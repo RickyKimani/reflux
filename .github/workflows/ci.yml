@@ -80,3 +80,14 @@ jobs:
 
       - name: Check
         run: v run tools/check.vsh -cc ${{ matrix.cc }}
+
+      # The M1 step 9 spike (docs/spike-python-ffi.md): a V shared library
+      # called from Python and NumPy. tcc can't make a usable Windows DLL, so
+      # Windows runs it with gcc only; Linux runs both.
+      - name: Install uv
+        if: matrix.cc == 'gcc' || runner.os == 'Linux'
+        uses: astral-sh/setup-uv@v10.3.2
+
+      - name: Python FFI spike
+        if: matrix.cc == 'gcc' || runner.os == 'Linux'
+        run: v run spike/python_ffi/spike.vsh -cc ${{ matrix.cc }}

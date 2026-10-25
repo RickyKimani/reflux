@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–8 are done. The roadmap entry is
+Status: **in progress.** Steps 1–9 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -304,14 +304,32 @@ These are the textbook picture of Peng–Robinson: good vapor volumes, liquid
 volumes about 5% low (which a Péneloux shift fixes), and a liquid speed of
 sound 15–20% low.
 
-### 9. Python shared-library spike
-- A V function exported with `@[export: 'reflux_scale']` and built with
-  `v -shared`. It scales a NumPy array in place, called through `ctypes`,
-  on Windows. If it works there, it goes into CI on Linux too.
-- Questions to answer: does V's GC start correctly inside the host? Does
-  module initialisation need an explicit call? Do allocations survive across
-  calls? Does it work with both tcc and gcc?
-- Output: a short write-up in `docs/` and a go / no-go for M10a's design.
+### 9. Python shared-library spike — done: go, with conditions
+- [spike/python_ffi/](../spike/python_ffi) is a V module of `@[export]`
+  functions over `thermo`, built with `v -shared`, plus eight Python and
+  NumPy scenarios. Each scenario runs in its own process, so a crash is
+  reported, not hidden.
+- The full write-up is [spike-python-ffi.md](spike-python-ffi.md). The
+  answers to the plan's questions:
+  - **Does V's GC start inside the host?** Yes, and its heap levels off
+    under load.
+  - **Is an explicit init call needed?** No; initialisation runs when the
+    DLL loads.
+  - **Do allocations survive across calls?** Only if V itself still refers
+    to them. A handle held only by Python was freed; a pinned one survived.
+  - **tcc and gcc?** gcc only on Windows: tcc DLLs export nothing.
+- Five problems found, each of which would have hurt M10a later:
+  1. V's `int` is 64-bit at the C boundary, which corrupted the heap;
+  2. tcc DLLs export nothing;
+  3. the libgcc DLL dependency, which Python doesn't look for on PATH;
+  4. handles freed by the GC;
+  5. panics killing the Python process.
+- Measured with `-prod`: 5.5 µs per PR point in one vectorised call, 9.1 µs
+  from a Python loop, so about 3.6 µs of `ctypes` overhead per call.
+- CI runs the spike on Linux (gcc and tcc) and Windows (gcc). That's
+  unverified until the branch is pushed.
+- Still open: concurrent calls from several Python threads, since `ctypes`
+  releases the GIL.
 
 ### 10. Docs
 - `design.md`: the second-derivative formulas, the full property table, the

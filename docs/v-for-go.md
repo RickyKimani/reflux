@@ -356,6 +356,14 @@ clone the arrays they store, so the caller can reuse theirs.
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 
+**Gotcha: `int` is 64-bit, but C's `int` is 32-bit.** Like Go's `int`, V's
+`int` is 64-bit on 64-bit platforms (`sizeof(int)` is 8 in this V). In any
+function that C, or Python's `ctypes`, calls, use explicit widths: `i32`
+or `i64`. The Python spike found this the hard way. A `status &int` array
+filled from a 4-byte NumPy buffer corrupted the heap
+([docs/spike-python-ffi.md](spike-python-ffi.md)). Go programmers who've
+used cgo know this as `C.int` versus `int`.
+
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
 

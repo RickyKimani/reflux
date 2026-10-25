@@ -212,9 +212,16 @@ anything else.
 - A `reflux` Python package over the C API using `ctypes`, so there's no
   compile step for users. Wheels that bundle the shared library come later
   (I2).
-- Technical risk to retire first: V's runtime (its garbage collector and
-  module initialisation) has to start correctly inside a shared library
-  loaded by Python. Prove this with a spike during M1.
+- **Retired in M1 by a spike** ([spike-python-ffi.md](spike-python-ffi.md)):
+  V's runtime starts and collects correctly inside Python. The spike also
+  set the design rules:
+  - explicit integer widths at the boundary (V's `int` is 64-bit);
+  - gcc with `-static-libgcc` on Windows (tcc DLLs export nothing);
+  - handles pinned in a V-side registry (the GC frees anything only Python
+    holds);
+  - no panics reachable from the API.
+- Still to test: concurrent calls from several Python threads, since
+  `ctypes` releases the GIL.
 
 **Exit:** a script computes a T–x–y diagram and a phase-fraction map into
 NumPy arrays and plots them with matplotlib, and that script runs in CI.
