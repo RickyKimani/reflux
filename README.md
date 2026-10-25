@@ -20,6 +20,8 @@ v -W test .           # all tests, warnings treated as errors
   how each piece is tested.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
   and why.
+- [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:
+  LHHW and friends as checkable data, not text.
 - [docs/v-for-go.md](docs/v-for-go.md) is V for Go programmers. It points
   back into this code for every feature.
 
@@ -33,6 +35,7 @@ These goals come from what went wrong with DWSIM:
 | Docs are years behind the code (8.x docs for 9.x/10.x) | Docs are generated from the code (`v doc`). Every example in the docs is compiled and run by the test suite, so it can't drift from the release. |
 | 10.x didn't work, so we had to go back to 9.x | A regression suite of reference cases runs on every commit. Flowsheet files carry a format version and are migrated, never silently reinterpreted. |
 | Flowsheets, especially sensitivity analyses, solve slowly | Analytic derivatives throughout, Newton/Broyden recycle convergence, warm-started and parallel sensitivity cases, and later exact sensitivities from the Jacobian. |
+| LHHW kinetics is a text box: no way to check the equation, and every adsorption term typed in again for each reaction | Kinetics is structured data ([docs/kinetics.md](docs/kinetics.md)). Adsorption terms are defined once per catalyst site and shared by every reaction on it. `reflux kinetics check` renders each rate back as a formula and checks element balance, units and consistency with equilibrium. |
 | Scripting is awkward, and you can't bring NumPy, pandas or Jupyter to your own analysis | A Python package over reflux's C API, available from the first flash onwards. NumPy arrays go in and come out without copying, calls are vectorised over many states, and flowsheets are Python objects. The CLI also writes JSON and CSV that pandas reads directly. |
 
 ## Layout

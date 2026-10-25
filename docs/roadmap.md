@@ -63,7 +63,8 @@ flowchart LR
   M4 --> M7[M7 Columns]
   M6 --> M7
   M4 --> M8[M8 Specs, sensitivity, optimisation]
-  M4 --> M9[M9 Reactors, exchangers]
+  M2 --> M9[M9 Reactors, kinetics, exchangers]
+  M4 --> M9
   M3 --> M10a[M10a Thermo from Python]
   M4 --> M10b[M10b Flowsheets from Python]
   M10a --> M10b
@@ -172,12 +173,25 @@ on a reference column. Robustness is reported across a set of specs.
 **Exit:** the same sensitivity analysis runs faster than DWSIM 9 on the same
 machine, measured with `-prod` builds.
 
-### M9 — Reactors and heat exchangers
+### M9 — Reactors, kinetics and heat exchangers
+- **Kinetics as structured data** (Track L, design in
+  [kinetics.md](kinetics.md)). This responds to DWSIM's text-box LHHW input.
+  Rate laws are power law, LHHW, Eley–Rideal or a parsed expression.
+  Adsorption terms are defined once per catalyst site and shared by every
+  reaction on it. Reversibility comes from ΔG°f by default.
+- `reflux kinetics check` and `explain`: render each rate back as a
+  formula; check element balance, units and consistency with equilibrium;
+  print a factor table at any state. The kinetics core needs only M2, so it
+  can be built before the reactors.
 - Conversion and yield reactors; Gibbs-minimisation equilibrium reactor (E6);
-  CSTR; PFR (which needs an ODE integrator, B5).
+  CSTR; PFR and packed bed (which need an ODE integrator, B5).
 - Two-stream exchangers specified by duty, outlet T, UA or approach (G2).
 
-**Exit:** textbook reactor cases are reproduced; element balances close.
+**Exit:** the Vanden Bussche–Froment methanol kinetics loads from TOML,
+renders back as the published equations, passes every check, and
+reproduces published rate values. A packed-bed PFR with that kinetics
+closes its element balances and approaches equilibrium. Textbook reactor
+cases are reproduced.
 
 ### M10 — Python and the C ABI
 
@@ -322,7 +336,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - G1 Mixer, splitter, valve, heater/cooler, pump, compressor/expander,
   flash drum, component separator. **M4**
 - G2 Heat exchangers. **M9**
-- G3 Reactors: conversion, yield, Gibbs, CSTR, PFR. **M9**
+- G3 Reactors: conversion, yield, Gibbs, CSTR, PFR, packed bed (using Track L
+  kinetics). **M9**
 - G4 Columns: shortcut, inside-out, Naphtali–Sandholm; absorbers and
   strippers; three-phase and rate-based later. **M7**
 - G5 Extractors and other separators. **after M7**
@@ -332,7 +347,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - H1 Sensitivity analysis: warm starts, parallel cases, exact sensitivities. **M8**
 - H2 Case studies and scenario files. **M8**
 - H3 Optimisation over flowsheet variables. **M8**
-- H4 Parameter estimation (fit kᵢⱼ or NRTL to VLE data); data reconciliation. **M8**
+- H4 Parameter estimation (fit kᵢⱼ or NRTL to VLE data; fit LHHW constants
+  to lab rate data, with confidence intervals); data reconciliation. **M8, M9**
 - H5 Monte Carlo uncertainty propagation. **after M8**
 
 ### I — Interoperability
@@ -354,6 +370,19 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 
 ### K — UI
 - K1 Service API (I6), K2 flowsheet editor, K3 plots. **M14**
+
+### L — Reaction kinetics
+- L1 Rate-law building blocks: Arrhenius (centred on T_ref) and van 't Hoff
+  temperature functions, monomials, catalyst sites with shared adsorption
+  terms. **M9**
+- L2 Rate laws: power law, LHHW, Eley–Rideal; activity basis per reaction
+  (partial pressure, fugacity, concentration). **M9**
+- L3 TOML input with equation parsing and element-balance checks. **M9**
+- L4 `reflux kinetics check` / `explain`: rendering (Unicode, LaTeX), units,
+  physical-sanity warnings, factor tables. **M9**
+- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9**
+- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9**
+- L7 Free-form expression rate laws (parsed, unit-checked, differentiated). **after M9**
 
 ---
 
