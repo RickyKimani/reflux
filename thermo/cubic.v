@@ -3,8 +3,8 @@ module thermo
 import math
 import numeric
 
-// CubicKind picks the two constants δ₁, δ₂ of the generalized cubic and the
-// Ωa, Ωb that place its critical point at (Tc, Pc).
+// CubicKind picks the two constants δ₁, δ₂ of the generalized cubic. The
+// Ωa, Ωb that place its critical point at (Tc, Pc) follow from them.
 pub enum CubicKind {
 	vdw
 	rk
@@ -17,34 +17,50 @@ struct CubicConsts {
 	delta2  f64
 	omega_a f64
 	omega_b f64
+	zc      f64 // the equation's own critical compressibility
 }
 
 fn (k CubicKind) consts() CubicConsts {
-	return match k {
-		.vdw {
-			CubicConsts{
-				delta1:  0.0
-				delta2:  0.0
-				omega_a: 27.0 / 64.0
-				omega_b: 1.0 / 8.0
-			}
-		}
-		.rk, .srk {
-			CubicConsts{
-				delta1:  1.0
-				delta2:  0.0
-				omega_a: 0.42748
-				omega_b: 0.08664
-			}
-		}
-		.pr {
-			CubicConsts{
-				delta1:  1.0 + math.sqrt2
-				delta2:  1.0 - math.sqrt2
-				omega_a: 0.45724
-				omega_b: 0.07780
-			}
-		}
+	d1, d2 := match k {
+		.vdw { 0.0, 0.0 }
+		.rk, .srk { 1.0, 0.0 }
+		.pr { 1.0 + math.sqrt2, 1.0 - math.sqrt2 }
+	}
+	// These four δ pairs always have a solution, so a failure here is a bug
+	// in reflux, not bad input. panic is for bugs; `!` is for things callers
+	// can get wrong.
+	return critical_constants(d1, d2) or { panic(err) }
+}
+
+// critical_constants finds Ωa, Ωb and Zc for a cubic with constants δ₁, δ₂.
+//
+// At Tr = Pr = 1 (so α = 1, A = Ωa, B = Ωb), the critical point is an
+// inflection with zero slope, which means the cubic in Z must be exactly
+// (Z − Zc)³. Matching the coefficients of
+//
+//     Z³ + [(δ₁+δ₂−1)B − 1]·Z² + [δ₁δ₂B² − (δ₁+δ₂)B(B+1) + A]·Z
+//        − [δ₁δ₂B²(B+1) + AB]
+//
+// with Z³ − 3Zc·Z² + 3Zc²·Z − Zc³ gives Zc and A in terms of B, and leaves
+// one equation in B. Computing the constants this way, instead of using
+// rounded textbook values, puts each equation's critical point exactly at
+// (Tc, Pc).
+fn critical_constants(delta1 f64, delta2 f64) !CubicConsts {
+	s := delta1 + delta2
+	m := delta1 * delta2
+	resid := fn [s, m] (b f64) f64 {
+		zc := (1.0 - (s - 1.0) * b) / 3.0
+		a := 3.0 * zc * zc - m * b * b + s * b * (b + 1.0)
+		return m * b * b * (b + 1.0) + a * b - zc * zc * zc
+	}
+	b := numeric.bisect(resid, 1e-6, 0.3)!
+	zc := (1.0 - (s - 1.0) * b) / 3.0
+	return CubicConsts{
+		delta1:  delta1
+		delta2:  delta2
+		omega_a: 3.0 * zc * zc - m * b * b + s * b * (b + 1.0)
+		omega_b: b
+		zc:      zc
 	}
 }
 

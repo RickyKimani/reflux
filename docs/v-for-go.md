@@ -105,6 +105,21 @@ looks like it does. See `cubic_real_roots` in [numeric/cubic.v](../numeric/cubic
 V also has no shadowing. Redeclaring `x` in an inner block is a compile
 error ("redefinition of `x`"), which removes another family of Go bugs.
 
+**Closures capture explicitly, and by value.** A Go closure silently
+captures variables by reference, so a loop variable or a later assignment
+can change what it sees. A V closure must list what it uses, and it gets a
+copy taken when the closure is created:
+
+```v
+mut x := 1.0
+f := fn [x] () f64 { return x }   // without [x]: compile error
+x = 5.0
+f()                               // 1.0, not 5.0
+```
+
+See `critical_constants` in [thermo/cubic.v](../thermo/cubic.v), which
+passes `fn [s, m] (b f64) f64 { … }` to `numeric.bisect`.
+
 ---
 
 ## 4. Errors and options: `!T`, `?T`, and `or {}`

@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **planned, not started.** The roadmap entry is
+Status: **in progress.** Step 1 is done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -36,7 +36,7 @@ Everything below is checked by `v -W test .`, so CI enforces it.
    - H(T₂) − H(T₁) at constant P equals the quadrature of Cp (to 1e-8);
    - every residual property tends to 0 as P → 0.
 3. **Critical point.** Each cubic, with the exact constants, has a triple
-   root Z = Zc at (Tc, Pc). The tolerance is 1e-6, limited by cube-root
+   root Z = Zc at (Tc, Pc). The tolerance is 1e-5, limited by cube-root
    sensitivity.
 4. **Same model, other implementation.** Z, ln φᵢ, Hʳ, Sʳ and Cpʳ for PR and
    SRK, pure and mixed, match Caleb Bell's `thermo` library to a relative
@@ -89,15 +89,26 @@ flowchart LR
 
 Steps 7 and 9 don't depend on the thermo chain and can happen at any point.
 
-### 1. Exact critical constants
-- `critical_constants(δ₁, δ₂) (Ωa, Ωb, Zc)`: at (Tc, Pc) the cubic in Z
-  must be (Z − Zc)³. That gives Zc = (1 − (δ₁+δ₂−1)Ωb)/3, Ωa in terms of
-  Ωb, and one equation in Ωb, solved by Newton on (0, 0.3).
-- Tests: SRK against the closed form Ωb = (2^⅓ − 1)/3. PR against the
-  literature values Ωa = 0.4572355289…, Ωb = 0.0777960739…,
-  Zc = 0.3074013…. A triple-root test at (Tc, Pc) for all four cubics.
-- Existing tests keep passing: the SVA volumes move by less than the book
+### 1. Exact critical constants — done
+- `critical_constants(δ₁, δ₂)` in [thermo/cubic.v](../thermo/cubic.v): at
+  (Tc, Pc) the cubic in Z must be (Z − Zc)³. That gives
+  Zc = (1 − (δ₁+δ₂−1)Ωb)/3, Ωa in terms of Ωb, and one equation in Ωb.
+  It's solved with `numeric.bisect`, which is new: slow but it can't fail,
+  which is fine for constants computed once per model.
+- Tests in [thermo/critical_test.v](../thermo/critical_test.v):
+  - vdW gives exactly 27/64, 1/8 and 3/8;
+  - SRK matches the closed form Ωb = (2^⅓ − 1)/3;
+  - PR matches Peng & Robinson's closed form for η = b/Vc, and the
+    ten-figure literature values;
+  - all four cubics have a triple root at (Tc, Pc) to 1e-5;
+  - δ₁ = δ₂ = δ gives van der Waals shifted in volume (Ωa = 27/64 for any
+    δ);
+  - δ₁ = δ₂ = −1, which has no critical point, is reported as an error.
+- Existing tests still pass: the SVA volumes move by less than the book
   rounds them.
+- One note for exit criterion 3: the triple-root tolerance had to be 1e-5,
+  not 1e-6. Rounding of about 1e-16 in the coefficients moves a triple root
+  by about (1e-16)^⅓ ≈ 5e-6.
 
 ### 2. Second derivatives of F (Cubic)
 - Add `residual2(t, v, n) Residual2` to `Model`, giving F_TT, F_TV, F_Vnᵢ,
