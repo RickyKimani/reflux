@@ -48,11 +48,14 @@ jobs:
         working-directory: ${{ runner.temp }}/vlang
         run: make
 
+      # V renamed make.bat to makev.bat in April 2026 (vlang/v#21497). This is
+      # how V's own Windows CI builds it: the compiler itself with tcc, which
+      # still lets the gcc job compile reflux with gcc.
       - name: Build V (Windows)
         if: steps.cache-v.outputs.cache-hit != 'true' && runner.os == 'Windows'
         working-directory: ${{ runner.temp }}/vlang
         shell: cmd
-        run: make.bat
+        run: .\makev.bat -tcc
 
       - name: Put V on PATH
         shell: bash
