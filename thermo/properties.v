@@ -53,9 +53,14 @@ pub:
 
 // residual_props returns the residual properties of a solved State.
 pub fn residual_props(m Model, st State) ResidualProps {
+	r := m.residual2(st.t, st.v, st.n)
+	return residual_props_from(r, pressure_derivs_from(r, st.t, st.v, st.n), st)
+}
+
+// residual_props_from does the work of residual_props from an already
+// evaluated residual, so that Fluid.props needs only one residual2 call.
+fn residual_props_from(r Residual2, pd PressureDerivs, st State) ResidualProps {
 	t, v := st.t, st.v
-	r := m.residual2(t, v, st.n)
-	pd := pressure_derivs_from(r, t, v, st.n)
 	ntot := numeric.sum(st.n)
 	rt := r_gas * t
 	h := -rt * t * r.f_t + st.p * v - ntot * rt

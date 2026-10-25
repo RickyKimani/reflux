@@ -42,6 +42,7 @@ fn test_every_cubic_has_a_triple_root_at_its_critical_point() {
 		tc:    400.0
 		pc:    40e5
 		omega: 0.1
+		mw:    0.1
 	}
 	for kind in [CubicKind.vdw, .rk, .srk, .pr] {
 		eos := new_cubic(kind, [c])!

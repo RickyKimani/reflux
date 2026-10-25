@@ -15,6 +15,7 @@ const butane = Component{
 	tc:    425.1
 	pc:    37.96e5
 	omega: 0.200
+	mw:    0.058123
 }
 
 const methane = Component{
@@ -22,6 +23,7 @@ const methane = Component{
 	tc:    190.6
 	pc:    45.99e5
 	omega: 0.012
+	mw:    0.016043
 }
 
 // The PRSV example in Caleb Bell's `thermo` library. κ₁ is fitted together
@@ -31,6 +33,7 @@ const hexane = Component{
 	tc:    507.6
 	pc:    30.25e5
 	omega: 0.2975
+	mw:    0.086177
 }
 
 fn main() {
@@ -41,6 +44,8 @@ fn main() {
 	prsv_example() or { die(err) }
 	println('')
 	mixture_example() or { die(err) }
+	println('')
+	fluid_example() or { die(err) }
 }
 
 fn pure_table(t f64, p f64) ! {
@@ -89,6 +94,36 @@ fn mixture_example() ! {
 		s := thermo.solve_tp(eos, t, p, n, root)!
 		phi := s.ln_phi.map(math.exp(it))
 		println('  ${root:-7} Z = ${s.z:.5f}  phi(methane) = ${phi[0]:.4f}  phi(n-butane) = ${phi[1]:.4f}')
+	}
+}
+
+// fluid_example adds ideal-gas data to PR to get total properties. The
+// four-constant Cp is Smith, Van Ness & Abbott Table C.1 (Cp/R = A + BT + CT²).
+// No formation data is given, so H and S would be relative; the quantities
+// printed here don't depend on it.
+fn fluid_example() ! {
+	r := thermo.r_gas
+	cp := thermo.Polynomial{
+		terms: [
+			thermo.PowerTerm{r * 1.935, 0},
+			thermo.PowerTerm{r * 36.915e-3, 1},
+			thermo.PowerTerm{r * -11.402e-6, 2},
+		]
+	}
+	eos := thermo.new_cubic(.pr, [butane])!
+	fl := thermo.new_fluid(eos, [thermo.IdealGas{
+		cp: cp
+	}])!
+	println('${butane.name}, PR + ideal-gas Cp, per mole')
+	println('${'':-20} ${'Cp':8} ${'Cv':8} ${'w':8} ${'mu_JT':8}')
+	println('${'':-20} ${'J/mol K':8} ${'J/mol K':8} ${'m/s':8} ${'K/bar':8}')
+	for label, pt in {
+		'vapor  400 K  5 bar': [400.0, 5e5]
+		'liquid 300 K 30 bar': [300.0, 30e5]
+	} {
+		root := if label.starts_with('vapor') { thermo.Root.vapor } else { thermo.Root.liquid }
+		pr := fl.props(thermo.solve_tp(eos, pt[0], pt[1], [1.0], root)!)
+		println('${label:-20} ${pr.cp:8.2f} ${pr.cv:8.2f} ${pr.w:8.1f} ${pr.mu_jt * 1e5:8.3f}')
 	}
 }
 

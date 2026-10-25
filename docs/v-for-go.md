@@ -175,6 +175,21 @@ v := liquid_volume(m, t, p, n) or { vapor_volume(m, t, p, n) or { return no_root
 
 - Map lookups use the same form, in place of Go's `v, ok := m[k]`:
   `want := book[kind] or { panic('missing') }`.
+- **Option fields.** A struct field can be `?f64`. Leave it out of the
+  literal and it's `none`; assign a plain `f64` and it's set. Read it with
+  `or`. Go would use a `*float64` (and risk a nil dereference) or a
+  separate `HasDhf bool`. See `IdealGas` in
+  [thermo/ideal.v](../thermo/ideal.v):
+
+```v
+pub struct IdealGas {
+	cp  CpForm @[required]
+	dhf ?f64   // ΔH°f, J/mol, if known
+}
+
+ig := thermo.IdealGas{ cp: form }        // dhf is none
+dhf := ig.dhf or { 0.0 }                 // a value either way
+```
 - **Typed errors** (Go's `errors.As`): make a struct that embeds `Error`
   and implements `msg()`, then test it with `is`:
 

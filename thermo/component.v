@@ -18,6 +18,7 @@ pub:
 	tc    f64    @[required] // critical temperature, K
 	pc    f64    @[required] // critical pressure, Pa
 	omega f64    @[required] // acentric factor, dimensionless
+	mw    f64    @[required] // molar mass, kg/mol
 }
 
 // InputError is a typed error, the V counterpart of a Go error struct you
@@ -48,6 +49,12 @@ fn (c Component) check() ! {
 		return InputError{
 			what:  '${c.name} critical pressure (Pa)'
 			value: c.pc
+		}
+	}
+	if c.mw <= 0.0 {
+		return InputError{
+			what:  '${c.name} molar mass (kg/mol)'
+			value: c.mw
 		}
 	}
 }

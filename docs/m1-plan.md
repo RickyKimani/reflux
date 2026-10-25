@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–3 are done. The roadmap entry is
+Status: **in progress.** Steps 1–4 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -165,17 +165,35 @@ temperature step of 1e-4·T left a truncation error of 6e-6. Shrinking the
 step showed it converging as h² onto the analytic value, so the formula was
 right and the step was too big. The tests now use 1e-5·T.
 
-### 4. Ideal gas and total properties
-- `CpForm = AlyLee | Polynomial`, each with `cp(t)`, `int_cp(t1, t2)` and
-  `int_cp_over_t(t1, t2)`. The Aly–Lee integrals are written in their
-  numerically stable forms, using ln sinh and ln cosh.
-- `IdealGas { cp CpForm, dhf f64, s0 f64 }`; `Fluid { model Model,
-  ideal []IdealGas }`; the reference state from D3.
-- `props(fluid, state) Props`: total H, S, G, U, A, Cp, Cv, speed of sound
-  and Joule–Thomson coefficient. Adds `mw` to `Component` (D6).
-- Tests: integrals against adaptive quadrature; the Cp-quadrature identity
-  for total H; mixing terms (−R Σ nᵢ ln xᵢ) checked against a mixture of a
-  component with itself.
+### 4. Ideal gas and total properties — done
+- [thermo/ideal.v](../thermo/ideal.v): `CpForm = AlyLee | Polynomial`, each
+  with `cp`, `int_cp` and `int_cp_over_t` in closed form. The Aly–Lee terms
+  are overflow-safe. `IdealGas` holds Cp plus ΔH°f and S° as Options (D3),
+  and `t_ref` and `p_ref` are defined there.
+- [thermo/fluid.v](../thermo/fluid.v): `Fluid` (a `Model` plus `[]IdealGas`)
+  and `Fluid.props(state)`, giving total H, S, G, U, A, Cp, Cv, speed of
+  sound and Joule–Thomson coefficient, and `absolute`.
+- `Component` has a required `mw` in kg/mol (D6). The compiler found every
+  literal that needed it.
+- [thermo/ideal_test.v](../thermo/ideal_test.v) (79 assertions):
+  - both integrals against Simpson quadrature, for Smith, Van Ness & Abbott
+    four-constant polynomials, an Aly–Lee form, and a polynomial with the
+    T⁻¹ and T⁰ powers whose integrals are logarithms;
+  - Aly–Lee limits, and finiteness from 1 K to 10⁵ K;
+  - the overflow-safe helpers against accurate references.
+- [thermo/fluid_test.v](../thermo/fluid_test.v) (55 assertions):
+  - the reference state, exactly, at T° and P°;
+  - missing formation data shifts only the zero;
+  - ΔH = ∫Cp dT and ΔS = ∫Cp/T dT along an isobar;
+  - Cp and Cv against finite differences;
+  - w against an isentropic finite difference, and μ_JT against an
+    isenthalpic one;
+  - the ideal-gas limits;
+  - a component "mixed with itself" adds exactly −R Σ nᵢ ln xᵢ and nothing
+    else.
+- Eleven planted mistakes across ideal.v and fluid.v were each caught.
+- One fix along the way: ln cosh x lost relative precision for small x
+  (cosh x ≈ 1). It now uses log1p(2 sinh²(x/2)) there.
 
 ### 5. Twu and Mathias–Copeman α (exercise candidate)
 - New `Alpha` variants with α, α′ and α″.

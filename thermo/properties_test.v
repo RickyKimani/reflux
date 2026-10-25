@@ -10,6 +10,7 @@ const methane = Component{
 	tc:    190.6
 	pc:    45.99e5
 	omega: 0.012
+	mw:    0.016043
 }
 
 const butane = Component{
@@ -17,6 +18,7 @@ const butane = Component{
 	tc:    425.1
 	pc:    37.96e5
 	omega: 0.200
+	mw:    0.058123
 }
 
 const co2 = Component{
@@ -24,6 +26,7 @@ const co2 = Component{
 	tc:    304.2
 	pc:    73.83e5
 	omega: 0.224
+	mw:    0.044010
 }
 
 struct Point {

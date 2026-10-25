@@ -9,6 +9,7 @@ const butane = Component{
 	tc:    425.1
 	pc:    37.96e5
 	omega: 0.200
+	mw:    0.058123
 }
 
 const methane = Component{
@@ -16,6 +17,7 @@ const methane = Component{
 	tc:    190.6
 	pc:    45.99e5
 	omega: 0.012
+	mw:    0.016043
 }
 
 const kinds = [CubicKind.vdw, .rk, .srk, .pr]
@@ -219,6 +221,7 @@ fn test_bad_input_is_a_typed_error() {
 		tc:    0.0
 		pc:    1e6
 		omega: 0.0
+		mw:    0.1
 	}
 	thermo.new_cubic(.pr, [broken]) or {
 		// `is` checks the concrete error type: Go's errors.As.

@@ -69,6 +69,50 @@ Mʳ = M − Mⁱᵍ at the same T, P and n, and they're extensive.
 The n·∂ln φᵢ/∂nⱼ matrix is symmetric, and Gibbs–Duhem makes each of its
 columns sum to zero when weighted by nᵢ. Both are tested.
 
+### Ideal gas, reference state and total properties
+
+`Model` is purely residual. Total properties come from a `Fluid`
+([thermo/fluid.v](../thermo/fluid.v)), which pairs a `Model` with each
+component's `IdealGas` data ([thermo/ideal.v](../thermo/ideal.v)).
+
+**Reference state:** elements in their standard states at T° = 298.15 K
+and P° = 1 bar. For component i:
+
+    Hᵢⁱᵍ(T) = ΔH°f,i + ∫_T°^T Cp,i dT
+    Sᵢⁱᵍ(T, P) = S°ᵢ + ∫_T°^T Cp,i/T dT − R ln(P/P°)
+
+With this convention a reactor's energy balance needs no separate heat of
+reaction. ΔH°f and S° are Options; if either is missing, `Props.absolute`
+is false. Differences between states of the same composition are still
+correct then.
+
+**Cp forms** (`CpForm` sum type), each with closed-form integrals:
+
+| Form | Cp | ∫Cp dT | ∫Cp/T dT |
+|---|---|---|---|
+| `Polynomial` | Σ cₖTᵖᵏ | Σ cₖTᵖᵏ⁺¹/(pₖ+1); ln T when pₖ = −1 | Σ cₖTᵖᵏ/pₖ; ln T when pₖ = 0 |
+| `AlyLee` (DIPPR 107) | A + B(x/sinh x)² + D(y/cosh y)², x = C/T, y = E/T | AT + BC·coth x − DE·tanh y | A ln T + B(x coth x − ln sinh x) − D(y tanh y − ln cosh y) |
+
+sinh and cosh overflow above about 710, which C/T reaches at low T. The
+Aly–Lee terms are therefore written in terms of e^(−x), and ln cosh x uses
+log1p(2 sinh²(x/2)) for small x, where cosh x is too close to 1.
+
+**Totals** for a state (T, P, V, n), with xᵢ = nᵢ/n and m = Σ nᵢMᵢ:
+
+| | |
+|---|---|
+| H | Σ nᵢHᵢⁱᵍ + Hʳ |
+| S | Σ nᵢ(Sᵢⁱᵍ − R ln xᵢ) + Sʳ |
+| G, U, A | H − TS, H − PV, U − TS |
+| Cp | Σ nᵢCp,i + Cpʳ |
+| Cv | Σ nᵢCp,i − nR + Cvʳ |
+| speed of sound | w² = −(V²/m)·(Cp/Cv)·(∂P/∂V)_T |
+| Joule–Thomson | μ_JT = [T(∂V/∂T)_P − V]/Cp, with (∂V/∂T)_P = −(∂P/∂T)_V/(∂P/∂V)_T |
+
+μ_JT does *not* go to zero at zero pressure. It tends to (T·dB/dT − B)/Cp,
+where B is the second virial coefficient, which is why the low-pressure test
+checks only Cp − Cv and w.
+
 ## Finding the volume
 
 `solve_tp` doesn't solve a polynomial, because CPA and SAFT don't have one.
