@@ -1,10 +1,11 @@
 # Spike: calling reflux from Python (M1 step 9)
 
 **Verdict: go**, with the conditions listed under "What M10a must do".
-A V shared library works inside a Python process on Windows. NumPy arrays
-cross without copying, and the results agree with the `thermo` fixtures to
-5e-15. Getting there turned up five problems, and any one of them would
-have broken M10a if it had been found late.
+A V shared library works inside a Python process on Windows and on Linux,
+and CI runs all eight scenarios on both. NumPy arrays cross without
+copying, and the results agree with the `thermo` fixtures to 5e-15.
+Getting there turned up seven problems (five on Windows, two more in Linux
+CI), and any one of them would have broken M10a if it had been found late.
 
 The spike lives in [spike/python_ffi/](../spike/python_ffi):
 
@@ -63,6 +64,20 @@ v run spike/python_ffi/spike.vsh -cc tcc    # shows what tcc does
    handler reported "print_backtrace_skipping_top_frames is not
    implemented", and the process exited. There's no way to catch a panic
    across the boundary, so the library must never panic on bad input.
+6. **On Linux, a Python thread must be registered with the collector.**
+   The thread scenario aborted with Boehm's "Collecting from unknown
+   thread". V's Linux build has the collector's thread support
+   (`GC_THREADS`), so the collector has to know every thread that runs V
+   code, and Python's threads are strangers to it. Each exported function
+   now registers the calling thread for the length of the call and
+   unregisters it afterwards ([gc_threads.h](../spike/python_ffi/ffi/gc_threads.h)).
+   The helper is C because thread support is a preprocessor question: V's
+   Windows build has none, so there it does nothing, and the Windows test
+   passed without it.
+7. **tcc can't build a loadable Linux `.so` either.** It doesn't mark the
+   library's stack as non-executable, and current glibc refuses to load
+   it: "cannot enable executable stack as shared object requires". With
+   finding 2, shared libraries need gcc (or clang) on every platform.
 
 What works without any help:
 - **Initialisation:** V's module initialisation runs when the DLL loads, so
@@ -85,6 +100,9 @@ What works without any help:
   a stale or double-freed handle is an error rather than a crash. (The
   registry needs `-enable-globals`, or a registry struct reached from a
   single global.)
+- **Register the calling thread** with the collector at every entry point,
+  as `gc_threads.h` does, so Python threads work on Linux.
+- **Build shared libraries with gcc or clang only**, never tcc.
 - **No panics reachable from the API.** Every failure becomes a status code.
   `thermo` already panics only on internal bugs (`CubicKind.consts`); the
   API layer has to keep it that way.
@@ -96,11 +114,27 @@ What works without any help:
   for statuses) via `np.ascontiguousarray`; otherwise V reads the wrong
   bytes.
 
+## In CI (GitHub Actions, gcc)
+
+| Scenario | ubuntu-latest | windows-latest |
+|---|---|---|
+| all eight scenarios | ok | ok |
+| 10,000 points in one call (debug build) | 5.6 µs/point | 3.4 µs/point |
+| the same from a Python loop | 7.0 µs/point | 4.3 µs/point |
+| heap after each 100 of 500 calls | 4.3 MB, steady | 4.3 MB, steady |
+
+The two runners used Python 3.14.4 (Linux) and 3.12.10 (Windows), so the
+spike isn't tied to one Python version.
+
 ## Still open
 
 - **Concurrent calls.** `ctypes` releases the GIL during a call, so two
-  Python threads can be inside V at once. The single-thread test passed, but
-  Boehm GC needs every thread that allocates to be registered. Concurrency
-  needs its own test, and possibly a lock or explicit thread registration.
-- **Linux.** It isn't tested here. CI now runs the spike on Linux with gcc
-  and with tcc, where ELF visibility may make the tcc build usable.
+  Python threads can be inside V at once. Each thread is now registered,
+  which is what the collector requires. But nothing yet tests two threads
+  allocating at the same moment, or `thermo` being safe to call
+  concurrently (it has no shared mutable state, so it should be). That test
+  belongs at the start of M10a.
+- **A note from V master.** Some builds print "diagnostic replay for
+  compiler_error produced no output". They still exit 0 and the library
+  works, so it looks like noise from V's new compiler diagnostics, not a
+  reflux problem.

@@ -216,9 +216,12 @@ anything else.
   V's runtime starts and collects correctly inside Python. The spike also
   set the design rules:
   - explicit integer widths at the boundary (V's `int` is 64-bit);
-  - gcc with `-static-libgcc` on Windows (tcc DLLs export nothing);
+  - gcc or clang only (tcc can't build loadable shared libraries on Windows
+    or Linux), with `-static-libgcc` on Windows;
   - handles pinned in a V-side registry (the GC frees anything only Python
     holds);
+  - the calling thread registered with the GC at every entry point (Python
+    threads abort a Linux collection otherwise);
   - no panics reachable from the API.
 - Still to test: concurrent calls from several Python threads, since
   `ctypes` releases the GIL.

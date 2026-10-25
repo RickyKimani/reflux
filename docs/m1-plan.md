@@ -318,18 +318,21 @@ sound 15–20% low.
   - **Do allocations survive across calls?** Only if V itself still refers
     to them. A handle held only by Python was freed; a pinned one survived.
   - **tcc and gcc?** gcc only on Windows: tcc DLLs export nothing.
-- Five problems found, each of which would have hurt M10a later:
+- Seven problems found, each of which would have hurt M10a later:
   1. V's `int` is 64-bit at the C boundary, which corrupted the heap;
   2. tcc DLLs export nothing;
   3. the libgcc DLL dependency, which Python doesn't look for on PATH;
   4. handles freed by the GC;
-  5. panics killing the Python process.
+  5. panics killing the Python process;
+  6. Python threads unknown to the GC on Linux (found in CI and fixed:
+     every entry point now registers the calling thread);
+  7. tcc `.so` files that Linux won't load.
 - Measured with `-prod`: 5.5 µs per PR point in one vectorised call, 9.1 µs
   from a Python loop, so about 3.6 µs of `ctypes` overhead per call.
-- CI runs the spike on Linux (gcc and tcc) and Windows (gcc). That's
-  unverified until the branch is pushed.
-- Still open: concurrent calls from several Python threads, since `ctypes`
-  releases the GIL.
+- CI runs the spike with gcc on Linux and Windows, and all eight scenarios
+  pass on both (run 40235402623).
+- Still open: two Python threads allocating inside V at the same moment,
+  since `ctypes` releases the GIL. That's a test for the start of M10a.
 
 ### 10. Docs
 - `design.md`: the second-derivative formulas, the full property table, the
