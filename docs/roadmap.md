@@ -88,6 +88,8 @@ flowchart LR
 broken test turns it red.
 
 ### M1 — Thermo core
+Detailed plan: [m1-plan.md](m1-plan.md).
+
 - Second derivatives in the `Model` contract: F_TT, F_TV, F_Vnᵢ, F_Tnᵢ,
   F_nᵢnⱼ (Track C1).
 - Residual Hʳ, Sʳ, Gʳ, Cpʳ, Cvʳ; speed of sound; Joule–Thomson coefficient.
