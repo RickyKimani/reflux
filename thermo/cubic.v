@@ -207,6 +207,50 @@ pub fn (c Cubic) residual(t f64, v f64, n []f64) Residual {
 	}
 }
 
+// residual2 implements Model. Each line matches a row of the F table in
+// docs/design.md, "Second derivatives of the cubic".
+pub fn (c Cubic) residual2(t f64, v f64, n []f64) Residual2 {
+	nc := n.len
+	ntot := numeric.sum(n)
+	q := c.vb_terms(v, c.min_volume(n))
+	att := c.attraction2(t, n)
+	rt := r_gas * t
+	d := att.a
+	d_rt := d / rt
+	dd := att.a_t - d / t // D_T − D/T, which every T-derivative contains
+	mut f_n := []f64{len: nc}
+	mut f_vn := []f64{len: nc}
+	mut f_tn := []f64{len: nc}
+	mut f_nn := []f64{len: nc * nc}
+	for i in 0 .. nc {
+		bi := c.b[i]
+		di := att.a_n[i]
+		f_n[i] = -q.g - ntot * q.g_b * bi - q.f * di / rt - d_rt * q.f_b * bi
+		f_vn[i] = -q.g_v - ntot * q.g_bv * bi - q.f_v * di / rt - d_rt * q.f_bv * bi
+		f_tn[i] = -q.f / rt * (att.a_nt[i] - di / t) - q.f_b * bi / rt * dd
+		for j in 0 .. nc {
+			bj := c.b[j]
+			dij := 2.0 * (1.0 - c.kij[i * nc + j]) * att.s[i] * att.s[j]
+			f_nn[i * nc + j] = -q.g_b * (bi + bj) - ntot * q.g_bb * bi * bj - (dij * q.f +
+				q.f_b * (di * bj + att.a_n[j] * bi) + d * q.f_bb * bi * bj) / rt
+		}
+	}
+	return Residual2{
+		Residual: Residual{
+			f:    -ntot * q.g - d_rt * q.f
+			f_v:  -ntot * q.g_v - d_rt * q.f_v
+			f_vv: -ntot * q.g_vv - d_rt * q.f_vv
+			f_t:  -q.f / rt * dd
+			f_n:  f_n
+		}
+		f_tt:     -q.f / rt * (att.a_tt - 2.0 * att.a_t / t + 2.0 * d / (t * t))
+		f_tv:     -q.f_v / rt * dd
+		f_vn:     f_vn
+		f_tn:     f_tn
+		f_nn:     f_nn
+	}
+}
+
 // z_roots solves the cubic directly as a polynomial in Z and returns the
 // roots with Z > B·P/(nRT), ascending. It is a shortcut only a cubic has.
 // solve_tp finds the same roots by Newton iteration, which is what the
@@ -231,10 +275,14 @@ struct VbTerms {
 	g_v  f64
 	g_vv f64
 	g_b  f64
+	g_bv f64
+	g_bb f64
 	f    f64
 	f_v  f64
 	f_vv f64
 	f_b  f64
+	f_bv f64
+	f_bb f64
 }
 
 fn (c Cubic) vb_terms(v f64, bb f64) VbTerms {
@@ -247,17 +295,42 @@ fn (c Cubic) vb_terms(v f64, bb f64) VbTerms {
 		math.log(d1 / d2) / (bb * (c.delta1 - c.delta2))
 	}
 	f_v := -1.0 / (d1 * d2)
+	// f is homogeneous of degree −1 in (V, B) and f_B of degree −2, which
+	// gives f_B and f_BB without dividing by δ₁ − δ₂.
+	f_b := -(f + v * f_v) / bb
+	f_bv := (c.delta1 * d2 + c.delta2 * d1) / (d1 * d1 * d2 * d2)
+	vb := v - bb
 	return VbTerms{
 		g:    math.log(1.0 - bb / v)
-		g_v:  bb / (v * (v - bb))
-		g_vv: 1.0 / (v * v) - 1.0 / ((v - bb) * (v - bb))
-		g_b:  -1.0 / (v - bb)
+		g_v:  bb / (v * vb)
+		g_vv: 1.0 / (v * v) - 1.0 / (vb * vb)
+		g_b:  -1.0 / vb
+		g_bv: 1.0 / (vb * vb)
+		g_bb: -1.0 / (vb * vb)
 		f:    f
 		f_v:  f_v
 		f_vv: (d1 + d2) / (d1 * d1 * d2 * d2)
-		// f is homogeneous of degree −1 in (V, B), so V·f_V + B·f_B = −f.
-		f_b:  -(f + v * f_v) / bb
+		f_b:  f_b
+		f_bv: f_bv
+		f_bb: -(2.0 * f_b + v * f_bv) / bb
 	}
+}
+
+// sqrt_a returns sᵢ = √aᵢ(T) for every component, with ds/dT and d²s/dT².
+// Working with s instead of a makes aᵢⱼ = (1 − kᵢⱼ)·sᵢ·sⱼ.
+fn (c Cubic) sqrt_a(t f64) ([]f64, []f64, []f64) {
+	nc := c.comps.len
+	mut s := []f64{len: nc}
+	mut s_t := []f64{len: nc}
+	mut s_tt := []f64{len: nc}
+	for i in 0 .. nc {
+		tc := c.comps[i].tc
+		alpha, d1, d2 := c.alphas[i].eval(t / tc)
+		s[i] = math.sqrt(c.ac[i] * alpha)
+		s_t[i] = c.ac[i] * d1 / tc / (2.0 * s[i])
+		s_tt[i] = (0.5 * c.ac[i] * d2 / (tc * tc) - s_t[i] * s_t[i]) / s[i]
+	}
+	return s, s_t, s_tt
 }
 
 // Attraction is A(T) for the mixture with ∂A/∂T and ∂A/∂nᵢ.
@@ -269,15 +342,7 @@ struct Attraction {
 
 fn (c Cubic) attraction(t f64, n []f64) Attraction {
 	nc := c.comps.len
-	// sᵢ = √aᵢ(T), so that aᵢⱼ = (1 − kᵢⱼ)·sᵢ·sⱼ.
-	mut s := []f64{len: nc}
-	mut s_t := []f64{len: nc}
-	for i in 0 .. nc {
-		tc := c.comps[i].tc
-		alpha, dalpha_dtr := c.alphas[i].eval(t / tc)
-		s[i] = math.sqrt(c.ac[i] * alpha)
-		s_t[i] = c.ac[i] * dalpha_dtr / tc / (2.0 * s[i])
-	}
+	s, s_t, _ := c.sqrt_a(t)
 	mut a := 0.0
 	mut a_t := 0.0
 	mut a_n := []f64{len: nc}
@@ -296,5 +361,50 @@ fn (c Cubic) attraction(t f64, n []f64) Attraction {
 		a:   a
 		a_t: a_t
 		a_n: a_n
+	}
+}
+
+// Attraction2 adds the second derivatives of A. It keeps s so that
+// Aᵢⱼ = 2(1 − kᵢⱼ)sᵢsⱼ can be formed where it's used, instead of storing
+// an nc×nc matrix.
+struct Attraction2 {
+	a    f64   // D
+	a_t  f64   // D_T
+	a_tt f64   // D_TT
+	a_n  []f64 // Dᵢ
+	a_nt []f64 // D_iT
+	s    []f64 // √aᵢ
+}
+
+fn (c Cubic) attraction2(t f64, n []f64) Attraction2 {
+	nc := c.comps.len
+	s, s_t, s_tt := c.sqrt_a(t)
+	mut a := 0.0
+	mut a_t := 0.0
+	mut a_tt := 0.0
+	mut a_n := []f64{len: nc}
+	mut a_nt := []f64{len: nc}
+	for i in 0 .. nc {
+		// qᵢ = Σⱼ (1 − kᵢⱼ)·sⱼ·nⱼ and rᵢ = Σⱼ (1 − kᵢⱼ)·s′ⱼ·nⱼ
+		mut q := 0.0
+		mut r := 0.0
+		for j in 0 .. nc {
+			w := 1.0 - c.kij[i * nc + j]
+			q += w * s[j] * n[j]
+			r += w * s_t[j] * n[j]
+		}
+		a += n[i] * s[i] * q
+		a_t += 2.0 * n[i] * s_t[i] * q
+		a_tt += 2.0 * n[i] * (s_tt[i] * q + s_t[i] * r)
+		a_n[i] = 2.0 * s[i] * q
+		a_nt[i] = 2.0 * (s_t[i] * q + s[i] * r)
+	}
+	return Attraction2{
+		a:    a
+		a_t:  a_t
+		a_tt: a_tt
+		a_n:  a_n
+		a_nt: a_nt
+		s:    s
 	}
 }

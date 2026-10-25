@@ -48,8 +48,12 @@ if !pinned.starts_with(@VCURRENTHASH) {
 
 // `$if` is evaluated at compile time, like a Go build tag but inline.
 ext := $if windows { '.exe' } $else { '' }
-exe := join_path(temp_dir(), 'reflux_check_${cc}${ext}')
-exe_prod := join_path(temp_dir(), 'reflux_check_${cc}_prod${ext}')
+// A fresh name per run, removed at the end: on Windows the previous run's
+// binary can still be locked (antivirus scanning it, typically) when the
+// next build tries to overwrite it.
+tag := '${cc}_${getpid()}'
+exe := join_path(temp_dir(), 'reflux_check_${tag}${ext}')
+exe_prod := join_path(temp_dir(), 'reflux_check_${tag}_prod${ext}')
 
 run(['v', 'fmt', '-verify', '.'])
 run(['v', 'vet', '.'])
@@ -61,4 +65,6 @@ if cc != 'tcc' {
 	run(['v', '-cc', cc, '-prod', '-o', exe_prod, '.'])
 	run([exe_prod])
 }
+rm(exe) or {}
+rm(exe_prod) or {}
 println('\nAll checks passed with ${cc}.')

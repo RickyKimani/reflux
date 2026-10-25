@@ -60,30 +60,42 @@ pub fn prsv(omega f64, kappa1 f64) Alpha {
 	}
 }
 
-// eval returns α and dα/dTr.
-pub fn (a Alpha) eval(tr f64) (f64, f64) {
+// eval returns α, dα/dTr and d²α/dTr². The formulas are written out in
+// docs/design.md under "Second derivatives of the cubic".
+pub fn (a Alpha) eval(tr f64) (f64, f64, f64) {
 	match a {
 		Unity {
-			return 1.0, 0.0
+			return 1.0, 0.0, 0.0
 		}
 		InvSqrtTr {
 			sq := math.sqrt(tr)
-			return 1.0 / sq, -0.5 / (tr * sq)
+			return 1.0 / sq, -0.5 / (tr * sq), 0.75 / (tr * tr * sq)
 		}
 		Soave {
 			// Inside this branch `a` is a Soave, so a.m is accessible:
 			// a smart cast, like a Go type switch variable.
 			sq := math.sqrt(tr)
 			k := 1.0 + a.m * (1.0 - sq)
-			return k * k, -a.m * k / sq
+			dk := -a.m / (2.0 * sq)
+			d2k := a.m / (4.0 * tr * sq)
+			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
 		}
 		Prsv {
 			sq := math.sqrt(tr)
-			kappa := a.kappa0 + a.kappa1 * (1.0 + sq) * (0.7 - tr)
-			dkappa := a.kappa1 * ((0.7 - tr) / (2.0 * sq) - (1.0 + sq))
-			k := 1.0 + kappa * (1.0 - sq)
-			dk := dkappa * (1.0 - sq) - kappa / (2.0 * sq)
-			return k * k, 2.0 * k * dk
+			// κ = κ₀ + κ₁·h(Tr) and α = k², with k = 1 + κ·u(Tr).
+			h := (1.0 + sq) * (0.7 - tr)
+			dh := (0.7 - tr) / (2.0 * sq) - (1.0 + sq)
+			d2h := -1.0 / sq - (0.7 - tr) / (4.0 * tr * sq)
+			kappa := a.kappa0 + a.kappa1 * h
+			dkappa := a.kappa1 * dh
+			d2kappa := a.kappa1 * d2h
+			u := 1.0 - sq
+			du := -1.0 / (2.0 * sq)
+			d2u := 1.0 / (4.0 * tr * sq)
+			k := 1.0 + kappa * u
+			dk := dkappa * u + kappa * du
+			d2k := d2kappa * u + 2.0 * dkappa * du + kappa * d2u
+			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
 		}
 	}
 }

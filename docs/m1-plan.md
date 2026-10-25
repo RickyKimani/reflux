@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Step 1 is done. The roadmap entry is
+Status: **in progress.** Steps 1 and 2 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -110,17 +110,28 @@ Steps 7 and 9 don't depend on the thermo chain and can happen at any point.
   not 1e-6. Rounding of about 1e-16 in the coefficients moves a triple root
   by about (1e-16)^⅓ ≈ 5e-6.
 
-### 2. Second derivatives of F (Cubic)
-- Add `residual2(t, v, n) Residual2` to `Model`, giving F_TT, F_TV, F_Vnᵢ,
-  F_Tnᵢ and F_nᵢnⱼ (flat, row-major), on top of everything `Residual`
-  already has.
-- For the cubic this needs g and f to second order in (V, B), and A(T, n) to
-  second order: Aᵢⱼ = 2(1 − kᵢⱼ)sᵢsⱼ, A_Tᵢ, A_TT. α″ feeds A_TT.
-- `Alpha.eval` grows a third return value; Soave and PRSV get α″.
-- The derivations are written up in [design.md](design.md) before the code,
-  so the code can be checked against them.
-- Tests: finite differences for every entry, Hessian symmetry, and both Euler
-  identities.
+### 2. Second derivatives of F (Cubic) — done
+- `Model` has a third method, `residual2(t, v, n) Residual2`. `Residual2`
+  embeds `Residual` and adds F_TT, F_TV, F_Vnᵢ, F_Tnᵢ and F_nᵢnⱼ (flat,
+  row-major).
+- [thermo/cubic.v](../thermo/cubic.v): g and f to second order in (V, B),
+  and A to second order through `attraction2`. A shared `sqrt_a` gives sᵢ,
+  s′ᵢ and s″ᵢ. Every line matches the table in
+  [design.md](design.md#second-derivatives-of-the-cubic), which was written
+  first.
+- `Alpha.eval` returns α, α′ and α″ for all four α variants.
+- [thermo/residual2_test.v](../thermo/residual2_test.v): 496 assertions over
+  the four pure cubics and two ternaries with asymmetric-looking kᵢⱼ and a
+  PRSV component, each at liquid-like and gas-like volumes and two
+  temperatures. The tests check:
+  - every second derivative against finite differences, with F_Vnᵢ both
+    ways (Schwarz);
+  - Hessian symmetry;
+  - three Euler identities (one more than planned: V·F_TV + Σ nᵢF_Tnᵢ = F_T);
+  - α′ and α″ for each α variant, PRSV on both sides of Tr = 0.7;
+  - that `residual2`'s first-order fields match `residual`'s.
+- The tests have teeth: six planted mistakes (in f_BB, g_BB, D_TT, F_TT,
+  F_Tnᵢ and PRSV's h″) were each caught.
 
 ### 3. Model-independent derived properties
 Written once against `Model`, so CPA gets them for free:
