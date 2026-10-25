@@ -21,8 +21,8 @@ here := dir(@FILE)
 out_dir := join_path(temp_dir(), 'reflux_ffi_spike')
 mkdir_all(out_dir)!
 // V adds the extension itself: .dll on Windows, .so elsewhere.
-base := join_path(out_dir, 'reflux_ffi_${cc}')
-lib := base + $if windows { '.dll' } $else { '.so' }
+stem := join_path(out_dir, 'reflux_ffi_${cc}')
+lib := stem + $if windows { '.dll' } $else { '.so' }
 
 mut build := ['v', '-cc', cc, '-W', '-shared', '-enable-globals']
 $if windows {
@@ -32,7 +32,7 @@ $if windows {
 		build << ['-cflags', '-static-libgcc']
 	}
 }
-build << ['-o', base, join_path(here, 'ffi')]
+build << ['-o', stem, join_path(here, 'ffi')]
 if run(build) != 0 {
 	eprintln('build failed')
 	exit(1)

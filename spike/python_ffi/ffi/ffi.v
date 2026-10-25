@@ -23,6 +23,31 @@ struct ModelBox {
 // -enable-globals.
 __global pinned_models = []voidptr{}
 
+// Threads that Python creates are unknown to Boehm GC, and on Linux a
+// collection started from one aborts ("Collecting from unknown thread",
+// found in CI). gc_threads.h registers such a thread for the length of a
+// call. It's written in C because whether the collector has thread support
+// at all (GC_THREADS) is a preprocessor question: it does on Linux, not in
+// V's Windows build. #flag and #include pull a C header into a V module,
+// and @VEXEROOT is V's install directory, where the collector's headers are.
+#flag -I @VEXEROOT/thirdparty/libgc/include
+#flag -I @VMODROOT/spike/python_ffi/ffi
+#include "gc_threads.h"
+
+fn C.reflux_enter() int
+fn C.reflux_leave(registered int)
+
+// enter registers the calling thread if the collector doesn't know it, and
+// says whether it did. Every exported function calls it first and undoes
+// it on return.
+fn enter() int {
+	return C.reflux_enter()
+}
+
+fn leave(registered int) {
+	C.reflux_leave(registered)
+}
+
 fn pure_pr(tc f64, pc f64, omega f64) !thermo.Cubic {
 	return thermo.new_cubic(.pr, [
 		thermo.Component{
@@ -47,6 +72,10 @@ fn root_of(r i32) thermo.Root {
 // Python passes a NumPy array's own buffer.
 @[export: 'reflux_scale']
 pub fn reflux_scale(x &f64, n i32, k f64) {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	for i in 0 .. n {
 		unsafe {
 			x[i] *= k
@@ -59,6 +88,10 @@ pub fn reflux_scale(x &f64, n i32, k f64) {
 // or −1 if the model can't be built.
 @[export: 'reflux_pr_z_many']
 pub fn reflux_pr_z_many(n i32, t &f64, p &f64, root i32, tc f64, pc f64, omega f64, z_out &f64, status &i32) i32 {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	eos := pure_pr(tc, pc, omega) or { return -1 }
 	mut failures := i32(0)
 	for i in 0 .. n {
@@ -82,6 +115,10 @@ pub fn reflux_pr_z_many(n i32, t &f64, p &f64, root i32, tc f64, pc f64, omega f
 // reflux_model_new returns a handle that only Python refers to.
 @[export: 'reflux_model_new']
 pub fn reflux_model_new(tc f64, pc f64, omega f64) voidptr {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	eos := pure_pr(tc, pc, omega) or { return unsafe { nil } }
 	return voidptr(&ModelBox{
 		eos: eos
@@ -92,6 +129,10 @@ pub fn reflux_model_new(tc f64, pc f64, omega f64) voidptr {
 // to, until reflux_model_free.
 @[export: 'reflux_model_new_pinned']
 pub fn reflux_model_new_pinned(tc f64, pc f64, omega f64) voidptr {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	h := reflux_model_new(tc, pc, omega)
 	if h != unsafe { nil } {
 		pinned_models << h
@@ -102,6 +143,10 @@ pub fn reflux_model_new_pinned(tc f64, pc f64, omega f64) voidptr {
 // reflux_model_free drops V's reference to a pinned handle.
 @[export: 'reflux_model_free']
 pub fn reflux_model_free(h voidptr) {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	i := pinned_models.index(h)
 	if i >= 0 {
 		pinned_models.delete(i)
@@ -111,6 +156,10 @@ pub fn reflux_model_free(h voidptr) {
 // reflux_model_z solves one point with a model handle; NaN on failure.
 @[export: 'reflux_model_z']
 pub fn reflux_model_z(h voidptr, t f64, p f64, root i32) f64 {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	m := unsafe { &ModelBox(h) }
 	st := thermo.solve_tp(m.eos, t, p, [1.0], root_of(root)) or { return math.nan() }
 	return st.z
@@ -119,6 +168,10 @@ pub fn reflux_model_z(h voidptr, t f64, p f64, root i32) f64 {
 // reflux_gc_collect runs a full collection and returns the heap size, bytes.
 @[export: 'reflux_gc_collect']
 pub fn reflux_gc_collect() u64 {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	gc_collect()
 	return u64(gc_heap_usage().heap_size)
 }
@@ -127,6 +180,10 @@ pub fn reflux_gc_collect() u64 {
 // a collection gets reused and overwritten.
 @[export: 'reflux_churn']
 pub fn reflux_churn(n i32) f64 {
+	reg := enter()
+	defer {
+		leave(reg)
+	}
 	mut s := 0.0
 	for i in 0 .. n {
 		a := []f64{len: 16, init: f64(i + index)}
