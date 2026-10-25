@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–6 are done. The roadmap entry is
+Status: **in progress.** Steps 1–7 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -240,13 +240,28 @@ right and the step was too big. The tests now use 1e-5·T.
   The last two tests above were added for it, and now catch it. All seven
   planted mistakes are caught.
 
-### 7. Dense LU (exercise candidate)
-- `numeric.LU`: `lu_factor(a []f64, n int) !LU` with partial pivoting, then
-  `solve(b)` and `solve_into(b, mut x)`. Row-major storage.
-- Tests: random systems with known solutions, residual bounds, a singular
-  matrix, a nearly singular matrix (Hilbert n = 8: the solve succeeds and
-  the residual stays small even though the error grows), and n = 1 and
-  n = 2 edge cases.
+### 7. Dense LU — done
+- [numeric/lu.v](../numeric/lu.v): `lu_factor(a, n) !LU` with partial
+  pivoting (row-major; a copy, so `a` is left alone), then `solve(b)`,
+  `solve_into(b, mut x)` (no allocation, for use inside iterations) and
+  `det()`.
+- A pivot no larger than n·ε·max|aᵢⱼ| makes it an error: "singular to
+  working precision", never a NaN.
+- [numeric/lu_test.v](../numeric/lu_test.v) (397 assertions):
+  - 30 random systems from 1×1 to 50×50, from a fixed-seed xorshift
+    generator, so results are the same on every machine. Each meets the
+    exit criterion ‖Ax − b‖ ≤ 1e-12·‖A‖·‖x‖ and recovers x to 1e-9;
+  - a zero and a 1e-20 leading entry, which only pivoting survives;
+  - three singular matrices, each rejected;
+  - Hilbert(8), condition number about 3e10: a tiny residual and a forward
+    error below 1e-4;
+  - determinants, including the sign from a row swap and
+    det(Hilbert(3)) = 1/2160;
+  - `solve_into` agreeing with `solve`;
+  - the input left unchanged and sizes checked.
+- Seven planted mistakes were each caught: pivot choice, the singularity
+  tolerance, the permutation, the stored multipliers, both substitution
+  loops, and the determinant sign.
 
 ### 8. Reference fixtures
 - `tools/gen_m1_fixtures.py`, run with `uv run`. Its dependencies (thermo,

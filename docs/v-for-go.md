@@ -98,6 +98,10 @@ fn scale(mut v []f64, k f64) { for mut x in v { x *= k } }
 scale(mut volumes, 1e6)
 ```
 
+`LU.solve_into(b, mut x)` in [numeric/lu.v](../numeric/lu.v) is the pattern
+for iterations: the caller owns `x`, says `mut` at the call, and the solve
+writes into it instead of allocating a new slice on every Newton step.
+
 `for mut x in arr` changes the elements in place. In Go, `for _, x := range arr`
 gives you a **copy**, which is a classic bug. V's `for mut` does what it
 looks like it does. See `cubic_real_roots` in [numeric/cubic.v](../numeric/cubic.v).
@@ -329,6 +333,7 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 |-----------------------------------|-------------------------------------|
 | `make([]float64, 0, 3)`           | `[]f64{cap: 3}`                     |
 | `make([]float64, n)`              | `[]f64{len: n}`                     |
+| make + loop filling `s[i] = f(i)` | `[]f64{len: n, init: f(index)}`     |
 | `s = append(s, x)`                | `s << x`                            |
 | `slices.Sort(s)`                  | `s.sort()`                          |
 | `slices.Clone(s)`                 | `s.clone()`                         |
