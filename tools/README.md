@@ -5,6 +5,7 @@ Scripts for working on reflux. Nothing here is part of the simulator.
 | Script | What it does |
 |---|---|
 | `check.vsh` | Runs the same checks as CI: format, vet, tests, build, demo. |
+| `gen_m1_fixtures.py` | Writes the M1 reference fixtures in `../testdata` from Caleb Bell's `thermo` and CoolProp. |
 
 ```bash
 v run tools/check.vsh
@@ -18,6 +19,17 @@ The first form uses tcc, V's bundled compiler. It's fast, so use it while
 working. The second also makes an optimised `-prod` build; gcc compiles much
 more slowly than tcc.
 
-Fixture generators for [`../testdata`](../testdata) will also live here.
-They may use Python (for `thermo` or CoolProp), because they run by hand,
-not in tests.
+## Fixture generators
+
+These use Python, because that's where the reference libraries are. They
+run by hand, never in tests: the V tests only read the JSON they write.
+
+```bash
+uv run tools/gen_m1_fixtures.py
+```
+
+The script declares its dependencies inline, with pinned versions (PEP 723),
+so `uv run` builds the environment itself and re-running gives the same
+numbers. Regenerate when a fixture needs new points or a new library
+version. The provenance block at the top of each file says which versions
+produced it.

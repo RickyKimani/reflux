@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–7 are done. The roadmap entry is
+Status: **in progress.** Steps 1–8 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -263,13 +263,46 @@ right and the step was too big. The tests now use 1e-5·T.
   tolerance, the permutation, the stored multipliers, both substitution
   loops, and the determinant sign.
 
-### 8. Reference fixtures
-- `tools/gen_m1_fixtures.py`, run with `uv run`. Its dependencies (thermo,
-  CoolProp) are declared inline, so there's no virtual environment to
-  manage.
-- It writes `testdata/m1_thermo_pr.json` and `testdata/m1_coolprop_butane.json`.
-  Each value records the library version and the date.
-- V tests read them with `json2`.
+### 8. Reference fixtures — done
+- [tools/gen_m1_fixtures.py](../tools/gen_m1_fixtures.py) runs with
+  `uv run tools/gen_m1_fixtures.py`. Its dependencies are declared inline
+  and pinned: thermo 0.6.1 and CoolProp 8.0.0, on Python 3.14.
+- It writes `testdata/m1_thermo.json` and `testdata/m1_coolprop_butane.json`,
+  each with a provenance block (date, generator, Python and library
+  versions).
+- Before writing it I checked two things against the libraries:
+  - `thermo` uses the same exact Ωa and Ωb as reflux;
+  - CoolProp's `smolar_residual` is on the (T, ρ) basis, so the generator
+    adds R ln Z to put it on reflux's (T, P) basis. That was verified against
+    an independent construction from a 1 Pa state.
+- [thermo/fixtures_test.v](../thermo/fixtures_test.v) reads them with
+  `json2` (212 assertions):
+  - **Exit criterion 4:** Z, V, ln φᵢ, Hʳ, Sʳ and Cpʳ agree with `thermo`
+    to 1e-9. That's 21 phases, covering PR and SRK, pure and ternary, both
+    roots near saturation and single roots elsewhere.
+  - **Exit criterion 5:** PR's deviations from CoolProp's reference equation
+    for n-butane match the recorded ones and haven't grown. CoolProp's own
+    ideal-gas Cp is used at each point, so only the residual model is
+    compared.
+- The fixture tests caught six small model changes: textbook-rounded Ωb, a
+  fifth-digit change to PR's or SRK's m(ω), kᵢⱼ ignored on either code path,
+  and R from CODATA 2014 instead of 2018, a relative change of about 3e-7.
+
+PR's recorded deviations from the reference equation for n-butane, with
+the component constants used throughout the tests:
+
+| State | V | Hʳ (J/mol) | Sʳ (J/mol K) | Cp | w |
+|---|---|---|---|---|---|
+| vapor, 350 K, 2 bar | −0.1% | +43 | +0.13 | −0.9% | −0.2% |
+| vapor, 400 K, 5 bar | −0.6% | +24 | +0.11 | −1.0% | −0.6% |
+| supercritical, 450 K, 50 bar | +1.5% | +320 | +0.99 | −10.0% | +6.9% |
+| dense, 430 K, 100 bar | +0.5% | +230 | +0.66 | +3.6% | −17.7% |
+| liquid, 300 K, 30 bar | −5.1% | +13 | +0.06 | −1.1% | −20.7% |
+| liquid, 250 K, 10 bar | −5.1% | +189 | +0.67 | −4.0% | −16.0% |
+
+These are the textbook picture of Peng–Robinson: good vapor volumes, liquid
+volumes about 5% low (which a Péneloux shift fixes), and a liquid speed of
+sound 15–20% low.
 
 ### 9. Python shared-library spike
 - A V function exported with `@[export: 'reflux_scale']` and built with
