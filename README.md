@@ -65,7 +65,7 @@ at the edges, i.e. input files and printed output.
 - [x] Generic volume solver that works for non-cubic models; checked against
       cubic polynomial roots
 - [x] Cubic EOS for mixtures (vdW, RK, SRK, PR), van der Waals mixing with kᵢⱼ
-- [x] Per-component α functions: Soave, PRSV
+- [x] Per-component α functions: Soave, PRSV, Twu, Mathias–Copeman
 - [x] Fugacity coefficients, pure-component Psat
 - [x] Derivatives checked against finite differences, Euler homogeneity and
       Σnᵢ ln φᵢ = Gʳ/RT
@@ -107,20 +107,19 @@ DDB) can't be redistributed.
 
 ## Exercises
 
-These are left for you to do while learning V. Each is small.
+These are left for you to do while learning V. Each is small. (Earlier
+exercises, the Twu α and residual H and S, are now part of M1.)
 
-1. **Add the Twu (1991) α.** Add `Twu{l f64, m f64, n f64}` to the `Alpha`
-   sum type, with α = Tr^(N(M−1))·exp(L(1 − Tr^(NM))). The compiler will
-   list every `match` that needs a branch, and the finite-difference test
-   pattern in `thermo/cubic_test.v` will check your dα/dTr.
-2. **Residual enthalpy and entropy.** Write `fn residual_hs(m Model, s State)`
-   using Hʳ = −RT²F_T + PV − nRT and Sʳ = −RT F_T − RF + nR ln Z. To test it,
-   use the fact that for a pure component ∂(ln φ)/∂T at constant P is
-   −Hʳ/(RT²).
-3. **Volume translation as a wrapper.** Write a struct `Translated` with
-   fields `inner Model` and `c []f64`, and make it implement `Model`.
-   With C = Σnᵢcᵢ: F′(T, V, n) = F(T, V + C, n) + n·ln(V/(V + C)). This is
-   an interface that holds an interface, and none of the solvers will
-   notice the difference.
-4. **Benchmark.** Time one million `solve_tp` calls under tcc, then under
+1. **Boston–Mathias α.** Boston & Mathias (1980) replace the Soave form
+   above Tc with an exponential that stays positive. Add it as a new `Alpha`
+   variant. The compiler will list every `match` that needs a branch, and
+   [thermo/alpha_test.v](thermo/alpha_test.v) shows what to check: α(1) = 1,
+   α′ and α″ against finite differences, and continuity with Soave at
+   Tr = 1.
+2. **Second virial coefficient.** Write
+   `fn second_virial(m Model, t f64) f64` for a pure component, using
+   B = lim_(V→∞) V·F/n² (evaluate at a very large V). Then check something
+   step 4 found: at zero pressure the Joule–Thomson coefficient tends to
+   (T·dB/dT − B)/Cp⁰, not to zero.
+3. **Benchmark.** Time one million `solve_tp` calls under tcc, then under
    `v -prod -cc gcc`. Compare the same loop written in Go.

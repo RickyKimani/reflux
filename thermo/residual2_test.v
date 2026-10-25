@@ -56,6 +56,25 @@ fn cases() []Case {
 		) or { panic(err) }
 		n:     [0.2, 0.5, 0.3]
 	}
+	// Twu on methane, Mathias–Copeman on CO₂. At 250 K CO₂ is below its Tc
+	// (304 K) and at 400 K above it, so both MC branches are exercised.
+	// The parameter values are illustrative.
+	out << Case{
+		label: 'PR ternary, Twu + Mathias-Copeman'
+		eos:   thermo.new_cubic(.pr, [methane, butane, co2],
+			kij:    kij
+			alphas: [thermo.Alpha(thermo.Twu{
+				l: 0.15
+				m: 0.90
+				n: 1.9
+			}), thermo.soave_pr(butane.omega), thermo.MathiasCopeman{
+				c1: 0.70
+				c2: -0.3
+				c3: 0.5
+			}]
+		) or { panic(err) }
+		n:     [0.2, 0.5, 0.3]
+	}
 	out << Case{
 		label: 'SRK ternary'
 		eos:   thermo.new_cubic(.srk, [methane, butane, co2], kij: kij) or { panic(err) }
@@ -211,25 +230,4 @@ fn test_euler_identities_for_the_second_derivatives() {
 	}
 }
 
-fn test_alpha_derivatives_match_finite_differences() {
-	alphas := {
-		'unity':      thermo.Alpha(thermo.Unity{})
-		'1/sqrt(Tr)': thermo.InvSqrtTr{}
-		'Soave':      thermo.soave_pr(0.2)
-		'PRSV':       thermo.prsv(0.2, 0.05)
-	}
-	for name, a in alphas {
-		// PRSV is checked on both sides of Tr = 0.7, where κ₁'s factor
-		// (0.7 − Tr) changes sign.
-		for tr in [0.3, 0.6999, 0.7, 0.7001, 1.5] {
-			_, d1, d2 := a.eval(tr)
-			h := 1e-6 * tr
-			up, d1_up, _ := a.eval(tr + h)
-			dn, d1_dn, _ := a.eval(tr - h)
-			fd1 := (up - dn) / (2.0 * h)
-			fd2 := (d1_up - d1_dn) / (2.0 * h)
-			assert close(d1, fd1, 1e-3), '${name} at Tr=${tr}: α′ ${d1} vs ${fd1}'
-			assert close(d2, fd2, 1e-3), '${name} at Tr=${tr}: α″ ${d2} vs ${fd2}'
-		}
-	}
-}
+// The α derivative checks are in alpha_test.v.

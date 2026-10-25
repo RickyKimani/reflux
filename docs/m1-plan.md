@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–4 are done. The roadmap entry is
+Status: **in progress.** Steps 1–5 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -195,11 +195,28 @@ right and the step was too big. The tests now use 1e-5·T.
 - One fix along the way: ln cosh x lost relative precision for small x
   (cosh x ≈ 1). It now uses log1p(2 sinh²(x/2)) there.
 
-### 5. Twu and Mathias–Copeman α (exercise candidate)
-- New `Alpha` variants with α, α′ and α″.
-- Tests: finite differences on α′ and α″ with the same test pattern as PRSV;
-  each matches Soave when its parameters reduce to it, where such a
-  reduction exists.
+### 5. Twu and Mathias–Copeman α — done
+- [thermo/alpha.v](../thermo/alpha.v): `Twu{l, m, n}` and
+  `MathiasCopeman{c1, c2, c3, truncated}`, each with α, α′ and α″. Both
+  definitions were checked against Caleb Bell's `thermo` (Twu91, and
+  Mathias–Copeman truncated above Tc).
+- The two variants were added to the `Alpha` type *before* their `match`
+  branches, to see the compiler at work. It reported "match must be
+  exhaustive (add match branches for: `MathiasCopeman`, `Twu` …)".
+- Truncation is the default, as in the original paper and `thermo`. It makes
+  α″ (and Cp) step by exactly c₂ at Tc; `truncated: false` is smooth.
+- [thermo/alpha_test.v](../thermo/alpha_test.v) (138 assertions):
+  - α′ and α″ for all seven α forms against finite differences, on both
+    sides of Tr = 0.7 and Tr = 1;
+  - α(1) = 1 for every form;
+  - Mathias–Copeman with only c₁ is exactly Soave (truncated or not);
+  - Twu with N = 0 is exactly 1;
+  - Twu stays positive and falls up to Tr = 50;
+  - the c₂ step in α″ at Tc, exactly.
+- residual2_test.v gained a ternary with Twu on methane and
+  Mathias–Copeman on CO₂ (on both sides of CO₂'s Tc). It's now 588
+  assertions.
+- Six planted mistakes in the new branches were each caught.
 
 ### 6. Péneloux volume shift (exercise candidate)
 - `Translated { inner Model, c []f64 }` implements `Model`:

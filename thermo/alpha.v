@@ -10,7 +10,7 @@ import math
 // This is a sum type: the module owns the whole list, and `match` must
 // handle every variant. Adding one (say `Twu{l f64, m f64, n f64}`) makes
 // the compiler point at every `match` that needs a new branch.
-pub type Alpha = InvSqrtTr | Prsv | Soave | Unity
+pub type Alpha = InvSqrtTr | MathiasCopeman | Prsv | Soave | Twu | Unity
 
 // Unity is α = 1 (van der Waals).
 pub struct Unity {}
@@ -31,6 +31,37 @@ pub struct Prsv {
 pub:
 	kappa0 f64
 	kappa1 f64
+}
+
+// Twu is the α of Twu et al. (1991):
+//
+//     α = Tr^(N(M−1)) · exp(L(1 − Tr^(NM)))
+//
+// L, M and N are fitted per component. Unlike the Soave form, α stays
+// positive and keeps falling at high Tr, which is why it extrapolates to
+// supercritical components better.
+pub struct Twu {
+pub:
+	l f64
+	m f64
+	n f64
+}
+
+// MathiasCopeman is the α of Mathias & Copeman (1983), fitted per
+// component, usually to polar compounds' vapour pressures:
+//
+//     α = [1 + c₁u + c₂u² + c₃u³]²,   u = 1 − √Tr
+//
+// Above Tc the original uses only the c₁ term, because the cubic in u
+// misbehaves at high Tr. That is the default here, matching Caleb Bell's
+// `thermo`. It keeps α and α′ continuous at Tc but makes α″, and so Cp, jump
+// there by c₂. Set `truncated: false` for the smooth form at every Tr.
+pub struct MathiasCopeman {
+pub:
+	c1        f64
+	c2        f64
+	c3        f64
+	truncated bool = true
 }
 
 // soave_srk is the SRK (1972) m(ω) correlation.
@@ -95,6 +126,30 @@ pub fn (a Alpha) eval(tr f64) (f64, f64, f64) {
 			k := 1.0 + kappa * u
 			dk := dkappa * u + kappa * du
 			d2k := d2kappa * u + 2.0 * dkappa * du + kappa * d2u
+			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
+		}
+		Twu {
+			// Work with ln α = N(M−1)·ln Tr + L(1 − Tr^(NM)); then
+			// α′ = α·(ln α)′ and α″ = α·[(ln α)″ + (ln α)′²].
+			nm := a.n * a.m
+			trp := math.pow(tr, nm)
+			alpha := math.pow(tr, a.n * (a.m - 1.0)) * math.exp(a.l * (1.0 - trp))
+			g1 := a.n * (a.m - 1.0) / tr - a.l * nm * trp / tr
+			g2 := -a.n * (a.m - 1.0) / (tr * tr) - a.l * nm * (nm - 1.0) * trp / (tr * tr)
+			return alpha, alpha * g1, alpha * (g2 + g1 * g1)
+		}
+		MathiasCopeman {
+			sq := math.sqrt(tr)
+			u := 1.0 - sq
+			du := -1.0 / (2.0 * sq)
+			d2u := 1.0 / (4.0 * tr * sq)
+			// Above Tc the truncated form keeps only c₁.
+			c2, c3 := if a.truncated && tr >= 1.0 { 0.0, 0.0 } else { a.c2, a.c3 }
+			k := 1.0 + u * (a.c1 + u * (c2 + u * c3))
+			dk_du := a.c1 + u * (2.0 * c2 + 3.0 * c3 * u)
+			d2k_du2 := 2.0 * c2 + 6.0 * c3 * u
+			dk := dk_du * du
+			d2k := d2k_du2 * du * du + dk_du * d2u
 			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
 		}
 	}

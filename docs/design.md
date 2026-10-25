@@ -224,9 +224,22 @@ PRSV is the same, with m replaced by κ(Tr) = κ₀ + κ₁h, h = (1 + √Tr)(0.
     k′ = κ′u + κu′,   k″ = κ″u + 2κ′u′ + κu″,   u = 1 − √Tr
     h′ = (0.7 − Tr)/(2√Tr) − (1 + √Tr),   h″ = −1/√Tr − (0.7 − Tr)/(4·Tr^1.5)
 
+**Twu (1991):** α = Tr^(N(M−1))·exp(L(1 − Tr^(NM))). This is easiest
+through ln α:
+
+    (ln α)′ = N(M−1)/Tr − L·NM·Tr^(NM−1)
+    (ln α)″ = −N(M−1)/Tr² − L·NM(NM−1)·Tr^(NM−2)
+    α′ = α·(ln α)′,   α″ = α·[(ln α)″ + (ln α)′²]
+
+**Mathias–Copeman (1983):** α = k², with k = 1 + c₁u + c₂u² + c₃u³ and
+u = 1 − √Tr, so k′ = k_u·u′ and k″ = k_uu·u′² + k_u·u″. Above Tc the
+default (`truncated`) keeps only c₁, as in the original paper and in
+`thermo`. At Tr = 1, u = 0, so α and α′ are continuous, but α″ drops by
+exactly c₂, and Cp steps with it. `truncated: false` gives the smooth form.
+
 **A caveat.** At very high Tr the Soave form passes through k = 0, which
 makes α = 0, and s′ divides by s there. It's unphysical territory anyway
-(roughly Tr > 5 for typical m), and the Twu α (step 5) is the physical fix.
+(roughly Tr > 5 for typical m), and the Twu α is the physical fix.
 
 ## How CPA will fit
 
