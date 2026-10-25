@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–5 are done. The roadmap entry is
+Status: **in progress.** Steps 1–6 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -218,12 +218,27 @@ right and the step was too big. The tests now use 1e-5·T.
   assertions.
 - Six planted mistakes in the new branches were each caught.
 
-### 6. Péneloux volume shift (exercise candidate)
-- `Translated { inner Model, c []f64 }` implements `Model`:
-  F′(T, V, n) = F(T, V + C, n) + n·ln(V/(V + C)), with C = Σ nᵢcᵢ, and
-  `residual2` follows by the chain rule.
-- Tests: Psat unchanged; ln φ′ᵢ = ln φᵢ − cᵢP/RT; the liquid volume shifts
-  by exactly C; all the step-3 identities still hold.
+### 6. Péneloux volume shift — done
+- [thermo/translated.v](../thermo/translated.v): `Translated { inner Model,
+  c []f64 }` implements `Model` by evaluating the inner model at W = V + C,
+  so F′ = F(T, W, n) + n·ln(V/W). All five methods follow by the chain rule
+  (the table is in [design.md](design.md#volume-shift)).
+  `translate(model, c)` rejects any cᵢ ≥ bᵢ. Shifts nest:
+  `translate(translate(m, c1)!, c2)!` works.
+- [thermo/translated_test.v](../thermo/translated_test.v) (203 assertions):
+  - V moves by exactly −C and ln φᵢ by exactly −cᵢP/RT;
+  - Psat is unchanged at four temperatures;
+  - Gʳ and Hʳ move by −PC, while Sʳ and Cpʳ don't move;
+  - two shifts equal their sum;
+  - every first and second derivative against finite differences;
+  - Euler, Gibbs–Duhem and Σ nᵢ·∂ln φᵢ/∂T = −Hʳ/RT²;
+  - the packing limit moves to B − C;
+  - a compressed liquid whose shifted volume lies below the inner B is
+    still found.
+- The planted-mistake check found a gap. A wrong sign in `min_volume` went
+  undetected, because ordinary liquids sit far from the packing limit.
+  The last two tests above were added for it, and now catch it. All seven
+  planted mistakes are caught.
 
 ### 7. Dense LU (exercise candidate)
 - `numeric.LU`: `lu_factor(a []f64, n int) !LU` with partial pivoting, then

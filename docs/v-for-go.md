@@ -240,8 +240,15 @@ pub fn solve_tp(m Model, t f64, p f64, n []f64, root Root) !State
 ```
 
 `Cubic` never says `implements Model`. Passing a `Cubic` to `solve_tp`
-compiles because it has the four methods. Inside a function, `if m is Cubic`
+compiles because it has the five methods. Inside a function, `if m is Cubic`
 checks the concrete type and smart-casts `m`, like a Go type assertion.
+
+**An interface can hold an interface.** `Translated` in
+[thermo/translated.v](../thermo/translated.v) has a field `inner Model` and
+implements `Model` itself, by evaluating `inner` at a shifted volume. So
+`thermo.translate(thermo.translate(eos, c1)!, c2)!` is a valid model, and
+`solve_tp` can't tell it from a cubic. It's the same decorator pattern as
+wrapping an `io.Reader` in Go.
 
 **Sum types** are what Go lacks: a *closed* set of variants, checked by the
 compiler. `Alpha` in [thermo/alpha.v](../thermo/alpha.v) is one, because the

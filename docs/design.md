@@ -241,6 +241,36 @@ exactly c₂, and Cp steps with it. `truncated: false` gives the smooth form.
 makes α = 0, and s′ divides by s there. It's unphysical territory anyway
 (roughly Tr > 5 for typical m), and the Twu α is the physical fix.
 
+## Volume shift
+
+`Translated` ([thermo/translated.v](../thermo/translated.v)) wraps any
+`Model`. With C = Σ nᵢcᵢ and W = V + C, it is the inner model evaluated at
+W:
+
+    F′(T, V, n) = F(T, W, n) + n·ln(V/W),   so   P′(T, V, n) = P(T, W, n)
+
+In the derivatives below, F and its subscripts are the inner model's at
+(T, W, n). Because ∂W/∂nᵢ = cᵢ, each n-derivative picks up a V-derivative:
+
+| | |
+|---|---|
+| F′_V | F_V + n/V − n/W |
+| F′_VV | F_VV − n/V² + n/W² |
+| F′_T, F′_TT, F′_TV | F_T, F_TT, F_TV |
+| F′_nᵢ | F_nᵢ + cᵢF_V + ln(V/W) − n·cᵢ/W |
+| F′_Vnᵢ | F_Vnᵢ + cᵢF_VV + 1/V − 1/W + n·cᵢ/W² |
+| F′_Tnᵢ | F_Tnᵢ + cᵢF_TV |
+| F′_nᵢnⱼ | F_nᵢnⱼ + cⱼF_Vnᵢ + cᵢF_Vnⱼ + cᵢcⱼF_VV − (cᵢ + cⱼ)/W + n·cᵢcⱼ/W² |
+
+What follows, and is tested:
+
+- V′ = V − C at the same (T, P), and ln φ′ᵢ = ln φᵢ − cᵢP/RT;
+- so Psat and phase splits don't change;
+- G′ʳ = Gʳ − PC, H′ʳ = Hʳ − PC, and Sʳ and Cpʳ are unchanged (for constant
+  c);
+- the packing limit moves to B − C, which is why `translate` rejects any
+  cᵢ ≥ bᵢ.
+
 ## How CPA will fit
 
 ```v
