@@ -40,16 +40,34 @@ volume solver calls the cheapest one on every iteration. The composition
 Hessian in `residual2` costs O(nc²) and is needed only by Cp, Newton flash
 and Jacobians.
 
-Everything else is derived, once, in model-independent code:
+### Properties from F
+
+Everything else is derived once, in model-independent code
+([thermo/properties.v](../thermo/properties.v)), following Michelsen &
+Mollerup chapter 2. n is Σnᵢ. Residual properties are on the (T, P) basis,
+Mʳ = M − Mⁱᵍ at the same T, P and n, and they're extensive.
 
 | Property | From F |
 |---|---|
 | P | RT(n/V − F_V) |
-| ∂P/∂V | −RT(F_VV + n/V²) |
+| (∂P/∂V)_T,n | −RT(F_VV + n/V²) |
+| (∂P/∂T)_V,n | P/T − RT·F_TV |
+| (∂P/∂nᵢ)_T,V | RT(1/V − F_Vnᵢ) |
+| V̄ᵢ | −(∂P/∂nᵢ)/(∂P/∂V) |
 | ln φᵢ | F_nᵢ − ln Z |
-| Gʳ/RT | F + n(Z − 1) − n ln Z |
+| (∂ln φᵢ/∂T)_P,n | F_Tnᵢ + 1/T − V̄ᵢ(∂P/∂T)/RT |
+| (∂ln φᵢ/∂P)_T,n | V̄ᵢ/RT − 1/P |
+| n(∂ln φᵢ/∂nⱼ)_T,P | n·F_nᵢnⱼ + 1 + n(∂P/∂nᵢ)(∂P/∂nⱼ)/(RT·∂P/∂V) |
+| Gʳ/RT | F + n(Z − 1) − n ln Z  (= Σ nᵢ ln φᵢ) |
 | Hʳ | −RT²F_T + PV − nRT |
-| Sʳ (at T, P) | −RT F_T − R F + nR ln Z |
+| Sʳ | −RT F_T − R F + nR ln Z |
+| Uʳ | −RT²F_T |
+| Aʳ | Uʳ − TSʳ = RT(F − n ln Z) |
+| Cvʳ | −RT(T·F_TT + 2F_T) |
+| Cpʳ | Cvʳ − T(∂P/∂T)²/(∂P/∂V) − nR |
+
+The n·∂ln φᵢ/∂nⱼ matrix is symmetric, and Gibbs–Duhem makes each of its
+columns sum to zero when weighted by nᵢ. Both are tested.
 
 ## Finding the volume
 

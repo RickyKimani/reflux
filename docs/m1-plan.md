@@ -1,6 +1,6 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1 and 2 are done. The roadmap entry is
+Status: **in progress.** Steps 1–3 are done. The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -133,16 +133,37 @@ Steps 7 and 9 don't depend on the thermo chain and can happen at any point.
 - The tests have teeth: six planted mistakes (in f_BB, g_BB, D_TT, F_TT,
   F_Tnᵢ and PRSV's h″) were each caught.
 
-### 3. Model-independent derived properties
-Written once against `Model`, so CPA gets them for free:
+### 3. Model-independent derived properties — done
+[thermo/properties.v](../thermo/properties.v) is written once against
+`Model`, so CPA gets all of it for free:
 
-- (∂P/∂V)_T,n, (∂P/∂T)_V,n, (∂P/∂nᵢ)_T,V, and the partial molar volumes V̄ᵢ;
-- `ln_phi_derivs(m, s)`: ∂ln φᵢ/∂T at constant P, ∂ln φᵢ/∂P at constant T,
-  and n·∂ln φᵢ/∂nⱼ at constant T and P (Michelsen & Mollerup, ch. 2);
-- residual Hʳ, Sʳ, Gʳ, Uʳ, Aʳ, Cvʳ and Cpʳ at a solved `State`.
+- `pressure_derivs(m, t, v, n)`: P, (∂P/∂V)_T,n, (∂P/∂T)_V,n,
+  (∂P/∂nᵢ)_T,V and the partial molar volumes V̄ᵢ;
+- `ln_phi_derivs(m, state)`: ∂ln φᵢ/∂T at constant P, ∂ln φᵢ/∂P at
+  constant T, and n·∂ln φᵢ/∂nⱼ at constant T and P;
+- `residual_props(m, state)`: Hʳ, Sʳ, Gʳ, Uʳ, Aʳ, Cvʳ and Cpʳ, extensive.
 
-Tests: Gibbs–Duhem, both ∂ln φ identities, the Cp − Cv identity, and the
-P → 0 limits.
+[thermo/properties_test.v](../thermo/properties_test.v) has 260 assertions
+over PR and vdW n-butane and the two ternaries, each at a vapor point and a
+dense point. It checks:
+
+- every derivative against finite differences of *re-solved* states, so the
+  volume solver is in the loop too;
+- Cpʳ = ∂Hʳ/∂T at constant P, Sʳ = −∂Gʳ/∂T, ∂Gʳ/∂P = V − nRT/P, and
+  Cvʳ = ∂Uʳ/∂T at constant V;
+- Σ nᵢV̄ᵢ = V;
+- Gibbs–Duhem and the symmetry of n·∂ln φᵢ/∂nⱼ;
+- Σ nᵢ·∂ln φᵢ/∂T = −Hʳ/RT² and Σ nᵢ·∂ln φᵢ/∂P = Vʳ/RT;
+- Gʳ = RT·Σ nᵢ ln φᵢ;
+- every residual property falling below 1e-5·nR at 1 Pa.
+
+Seven planted mistakes in properties.v were each caught.
+
+One thing came up: the SRK ternary's "liquid" point (250 K, 60 bar) turned
+out to be a single dense root near the mixture's critical region. There, a
+temperature step of 1e-4·T left a truncation error of 6e-6. Shrinking the
+step showed it converging as h² onto the analytic value, so the formula was
+right and the step was too big. The tests now use 1e-5·T.
 
 ### 4. Ideal gas and total properties
 - `CpForm = AlyLee | Polynomial`, each with `cp(t)`, `int_cp(t1, t2)` and
