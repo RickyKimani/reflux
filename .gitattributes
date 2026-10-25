@@ -1,0 +1,12 @@
+# `v fmt` writes LF. Git on Windows checks text out as CRLF by default, and
+# then `v fmt -verify` would report every file as unformatted. Pin LF for
+# everything the tools read or write.
+*.v     text eol=lf
+*.vsh   text eol=lf
+v.mod   text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.json  text eol=lf
+*.xml   text eol=lf
+*.yml   text eol=lf
+*.py    text eol=lf

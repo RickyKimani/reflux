@@ -1,0 +1,19 @@
+# Binaries produced by `v .` / `v -prod .`. Anchored with a leading slash:
+# a bare `reflux` would also ignore the future python/reflux/ package.
+/reflux
+/reflux.exe
+# `v run tools/check.vsh` builds the script next to itself while it runs.
+/tools/check
+*.exe
+*.so
+*.dll
+*.dylib
+
+# V build caches and generated C
+*.tmp.c
+*.c.tmp
+.vtmp/
+
+# Editors
+.vscode/
+.idea/

@@ -1,0 +1,79 @@
+# Runs tools/check.vsh on Windows and Linux, with tcc and with gcc.
+# The script is the single source of truth: CI and `v run tools/check.vsh`
+# run exactly the same checks.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# The V commit is pinned in .v-version, so an upstream change can't break
+# the build overnight. Upgrade on purpose: `v up`, put the new commit in
+# .v-version, run the checks, and fix what breaks, all in one commit.
+jobs:
+  check:
+    name: ${{ matrix.os }} / ${{ matrix.cc }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        cc: [tcc, gcc]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read pinned V commit
+        shell: bash
+        run: echo "V_REF=$(tr -d '[:space:]' < .v-version)" >> "$GITHUB_ENV"
+
+      - name: Restore V
+        id: cache-v
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/vlang
+          key: v-${{ runner.os }}-${{ env.V_REF }}
+
+      - name: Fetch V ${{ env.V_REF }}
+        if: steps.cache-v.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git init -q "$RUNNER_TEMP/vlang"
+          cd "$RUNNER_TEMP/vlang"
+          git remote add origin https://github.com/vlang/v
+          git fetch -q --depth 1 origin "$V_REF"
+          git checkout -q --detach FETCH_HEAD
+
+      - name: Build V (Linux)
+        if: steps.cache-v.outputs.cache-hit != 'true' && runner.os == 'Linux'
+        working-directory: ${{ runner.temp }}/vlang
+        run: make
+
+      - name: Build V (Windows)
+        if: steps.cache-v.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        working-directory: ${{ runner.temp }}/vlang
+        shell: cmd
+        run: make.bat
+
+      - name: Put V on PATH
+        shell: bash
+        run: echo "$RUNNER_TEMP/vlang" >> "$GITHUB_PATH"
+
+      # Same toolchain as the development machine: MSYS2 UCRT64 gcc.
+      - name: Install gcc (Windows)
+        if: runner.os == 'Windows' && matrix.cc == 'gcc'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          release: false
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Put gcc on PATH (Windows)
+        if: runner.os == 'Windows' && matrix.cc == 'gcc'
+        shell: bash
+        run: echo 'C:\msys64\ucrt64\bin' >> "$GITHUB_PATH"
+
+      - name: Show toolchain
+        run: v doctor
+
+      - name: Check
+        run: v run tools/check.vsh -cc ${{ matrix.cc }}
