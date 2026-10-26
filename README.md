@@ -56,6 +56,9 @@ numeric/
 tdep/
   tdep.v            temperature-dependent correlations (ChemSep and DIPPR
                     forms): value, derivative and both integrals
+components/
+  record.v          a compound as a component file holds it (docs/data-format.md)
+  chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
   model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
   properties.v      P derivatives, ln φ derivatives, residual H, S, G, U, A, Cv, Cp
@@ -110,7 +113,9 @@ So far:
 - the file format is chosen;
 - every correlation form the data uses for vapour pressure, heat capacity,
   density and heat of vaporization can be evaluated, differentiated and
-  integrated.
+  integrated;
+- the whole database imports, as 642 compounds, with its defects repaired
+  or reported rather than silently fixed.
 
 ## Roadmap
 

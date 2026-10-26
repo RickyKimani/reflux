@@ -350,6 +350,17 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `const butane = Component{…}` and `const kinds = [CubicKind.vdw, .rk, .srk, .pr]`.
 - Receivers: `fn (c Cubic) residual(…)` is a value receiver, and
   `fn (mut s Solver) step()` is the equivalent of Go's `func (s *Solver) Step()`.
+- **Read-only exported fields.** In Go an exported field can always be
+  written by anyone who has the struct. V separates the two: fields under
+  `pub:` can be read outside the module but not assigned, and only
+  `pub mut:` fields can be assigned from anywhere. The importer's `Source`,
+  `Repair` and `Duplicate`
+  ([components/chemsep/chemsep.v](../components/chemsep/chemsep.v)) are
+  `pub:`, so a report can't be edited after the fact. (I first assumed
+  `pub mut:` meant "mutable only inside the module", as older V docs said.
+  A probe showed it doesn't.)
+- **Struct update syntax**, which Go lacks: `Repair{...it, cas: rec.ids.cas}`
+  copies `it` and changes one field.
 
 ---
 
@@ -420,6 +431,17 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
     imports `thermo`, so it can only see `pub` names. That keeps the public
     API honest.
 - `math.tolerance(a, b, tol)` is the relative-or-absolute float compare.
+- **An expensive fixture, computed once.** A `const` whose value is a
+  function call is evaluated when the program starts, so every test function
+  in the file shares it. Go would need `TestMain` or a `sync.Once`.
+  [components/chemsep/chemsep_test.v](../components/chemsep/chemsep_test.v)
+  imports the whole ChemSep database this way, once (about 4 s), for 16
+  tests:
+
+```v
+const vendored = import_files(@VMODROOT, ['data/vendor/chemsep/chemsep1.xml',
+	'data/vendor/chemsep/chemsep2.xml']) or { panic(err) }
+```
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
   Newton solver against the polynomial roots. Identities catch bugs that
@@ -511,7 +533,7 @@ sensitivity analysis are independent, which makes them the first place
 
 ---
 
-## 13. Generics and JSON
+## 13. Generics, JSON and reflection
 
 Generics use square brackets, as in Go 1.18+, and are monomorphised (one
 copy per type). V's `json2` decodes straight into a struct by field name.
@@ -550,6 +572,39 @@ if want := p.chemicals_y {
 
 A JSON key can't be a V keyword such as `int`. The fixture generator writes
 `integral` instead.
+
+**Reflection happens at compile time.** Go's `reflect` inspects values at
+run time, through `interface{}`, and a mistake is a run-time panic. V's
+`$for` loops over a type's fields while compiling, and generates ordinary
+typed code for each one. [components/record.v](../components/record.v)
+sets a struct's float field by its name this way:
+
+```v
+fn set_field[T](mut s T, key string, v f64) ! {
+	$for f in T.fields {
+		$if f.typ is ?f64 {
+			if f.name == key {
+				s.$(f.name) = v // becomes s.tc = v, s.pc = v, … : one branch per field
+				return
+			}
+		}
+	}
+	return error('no ${typeof(s).name} key `${key}`')
+}
+```
+
+`$if f.typ is ?f64` is decided at compile time, so fields of other types
+never reach the assignment, and the assignment is type-checked like any
+other. The component file's keys are simply the struct's field names. The
+importer, and the TOML writer and reader still to come, share one
+definition and can't drift apart.
+
+Two smaller gotchas from the importer:
+- `strconv.atof64` rejects `abc` and `1.2.3` but accepts `nan` and `inf`,
+  so check `math.is_finite` yourself.
+- `arr.filter(…)` and `arr.map(…)` give you `it` but not `index`, which
+  exists only in array initialisers (`[]int{len: n, init: index}`). Use a
+  loop.
 
 ---
 

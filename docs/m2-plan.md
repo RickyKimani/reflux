@@ -62,11 +62,12 @@ The ChemSep-specific equations, from ChemSep's PCDmanager documentation:
 
 All checked by `v -W test .`, so CI enforces them.
 
-1. **Import is complete.** All 642 records import, despite the 43 malformed
-   SMILES values, which are repaired and listed. The import report lists
-   zero unparsed records. Any overlap between the files is resolved by the
-   documented rule (D8); there is none in 8.50. Unsupported equation forms
-   (such as eq. 200) are kept verbatim and reported, never dropped.
+1. **Import is complete.** All 644 records import as 642 compounds,
+   despite the 43 malformed SMILES values, which are repaired and listed.
+   The import report lists zero unparsed records. The two compounds that
+   `chemsep2.xml` lists twice are resolved by the documented rule (D8).
+   Unsupported equation forms (such as eq. 200) are kept verbatim and
+   reported, never dropped.
 2. **The data files are reproducible.** Re-running the importer on the
    vendored XML regenerates `data/components/` byte for byte, and the
    vendored files still match the SHA-256 sums in their NOTICE. CI checks
@@ -113,7 +114,7 @@ All checked by `v -W test .`, so CI enforces them.
 | D5 | Units of correlations | Coefficients are stored **verbatim**, along with the correlation's native output unit, and the evaluator converts the *result* to SI per mol. Scalars are converted at import. | Forms like A + exp(…) can't be rescaled coefficient by coefficient. Verbatim coefficients also compare directly with ChemSep and `chemicals`. |
 | D6 | Where it lives | A new module `components`, which imports `thermo` and builds `thermo.Component`, `thermo.IdealGas` and `thermo.Fluid`. | `thermo` stays about models. Data handling is its own concern. |
 | D7 | Outside [Tmin, Tmax] | Evaluate anyway (extrapolate) and say so: each evaluation returns the value plus an in-range flag. | A flash's trial temperatures often step outside a correlation's range briefly. Refusing would break the iteration, while silence would hide bad data. |
-| D8 | Overlapping compounds | `chemsep1.xml` wins; `chemsep2.xml` adds compounds. Overlaps are listed in the import report. | Simple and deterministic. Revisit if the two disagree badly. |
+| D8 | Overlapping compounds | The first occurrence of a CAS number, in reading order (`chemsep1.xml`, then `chemsep2.xml`, top to bottom), wins. Each duplicate is listed in the import report with the elements that differ. | Simple and deterministic. In 8.50 the only duplicates are two compounds listed twice within `chemsep2.xml`. In both, the first copy is the more complete and more recently edited one (step 3). |
 | D9 | Ideal-gas Cp from the database | A new `CpForm` variant wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use adaptive Gauss–Kronrod quadrature (`numeric.integrate`) when there's no closed form. | It reuses M1's whole total-property machinery. |
 | D10 | Mathias–Copeman parameters | The XML's values are imported and stored but not used by default, since their EOS isn't stated. `mc-PR.lib`, fitted for PR, is the better source; vendoring it is a small addition to step 6. | Using parameters fitted for one EOS in another would be guessing. |
 | D11 | Who writes what | As in M1, I write it all unless you claim a step. Good candidates are marked. | |
@@ -231,12 +232,64 @@ flowchart LR
   them. The synthetic eq.-104 set fixes that, and it and four more
   mutations of the D and E terms are now caught: 30 of 30.
 
-### 3. ChemSep XML importer
-- Parse with `encoding.xml` into records. Convert scalars to SI; keep
-  correlation coefficients verbatim (D5). Attach provenance: file,
-  version, compound index.
-- Tests: every record parses; spot values against hand conversions; the
-  overlap rule.
+### 3. ChemSep XML importer — done
+- New module `components`, for now just the record model
+  ([components/record.v](../components/record.v)). Its struct field names
+  are the component-file keys. Values are set by key through V's
+  compile-time reflection, so an unknown key is an error, and the step 4
+  writer will take its key order from the same structs.
+- New module `components.chemsep`, the importer.
+  - [fields.v](../components/chemsep/fields.v) is the one table that maps
+    each of the 68 ChemSep elements to a key, a kind, the unit it must carry,
+    and whether it's per kmol.
+  - [chemsep.v](../components/chemsep/chemsep.v) parses with V's
+    `encoding.xml`.
+  - The provenance is `ChemSep v8.49 (data/vendor/chemsep/chemsep1.xml)`
+    and the like, with the version taken from the file itself.
+- Strict, so a new ChemSep release can't be misread silently. These are all
+  errors:
+  - an unknown element or attribute;
+  - a unit other than the expected one;
+  - a malformed, NaN or infinite number;
+  - a gap in a coefficient set;
+  - an element twice in a compound;
+  - text where elements belong;
+  - a CAS number that fails its check digit. It becomes a file name, so
+    this also keeps anything path-like out.
+- Per-kmol values are converted by moving the decimal point in the text
+  before parsing. Dividing by 1000 would be one unit in the last place off
+  for 220 of the 2,637 distinct per-kmol values.
+- The whole vendored database imports in about 4 s under tcc. What it found:
+  - **644 records, 642 compounds.** Trifluoromethane and 3-chloropropene
+    are each in `chemsep2.xml` twice. The first copy is the more complete
+    and more recent one both times, so D8 now reads "first occurrence wins".
+  - **47 repairs.**
+    - 41 stray SMILES `<`s; the other 2 of the 43 are in the dropped copies.
+    - Six ASOG group lists that name a group twice. Summing the two is right
+      every time: diglyme's 2 + 1 ether groups for its three ether oxygens.
+  - **Findings, kept verbatim and reported:**
+    - 42 impossible correlation ranges, such as chloroform's solid Cp over
+      [283, 0] K and several liquid viscosities ending at 1 K;
+    - 334 correlations in forms reflux can't evaluate, 327 of them
+      permittivities;
+    - 8 records with suspect unused coefficients;
+    - one correlation with no coefficients, para-hydrogen's RPP Cp;
+    - 5 partial Mathias–Copeman sets;
+    - 1,2-dichloroethylene carbonate, with no Tc, Pc or ω.
+- Tests ([chemsep_test.v](../components/chemsep/chemsep_test.v)): the real
+  import's counts, duplicates, repairs and findings. They were all
+  cross-checked with an independent Python/ElementTree survey of the XML.
+  Also:
+  - n-butane against hand conversions, value by value;
+  - the decimal shift;
+  - CAS validation;
+  - a synthetic file for each refusal, the repairs, and duplicates across
+    files;
+  - every table key against the record structs.
+- Mutation check: 21 planted mistakes, all caught. They covered the decimal
+  shift, each strictness check, the repairs, the duplicate rule, each kind
+  of finding, the CAS check digit, a per-kmol flag in the table, and the
+  reflection setters.
 
 ### 4. TOML writer and reader
 - `tools/import_chemsep.vsh` writes `data/components/<CAS>.toml`, and the
@@ -250,6 +303,12 @@ flowchart LR
   and `ideal_gas(...)` a `thermo.IdealGas`.
 - User components in the same TOML format, in a directory listed after the
   built-in one, so they can add to or override it.
+- Decide what the database does with the step 3 findings:
+  - a correlation with an impossible range or no coefficients is
+    probably unusable;
+  - eq. 200 falls back to the Antoine record;
+  - a compound without Tc, Pc and ω can't become a `thermo.Component`,
+    and lookup should say why.
 
 ### 6. kᵢⱼ banks
 - An IPD parser; a symmetric matrix for a component list; a report of
@@ -287,7 +346,7 @@ flowchart LR
 | Risk | Effect | Fallback |
 |---|---|---|
 | V's `toml` module can't handle the schema | step 1 changes format | JSON via `json2`, which M1 already uses |
-| `encoding.xml` is slow, or rejects the malformed files | import fails | the importer repairs the known defect (the stray `<`) before parsing, and lists each repair. If V's parser still can't cope, a small purpose-built reader for this flat format will. Import runs only when the vendored XML changes; the TOML is what loads at run time. |
+| `encoding.xml` is slow, or rejects the malformed files | import fails | **Happened as expected, and handled.** V's parser rejects the stray `<`, so the importer escapes that one pattern first and lists each repair. Speed is fine: 4 s for both files under tcc, and import runs only when the vendored XML changes. |
 | ChemSep LITE's files differ from DWSIM's copies | different numbers | **Happened**, and harmlessly: the official files win (D3), and the NOTICE records the differences. |
 | The kᵢⱼ licence assumption (D2) turns out wrong | files must be removed | they're isolated in `data/vendor/chemsep/`, and the importer can read them from a local install instead |
 | Bad entries in the data | wrong results downstream | the sanity sweep and data-quality report make them visible; no silent fixes |

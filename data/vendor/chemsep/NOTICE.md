@@ -53,6 +53,12 @@ stray `<` (1 in `chemsep1.xml`, 42 in `chemsep2.xml`; for example
 reflux's importer drops the trailing `<`, which is invalid SMILES in any
 case, and lists every repair in its import report.
 
+Two compounds are in `chemsep2.xml` twice: trifluoromethane (75-46-7) and
+3-chloropropene (107-05-1), with the same library index each time. In both,
+the first copy is the more complete and more recently edited one, and it's
+the one reflux keeps. The import report lists everything else the importer
+noticed: summed ASOG groups, impossible correlation ranges and similar.
+
 ## Compared with the copies in DWSIM's repository
 
 DWSIM's GitHub repository ships older exports (v8.3 and v8.31, 2022), with
