@@ -166,26 +166,60 @@ each sum.
 
 ## `data/components/index.toml`
 
-The importer also writes one index file listing every compound's CAS
-number, name, aliases and InChIKey. Lookup by name reads only the index,
-and only the requested components' files are parsed. That matters at about
-1 ms per file under tcc (below).
+The importer also writes one index file listing every compound's name,
+InChIKey and aliases under its CAS number, sorted by CAS number:
+
+```toml
+format = 1
+
+[compounds."106-97-8"]
+name = "N-butane"
+inchikey = "IJDNQMDRQITEOD-UHFFFAOYSA-N"
+```
+
+Lookup by name reads only the index, and only the requested components'
+files are parsed. That matters at about 2 ms per file under tcc.
+
+## The rest of `data/components/`
+
+The directory is generated as a whole, by `tools/import_chemsep.vsh`, and a
+test fails if the committed files differ from a fresh generation.
+- Each compound file starts with a two-line comment naming the compound and
+  saying it's generated.
+- `README.md` gives the licence: the files are a Modified Version of the
+  ChemSep database, under its own Artistic License 2.0.
+- `CHANGES.md` documents how they differ from the original, as the licence
+  asks: the systematic conversions, every repair, the duplicates dropped,
+  and what was noticed but left as it is.
 
 ## Rules the reader enforces
 
+The reader is [components/file.v](../components/file.v), and every error
+names the file and the key.
 - `format` must be a version it knows.
 - **Types are checked.** V's `toml.Any.f64()` returns 0.0 for a string
   without complaint, so every value's type is checked before use. A wrong
   type is an error naming the file, the key and the type found.
+- **A float may be written as an integer** (`tc = 425`), if the integer is
+  exact as a float (|i| ≤ 2⁵³). NaN and infinities are refused. V's toml
+  parser reads `nan` as a string and `inf` as a huge integer, so both are
+  caught by these rules.
 - Unknown keys are errors, so a typo like `omgea` can't silently drop a
   value.
 - `ids.cas` must match the file name.
+- Group numbers are plain decimals (`"19"`, not `"019"`), and counts are
+  positive.
+- `name`, `source` and `ids.cas` are required, and so are a correlation's
+  `eq`, `coeffs`, `t_range` and `units`.
 
 ## Rules the writer follows
 
 Output is deterministic, so regenerating the files gives no diff
 (M2 exit criterion 2):
 
+- absent values and empty tables aren't written at all;
+- strings are TOML basic strings, with `\` and `"` escaped. SMILES contain
+  backslashes. Control characters are refused;
 - keys always in the order of the fields in
   [components/record.v](../components/record.v);
 - floats printed with V's `f64.str()`, which the spike showed round-trips

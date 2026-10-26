@@ -10,7 +10,7 @@ folder. They are byte-for-byte identical to the installed files.
 | File | From | Version (as stated in the file) | Size (bytes) | SHA-256 |
 |---|---|---|---|---|
 | `chemsep1.xml` | `pcd/` | ChemSep v8.49 pure component data 1 (2024), 433 compounds | 3818631 | `453b0f61ec0ab185eff2b1f8096aa1e96b05feb1c67f9b03e42a15dcd800ab14` |
-| `chemsep2.xml` | `pcd/` | ChemSep v8.50 pure component data 2 (2025, modified 2026), 209 compounds | 1604493 | `37c7086eb4c4b89a61406fe565c66720b7b31d5ae5cdeef784e143fa5031607e` |
+| `chemsep2.xml` | `pcd/` | ChemSep v8.50 pure component data 2 (2025, modified 2026), 211 records of 209 compounds | 1604493 | `37c7086eb4c4b89a61406fe565c66720b7b31d5ae5cdeef784e143fa5031607e` |
 | `pr.ipd` | `ipd/` | DECHEMA Peng-Robinson parameters | 21929 | `48440f2838e6fa8475e32b59756891c23ea0ea0a58ad56d4a3d79e32089e9d27` |
 | `srk.ipd` | `ipd/` | DECHEMA Soave-Redlich-Kwong parameters | 22449 | `d2a94c1566b99bc08847c007f6f4e45dcce9b334098f433d2ef1d37908665d44` |
 | `Artistic_license_2_0.txt` | `pcd/` | the licence text ChemSep ships with its data | 8720 | `da4a665b492e71021b516e2d9e261f77f0c62ac60bfac089b4a4a33ddecd42a7` |

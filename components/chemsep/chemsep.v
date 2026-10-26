@@ -319,7 +319,10 @@ fn correlation(el xml.XMLNode, units string) !components.CorrelationData {
 // Six ChemSep 8.50 compounds list an ASOG group twice, for instance
 // diglyme's ether group 19 as 2 and then 1. Each time the sum is the
 // right count (diglyme has three ether oxygens), so repeats are added up,
-// and each sum is returned as a repair to report.
+// and each sum is returned as a repair to report. One compound, diphenyl
+// disulfide, has a UNIFAC-LLE list that is just "group 10, count 0": a
+// zero count contributes nothing, so it's dropped, and reported, keeping
+// the component format's rule that counts are positive.
 fn groups(el xml.XMLNode, key string) !(map[int]int, []Repair) {
 	check_attributes(el, ['name'])!
 	mut counts := map[int]int{}
@@ -331,12 +334,22 @@ fn groups(el xml.XMLNode, key string) !(map[int]int, []Repair) {
 		check_attributes(c, ['id', 'value'])!
 		id := integer(c.attributes['id'] or { '' })!
 		n := integer(c.attributes['value'] or { '' })!
+		if id <= 0 || n < 0 {
+			return error('<${el.name}> has group ${id} with count ${n}')
+		}
 		counts[id] += n
 		listed[id] << n
 	}
 	mut repairs := []Repair{}
 	for id, ns in listed {
-		if ns.len > 1 {
+		if counts[id] == 0 {
+			counts.delete(id)
+			repairs << Repair{
+				key:    'groups.${key}'
+				before: 'group ${id}: ' + ns.map(it.str()).join(' + ')
+				after:  'dropped'
+			}
+		} else if ns.len > 1 {
 			repairs << Repair{
 				key:    'groups.${key}'
 				before: 'group ${id}: ' + ns.map(it.str()).join(' + ')

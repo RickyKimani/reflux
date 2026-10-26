@@ -37,6 +37,11 @@ It is a good way to find out what a feature costs.
 
 `-W` turns warnings into errors. Use it for tests and CI (see §4 for why).
 
+A `.vsh` script inside the project can import the project's own modules,
+just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
+is a 30-line script around `import components.chemsep`. Go would need a
+`cmd/` package to do the same.
+
 **Windows gotcha: keep the project path short.** tcc puts temporary files
 with long names next to the output. In a deeply nested folder it fails with
 `could not write … .o: No such file or directory`, then tries to fall back to
@@ -439,8 +444,7 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
   tests:
 
 ```v
-const vendored = import_files(@VMODROOT, ['data/vendor/chemsep/chemsep1.xml',
-	'data/vendor/chemsep/chemsep2.xml']) or { panic(err) }
+const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 ```
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
@@ -605,6 +609,29 @@ Two smaller gotchas from the importer:
 - `arr.filter(…)` and `arr.map(…)` give you `it` but not `index`, which
   exists only in array initialisers (`[]int{len: n, init: index}`). Use a
   loop.
+
+Two limits of `$for`, both met in the component-file writer
+([components/file.v](../components/file.v)):
+- `s.$(f.name)` can't go inside a string interpolation. Assign it to a
+  variable first.
+- In V 0.5.2, `if d := s.$(f.name) { … }` unwraps an Option *float* field,
+  but leaves an Option *struct* field (`?CorrelationData`) still an Option
+  inside the block. Pass the Option to an ordinary typed function and
+  unwrap it there.
+
+**Struct equality is deep.** In Go, `==` on a struct that holds a map or a
+slice doesn't compile, and you reach for `reflect.DeepEqual`. V's `==`
+compares structs field by field, through arrays, maps and Options. The
+round-trip test is just `assert read_toml(path)! == record`, for each of
+642 compounds.
+
+V's `toml` module has quirks to code around:
+- `nan` reads back as the *string* "nan";
+- `inf` reads back as the integer 9218868437227405312;
+- integers come back as `i64`, `int` or `u64` depending on their size.
+
+[components/file.v](../components/file.v) checks every value's type, and
+takes an integer as a float only when it's exact (|i| ≤ 2⁵³).
 
 ---
 

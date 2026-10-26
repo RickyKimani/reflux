@@ -263,10 +263,12 @@ flowchart LR
   - **644 records, 642 compounds.** Trifluoromethane and 3-chloropropene
     are each in `chemsep2.xml` twice. The first copy is the more complete
     and more recent one both times, so D8 now reads "first occurrence wins".
-  - **47 repairs.**
+  - **48 repairs** (47 in step 3; step 4's round trip found the 48th).
     - 41 stray SMILES `<`s; the other 2 of the 43 are in the dropped copies.
     - Six ASOG group lists that name a group twice. Summing the two is right
       every time: diglyme's 2 + 1 ether groups for its three ether oxygens.
+    - One zero group count, diphenyl disulfide's UNIFAC-LLE list. It's
+      dropped: a zero count contributes nothing.
   - **Findings, kept verbatim and reported:**
     - 42 impossible correlation ranges, such as chloroform's solid Cp over
       [283, 0] K and several liquid viscosities ending at 1 K;
@@ -291,11 +293,60 @@ flowchart LR
   of finding, the CAS check digit, a per-kmol flag in the table, and the
   reflection setters.
 
-### 4. TOML writer and reader
-- `tools/import_chemsep.vsh` writes `data/components/<CAS>.toml`, and the
-  reader loads them back.
-- Tests: round trip (write, read, identical records); the CI check that
-  regenerating gives no diff (criterion 2).
+### 4. TOML writer and reader — done
+- `components.write_toml` and `components.parse_toml`/`read_toml`
+  ([components/file.v](../components/file.v)). Both walk the record structs
+  by compile-time reflection, so key order and key names come from one
+  place.
+  - **The writer is deterministic:** struct order, empty tables left out,
+    floats in V's shortest round-trip form, strings escaped. SMILES have
+    `\` in them.
+  - **It refuses** NaN, infinities, control characters, and a `sources`
+    override that names no value.
+  - **The reader is strict.** These are errors naming the file and key:
+    - an unknown key;
+    - a wrong type;
+    - a missing required key;
+    - a file not named after its CAS number;
+    - a group number that isn't canonical, or a count that isn't positive.
+  - V's toml parser reads `nan` as a string and `inf` as a huge integer.
+    So a float field takes an integer only if it's exact (|i| ≤ 2⁵³), and
+    both are refused.
+- `index.toml` ([components/index.v](../components/index.v)) gives each
+  compound's name, InChIKey and aliases, sorted by CAS number. Lookup by
+  name reads only this file.
+- `components.chemsep.generate` renders the whole of `data/components/`:
+  - 642 compound files;
+  - `index.toml`;
+  - `README.md`: generated, don't edit, the licence;
+  - `CHANGES.md`: how this Modified Version differs from ChemSep's Standard
+    Version (D1). It's also criterion 1's import report: every repair, the
+    dropped duplicates, and every finding.
+- [tools/import_chemsep.vsh](../tools/import_chemsep.vsh) writes exactly
+  that set: it rewrites what changed and removes what's no longer
+  generated. 645 files, 2.9 MB.
+- Tests:
+  - **Criterion 2, in [generate_test.v](../components/chemsep/generate_test.v):**
+    - the committed directory equals a fresh generation byte for byte,
+      with no extra or missing files;
+    - all five vendored files match the size and SHA-256 in their NOTICE.
+    CI runs both as part of `v test .`.
+  - Every committed file reads back as the record it was written from (V's
+    `==` compares the structs deeply).
+  - The index lists every file.
+  - [file_test.v](../components/file_test.v) checks the writer's
+    determinism and escaping, and gives each reader refusal its own case.
+- The round trip found a data defect the importer had passed: a zero group
+  count. It's now a reported repair (step 3).
+- Mutation check: 25 planted mistakes, 23 caught on the first run.
+  - **Missed, and fixed:** the index reader's unknown-key check. The test
+    appended its stray key at the end of the file, where TOML puts it
+    inside the last compound table, so a different check refused it. The
+    test now puts the key at the top level, and each index refusal is
+    matched to its message. That mutation and two new ones are caught.
+  - **Missed, and left:** the reader's NaN/infinity check on floats. V's
+    toml never produces a non-finite float (see above), so no file can
+    reach it. It stays, documented, in case the parser changes.
 
 ### 5. Database API
 - `load_default()`, `load(dir)`; lookup by CAS, name or alias, with

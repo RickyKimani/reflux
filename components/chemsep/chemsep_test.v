@@ -2,13 +2,12 @@ module chemsep
 
 import components
 
-// The vendored database, imported once for all the tests below. A const
+// The imported database, imported once for all the tests below. A const
 // with a function call is computed when the test program starts.
-const vendored = import_files(@VMODROOT, ['data/vendor/chemsep/chemsep1.xml',
-	'data/vendor/chemsep/chemsep2.xml']) or { panic(err) }
+const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 
 fn find(cas string) components.Record {
-	for r in vendored.records {
+	for r in imported.records {
 		if r.ids.cas == cas {
 			return r
 		}
@@ -16,17 +15,17 @@ fn find(cas string) components.Record {
 	panic('${cas} not imported')
 }
 
-// The vendored files: what M2 exit criterion 1 asks for.
+// The imported files: what M2 exit criterion 1 asks for.
 
 fn test_every_record_imports() {
-	assert vendored.sources.len == 2
-	s1, s2 := vendored.sources[0], vendored.sources[1]
+	assert imported.sources.len == 2
+	s1, s2 := imported.sources[0], imported.sources[1]
 	assert s1.path == 'data/vendor/chemsep/chemsep1.xml' && s1.version == 'v8.49' && s1.records == 433
 	assert s2.path == 'data/vendor/chemsep/chemsep2.xml' && s2.version == 'v8.50' && s2.records == 211
 	// 644 records, two of them second copies.
-	assert vendored.records.len == 642
+	assert imported.records.len == 642
 	mut seen := map[string]bool{}
-	for r in vendored.records {
+	for r in imported.records {
 		assert !seen[r.ids.cas], 'CAS ${r.ids.cas} twice'
 		seen[r.ids.cas] = true
 		assert r.name != ''
@@ -36,7 +35,7 @@ fn test_every_record_imports() {
 }
 
 fn test_duplicates_keep_the_first_copy() {
-	d := vendored.duplicates
+	d := imported.duplicates
 	assert d.len == 2
 	assert d[0].cas == '75-46-7' && d[0].name == 'Trifluoromethane'
 	assert d[0].kept == 'chemsep2.xml record 179' && d[0].dropped == 'chemsep2.xml record 182'
@@ -51,49 +50,54 @@ fn test_duplicates_keep_the_first_copy() {
 fn test_repairs_are_the_known_defects() {
 	// The files have 43 stray `<`s, but two are in the dropped duplicate
 	// copies, and repairs are reported only for records kept.
-	smiles := vendored.repairs.filter(it.key == 'ids.smiles')
+	smiles := imported.repairs.filter(it.key == 'ids.smiles')
 	assert smiles.len == 41
 	for r in smiles {
 		assert r.before == r.after + '<'
 		assert find(r.cas).ids.smiles or { '' } == r.after
 	}
 	assert smiles[0].cas == '3178-22-1' && smiles[0].after == 'CC(C)(C)C1CCCCC1'
-	sums := vendored.repairs.filter(it.key == 'groups.asog')
+	sums := imported.repairs.filter(it.key == 'groups.asog')
 	assert sums.len == 6
-	assert vendored.repairs.len == 47
+	// Diphenyl disulfide's UNIFAC-LLE list is a single zero count.
+	zero := imported.repairs.filter(it.key == 'groups.unifac_lle')
+	assert zero.len == 1 && zero[0].cas == '882-33-7' && zero[0].before == 'group 10: 0'
+		&& zero[0].after == 'dropped'
+	assert find('882-33-7').groups.unifac_lle.len == 0
+	assert imported.repairs.len == 48
 	// Diglyme's three ether oxygens: ASOG group 19, listed as 2 and 1.
 	assert find('111-96-6').groups.asog[19] == 3
 	assert sums.any(it.cas == '111-96-6' && it.before == 'group 19: 2 + 1'
 		&& it.after == 'group 19: 3')
 	// No SMILES anywhere still has markup in it.
-	for r in vendored.records {
+	for r in imported.records {
 		assert !(r.ids.smiles or { '' }).contains_any('<>&')
 	}
 }
 
 fn test_findings() {
 	count := fn (k FindingKind) int {
-		return vendored.findings.filter(it.kind == k).len
+		return imported.findings.filter(it.kind == k).len
 	}
 	// Forms reflux can't evaluate, kept verbatim: 322 + 5 permittivities,
 	// 5 vapour pressures (eq. 200), 1 liquid viscosity (118), 1 liquid Cp (124).
 	assert count(.unsupported_form) == 334
-	assert vendored.findings.filter(it.kind == .unsupported_form
+	assert imported.findings.filter(it.kind == .unsupported_form
 		&& it.what == 'vapor_pressure: equation 200').len == 5
 	// Inverted or empty ranges, e.g. chloroform's solid Cp over [283, 0] K.
 	assert count(.bad_range) == 42
-	assert vendored.findings.any(it.kind == .bad_range && it.name == 'Chloroform'
+	assert imported.findings.any(it.kind == .bad_range && it.name == 'Chloroform'
 		&& it.what == 'solid_cp: range [283.0, 0.0] K')
 	// Four eq.-2 solid densities with more than A and B, four eq.-4 amine
 	// liquid Cps with an E.
 	assert count(.unused_coefficients) == 8
-	assert vendored.findings.filter(it.kind == .unused_coefficients
+	assert imported.findings.filter(it.kind == .unused_coefficients
 		&& it.what.starts_with('liquid_cp: equation 4')).len == 4
 	assert count(.no_coefficients) == 1
-	assert vendored.findings.any(it.kind == .no_coefficients && it.cas == '1333-74-0p')
+	assert imported.findings.any(it.kind == .no_coefficients && it.cas == '1333-74-0p')
 	assert count(.partial_set) == 5
 	assert count(.incomplete) == 1
-	assert vendored.findings.any(it.kind == .incomplete && it.cas == '3967-55-3'
+	assert imported.findings.any(it.kind == .incomplete && it.cas == '3967-55-3'
 		&& it.what == 'no tc, pc, omega')
 }
 
@@ -221,7 +225,7 @@ fn test_every_table_key_is_a_record_field() {
 	}
 }
 
-// Small synthetic files, for the checks the vendored data never trips.
+// Small synthetic files, for the checks the imported data never trips.
 
 const minimal = '<CompoundID name="Name" value="Test" />\n<CAS name="CAS number" value="106-97-8" />'
 
@@ -334,6 +338,13 @@ fn test_groups() {
 	assert imp.repairs.len == 1 && imp.repairs[0].key == 'groups.asog'
 	refused(body.replace('id="2"', 'id="two"'), '`two` is not an integer')
 	refused(body.replace('<group id="2"', '<item id="2"'), 'unknown child <item>')
+	refused(body.replace('id="2" value="3"', 'id="2" value="-1"'), 'group 2 with count -1')
+	// A zero count is dropped, and reported.
+	zero := import_one(body.replace('id="2" value="3"', 'id="2" value="0"'))!
+	assert zero.records[0].groups.asog == {
+		19: 3
+	}
+	assert zero.repairs.any(it.before == 'group 2: 0' && it.after == 'dropped')
 }
 
 fn test_duplicates_across_files() {

@@ -5,6 +5,7 @@ Scripts for working on reflux. Nothing here is part of the simulator.
 | Script | What it does |
 |---|---|
 | `check.vsh` | Runs the same checks as CI: format, vet, tests, build, demo. |
+| `import_chemsep.vsh` | Regenerates `../data/components/` from the vendored ChemSep XML. Run it after changing the importer or the vendored files; a test fails until you do. |
 | `gen_m1_fixtures.py` | Writes the M1 reference fixtures in `../testdata` from Caleb Bell's `thermo` and CoolProp. |
 | `gen_m2_fixtures.py` | Writes `../testdata/m2_tdep.json`: every correlation form on real ChemSep records, evaluated with mpmath and checked against `chemicals`. |
 
