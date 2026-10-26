@@ -63,6 +63,8 @@ components/
   database.v        load and look up compounds, with suggestions for misses
   build.v           records → thermo.Component, thermo.IdealGas, and
                     correlations in SI per mol
+  params.v, kij.v   ChemSep's kᵢⱼ (PR, SRK) and Mathias–Copeman (PR) files,
+                    and kᵢⱼ matrices with a report of where each value came from
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
   model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
@@ -127,7 +129,9 @@ So far:
   that they're exactly what the importer writes;
 - compounds can be looked up by name, CAS number or InChIKey, and turned
   into thermo's components and ideal gases. A directory of your own
-  overrides the built-in data.
+  overrides the built-in data;
+- PR and SRK kᵢⱼ come from ChemSep's DECHEMA tables, with a report of where
+  each value came from, and Mathias–Copeman α from its PR fits.
 
 ## Roadmap
 

@@ -116,8 +116,9 @@ All checked by `v -W test .`, so CI enforces them.
 | D7 | Outside [Tmin, Tmax] | Evaluate anyway (extrapolate) and say so: each evaluation returns the value plus an in-range flag. | A flash's trial temperatures often step outside a correlation's range briefly. Refusing would break the iteration, while silence would hide bad data. |
 | D8 | Overlapping compounds | The first occurrence of a CAS number, in reading order (`chemsep1.xml`, then `chemsep2.xml`, top to bottom), wins. Each duplicate is listed in the import report with the elements that differ. | Simple and deterministic. In 8.50 the only duplicates are two compounds listed twice within `chemsep2.xml`. In both, the first copy is the more complete and more recently edited one (step 3). |
 | D9 | Ideal-gas Cp from the database | A new `CpForm` variant, `thermo.Correlated`, wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use adaptive Gauss–Kronrod quadrature (`numeric.integrate`) when there's no closed form. A failed integral is NaN rather than an error. | It reuses M1's whole total-property machinery, and `Fluid.props` keeps its signature. |
-| D10 | Mathias–Copeman parameters | The XML's values are imported and stored but not used by default, since their EOS isn't stated. `mc-PR.lib`, fitted for PR, is the better source; vendoring it is a small addition to step 6. | Using parameters fitted for one EOS in another would be guessing. |
+| D10 | Mathias–Copeman parameters | The XML's values are imported and stored but not used by default, since their EOS isn't stated. `mc-PR.lib`, fitted for PR, is the better source. It's vendored and read in step 6, under D2's licence assumption. None of its sets matches the XML's for the 573 compounds that have both. | Using parameters fitted for one EOS in another would be guessing. |
 | D11 | Who writes what | As in M1, I write it all unless you claim a step. Good candidates are marked. | |
+| D12 | A kᵢⱼ pair listed more than once | **The first listing is used (your call).** The matrix keeps every other listing and its report shows them, and any pair can be overridden by hand. The same goes for compounds listed more than once in `mc-PR.lib`. | 53 of `pr.ipd`'s 187 pairs have several DECHEMA fits, each with its own value. Their temperature ranges overlap in 38 of them, so temperature can't pick one, and ChemSep itself makes you choose. First-listed is deterministic, and the report makes the choice visible. |
 
 ## Steps
 
@@ -404,11 +405,52 @@ flowchart LR
   the unit scales, the fallback, each refusal, Tc and ΔH°f wiring, the
   in-range flag, and thermo's new Cp form.
 
-### 6. kᵢⱼ banks
-- An IPD parser; a symmetric matrix for a component list; a report of
-  missing pairs.
-- Tests: a few pairs against the file by hand; symmetry; reporting of
-  missing pairs.
+### 6. kᵢⱼ banks — done
+- **The parameter files** ([components/params.v](../components/params.v)).
+  `load_kij(.pr)` and `load_kij(.srk)` read ChemSep's `pr.ipd` and
+  `srk.ipd` straight from `data/vendor/chemsep/`; they're small and need no
+  conversion. ChemSep has no kᵢⱼ for vdW or RK. `load_mathias_copeman_pr()`
+  reads `mc-PR.lib`, now vendored with its size and SHA-256 in the NOTICE,
+  and `entry.alpha()` gives a `thermo.MathiasCopeman`.
+- **One reader for both text formats.**
+  - Tabs and spaces are both field separators; the files mix them.
+  - A `*` is a missing value.
+  - A data line that can't be read is skipped and kept as a `Defect`, never
+    dropped silently. Tests pin the exact defects.
+- **`bank.matrix(cas, overrides: …)`** ([components/kij.v](../components/kij.v))
+  gives the n×n symmetric, row-major array `thermo.new_cubic` takes, plus a
+  record of how each pair got its value:
+  - the first listing (D12), with the others kept;
+  - an override;
+  - or no data, so 0, as ChemSep also defaults it.
+
+  `report()` prints every pair, its source and the unused alternatives.
+  Criterion 8.
+- What the files hold:
+  - **`pr.ipd`**: 302 entries for 187 pairs, 53 of them repeated, and no
+    defects. **`srk.ipd`**: 306 entries for 189 pairs, 54 repeated.
+  - Six of their CAS numbers aren't in ChemSep LITE's database (R-22, R-32
+    and others), so those pairs can never be asked for.
+  - **`mc-PR.lib`**: 668 entries for 597 compounds. 60 are listed more than
+    once, some four times. One line, propane, has no CAS number. Eight lines
+    use `*`.
+- An example of why the report matters: "first listed" gives CO₂/water
+  0.0063, DECHEMA's 523–623 K fit. Whitson's widely used 0.1896 is the
+  third line. The report shows both, and an override picks one.
+- Tests ([params_test.v](../components/params_test.v)):
+  - lines checked by hand against the files;
+  - pairs found either way round;
+  - a matrix that's symmetric, uses first listings, lists the missing pair,
+    reports the alternatives, and is accepted by `thermo.new_cubic`;
+  - overrides and the mistakes in them;
+  - the Mathias–Copeman counts and the first-listing rule;
+  - every rule of the file format, on synthetic text.
+
+  The counts were checked with an independent Python parse.
+- Mutation check: 23 planted mistakes, all caught. They covered each line
+  rule and defect kind, field splitting on tabs, `*` as unknown, the
+  first-listing rule in both files, the symmetric fill, overrides and
+  their errors, missing pairs, and the report.
 
 ### 7. Reference fixtures
 - The DIPPR values from `chemicals` were done in step 2. What's left is

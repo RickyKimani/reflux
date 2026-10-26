@@ -354,6 +354,10 @@ kinds := [CubicKind.vdw, .rk, .srk, .pr]  // name it once, then shorthand
 A `match` on an enum is exhaustive too. See `CubicKind.consts()` in
 [thermo/cubic.v](../thermo/cubic.v).
 
+Forget to name the type in an array literal, as in `for kind in [.pr, .srk]`,
+and the error is misleading: `cannot use int as thermo.CubicKind`. Nothing
+tells V which enum `.pr` belongs to, so the elements fall back to ints.
+
 ---
 
 ## 7. Structs

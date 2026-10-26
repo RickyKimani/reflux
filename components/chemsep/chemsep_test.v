@@ -182,12 +182,12 @@ fn test_per_kmol_values_are_exact_decimal_shifts() {
 
 fn test_cas_numbers_are_checked() {
 	for good in ['106-97-8', '7732-18-5', '1333-74-0p', '1333-74-0o', '50-00-0'] {
-		check_cas(good)!
+		components.check_cas(good)!
 	}
 	// A wrong check digit, wrong shapes, a capital suffix, and a path.
 	for bad in ['106-97-7', '106-978', '1-97-8', '12345678-97-8', '106-97-8P', '106-97-8pp', '../97-8',
 		'106-9a-8', ''] {
-		if _ := check_cas(bad) {
+		if _ := components.check_cas(bad) {
 			assert false, '`${bad}` passed'
 		}
 	}
