@@ -114,7 +114,7 @@ All checked by `v -W test .`, so CI enforces them.
 | D6 | Where it lives | A new module `components`, which imports `thermo` and builds `thermo.Component`, `thermo.IdealGas` and `thermo.Fluid`. | `thermo` stays about models. Data handling is its own concern. |
 | D7 | Outside [Tmin, Tmax] | Evaluate anyway (extrapolate) and say so: each evaluation returns the value plus an in-range flag. | A flash's trial temperatures often step outside a correlation's range briefly. Refusing would break the iteration, while silence would hide bad data. |
 | D8 | Overlapping compounds | `chemsep1.xml` wins; `chemsep2.xml` adds compounds. Overlaps are listed in the import report. | Simple and deterministic. Revisit if the two disagree badly. |
-| D9 | Ideal-gas Cp from the database | A new `CpForm` variant wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use Gauss–Legendre quadrature when there's no closed form. | It reuses M1's whole total-property machinery. |
+| D9 | Ideal-gas Cp from the database | A new `CpForm` variant wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use adaptive Gauss–Kronrod quadrature (`numeric.integrate`) when there's no closed form. | It reuses M1's whole total-property machinery. |
 | D10 | Mathias–Copeman parameters | The XML's values are imported and stored but not used by default, since their EOS isn't stated. `mc-PR.lib`, fitted for PR, is the better source; vendoring it is a small addition to step 6. | Using parameters fitted for one EOS in another would be guessing. |
 | D11 | Who writes what | As in M1, I write it all unless you claim a step. Good candidates are marked. | |
 
@@ -170,14 +170,66 @@ flowchart LR
     internals, a V bug (assign to a variable first).
 - The schema is written down in [data-format.md](data-format.md).
 
-### 2. Correlations (exercise candidate: the polynomial and exponential forms)
-- A `Correlation` (form, A–E, Tmin, Tmax, Tc where the form needs it, native
-  unit) with `eval`, `deriv`, `int` and `int_over_t`.
-- The forms: ChemSep 1–5, 10–17 and 45; DIPPR 100–107, 114 and 116.
-  Unsupported forms (200 and any others) are representable but not
-  evaluable, and are reported.
-- Tests: fixtures from `chemicals.dippr`; quadrature for integrals;
-  finite differences for derivatives.
+### 2. Correlations — done
+- A new module, `tdep`. It has `Correlation` (form, A–E, Tmin, Tmax, and Tc
+  for the forms that need it) with `eval`, `deriv`, `integral` and
+  `integral_over_t`. It's pure mathematics in the correlation's own units:
+  the native unit and the conversion to SI belong to the `components`
+  layer (D5).
+- The forms: ChemSep 1–5, 10–17 and 45; DIPPR 100–102, 104–107 and 114–116.
+  - Derivatives are closed-form for all of them.
+  - ∫Y dT is closed-form for 1–5, 45, 100, 104, 107, 114 and 116, and
+    ∫Y/T dT for 1–5, 45, 100, 104 and 107.
+  - The rest use a new `numeric.integrate` (below).
+- `new()` refuses forms it can't evaluate, so the data layer keeps them
+  verbatim and reports them. ChemSep 8.50 uses five such forms:
+  - 120 and 121, relative permittivity (324 and 5 records). These matter
+    only for electrolytes.
+  - 200, vapour pressure (5 records). Step 5 falls back to the Antoine
+    record.
+  - 118, liquid viscosity (1 record).
+  - 124, liquid Cp (1 record).
+- Findings that shaped the code:
+  - 101 eq. 106 records (heats of vaporization, surface tensions, water's
+    liquid density) end a little past their compound's own Tc, by up to
+    48 K. n-butane's ends at 425.16 K against Tc = 425.12 K. Form 106 is for
+    properties that vanish at Tc, so it returns 0 at and above Tc instead
+    of NaN. 114 and 116 aren't defined above Tc, and `new()` refuses such
+    ranges; none occur in the data.
+  - Some solid-phase records start at 0 K, so Tmin = 0 is allowed.
+- `numeric.integrate` is globally adaptive Gauss–Kronrod 7–15 (QUADPACK's
+  QAG): it always splits the panel with the largest error, uses QUADPACK's
+  error estimate and roundoff floor, and has a 2000-panel budget. My first
+  version halved locally with a halved tolerance per side. When asked for
+  1e-14, below what roundoff allows, it ran for two minutes; QAG settles in
+  one panel. A divergent integral or noise is an error, not a hang.
+- Fixtures: [tools/gen_m2_fixtures.py](../tools/gen_m2_fixtures.py) writes
+  [testdata/m2_tdep.json](../testdata/m2_tdep.json).
+  - It has 68 cases covering all 24 forms: up to three real ChemSep records
+    per form, n-butane's main records, and synthetic sets for the forms
+    ChemSep never uses. Two synthetic sets cover hard cases:
+    - an Aly–Lee set run from 2 K to 10⁵ K, where sinh overflows a float;
+    - an eq.-104 set where every term counts (see the mutation check).
+  - Values, dY/dT and both integrals are mpmath at 40 digits, from formulas
+    written separately from the V code.
+  - For the DIPPR forms the script checks itself against `chemicals` 1.5.2,
+    and stops rather than write a bad fixture: values to 1e-12, derivatives
+    to 1e-9, closed-form integrals to 1e-10.
+- Tests: values match mpmath to 1e-13, and derivatives and integrals to
+  1e-11, which meets criterion 4. The DIPPR values also match `chemicals`
+  to 1e-12. Unit tests cover:
+  - the refusals;
+  - the zero-fill of missing coefficients, `unused_nonzero` and the range ends;
+  - closed forms against quadrature;
+  - the behaviour at and above Tc;
+  - Aly–Lee at 1 mK and 10⁹ K, with C = 0 and with negative C and E;
+  - the hyperbolic helpers' series.
+- Mutation check: of 26 planted mistakes, 25 were caught first time. The
+  one that got through was a wrong D/T⁷ coefficient in the eq.-104
+  integral. In ChemSep's second virial coefficients the D and E terms are
+  about 1e-14 of the total over each record's range, so no test could see
+  them. The synthetic eq.-104 set fixes that, and it and four more
+  mutations of the D and E terms are now caught: 30 of 30.
 
 ### 3. ChemSep XML importer
 - Parse with `encoding.xml` into records. Convert scalars to SI; keep
@@ -206,16 +258,21 @@ flowchart LR
   missing pairs.
 
 ### 7. Reference fixtures
-- Extend `tools/` with a generator (uv, pinned) that writes DIPPR values
-  from `chemicals` and CoolProp constants and Cp⁰ for the overlapping
-  fluids.
-- The V tests read them (criteria 4 and 6).
+- The DIPPR values from `chemicals` were done in step 2. What's left is
+  CoolProp's constants and Cp⁰ for the overlapping fluids, added to
+  `tools/gen_m2_fixtures.py`.
+- The V tests read them (criterion 6).
 
 ### 8. Sanity sweep and data-quality report
 - Over every compound: finiteness, sign, Psat(Tb) ≈ 1 atm, and the PR-Psat
   comparison for the 20 representative compounds.
 - `docs/data-quality.md` lists what fails, with numbers, generated by a
-  tool and checked by a test.
+  tool and checked by a test. It also lists what step 2 found:
+  - the records in forms reflux doesn't evaluate;
+  - the 101 eq.-106 records whose range runs past Tc;
+  - the 8 records whose unused coefficients aren't zero (`unused_nonzero`):
+    four eq.-2 solid densities with a C, and four eq.-4 amine liquid Cps
+    with an E. Those suggest a wrong equation number.
 
 ### 9. End to end
 - `db.fluid(.pr, names)`; the integration test from criterion 9; the demo

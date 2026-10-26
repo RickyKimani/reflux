@@ -130,6 +130,26 @@ f()                               // 1.0, not 5.0
 See `critical_constants` in [thermo/cubic.v](../thermo/cubic.v), which
 passes `fn [s, m] (b f64) f64 { … }` to `numeric.bisect`.
 
+`mut` in the capture list doesn't change this: `fn [mut n] () { n++ }`
+increments the closure's *own* copy, and the outer `n` stays where it was.
+To share state the way a Go closure does, capture a reference:
+
+```v
+struct Counter {
+mut:
+	n int
+}
+
+mut calls := &Counter{}
+f := fn [mut calls] (x f64) f64 {
+	calls.n++ // the pointer is copied; the Counter it points to is shared
+	return x * x
+}
+```
+
+[numeric/integrate_test.v](../numeric/integrate_test.v) counts function
+evaluations this way. My first version captured an `int` and counted zero.
+
 ---
 
 ## 4. Errors and options: `!T`, `?T`, and `or {}`
@@ -511,6 +531,25 @@ fx := read_fixture[ThermoFixture]('m1_thermo.json')!
 `@FILE` is the path of the source file, filled in at compile time, so the
 test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
 module is gone; it's `json2` now.)
+
+A key that may be missing from the JSON fits an Option field. Where Go
+would use a `*float64` that's nil when absent, V's `json2` leaves a `?f64`
+as `none`, and reading it forces you to handle that case. From
+[tdep/fixtures_test.v](../tdep/fixtures_test.v):
+
+```v
+struct Point {
+	t            f64
+	chemicals_y  ?f64 // only for the DIPPR forms
+}
+
+if want := p.chemicals_y {
+	assert agree(corr.eval(p.t), want, 1e-12, 0.0)
+}
+```
+
+A JSON key can't be a V keyword such as `int`. The fixture generator writes
+`integral` instead.
 
 ---
 

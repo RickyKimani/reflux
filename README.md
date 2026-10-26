@@ -52,6 +52,10 @@ numeric/
   roots.v           bracketed root finding (bisection)
   lu.v              dense LU with partial pivoting
   vec.v             small vector helpers
+  integrate.v       adaptive Gauss–Kronrod quadrature
+tdep/
+  tdep.v            temperature-dependent correlations (ChemSep and DIPPR
+                    forms): value, derivative and both integrals
 thermo/
   model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
   properties.v      P derivatives, ln φ derivatives, residual H, S, G, U, A, Cv, Cp
@@ -61,10 +65,14 @@ thermo/
   ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
   fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
   saturation.v      pure-component Psat, for any Model
-docs/               roadmap, M1 plan, design notes, spike write-up, V notes
-tools/              check.vsh (the CI checks), gen_m1_fixtures.py (references)
-testdata/           reference fixtures from thermo and CoolProp, with provenance
+docs/               roadmap, milestone plans, design notes, data format,
+                    spike write-up, V notes
+tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references)
+testdata/           reference fixtures from thermo, CoolProp, chemicals and
+                    mpmath, with provenance
+data/vendor/        the ChemSep 8.50 database, verbatim, with its licence
 spike/python_ffi/   calling reflux from Python and NumPy (M1 step 9)
+spike/data_format/  the TOML component-file trial (M2 step 1)
 .v-version          the V commit CI builds
 ```
 
@@ -96,7 +104,13 @@ the end of [docs/m1-plan.md](docs/m1-plan.md). What exists now:
 - [x] Proven callable from Python and NumPy on Windows and Linux (a spike;
       the real API is M10a)
 
-Next is M2: component data from ChemSep.
+M2, component data from ChemSep, is under way ([docs/m2-plan.md](docs/m2-plan.md)).
+So far:
+- the official database is vendored;
+- the file format is chosen;
+- every correlation form the data uses for vapour pressure, heat capacity,
+  density and heat of vaporization can be evaluated, differentiated and
+  integrated.
 
 ## Roadmap
 

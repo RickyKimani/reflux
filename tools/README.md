@@ -6,6 +6,7 @@ Scripts for working on reflux. Nothing here is part of the simulator.
 |---|---|
 | `check.vsh` | Runs the same checks as CI: format, vet, tests, build, demo. |
 | `gen_m1_fixtures.py` | Writes the M1 reference fixtures in `../testdata` from Caleb Bell's `thermo` and CoolProp. |
+| `gen_m2_fixtures.py` | Writes `../testdata/m2_tdep.json`: every correlation form on real ChemSep records, evaluated with mpmath and checked against `chemicals`. |
 
 ```bash
 v run tools/check.vsh
@@ -26,6 +27,10 @@ run by hand, never in tests: the V tests only read the JSON they write.
 
 ```bash
 uv run tools/gen_m1_fixtures.py
+```
+
+```bash
+uv run tools/gen_m2_fixtures.py
 ```
 
 The script declares its dependencies inline, with pinned versions (PEP 723),
