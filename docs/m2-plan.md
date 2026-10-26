@@ -1,13 +1,15 @@
 # M2 plan — component data
 
-Status: **planned, not started.** The roadmap entry is
+Status: **in progress.** Step 0 is done: the official files are in
+`data/vendor/chemsep/`, and their [NOTICE](../data/vendor/chemsep/NOTICE.md)
+records versions, checksums and licence. The roadmap entry is
 [M2 in roadmap.md](roadmap.md#m2--component-data); this file is the detailed
 plan.
 
 ## Goal
 
-After M2, reflux can build any of about 556 compounds by name or CAS
-number. Each compound comes with:
+After M2, reflux can build any of the 642 compounds in ChemSep 8.50 by
+name, CAS number or InChIKey. Each compound comes with:
 
 - its constants, in SI per-mol units, each traceable to its source;
 - the temperature-dependent correlations the flash and energy balances
@@ -26,20 +28,24 @@ M3's flash then starts from real data instead of hand-typed constants.
 
 ## What the research found
 
-All of this comes from looking at the files themselves (October 2026). The
-copies inspected came from DWSIM's repository; the plan takes the official
-ones (D3).
+All of this comes from looking at the files themselves (October 2026).
+The plan was first written from the copies in DWSIM's repository (v8.3,
+2022). It was then checked against the official ChemSep LITE 8.50 install
+(step 0), and the official files are what reflux uses. Where the two
+differ, the official values are given here.
 
 | Question | Answer |
 |---|---|
-| What is the data? | ChemSep pure-component databases `chemsep1.xml` (v8.3, **431 compounds**) and `chemsep2.xml` (v8.31, **127 compounds**). Two compounds appear in both. |
-| Licence | Stated in each file's root element: *"ChemSep v8.3 pure component data - Copyright (c) Harry Kooijman and Ross Taylor (2021)"*, with a link to the **Artistic License 2.0**. |
+| What is the data? | ChemSep pure-component databases `chemsep1.xml` (v8.49, **433 compounds**) and `chemsep2.xml` (v8.50, **209 compounds**). They don't overlap: 642 compounds in all. |
+| Licence | Stated in each file's root element: *"ChemSep v8.49 pure component data 1 - Copyright (c) Harry Kooijman and Ross Taylor (2024)"*, with a link to the **Artistic License 2.0**, and the licence text ships in the same folder. |
+| Defects | The XML is **not well-formed**: 43 SMILES attribute values end in a stray `<`. Strict XML parsers reject the files as shipped. |
+| New in the official files | `InChIKey` and `PubChemID` per compound. Real revisions to Tc, Pc or ω for a few dozen compounds since v8.3; most other differences are reformatting. |
 | What Artistic 2.0 allows | Verbatim redistribution with notices (§2); a converted copy is a "Modified Version", distributable if the changes are documented and it stays under Artistic 2.0 (§4(c)(i)); bundling with MIT code is fine (§7). |
-| Identifiers | Name, CAS number (all 558 present, well-formed and unique per file), SMILES, a structural formula, a family code. |
+| Identifiers | Name, CAS number (present, well-formed and unique in every record), InChIKey, PubChemID, SMILES, a structural formula, a family code. |
 | Units | Per **kmol**: J/kmol, m³/kmol, kg/kmol. K and Pa elsewhere. |
 | What M3 needs, and coverage | Tc, Pc, Vc, Zc, Tb, M, ω, ΔH°f, ΔG°f, S°: 431/431. Vapour pressure, ideal-gas Cp and heat of vaporisation: 431/431. Liquid density 424, liquid Cp 422. |
 | Equation forms | Ideal-gas Cp is ChemSep **eq. 16**, A + exp(B/T + C + DT + ET²), for 429 compounds. It has no closed-form integral. Vapour pressure is DIPPR 101 (421), eq. 10 Antoine (8) and **eq. 200 (2, form unknown)**. Liquid density is DIPPR 105, heat of vaporisation DIPPR 106. Transport properties use 101, 102, 16 and others. |
-| Extras | Mathias–Copeman c₁–c₃ for 350 compounds (the EOS they were fitted for isn't stated); UNIQUAC r and q; UNIFAC, modified-UNIFAC and ASOG group assignments; Lennard-Jones parameters. |
+| Extras | Mathias–Copeman c₁–c₃ in the XML (the EOS isn't stated), plus a separate `mc-PR.lib` explicitly fitted for Peng–Robinson; UNIQUAC r and q; UNIFAC, modified-UNIFAC and ASOG group assignments; Lennard-Jones parameters; a name-synonyms file. |
 | kᵢⱼ | `pr.ipd` and `srk.ipd`: 292 pairs each, keyed by CAS pair, "DECHEMA Peng-Robinson [SRK] Parameters", "Copyright 2009 Harry Kooijman and Ross Taylor". **No licence named.** Also NRTL, UNIQUAC and Wilson files, for M6. |
 | An oracle for tests | Caleb Bell's `chemicals` 1.5.2 implements DIPPR 100–107, 114–116 and 127, including integrals. It reproduces n-butane's Psat(350 K) = 9.467 bar and ρL(300 K) = 9.836 kmol/m³ from the ChemSep coefficients. |
 
@@ -55,13 +61,15 @@ The ChemSep-specific equations, from ChemSep's PCDmanager documentation:
 
 All checked by `v -W test .`, so CI enforces them.
 
-1. **Import is complete.** Every record in both ChemSep files imports. The
-   import report lists zero unparsed records. The two overlapping compounds
-   are resolved by the documented rule (D8). Unsupported equation forms
+1. **Import is complete.** All 642 records import, despite the 43 malformed
+   SMILES values, which are repaired and listed. The import report lists
+   zero unparsed records. Any overlap between the files is resolved by the
+   documented rule (D8); there is none in 8.50. Unsupported equation forms
    (such as eq. 200) are kept verbatim and reported, never dropped.
 2. **The data files are reproducible.** Re-running the importer on the
-   vendored XML regenerates `data/components/` byte for byte. CI fails if
-   they differ, so the converted data can't drift from its source.
+   vendored XML regenerates `data/components/` byte for byte, and the
+   vendored files still match the SHA-256 sums in their NOTICE. CI checks
+   both, so neither the converted data nor its source can drift.
 3. **Units are right.** Every scalar is SI per mol. Tests check a sample
    against hand conversions, for example n-butane's M of 58.123 kg/kmol
    becoming 0.058123 kg/mol, and ΔH°f in J/kmol becoming J/mol.
@@ -99,14 +107,14 @@ All checked by `v -W test .`, so CI enforces them.
 |---|---|---|---|
 | D1 | Licence and layout | Verbatim ChemSep XML in `data/vendor/chemsep/`, with the Artistic 2.0 text and a NOTICE (source, version, SHA-256). The converted files in `data/components/` are a Modified Version, also under Artistic 2.0 (§4(c)(i)), with a CHANGES file. Code stays MIT. | It's exactly what the licence allows, and it keeps code and data licences visibly separate. |
 | D2 | kᵢⱼ files | **Shipped, as DWSIM does (your call).** They go in `data/vendor/chemsep/` too. The NOTICE says plainly that the files name no licence and are assumed to fall under the database's Artistic 2.0, with a note to confirm with the authors. | Practical; the assumption is written down where anyone redistributing will see it. |
-| D3 | Where the XML comes from | **The official ChemSep LITE download (your call).** You install ChemSep LITE 8.3x from chemsep.org, and the files come from its `pcd` folder. | The Standard Version, straight from the copyright holders. |
+| D3 | Where the XML comes from | **The official ChemSep LITE download (your call).** Done with ChemSep LITE 8.50; the files come from its `pcd` and `ipd` folders. | The Standard Version, straight from the copyright holders. |
 | D4 | reflux's own format | TOML, one file per compound (`data/components/<CAS>.toml`): readable, diffable, and the same format a user writes for their own compounds. Every value carries a source tag. | A per-compound diff is reviewable; one large file isn't. Step 1 checks V's `toml` module can do it, with JSON as the fallback. |
 | D5 | Units of correlations | Coefficients are stored **verbatim**, along with the correlation's native output unit, and the evaluator converts the *result* to SI per mol. Scalars are converted at import. | Forms like A + exp(…) can't be rescaled coefficient by coefficient. Verbatim coefficients also compare directly with ChemSep and `chemicals`. |
 | D6 | Where it lives | A new module `components`, which imports `thermo` and builds `thermo.Component`, `thermo.IdealGas` and `thermo.Fluid`. | `thermo` stays about models. Data handling is its own concern. |
 | D7 | Outside [Tmin, Tmax] | Evaluate anyway (extrapolate) and say so: each evaluation returns the value plus an in-range flag. | A flash's trial temperatures often step outside a correlation's range briefly. Refusing would break the iteration, while silence would hide bad data. |
 | D8 | Overlapping compounds | `chemsep1.xml` wins; `chemsep2.xml` adds compounds. Overlaps are listed in the import report. | Simple and deterministic. Revisit if the two disagree badly. |
 | D9 | Ideal-gas Cp from the database | A new `CpForm` variant wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use Gauss–Legendre quadrature when there's no closed form. | It reuses M1's whole total-property machinery. |
-| D10 | Mathias–Copeman parameters | Imported and stored, but not used by default. | Which EOS they were fitted for isn't stated, so using them by default would be guessing. |
+| D10 | Mathias–Copeman parameters | The XML's values are imported and stored but not used by default, since their EOS isn't stated. `mc-PR.lib`, fitted for PR, is the better source; vendoring it is a small addition to step 6. | Using parameters fitted for one EOS in another would be guessing. |
 | D11 | Who writes what | As in M1, I write it all unless you claim a step. Good candidates are marked. | |
 
 ## Steps
@@ -128,11 +136,17 @@ flowchart LR
   S9 --> S10
 ```
 
-### 0. Get the official files (you)
-Install ChemSep LITE 8.3x from chemsep.org. I copy `chemsep1.xml`,
-`chemsep2.xml`, `pr.ipd` and `srk.ipd` into `data/vendor/chemsep/` and
-record the version and SHA-256. If the official files differ from DWSIM's
-copies, the NOTICE says how.
+### 0. Get the official files — done
+- ChemSep LITE **8.50** is installed at
+  `%LOCALAPPDATA%\ChemSepL8v50`. `chemsep1.xml`, `chemsep2.xml`, `pr.ipd`,
+  `srk.ipd` and ChemSep's own `Artistic_license_2_0.txt` were copied into
+  `data/vendor/chemsep/`, and they're byte-identical to the installed files.
+- [NOTICE.md](../data/vendor/chemsep/NOTICE.md) records the versions,
+  SHA-256 sums, the licence statements quoted from the files, the kᵢⱼ
+  licence assumption (D2), the 43 malformed SMILES values, and how the
+  files differ from DWSIM's.
+- `.gitattributes` marks `data/vendor/` as `-text`, so Git doesn't rewrite
+  the CRLF line endings and the checksums stay true.
 
 ### 1. Data format spike
 Write n-butane by hand as TOML in the D4 schema, and check that V's `toml`
@@ -199,8 +213,8 @@ JSON, and write the schema down in `docs/data-format.md`.
 | Risk | Effect | Fallback |
 |---|---|---|
 | V's `toml` module can't handle the schema | step 1 changes format | JSON via `json2`, which M1 already uses |
-| `encoding.xml` is slow or fragile on a 3.7 MB file | slow import | import runs only when the vendored XML changes; the TOML is what loads at run time |
-| ChemSep LITE's files differ from DWSIM's copies | different numbers | the official files win (D3); the NOTICE records the difference |
+| `encoding.xml` is slow, or rejects the malformed files | import fails | the importer repairs the known defect (the stray `<`) before parsing, and lists each repair. If V's parser still can't cope, a small purpose-built reader for this flat format will. Import runs only when the vendored XML changes; the TOML is what loads at run time. |
+| ChemSep LITE's files differ from DWSIM's copies | different numbers | **Happened**, and harmlessly: the official files win (D3), and the NOTICE records the differences. |
 | The kᵢⱼ licence assumption (D2) turns out wrong | files must be removed | they're isolated in `data/vendor/chemsep/`, and the importer can read them from a local install instead |
 | Bad entries in the data | wrong results downstream | the sanity sweep and data-quality report make them visible; no silent fixes |
 | Repository size (about 5 MB vendored plus the converted files) | slower clones | acceptable at this scale; revisit with Git LFS if it grows |
