@@ -18,7 +18,8 @@ v -W test .           # all tests, warnings treated as errors
 
 - [docs/roadmap.md](docs/roadmap.md) is what gets built, in what order, and
   how each piece is tested. [docs/m1-plan.md](docs/m1-plan.md) is M1's
-  plan, step by step, with its exit review at the end.
+  plan, step by step, with its exit review at the end, and
+  [docs/m2-plan.md](docs/m2-plan.md) is the plan for M2, component data.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
   and why, with every formula the code uses.
 - [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:

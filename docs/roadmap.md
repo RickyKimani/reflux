@@ -110,6 +110,9 @@ H and S of n-butane match NIST WebBook spot values within the model's
 expected error; ∂ln φᵢ/∂T at constant P equals −H̄ʳᵢ/RT².
 
 ### M2 — Component data
+Detailed plan, including what the ChemSep files contain and their
+licence: [m2-plan.md](m2-plan.md).
+
 - Component record with identifiers (name, CAS, formula, InChIKey) and
   **provenance on every value** (Track D1).
 - ChemSep XML importer that writes reflux's own text data format (D2).
