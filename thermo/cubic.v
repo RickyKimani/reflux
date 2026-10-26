@@ -64,8 +64,9 @@ fn critical_constants(delta1 f64, delta2 f64) !CubicConsts {
 	}
 }
 
-// default_alpha is the α function each equation was published with.
-fn (k CubicKind) default_alpha(omega f64) Alpha {
+// default_alpha is the α function each equation was published with: what
+// new_cubic uses when no alphas are given.
+pub fn (k CubicKind) default_alpha(omega f64) Alpha {
 	return match k {
 		.vdw { Unity{} }
 		.rk { InvSqrtTr{} }

@@ -6,7 +6,7 @@
   "coolprop": "8.0.0",
   "chemsep": "data/components (ChemSep 8.50, converted)"
  },
- "note": "coolprop is CoolProp's value (HEOS backend); deviation is ChemSep minus CoolProp, relative, except for omega, where it's absolute. cp0 in J/(mol K) at low density, psat in Pa on the saturated liquid. key names the ChemSep correlation used.",
+ "note": "coolprop is CoolProp's value (HEOS backend); deviation is ChemSep minus CoolProp, relative, except for omega, where it's absolute. cp0 in J/(mol K) at low density, psat in Pa on the saturated liquid. key names the ChemSep correlation used. n_butane holds CoolProp's Psat (Pa) and molar enthalpy h (J/mol, CoolProp's own zero) for the end-to-end test.",
  "fluids": [
   {
    "coolprop": "1-Butene",
@@ -6188,5 +6188,97 @@
     ]
    }
   }
- ]
+ ],
+ "n_butane": {
+  "psat": [
+   {
+    "t": 250.0,
+    "p": 39153.086593916625
+   },
+   {
+    "t": 300.0,
+    "p": 257596.1341639972
+   },
+   {
+    "t": 350.0,
+    "p": 944175.1271558887
+   },
+   {
+    "t": 400.0,
+    "p": 2495445.863149011
+   }
+  ],
+  "states": [
+   {
+    "label": "vapor 300 K 1 bar",
+    "phase": "vapor",
+    "t": 300.0,
+    "p": 100000.0,
+    "h": 36663.32175986056
+   },
+   {
+    "label": "vapor 450 K 1 bar",
+    "phase": "vapor",
+    "t": 450.0,
+    "p": 100000.0,
+    "h": 54547.85027643202
+   },
+   {
+    "label": "liquid 250 K 20 bar",
+    "phase": "liquid",
+    "t": 250.0,
+    "p": 2000000.0,
+    "h": 8687.265623389101
+   },
+   {
+    "label": "liquid 350 K 20 bar",
+    "phase": "liquid",
+    "t": 350.0,
+    "p": 2000000.0,
+    "h": 22959.09978493365
+   },
+   {
+    "label": "liquid 300 K 5 bar",
+    "phase": "liquid",
+    "t": 300.0,
+    "p": 500000.0,
+    "h": 15353.370485954372
+   },
+   {
+    "label": "liquid 300 K 100 bar",
+    "phase": "liquid",
+    "t": 300.0,
+    "p": 10000000.0,
+    "h": 15767.815621298103
+   },
+   {
+    "label": "supercritical 450 K 50 bar",
+    "phase": "vapor",
+    "t": 450.0,
+    "p": 5000000.0,
+    "h": 45861.461676624764
+   },
+   {
+    "label": "supercritical 500 K 50 bar",
+    "phase": "vapor",
+    "t": 500.0,
+    "p": 5000000.0,
+    "h": 56961.878502865504
+   },
+   {
+    "label": "saturated liquid 300 K",
+    "phase": "liquid",
+    "t": 300.0,
+    "p": 257596.1341639972,
+    "h": 15343.999132024786
+   },
+   {
+    "label": "saturated vapor 300 K",
+    "phase": "vapor",
+    "t": 300.0,
+    "p": 257596.1341639972,
+    "h": 36243.61058932051
+   }
+  ]
+ }
 }

@@ -552,9 +552,56 @@ flowchart LR
   temperatures, the outlier threshold, and the R-23 takeover and its
   staleness check.
 
-### 9. End to end
-- `db.fluid(.pr, names)`; the integration test from criterion 9; the demo
-  updated to use database components.
+### 9. End to end — done
+- `db.fluid(.pr, ['methane', 'n-butane'])` builds a `thermo.Fluid`
+  ([components/fluid.v](../components/fluid.v)) from:
+  - each compound's constants;
+  - its ideal-gas Cp and formation data;
+  - kᵢⱼ from ChemSep's bank for the equation (D12's first listing), with
+    any `overrides`, or `kij: false` for none;
+  - α as chosen.
+
+  `alpha: .mathias_copeman` uses `mc-PR.lib`, and only for PR. A compound it
+  lacks keeps PR's own α. `db.setup(…)` returns the same fluid with a record
+  of how it was built: the records, the kᵢⱼ matrix with its report, and each
+  α's origin. thermo's `CubicKind.default_alpha` became public for this.
+- The integration test ([components/fluid_test.v](../components/fluid_test.v)),
+  criterion 9:
+  - **Wiring.** The database-built methane/n-butane fluid gives
+    bit-identical properties to one built by hand from the same numbers.
+    Its kᵢⱼ is `pr.ipd` line 133's 0.0244.
+  - **M1 reproduced.** On M1's six CoolProp states, PR with ChemSep's
+    constants deviates from the reference equation within 0.2% of M1's
+    recorded deviations for V, Cp and w, and within 50 J/mol for Hʳ. M1
+    used Smith, Van Ness & Abbott's constants, which differ by 0.02 K in Tc
+    and 0.001 in ω.
+  - **Psat.** 9.4747 bar at 350 K, +0.18% against SVA Example 3.9's
+    measured 9.4573 bar. Against CoolProp it's within 0.05–1.2% from 250 to
+    400 K. The deviations are recorded and can't grow.
+  - **Enthalpy changes** against CoolProp, recorded and can't grow, with
+    CoolProp's states added to `m2_coolprop.json`:
+
+    | Change | Deviation |
+    |---|---|
+    | Heating vapour | +1.1% |
+    | Heating liquid | +1.0% |
+    | Heat of vaporization at 300 K | +0.55% |
+    | Liquid to vapour across the dome | +0.5% |
+    | Supercritical step | −4.5% |
+    | Compressing liquid from 5 to 100 bar | −13.7%, only 57 J/mol: PR's liquid volumes |
+- The demo (`v run .`) now runs on database components:
+  - n-butane's EOS table, with ChemSep's own vapour pressure beside it;
+  - water at its boiling point with PR's Soave α (0.963 bar) and with
+    Mathias–Copeman (1.015 bar; measured 1.01325);
+  - the methane/n-butane mixture, with its kᵢⱼ and where it came from;
+  - absolute H and S;
+  - a lookup miss with its suggestions.
+
+  The PRSV example went: its κ₁ is fitted together with a particular ω, so
+  it can't take database constants. PRSV stays covered by thermo's tests.
+- Mutation check: 7 planted mistakes, all caught. They covered the kᵢⱼ
+  bank and overrides, the PR-only rule and use of Mathias–Copeman, the
+  default α, the order of the ideal gases, and the fallback note.
 
 ### 10. Docs and exit review
 - README, roadmap, the data-format doc, the V notes (`encoding.xml`,

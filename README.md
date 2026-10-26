@@ -5,7 +5,7 @@ An open-source steady-state chemical process simulator written in
 than DWSIM. The short-term goal is to learn V by building it.
 
 ```bash
-v run .               # n-butane at 350 K and 9.4573 bar, PRSV, a mixture, and Cp, w, μ_JT
+v run .               # n-butane at 350 K and 9.4573 bar, Mathias–Copeman water, a mixture, H, S, Cp, w, μ_JT
 ```
 
 ```bash
@@ -46,7 +46,7 @@ These goals come from what went wrong with DWSIM:
 
 ```
 v.mod               module manifest (Go's go.mod)
-main.v              demo CLI
+main.v              demo CLI, on database components
 numeric/
   cubic.v           real roots of a cubic
   roots.v           bracketed root finding (bisection)
@@ -132,6 +132,9 @@ So far:
 - compounds can be looked up by name, CAS number or InChIKey, and turned
   into thermo's components and ideal gases. A directory of your own
   overrides the built-in data;
+- `db.fluid(.pr, ['methane', 'n-butane'])` builds a working fluid from the
+  database, kᵢⱼ and α included. It reproduces M1's n-butane results with
+  ChemSep's constants;
 - PR and SRK kᵢⱼ come from ChemSep's DECHEMA tables, with a report of where
   each value came from, and Mathias–Copeman α from its PR fits;
 - ChemSep's data is checked against CoolProp's reference equations for the

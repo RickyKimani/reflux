@@ -331,6 +331,34 @@ def coolprop_fluid(name, cas, rec):
     return fluid
 
 
+def n_butane():
+    """n-butane from CoolProp's reference equation, for the end-to-end test
+    (M2 exit criterion 9): Psat at four temperatures, and the molar enthalpy
+    at states whose differences are heating, vaporization, compression and a
+    supercritical step. CoolProp's enthalpy zero is its own, so only the
+    differences mean anything."""
+    name = "n-Butane"
+    psat = [{"t": t, "p": CP.PropsSI("P", "T", t, "Q", 0, name)} for t in (250.0, 300.0, 350.0, 400.0)]
+    states = []
+    for label, phase, t, p in (
+        ("vapor 300 K 1 bar", "vapor", 300.0, 1e5),
+        ("vapor 450 K 1 bar", "vapor", 450.0, 1e5),
+        ("liquid 250 K 20 bar", "liquid", 250.0, 20e5),
+        ("liquid 350 K 20 bar", "liquid", 350.0, 20e5),
+        ("liquid 300 K 5 bar", "liquid", 300.0, 5e5),
+        ("liquid 300 K 100 bar", "liquid", 300.0, 100e5),
+        ("supercritical 450 K 50 bar", "vapor", 450.0, 50e5),
+        ("supercritical 500 K 50 bar", "vapor", 500.0, 50e5),
+    ):
+        states.append({"label": label, "phase": phase, "t": t, "p": p,
+                       "h": CP.PropsSI("Hmolar", "T", t, "P", p, name)})
+    p300 = CP.PropsSI("P", "T", 300.0, "Q", 0, name)
+    for q, phase in ((0, "liquid"), (1, "vapor")):
+        states.append({"label": f"saturated {phase} 300 K", "phase": phase, "t": 300.0, "p": p300,
+                       "h": CP.PropsSI("Hmolar", "T", 300.0, "Q", q, name)})
+    return {"psat": psat, "states": states}
+
+
 def coolprop_fixture():
     fluids = []
     for name in sorted(CP.get_global_param_string("fluids_list").split(","), key=str.lower):
@@ -348,8 +376,10 @@ def coolprop_fixture():
         },
         "note": "coolprop is CoolProp's value (HEOS backend); deviation is ChemSep minus CoolProp, "
         "relative, except for omega, where it's absolute. cp0 in J/(mol K) at low density, psat in Pa "
-        "on the saturated liquid. key names the ChemSep correlation used.",
+        "on the saturated liquid. key names the ChemSep correlation used. n_butane holds CoolProp's "
+        "Psat (Pa) and molar enthalpy h (J/mol, CoolProp's own zero) for the end-to-end test.",
         "fluids": fluids,
+        "n_butane": n_butane(),
     }
 
 
