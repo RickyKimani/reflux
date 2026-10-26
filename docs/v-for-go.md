@@ -119,6 +119,12 @@ looks like it does. See `cubic_real_roots` in [numeric/cubic.v](../numeric/cubic
 
 V also has no shadowing. Redeclaring `x` in an inner block is a compile
 error ("redefinition of `x`"), which removes another family of Go bugs.
+Two relatives of that rule:
+- A variable can't take the name of the module it's in: `components`
+  inside module `components` is an error.
+- A local named like a module-level const is a warning, and so an error
+  under `-W`. A test const `db` clashed with the `db` inside
+  `components.load` this way.
 
 **Closures capture explicitly, and by value.** A Go closure silently
 captures variables by reference, so a loop variable or a later assignment
@@ -242,6 +248,20 @@ pub fn (e InputError) msg() string {
 
 thermo.new_cubic(.pr, [broken]) or {
 	if err is thermo.InputError { /* … */ }
+}
+```
+
+  Inside the `if err is …` branch, `err` *is* that type, so its own fields
+  can be used without a cast. A failed lookup's `LookupError` carries the
+  closest names, so a caller can offer them, not just print the message
+  ([components/database.v](../components/database.v)):
+
+```v
+rec := db.find('watr') or {
+	if err is components.LookupError {
+		println(err.suggestions[0]) // Water (7732-18-5)
+	}
+	return
 }
 ```
 

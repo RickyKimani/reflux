@@ -1,8 +1,9 @@
-// Internal test (module thermo), so the overflow-safe helpers can be checked
-// directly as well as through the public CpForm methods.
+// Internal test (module thermo). The overflow-safe hyperbolic helpers behind
+// AlyLee live in tdep now, and are tested there.
 module thermo
 
 import math
+import tdep
 
 // Cp/R = A + B·T + C·T² + D·T⁻², the four-constant form, as Polynomial terms.
 fn four_constant(a f64, b f64, c f64, d f64) CpForm {
@@ -34,6 +35,13 @@ fn forms() map[string]CpForm {
 		})
 		'log powers':    CpForm(Polynomial{
 			terms: [PowerTerm{30.0, 0}, PowerTerm{2000.0, -1}, PowerTerm{0.01, 1}]
+		})
+		// ChemSep's n-butane ideal-gas Cp, eq. 16 in J/(kmol·K): no closed-form
+		// integral, so this exercises the quadrature.
+		'eq. 16':        CpForm(Correlated{
+			c:     tdep.new(16, [44749.9, -338.141, 11.8145, 0.00097744, -3.35913e-07], 80.0,
+				1500.0, 0.0) or { panic(err) }
+			scale: 1e-3
 		})
 	}
 }
@@ -84,23 +92,35 @@ fn test_aly_lee_limits_and_extreme_temperatures() {
 	}
 }
 
-// ref_ln_cosh is an accurate reference: the Taylor series where cosh x is
-// too close to 1 for log(cosh x) to keep its digits, the naive form elsewhere.
-fn ref_ln_cosh(x f64) f64 {
-	if x < 0.1 {
-		x2 := x * x
-		return x2 / 2.0 - x2 * x2 / 12.0 + x2 * x2 * x2 / 45.0 - 17.0 * x2 * x2 * x2 * x2 / 2520.0
+fn test_correlated_scales_its_correlation() {
+	// The same Aly–Lee Cp, once in J/(mol·K) and once as an eq. 107
+	// correlation in J/(kmol·K) scaled back down.
+	direct := CpForm(AlyLee{
+		a: 80.0
+		b: 240.0
+		c: 1630.0
+		d: 150.0
+		e: 730.0
+	})
+	scaled := CpForm(Correlated{
+		c:     tdep.new(107, [80e3, 240e3, 1630.0, 150e3, 730.0], 50.0, 1500.0, 0.0)!
+		scale: 1e-3
+	})
+	for t in [100.0, 298.15, 1000.0] {
+		assert math.tolerance(scaled.cp(t), direct.cp(t), 1e-14)
+		assert math.tolerance(scaled.int_cp(298.15, t), direct.int_cp(298.15, t), 1e-13)
+		assert math.tolerance(scaled.int_cp_over_t(298.15, t), direct.int_cp_over_t(298.15, t),
+			1e-13)
 	}
-	return math.log(math.cosh(x))
 }
 
-fn test_overflow_safe_helpers_agree_with_the_naive_forms() {
-	for x in [0.001, 0.01, 0.5, 0.999, 1.0, 1.001, 3.0, 20.0, 300.0] {
-		assert math.tolerance(x_over_sinh_sq(x), math.pow(x / math.sinh(x), 2), 1e-13), 'x/sinh at ${x}'
-		assert math.tolerance(x_over_cosh_sq(x), math.pow(x / math.cosh(x), 2), 1e-13), 'x/cosh at ${x}'
-		assert math.tolerance(ln_sinh(x), math.log(math.sinh(x)), 1e-13), 'ln sinh at ${x}'
-		assert math.tolerance(ln_cosh(x), ref_ln_cosh(x), 1e-13), 'ln cosh at ${x}: ${ln_cosh(x)} vs ${ref_ln_cosh(x)}'
-	}
-	assert x_over_sinh_sq(0.0) == 1.0
-	assert x_over_sinh_sq(2000.0) == 0.0 // underflows cleanly instead of Inf/Inf
+fn test_an_integral_that_cannot_be_done_is_nan() {
+	// exp(1000/T) overflows below about 1.4 K, so ∫Cp dT down to 1 K has no
+	// finite value. NaN says so; a number here would be wrong.
+	f := CpForm(Correlated{
+		c: tdep.new(16, [0.0, 1000.0], 100.0, 1000.0, 0.0)!
+	})
+	assert math.is_nan(f.int_cp(1.0, 300.0))
+	assert math.is_nan(f.int_cp_over_t(1.0, 300.0))
+	assert math.is_finite(f.int_cp(200.0, 300.0))
 }

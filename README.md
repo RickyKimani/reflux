@@ -60,6 +60,9 @@ components/
   record.v          a compound as a component file holds it (docs/data-format.md)
   file.v, index.v   the TOML component files and index: deterministic writer,
                     strict reader
+  database.v        load and look up compounds, with suggestions for misses
+  build.v           records → thermo.Component, thermo.IdealGas, and
+                    correlations in SI per mol
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
   model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
@@ -121,7 +124,10 @@ So far:
 - the whole database imports, as 642 compounds, with its defects repaired
   or reported rather than silently fixed;
 - the converted files are committed in `data/components/`, and CI checks
-  that they're exactly what the importer writes.
+  that they're exactly what the importer writes;
+- compounds can be looked up by name, CAS number or InChIKey, and turned
+  into thermo's components and ideal gases. A directory of your own
+  overrides the built-in data.
 
 ## Roadmap
 

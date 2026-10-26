@@ -177,6 +177,28 @@ fn test_aly_lee_edge_coefficients() {
 		1e-14)
 }
 
+// ref_ln_cosh is an accurate reference: the Taylor series where cosh x is
+// too close to 1 for log(cosh x) to keep its digits, the naive form elsewhere.
+fn ref_ln_cosh(x f64) f64 {
+	if x < 0.1 {
+		x2 := x * x
+		return x2 / 2.0 - x2 * x2 / 12.0 + x2 * x2 * x2 / 45.0 - 17.0 * x2 * x2 * x2 * x2 / 2520.0
+	}
+	return math.log(math.cosh(x))
+}
+
+fn test_hyperbolic_helpers_agree_with_the_naive_forms() {
+	// Moved here from thermo in M2 step 5, when thermo.AlyLee began using
+	// these helpers through tdep instead of keeping copies.
+	for x in [0.001, 0.01, 0.5, 0.999, 1.0, 1.001, 3.0, 20.0, 300.0] {
+		assert math.tolerance(x_over_sinh_sq(x), math.pow(x / math.sinh(x), 2), 1e-13), 'x/sinh at ${x}'
+		assert math.tolerance(x_over_cosh_sq(x), math.pow(x / math.cosh(x), 2), 1e-13), 'x/cosh at ${x}'
+		assert math.tolerance(ln_sinh(x), math.log(math.sinh(x)), 1e-13), 'ln sinh at ${x}'
+		assert math.tolerance(ln_cosh(x), ref_ln_cosh(x), 1e-13), 'ln cosh at ${x}: ${ln_cosh(x)} vs ${ref_ln_cosh(x)}'
+	}
+	assert x_over_sinh_sq(2000.0) == 0.0 // underflows cleanly instead of Inf/Inf
+}
+
 fn test_hyperbolic_helpers_near_zero_and_switchover() {
 	// Taylor series near 0, and continuity where the helpers switch method
 	// at x = 1.

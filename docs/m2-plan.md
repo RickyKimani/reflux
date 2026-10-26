@@ -115,7 +115,7 @@ All checked by `v -W test .`, so CI enforces them.
 | D6 | Where it lives | A new module `components`, which imports `thermo` and builds `thermo.Component`, `thermo.IdealGas` and `thermo.Fluid`. | `thermo` stays about models. Data handling is its own concern. |
 | D7 | Outside [Tmin, Tmax] | Evaluate anyway (extrapolate) and say so: each evaluation returns the value plus an in-range flag. | A flash's trial temperatures often step outside a correlation's range briefly. Refusing would break the iteration, while silence would hide bad data. |
 | D8 | Overlapping compounds | The first occurrence of a CAS number, in reading order (`chemsep1.xml`, then `chemsep2.xml`, top to bottom), wins. Each duplicate is listed in the import report with the elements that differ. | Simple and deterministic. In 8.50 the only duplicates are two compounds listed twice within `chemsep2.xml`. In both, the first copy is the more complete and more recently edited one (step 3). |
-| D9 | Ideal-gas Cp from the database | A new `CpForm` variant wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use adaptive Gauss–Kronrod quadrature (`numeric.integrate`) when there's no closed form. | It reuses M1's whole total-property machinery. |
+| D9 | Ideal-gas Cp from the database | A new `CpForm` variant, `thermo.Correlated`, wrapping a correlation, so eq. 16 drops into M1's `Fluid` unchanged. Integrals use adaptive Gauss–Kronrod quadrature (`numeric.integrate`) when there's no closed form. A failed integral is NaN rather than an error. | It reuses M1's whole total-property machinery, and `Fluid.props` keeps its signature. |
 | D10 | Mathias–Copeman parameters | The XML's values are imported and stored but not used by default, since their EOS isn't stated. `mc-PR.lib`, fitted for PR, is the better source; vendoring it is a small addition to step 6. | Using parameters fitted for one EOS in another would be guessing. |
 | D11 | Who writes what | As in M1, I write it all unless you claim a step. Good candidates are marked. | |
 
@@ -348,18 +348,61 @@ flowchart LR
     toml never produces a non-finite float (see above), so no file can
     reach it. It stays, documented, in case the parser changes.
 
-### 5. Database API
-- `load_default()`, `load(dir)`; lookup by CAS, name or alias, with
-  suggestions for unknown names; `component(...)` gives a `thermo.Component`
-  and `ideal_gas(...)` a `thermo.IdealGas`.
-- User components in the same TOML format, in a directory listed after the
-  built-in one, so they can add to or override it.
-- Decide what the database does with the step 3 findings:
-  - a correlation with an impossible range or no coefficients is
-    probably unusable;
-  - eq. 200 falls back to the Antoine record;
-  - a compound without Tc, Pc and ω can't become a `thermo.Component`,
-    and lookup should say why.
+### 5. Database API — done
+- `components.load(dirs)` and `load_default()`
+  ([components/database.v](../components/database.v)).
+  - The built-in directory is `data/components/`, found through `@VMODROOT`
+    at compile time, or `$REFLUX_DATA`.
+  - A directory with an `index.toml` is read through it, and a stale index
+    (one listing a missing file) is an error. A directory without one, such
+    as your own, has its `*.toml` files read.
+  - A later directory's compound replaces an earlier one with the same CAS
+    number, whole: that's how user components override built-in ones.
+  - Files are parsed only when a compound is asked for.
+- `db.find(query)` matches a CAS number, an InChIKey, or a name or alias
+  (ignoring case and spaces). Criterion 7:
+  - A miss is a typed `LookupError` with the five closest names: those
+    containing the query first, shortest first, then by edit distance.
+    "butane" suggests N-butane and Isobutane, "watr" Water.
+  - A query matching several compounds is a `LookupError` listing them all.
+    That happens in the shipped data: ChemSep gives carbon monoxide
+    formaldehyde's InChIKey. A name used again in a user directory
+    triggers it too.
+- What a record builds ([components/build.v](../components/build.v)):
+  - `rec.component()` builds a `thermo.Component`. It fails, naming what's
+    missing, for the one compound without Tc, Pc and ω.
+  - `rec.ideal_gas()` builds a `thermo.IdealGas`. Its Cp is a new
+    `thermo.Correlated` form (D9) wrapping the `ideal_gas_cp` correlation,
+    scaled from J/(kmol·K).
+  - `rec.property(key)` gives any correlation converted to SI per mol. Its
+    `at(T)` returns the value and whether T is in the fitted range (D7).
+- The step 3 findings, decided:
+  - a correlation with no coefficients or an impossible range is refused,
+    and the message points to CHANGES.md;
+  - a vapour pressure that can't be used falls back to the Antoine record,
+    with a note saying why. That covers 26 compounds: 5 in eq. 200, the rest
+    without a usable eq.-101 record. Only the stub compound has no vapour
+    pressure at all.
+  - the reduced-temperature forms take the compound's Tc unless the
+    correlation has its own.
+- In thermo:
+  - **`Correlated`** integrates numerically where it must. A failed
+    integral, which takes a correlation that overflows, returns NaN, so
+    `Fluid.props` stays infallible and M1's API is unchanged.
+  - **`AlyLee`** now evaluates through tdep's eq. 107, so the duplicated
+    overflow-safe helpers are gone from thermo. Their naive-form test moved
+    to tdep. M1's fixtures still pass unchanged.
+- Tests ([database_test.v](../components/database_test.v)): every lookup
+  path and refusal, overrides and clashes in temporary user directories,
+  n-butane's conversions against the formulas written out, and a sweep
+  building every compound. Its counts were checked with Python's tomllib:
+  - an ideal gas for 640 compounds (none for the stub or for R-1234yf);
+  - a component for 641;
+  - a vapour pressure for 641.
+- Mutation check: 22 planted mistakes, all caught. They covered each lookup
+  path, the suggestion ranking, directory order, the stale-index check,
+  the unit scales, the fallback, each refusal, Tc and ΔH°f wiring, the
+  in-range flag, and thermo's new Cp form.
 
 ### 6. kᵢⱼ banks
 - An IPD parser; a symmetric matrix for a component list; a report of
@@ -383,6 +426,14 @@ flowchart LR
   - the 8 records whose unused coefficients aren't zero (`unused_nonzero`):
     four eq.-2 solid densities with a C, and four eq.-4 amine liquid Cps
     with an E. Those suggest a wrong equation number.
+- And what step 5 found:
+  - an InChIKey shared by two compounds: carbon monoxide has formaldehyde's;
+  - compounds with no usable ideal-gas Cp: the stub record, and R-1234yf
+    (754-12-1);
+  - the 26 compounds whose vapour pressure falls back to Antoine.
+    ChemSep's eq. 200 looks like a Wagner equation, with Pc as its fifth
+    coefficient and Tmax at Tc. Supporting it would turn 5 of those back
+    into their own fits.
 
 ### 9. End to end
 - `db.fluid(.pr, names)`; the integration test from criterion 9; the demo

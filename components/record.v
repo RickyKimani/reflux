@@ -166,6 +166,25 @@ pub fn (mut c Correlations) set(key string, d CorrelationData) ! {
 	return error('no correlation `${key}`')
 }
 
+// get returns correlation `key`. It fails if the record has none, or if
+// the format has no correlation of that name.
+pub fn (c Correlations) get(key string) !CorrelationData {
+	$for f in Correlations.fields {
+		$if f.typ is ?CorrelationData {
+			if f.name == key {
+				// Unwrapped in a typed function: inside `$for`, `if d := …` on
+				// an Option struct field leaves d an Option (a V 0.5.2 bug).
+				return present(c.$(f.name), key)
+			}
+		}
+	}
+	return error('no correlation called `${key}` in the component format')
+}
+
+fn present(opt ?CorrelationData, key string) !CorrelationData {
+	return opt or { return error('no `${key}` data') }
+}
+
 // set sets the group counts for method `key`.
 pub fn (mut g Groups) set(key string, counts map[int]int) ! {
 	$for f in Groups.fields {
