@@ -110,10 +110,22 @@ H and S of n-butane match NIST WebBook spot values within the model's
 expected error; ∂ln φᵢ/∂T at constant P equals −H̄ʳᵢ/RT².
 
 ### M2 — Component data
+**Done.** The detailed plan, including what the ChemSep files contain and
+their licence, and the criterion-by-criterion exit review are in
+[m2-plan.md](m2-plan.md). The plan went further than the exit below:
+- ChemSep's data is cross-checked against CoolProp for 85 fluids;
+- every correlation is swept for sanity, into
+  [data-quality.md](data-quality.md);
+- `db.fluid` builds working fluids from the database, kᵢⱼ and α
+  included.
+
 - Component record with identifiers (name, CAS, formula, InChIKey) and
   **provenance on every value** (Track D1).
 - ChemSep XML importer that writes reflux's own text data format (D2).
 - Temperature-dependent correlations: DIPPR equations, Antoine, Wagner (D3).
+  Done except Wagner. ChemSep's eq. 200 looks like a Wagner equation, but
+  its form isn't documented in what ChemSep ships, so its 5 records fall
+  back to Antoine until it can be confirmed.
 - kᵢⱼ banks for PR and SRK, with provenance (D4).
 
 **Exit:** every ChemSep compound loads; PR Psat for a fixed set of 20

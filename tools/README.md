@@ -5,7 +5,10 @@ Scripts for working on reflux. Nothing here is part of the simulator.
 | Script | What it does |
 |---|---|
 | `check.vsh` | Runs the same checks as CI: format, vet, tests, build, demo. |
+| `import_chemsep.vsh` | Regenerates `../data/components/` from the vendored ChemSep XML. Run it after changing the importer or the vendored files; a test fails until you do. |
+| `data_quality.vsh` | Regenerates `../docs/data-quality.md`: the sweep over every compound's data, PR against ChemSep's vapour pressures, and the outliers against CoolProp. Run it after changing the data or anything the sweep evaluates; a test fails until you do. |
 | `gen_m1_fixtures.py` | Writes the M1 reference fixtures in `../testdata` from Caleb Bell's `thermo` and CoolProp. |
+| `gen_m2_fixtures.py` | Writes `../testdata/m2_tdep.json`: every correlation form on real ChemSep records, evaluated with mpmath and checked against `chemicals`. Also writes `../testdata/m2_coolprop.json`, ChemSep against CoolProp for the 85 fluids both have, and `../testdata/m2_pr_psat.json`, PR's vapour pressure from `thermo` against ChemSep's for 20 compounds. |
 
 ```bash
 v run tools/check.vsh
@@ -26,6 +29,10 @@ run by hand, never in tests: the V tests only read the JSON they write.
 
 ```bash
 uv run tools/gen_m1_fixtures.py
+```
+
+```bash
+uv run tools/gen_m2_fixtures.py
 ```
 
 The script declares its dependencies inline, with pinned versions (PEP 723),

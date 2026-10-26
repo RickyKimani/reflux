@@ -10,3 +10,10 @@ v.mod   text eol=lf
 *.xml   text eol=lf
 *.yml   text eol=lf
 *.py    text eol=lf
+
+# Vendored third-party data is kept byte for byte as its authors ship it
+# (ChemSep's files have CRLF endings), so the SHA-256 sums in each NOTICE
+# stay true on every checkout. Later lines override earlier ones, and
+# NOTICE.md itself is ours, so it goes back to LF.
+data/vendor/**            -text
+data/vendor/**/NOTICE.md  text eol=lf

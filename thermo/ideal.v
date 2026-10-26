@@ -1,12 +1,12 @@
 module thermo
 
 import math
+import tdep
 
 // Ideal-gas heat capacity forms. Each one gives Cp(T) and the two integrals
-// that H and S need, ∫Cp dT and ∫Cp/T dT, in closed form. Everything is
-// per mole, in J/(mol·K) and J/mol. Database units (DIPPR uses J/(kmol·K))
-// are converted when the data is loaded, never here.
-pub type CpForm = AlyLee | Polynomial
+// that H and S need, ∫Cp dT and ∫Cp/T dT. Everything is per mole, in
+// J/(mol·K) and J/mol.
+pub type CpForm = AlyLee | Correlated | Polynomial
 
 // PowerTerm is c·T^p.
 pub struct PowerTerm {
@@ -28,6 +28,10 @@ pub:
 //     Cp = A + B·[(C/T)/sinh(C/T)]² + D·[(E/T)/cosh(E/T)]²
 //
 // A, B and D in J/(mol·K); C and E in K.
+//
+// It's evaluated by tdep's eq. 107, which has the closed-form integrals and
+// stays finite at low T, where C/T is large enough that sinh and cosh
+// overflow a float.
 pub struct AlyLee {
 pub:
 	a f64
@@ -35,6 +39,34 @@ pub:
 	c f64
 	d f64
 	e f64
+}
+
+fn (f AlyLee) correlation() tdep.Correlation {
+	return tdep.Correlation{
+		eq:   107
+		a:    f.a
+		b:    f.b
+		c:    f.c
+		d:    f.d
+		e:    f.e
+		tmax: math.inf(1)
+	}
+}
+
+// Correlated is Cp from one of tdep's temperature-dependent correlations,
+// such as ChemSep's eq. 16, the form of most of its ideal-gas heat
+// capacities. The correlation keeps its source's units, and scale converts
+// its value to J/(mol·K): 1e-3 for ChemSep's J/(kmol·K).
+//
+// Forms with no closed-form integral are integrated numerically. If that
+// fails (it takes a correlation that overflows somewhere between the two
+// temperatures), int_cp and int_cp_over_t return NaN. Fluid.props stays
+// infallible that way, and the NaN shows in H and S instead of hiding as a
+// wrong number.
+pub struct Correlated {
+pub:
+	c     tdep.Correlation @[required]
+	scale f64 = 1.0
 }
 
 // cp returns the ideal-gas heat capacity at T, J/(mol·K).
@@ -48,132 +80,58 @@ pub fn (f CpForm) cp(t f64) f64 {
 			s
 		}
 		AlyLee {
-			mut s := f.a
-			if f.b != 0.0 {
-				s += f.b * x_over_sinh_sq(f.c / t)
-			}
-			if f.d != 0.0 {
-				s += f.d * x_over_cosh_sq(f.e / t)
-			}
-			s
+			f.correlation().eval(t)
+		}
+		Correlated {
+			f.scale * f.c.eval(t)
 		}
 	}
 }
 
 // int_cp returns ∫Cp dT from t1 to t2, J/mol.
 pub fn (f CpForm) int_cp(t1 f64, t2 f64) f64 {
-	return f.h_anti(t2) - f.h_anti(t1)
+	return match f {
+		Polynomial { f.h_anti(t2) - f.h_anti(t1) }
+		AlyLee { f.correlation().integral(t1, t2) or { math.nan() } }
+		Correlated { f.scale * (f.c.integral(t1, t2) or { math.nan() }) }
+	}
 }
 
 // int_cp_over_t returns ∫Cp/T dT from t1 to t2, J/(mol·K).
 pub fn (f CpForm) int_cp_over_t(t1 f64, t2 f64) f64 {
-	return f.s_anti(t2) - f.s_anti(t1)
+	return match f {
+		Polynomial { f.s_anti(t2) - f.s_anti(t1) }
+		AlyLee { f.correlation().integral_over_t(t1, t2) or { math.nan() } }
+		Correlated { f.scale * (f.c.integral_over_t(t1, t2) or { math.nan() }) }
+	}
 }
 
 // h_anti is an antiderivative of Cp.
-fn (f CpForm) h_anti(t f64) f64 {
-	match f {
-		Polynomial {
-			mut s := 0.0
-			for term in f.terms {
-				// ∫T^p dT = T^(p+1)/(p+1), except p = −1, which gives ln T.
-				s += if term.p == -1 {
-					term.c * math.log(t)
-				} else {
-					term.c * math.pow(t, f64(term.p + 1)) / f64(term.p + 1)
-				}
-			}
-			return s
-		}
-		AlyLee {
-			// d/dT[C·coth(C/T)] = (C/T)²/sinh²(C/T), and
-			// d/dT[−E·tanh(E/T)] = (E/T)²/cosh²(E/T).
-			mut s := f.a * t
-			if f.b != 0.0 {
-				s += f.b * f.c / math.tanh(f.c / t)
-			}
-			if f.d != 0.0 {
-				s -= f.d * f.e * math.tanh(f.e / t)
-			}
-			return s
+fn (f Polynomial) h_anti(t f64) f64 {
+	mut s := 0.0
+	for term in f.terms {
+		// ∫T^p dT = T^(p+1)/(p+1), except p = −1, which gives ln T.
+		s += if term.p == -1 {
+			term.c * math.log(t)
+		} else {
+			term.c * math.pow(t, f64(term.p + 1)) / f64(term.p + 1)
 		}
 	}
+	return s
 }
 
 // s_anti is an antiderivative of Cp/T.
-fn (f CpForm) s_anti(t f64) f64 {
-	match f {
-		Polynomial {
-			mut s := 0.0
-			for term in f.terms {
-				// ∫T^(p−1) dT = T^p/p, except p = 0, which gives ln T.
-				s += if term.p == 0 {
-					term.c * math.log(t)
-				} else {
-					term.c * math.pow(t, f64(term.p)) / f64(term.p)
-				}
-			}
-			return s
-		}
-		AlyLee {
-			// With x = C/T: d/dT[x·coth x − ln sinh x] = x²/(T·sinh²x), and
-			// with y = E/T: d/dT[−(y·tanh y − ln cosh y)] = y²/(T·cosh²y).
-			mut s := f.a * math.log(t)
-			if f.b != 0.0 {
-				x := f.c / t
-				s += f.b * (x / math.tanh(x) - ln_sinh(x))
-			}
-			if f.d != 0.0 {
-				y := f.e / t
-				s -= f.d * (y * math.tanh(y) - ln_cosh(y))
-			}
-			return s
+fn (f Polynomial) s_anti(t f64) f64 {
+	mut s := 0.0
+	for term in f.terms {
+		// ∫T^(p−1) dT = T^p/p, except p = 0, which gives ln T.
+		s += if term.p == 0 {
+			term.c * math.log(t)
+		} else {
+			term.c * math.pow(t, f64(term.p)) / f64(term.p)
 		}
 	}
-}
-
-// The Aly–Lee terms overflow if written naively: sinh and cosh exceed f64
-// for arguments above about 710, which C/T reaches at low T. These forms
-// rewrite them in terms of e^(−x), which only underflows harmlessly to 0.
-
-// x_over_sinh_sq returns (x/sinh x)² for x ≥ 0.
-fn x_over_sinh_sq(x f64) f64 {
-	if x == 0.0 {
-		return 1.0
-	}
-	if x < 1.0 {
-		r := x / math.sinh(x)
-		return r * r
-	}
-	e := math.exp(-x)
-	r := 2.0 * x * e / (1.0 - e * e)
-	return r * r
-}
-
-// x_over_cosh_sq returns (x/cosh x)² for x ≥ 0.
-fn x_over_cosh_sq(x f64) f64 {
-	e := math.exp(-x)
-	r := 2.0 * x * e / (1.0 + e * e)
-	return r * r
-}
-
-// ln_sinh returns ln(sinh x) for x > 0.
-fn ln_sinh(x f64) f64 {
-	if x < 1.0 {
-		return math.log(math.sinh(x))
-	}
-	return x - math.ln2 + math.log1p(-math.exp(-2.0 * x))
-}
-
-// ln_cosh returns ln(cosh x) for x ≥ 0. For small x, cosh x is so close to
-// 1 that ln(cosh x) loses relative precision; cosh x − 1 = 2·sinh²(x/2)
-// keeps it.
-fn ln_cosh(x f64) f64 {
-	if x < 1.0 {
-		s := math.sinh(0.5 * x)
-		return math.log1p(2.0 * s * s)
-	}
-	return x - math.ln2 + math.log1p(math.exp(-2.0 * x))
+	return s
 }
 
 // IdealGas is one component's ideal-gas data. The formation values put H

@@ -37,6 +37,11 @@ It is a good way to find out what a feature costs.
 
 `-W` turns warnings into errors. Use it for tests and CI (see §4 for why).
 
+A `.vsh` script inside the project can import the project's own modules,
+just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
+is a 30-line script around `import components.chemsep`. Go would need a
+`cmd/` package to do the same.
+
 **Windows gotcha: keep the project path short.** tcc puts temporary files
 with long names next to the output. In a deeply nested folder it fails with
 `could not write … .o: No such file or directory`, then tries to fall back to
@@ -114,6 +119,12 @@ looks like it does. See `cubic_real_roots` in [numeric/cubic.v](../numeric/cubic
 
 V also has no shadowing. Redeclaring `x` in an inner block is a compile
 error ("redefinition of `x`"), which removes another family of Go bugs.
+Two relatives of that rule:
+- A variable can't take the name of the module it's in: `components`
+  inside module `components` is an error.
+- A local named like a module-level const is a warning, and so an error
+  under `-W`. A test const `db` clashed with the `db` inside
+  `components.load` this way.
 
 **Closures capture explicitly, and by value.** A Go closure silently
 captures variables by reference, so a loop variable or a later assignment
@@ -129,6 +140,26 @@ f()                               // 1.0, not 5.0
 
 See `critical_constants` in [thermo/cubic.v](../thermo/cubic.v), which
 passes `fn [s, m] (b f64) f64 { … }` to `numeric.bisect`.
+
+`mut` in the capture list doesn't change this: `fn [mut n] () { n++ }`
+increments the closure's *own* copy, and the outer `n` stays where it was.
+To share state the way a Go closure does, capture a reference:
+
+```v
+struct Counter {
+mut:
+	n int
+}
+
+mut calls := &Counter{}
+f := fn [mut calls] (x f64) f64 {
+	calls.n++ // the pointer is copied; the Counter it points to is shared
+	return x * x
+}
+```
+
+[numeric/integrate_test.v](../numeric/integrate_test.v) counts function
+evaluations this way. My first version captured an `int` and counted zero.
 
 ---
 
@@ -220,6 +251,20 @@ thermo.new_cubic(.pr, [broken]) or {
 }
 ```
 
+  Inside the `if err is …` branch, `err` *is* that type, so its own fields
+  can be used without a cast. A failed lookup's `LookupError` carries the
+  closest names, so a caller can offer them, not just print the message
+  ([components/database.v](../components/database.v)):
+
+```v
+rec := db.find('watr') or {
+	if err is components.LookupError {
+		println(err.suggestions[0]) // Water (7732-18-5)
+	}
+	return
+}
+```
+
 - **Wrapping** (Go's `fmt.Errorf("…: %w", err)`):
   `f() or { return error('loading ${path}: ${err}') }`. See `arg_or` in
   [main.v](../main.v). V doesn't keep an error chain the way `%w` does.
@@ -290,6 +335,33 @@ Rule of thumb: interface when others will add implementations, sum type
 when you own the list and want the compiler to check you've handled every
 case.
 
+**The standard library uses sum types too.** In `encoding.xml`, a node's
+children are `[]XMLNodeContents`, where
+`XMLNodeContents = XMLCData | XMLComment | XMLNode | string`. Go's
+`encoding/xml` decodes into tagged structs instead. Walking the tree in
+V is a `match` that must say what to do with each kind. The ChemSep
+importer ([components/chemsep/chemsep.v](../components/chemsep/chemsep.v))
+keeps elements, skips comments and formatting whitespace, and turns
+anything else into an error, so stray text can't be ignored by accident:
+
+```v
+for c in node.children {
+	match c {
+		xml.XMLNode { out << c }
+		xml.XMLComment {}
+		string { if c.trim_space() != '' { return error('stray text') } }
+		xml.XMLCData { return error('unexpected CDATA') }
+	}
+}
+```
+
+Two `encoding.xml` behaviours shaped the importer:
+- it rejects a `<` inside an attribute value, which ChemSep's files have
+  43 of;
+- it reads a 3.8 MB file in about 1.5 s under tcc. That's fine for an
+  importer that runs only when the data changes, which is why reflux loads
+  its own TOML at run time instead.
+
 ---
 
 ## 6. Enums
@@ -308,6 +380,10 @@ kinds := [CubicKind.vdw, .rk, .srk, .pr]  // name it once, then shorthand
 
 A `match` on an enum is exhaustive too. See `CubicKind.consts()` in
 [thermo/cubic.v](../thermo/cubic.v).
+
+Forget to name the type in an array literal, as in `for kind in [.pr, .srk]`,
+and the error is misleading: `cannot use int as thermo.CubicKind`. Nothing
+tells V which enum `.pr` belongs to, so the elements fall back to ints.
 
 ---
 
@@ -330,6 +406,17 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `const butane = Component{…}` and `const kinds = [CubicKind.vdw, .rk, .srk, .pr]`.
 - Receivers: `fn (c Cubic) residual(…)` is a value receiver, and
   `fn (mut s Solver) step()` is the equivalent of Go's `func (s *Solver) Step()`.
+- **Read-only exported fields.** In Go an exported field can always be
+  written by anyone who has the struct. V separates the two: fields under
+  `pub:` can be read outside the module but not assigned, and only
+  `pub mut:` fields can be assigned from anywhere. The importer's `Source`,
+  `Repair` and `Duplicate`
+  ([components/chemsep/chemsep.v](../components/chemsep/chemsep.v)) are
+  `pub:`, so a report can't be edited after the fact. (I first assumed
+  `pub mut:` meant "mutable only inside the module", as older V docs said.
+  A probe showed it doesn't.)
+- **Struct update syntax**, which Go lacks: `Repair{...it, cas: rec.ids.cas}`
+  copies `it` and changes one field.
 
 ---
 
@@ -362,6 +449,17 @@ clone the arrays they store, so the caller can reuse theirs.
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 
+**Gotcha: `toml.Any` converts without complaint.** `doc.value('name').f64()`
+on a string returns `0.0`, and a missing key gives a `Null` that also
+converts to zero. Check the type first (`if v is f64 || v is i64`), or use
+`value_opt`, which returns an error for a missing key. This is why the
+component reader in M2 checks every value's type.
+
+**Gotcha (a V bug): don't interpolate an inline `.map()`.**
+`println('${m.values().map(it.int())}')` prints the array's internal
+struct instead of `[2, 3]`. Assign it to a variable first and interpolate
+that. Found in the M2 data-format spike, with V `eab77e7`.
+
 **Gotcha: `int` is 64-bit, but C's `int` is 32-bit.** Like Go's `int`, V's
 `int` is 64-bit on 64-bit platforms (`sizeof(int)` is 8 in this V). In any
 function that C, or Python's `ctypes`, calls, use explicit widths: `i32`
@@ -372,6 +470,15 @@ used cgo know this as `C.int` versus `int`.
 
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
+
+**Files:**
+- `os.ls(dir)` returns bare names, not paths, in whatever order the file
+  system gives. Go's `os.ReadDir` sorts by name. So sort wherever order
+  can matter: `components.load` sorts a user directory's file names, so
+  which duplicate wins is the same on every machine.
+- `os.read_file` returns the bytes as they are, CRLF and all, and
+  `split_into_lines()` handles both line endings. The ChemSep `.ipd` and
+  `.lib` readers rely on that, since the vendored files keep their CRLFs.
 
 ---
 
@@ -389,6 +496,16 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
     imports `thermo`, so it can only see `pub` names. That keeps the public
     API honest.
 - `math.tolerance(a, b, tol)` is the relative-or-absolute float compare.
+- **An expensive fixture, computed once.** A `const` whose value is a
+  function call is evaluated when the program starts, so every test function
+  in the file shares it. Go would need `TestMain` or a `sync.Once`.
+  [components/chemsep/chemsep_test.v](../components/chemsep/chemsep_test.v)
+  imports the whole ChemSep database this way, once (about 4 s), for 16
+  tests:
+
+```v
+const imported = import_files(@VMODROOT, vendored) or { panic(err) }
+```
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
   Newton solver against the polynomial roots. Identities catch bugs that
@@ -480,7 +597,7 @@ sensitivity analysis are independent, which makes them the first place
 
 ---
 
-## 13. Generics and JSON
+## 13. Generics, JSON and reflection
 
 Generics use square brackets, as in Go 1.18+, and are monomorphised (one
 copy per type). V's `json2` decodes straight into a struct by field name.
@@ -501,11 +618,98 @@ fx := read_fixture[ThermoFixture]('m1_thermo.json')!
 test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
 module is gone; it's `json2` now.)
 
+A key that may be missing from the JSON fits an Option field. Where Go
+would use a `*float64` that's nil when absent, V's `json2` leaves a `?f64`
+as `none`, and reading it forces you to handle that case. From
+[tdep/fixtures_test.v](../tdep/fixtures_test.v):
+
+```v
+struct Point {
+	t            f64
+	chemicals_y  ?f64 // only for the DIPPR forms
+}
+
+if want := p.chemicals_y {
+	assert agree(corr.eval(p.t), want, 1e-12, 0.0)
+}
+```
+
+A JSON key can't be a V keyword such as `int`. The fixture generator writes
+`integral` instead.
+
+**Reflection happens at compile time.** Go's `reflect` inspects values at
+run time, through `interface{}`, and a mistake is a run-time panic. V's
+`$for` loops over a type's fields while compiling, and generates ordinary
+typed code for each one. [components/record.v](../components/record.v)
+sets a struct's float field by its name this way:
+
+```v
+fn set_field[T](mut s T, key string, v f64) ! {
+	$for f in T.fields {
+		$if f.typ is ?f64 {
+			if f.name == key {
+				s.$(f.name) = v // becomes s.tc = v, s.pc = v, … : one branch per field
+				return
+			}
+		}
+	}
+	return error('no ${typeof(s).name} key `${key}`')
+}
+```
+
+`$if f.typ is ?f64` is decided at compile time, so fields of other types
+never reach the assignment, and the assignment is type-checked like any
+other. The component file's keys are simply the struct's field names. The
+importer, and the TOML writer and reader still to come, share one
+definition and can't drift apart.
+
+Two smaller gotchas from the importer:
+- `strconv.atof64` rejects `abc` and `1.2.3` but accepts `nan` and `inf`,
+  so check `math.is_finite` yourself.
+- `arr.filter(…)` and `arr.map(…)` give you `it` but not `index`, which
+  exists only in array initialisers (`[]int{len: n, init: index}`). Use a
+  loop.
+
+Two limits of `$for`, both met in the component-file writer
+([components/file.v](../components/file.v)):
+- `s.$(f.name)` can't go inside a string interpolation. Assign it to a
+  variable first.
+- In V 0.5.2, `if d := s.$(f.name) { … }` unwraps an Option *float* field,
+  but leaves an Option *struct* field (`?CorrelationData`) still an Option
+  inside the block. Pass the Option to an ordinary typed function and
+  unwrap it there.
+
+**Struct equality is deep.** In Go, `==` on a struct that holds a map or a
+slice doesn't compile, and you reach for `reflect.DeepEqual`. V's `==`
+compares structs field by field, through arrays, maps and Options. The
+round-trip test is just `assert read_toml(path)! == record`, for each of
+642 compounds.
+
+V's `toml` module has quirks to code around:
+- `nan` reads back as the *string* "nan";
+- `inf` reads back as the integer 9218868437227405312;
+- integers come back as `i64`, `int` or `u64` depending on their size.
+
+[components/file.v](../components/file.v) checks every value's type, and
+takes an integer as a float only when it's exact (|i| ≤ 2⁵³).
+
 ---
 
-## 14. A V limit that shaped this code
+## 14. V limits that shaped this code
 
 **Operator overloading needs both operands to be the same type.** `2.0 * x`
 doesn't compile when `x` is a user-defined `Dual`. That's why the models use
 hand-written derivatives rather than automatic differentiation (see
 [docs/design.md](design.md)).
+
+**Formatted numbers depend on the C compiler.** V compiles to C, and
+`${x:.4g}` ends up in the C library's printf. Go's `fmt` is Go's own code,
+the same on every platform. When a value is an exact tie, such as 267.25
+to four figures, C libraries disagree: a tcc build printed 267.3 and a gcc
+build 267.2. The generated data-quality report differed by that one
+character between the two CI compilers. So
+[components/quality/quality.v](../components/quality/quality.v) rounds each
+value itself, half away from zero with `math.round`, before printing it,
+and a rounded value is never a tie. Plain `${x}` (shortest round-trip,
+`f64.str()`) is V's own code and was never affected, which is why the
+component files always matched.
