@@ -362,6 +362,17 @@ clone the arrays they store, so the caller can reuse theirs.
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 
+**Gotcha: `toml.Any` converts without complaint.** `doc.value('name').f64()`
+on a string returns `0.0`, and a missing key gives a `Null` that also
+converts to zero. Check the type first (`if v is f64 || v is i64`), or use
+`value_opt`, which returns an error for a missing key. This is why the
+component reader in M2 checks every value's type.
+
+**Gotcha (a V bug): don't interpolate an inline `.map()`.**
+`println('${m.values().map(it.int())}')` prints the array's internal
+struct instead of `[2, 3]`. Assign it to a variable first and interpolate
+that. Found in the M2 data-format spike, with V `eab77e7`.
+
 **Gotcha: `int` is 64-bit, but C's `int` is 32-bit.** Like Go's `int`, V's
 `int` is 64-bit on 64-bit platforms (`sizeof(int)` is 8 in this V). In any
 function that C, or Python's `ctypes`, calls, use explicit widths: `i32`

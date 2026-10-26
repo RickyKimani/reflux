@@ -1,8 +1,9 @@
 # M2 plan — component data
 
-Status: **in progress.** Step 0 is done: the official files are in
-`data/vendor/chemsep/`, and their [NOTICE](../data/vendor/chemsep/NOTICE.md)
-records versions, checksums and licence. The roadmap entry is
+Status: **in progress.** Steps 0 and 1 are done: the official files are in
+`data/vendor/chemsep/` (see their [NOTICE](../data/vendor/chemsep/NOTICE.md)),
+and the format is TOML ([data-format.md](data-format.md)). The roadmap entry
+is
 [M2 in roadmap.md](roadmap.md#m2--component-data); this file is the detailed
 plan.
 
@@ -148,10 +149,26 @@ flowchart LR
 - `.gitattributes` marks `data/vendor/` as `-text`, so Git doesn't rewrite
   the CRLF line endings and the checksums stay true.
 
-### 1. Data format spike
-Write n-butane by hand as TOML in the D4 schema, and check that V's `toml`
-module reads the nested tables and arrays it needs. Decide between TOML and
-JSON, and write the schema down in `docs/data-format.md`.
+### 1. Data format spike — done: TOML
+- n-butane was written by hand in the schema
+  ([spike/data_format/106-97-8.toml](../spike/data_format/106-97-8.toml)) and
+  read with V's `toml` module
+  ([spike/data_format/spike.v](../spike/data_format/spike.v)). Everything the
+  schema needs works: nested tables, arrays, inline-table overrides with
+  their own source, quoted numeric group keys, comments, file order kept,
+  and missing keys and malformed files reported.
+- On all 53,977 distinct numbers in the ChemSep XML, the TOML parser and
+  `strconv` agree exactly. V's `f64.str()` round-trips and always prints a
+  TOML float, so the writer can be deterministic.
+- Parsing takes about 1 ms per file under tcc. So the importer also writes an
+  `index.toml` for name lookup, and components are parsed only when asked
+  for.
+- Two V gotchas found:
+  - `toml.Any.f64()` on a string silently returns 0.0, so the reader checks
+    types;
+  - string interpolation of an inline `.map(…)` result prints the array's
+    internals, a V bug (assign to a variable first).
+- The schema is written down in [data-format.md](data-format.md).
 
 ### 2. Correlations (exercise candidate: the polynomial and exponential forms)
 - A `Correlation` (form, A–E, Tmin, Tmax, Tc where the form needs it, native
