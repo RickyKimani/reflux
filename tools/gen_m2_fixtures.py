@@ -1,40 +1,58 @@
 # /// script
-# requires-python = ">=3.10"
-# dependencies = ["chemicals==1.5.2", "mpmath==1.3.0"]
+# requires-python = ">=3.11"
+# dependencies = ["chemicals==1.5.2", "mpmath==1.3.0", "CoolProp==8.0.0"]
 # ///
-"""Generate the M2 correlation fixtures for reflux.
+"""Generate the M2 reference fixtures for reflux.
 
 Run from the repository root:
 
     uv run tools/gen_m2_fixtures.py
 
-It writes testdata/m2_tdep.json, which tdep/fixtures_test.v reads.
+It writes two files to testdata/:
 
-For every equation form tdep supports, it takes real coefficient sets from
-the vendored ChemSep XML, plus made-up sets for the forms ChemSep never
-uses and for a few hard cases. It then evaluates each at 40 significant
-digits with mpmath: the
-value, dY/dT, ∫Y dT and ∫Y/T dT. The formulas below are written
-independently of reflux's V code. For the DIPPR forms they're also checked
-against Caleb Bell's `chemicals`: if a formula here disagrees with
-`chemicals`, the script stops instead of writing a bad fixture.
+m2_tdep.json
+    Every equation form tdep supports, read by tdep/fixtures_test.v. Real
+    coefficient sets come from the vendored ChemSep XML, plus made-up sets
+    for the forms ChemSep never uses and for a few hard cases. Each is
+    evaluated at 40 significant digits with mpmath: the value, dY/dT, ∫Y dT
+    and ∫Y/T dT. The formulas below are written independently of reflux's V
+    code. For the DIPPR forms they're also checked against Caleb Bell's
+    `chemicals`: if a formula here disagrees, the script stops instead of
+    writing a bad fixture.
+
+m2_coolprop.json
+    ChemSep's data against CoolProp's reference equations, for every
+    CoolProp fluid that ChemSep also has (matched by CAS number). It holds
+    Tc, Pc, ω and M, the ideal-gas Cp and the vapour pressure, and the
+    deviation of ChemSep's values from CoolProp's at the time of generation.
+    ChemSep's values are read from data/components/ and evaluated here, with
+    the formulas below. components/coolprop_test.v recomputes the deviations
+    through reflux and requires that they match and haven't grown. That's a
+    regression guard on the data and its conversion, not a claim that
+    ChemSep is as accurate as CoolProp.
 """
 
 import datetime
 import json
+import math
 import pathlib
 import platform
 import re
+import tomllib
 import xml.etree.ElementTree as ET
 
 import chemicals
 import chemicals.dippr as dippr
+import CoolProp
+import CoolProp.CoolProp as CP
 import mpmath as mp
 
 mp.mp.dps = 40
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VENDOR = ROOT / "data" / "vendor" / "chemsep"
+COMPONENTS = ROOT / "data" / "components"
 OUT = ROOT / "testdata" / "m2_tdep.json"
+OUT_COOLPROP = ROOT / "testdata" / "m2_coolprop.json"
 
 TAU_FORMS = {106, 114, 116}
 
@@ -247,6 +265,109 @@ def evaluate(case):
     return {**case, "t0": t0, "points": points}
 
 
+def usable(c):
+    """Whether reflux can use a correlation record: the rules of
+    components/build.v, restated."""
+    if c is None or c["eq"] not in SUPPORTED or not c["coeffs"]:
+        return False
+    lo, hi = c["t_range"]
+    return not (lo > hi or lo < 0 or hi <= 0)
+
+
+def chemsep_value(c, t, tc, scale):
+    """A ChemSep correlation record's value at t, in SI per mol."""
+    k = (list(c["coeffs"]) + [0.0] * 5)[:5]
+    return float(Y(c["eq"], k, t, c.get("tc", tc))) * scale
+
+
+def points(lo, hi, value, reference):
+    """Four temperatures across [lo, hi], with CoolProp's value and ChemSep's
+    relative deviation from it. Points CoolProp can't evaluate are skipped."""
+    out = []
+    for f in (0.05, 0.35, 0.65, 0.95):
+        t = lo + f * (hi - lo)
+        try:
+            ref = reference(t)
+        except ValueError:
+            continue
+        out.append({"t": t, "coolprop": ref, "deviation": (value(t) - ref) / ref})
+    return out
+
+
+def coolprop_fluid(name, cas, rec):
+    c = rec.get("constants", {})
+    cor = rec.get("correlations", {})
+    fluid = {"coolprop": name, "cas": cas, "name": rec["name"], "constants": {}}
+    for key, param in (("tc", "Tcrit"), ("pc", "pcrit"), ("omega", "acentric"), ("mw", "molar_mass")):
+        if key not in c:
+            continue
+        try:
+            ref = CP.PropsSI(param, name)
+        except ValueError:
+            continue
+        # ω can be near zero (argon's is −0.002), so its deviation is absolute.
+        dev = c[key] - ref if key == "omega" else (c[key] - ref) / ref
+        fluid["constants"][key] = {"coolprop": ref, "deviation": dev}
+    t_low = max(CP.PropsSI("Ttriple", name), CP.PropsSI("Tmin", name))
+    t_high = CP.PropsSI("Tmax", name)
+    tc_ref = CP.PropsSI("Tcrit", name)
+    cp = cor.get("ideal_gas_cp")
+    if usable(cp):
+        assert cp["units"] == "J/kmol/K", f"{cas} ideal_gas_cp in {cp['units']}"
+        lo, hi = max(cp["t_range"][0], t_low), min(cp["t_range"][1], t_high)
+        if lo < hi:
+            fluid["cp0"] = {"key": "ideal_gas_cp", "points": points(lo, hi,
+                lambda t: chemsep_value(cp, t, c.get("tc", 0.0), 1e-3),
+                lambda t: CP.PropsSI("Cp0molar", "T", t, "Dmolar", 1e-3, name))}
+    key = "vapor_pressure" if usable(cor.get("vapor_pressure")) else "antoine_vapor_pressure"
+    vp = cor.get(key)
+    if usable(vp):
+        assert vp["units"] == "Pa", f"{cas} {key} in {vp['units']}"
+        lo, hi = max(vp["t_range"][0], t_low), min(vp["t_range"][1], 0.98 * tc_ref)
+        if lo < hi:
+            fluid["psat"] = {"key": key, "points": points(lo, hi,
+                lambda t: chemsep_value(vp, t, c.get("tc", 0.0), 1.0),
+                lambda t: CP.PropsSI("P", "T", t, "Q", 0, name))}
+    return fluid
+
+
+def coolprop_fixture():
+    fluids = []
+    for name in sorted(CP.get_global_param_string("fluids_list").split(","), key=str.lower):
+        cas = CP.get_fluid_param_string(name, "CAS")
+        path = COMPONENTS / f"{cas}.toml"
+        if path.exists():
+            fluids.append(coolprop_fluid(name, cas, tomllib.loads(path.read_text(encoding="utf-8"))))
+    return {
+        "source": {
+            "generated": datetime.date.today().isoformat(),
+            "generator": "tools/gen_m2_fixtures.py",
+            "python": platform.python_version(),
+            "coolprop": CoolProp.__version__,
+            "chemsep": "data/components (ChemSep 8.50, converted)",
+        },
+        "note": "coolprop is CoolProp's value (HEOS backend); deviation is ChemSep minus CoolProp, "
+        "relative, except for omega, where it's absolute. cp0 in J/(mol K) at low density, psat in Pa "
+        "on the saturated liquid. key names the ChemSep correlation used.",
+        "fluids": fluids,
+    }
+
+
+def summarize(data):
+    """Print the worst deviation of each kind, for the record."""
+    worst = {}
+    for f in data["fluids"]:
+        for k, v in f["constants"].items():
+            worst.setdefault(k, []).append((abs(v["deviation"]), f["coolprop"]))
+        for k in ("cp0", "psat"):
+            for p in f.get(k, {}).get("points", []):
+                worst.setdefault(k, []).append((abs(p["deviation"]), f"{f['coolprop']} at {p['t']:.1f} K"))
+    for k, v in worst.items():
+        v.sort(reverse=True)
+        median = sorted(x for x, _ in v)[len(v) // 2]
+        print(f"  {k:6} median {median:.2e}, worst: " + "; ".join(f"{w} {d:.2e}" for d, w in v[:3]))
+
+
 def main():
     found, forms = chemsep_sets()
     cases = []
@@ -274,6 +395,12 @@ def main():
     forms = sorted({c["eq"] for c in cases})
     print(f"wrote {OUT.relative_to(ROOT)}: {len(cases)} cases covering forms {forms}")
     print(f"forms in the data that tdep doesn't support: {unsupported}")
+
+    cp_data = coolprop_fixture()
+    OUT_COOLPROP.write_text(json.dumps(cp_data, indent=1) + "\n", encoding="utf-8", newline="\n")
+    n = len(cp_data["fluids"])
+    print(f"wrote {OUT_COOLPROP.relative_to(ROOT)}: {n} CoolProp fluids also in ChemSep")
+    summarize(cp_data)
 
 
 if __name__ == "__main__":

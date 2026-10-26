@@ -452,11 +452,47 @@ flowchart LR
   first-listing rule in both files, the symmetric fill, overrides and
   their errors, missing pairs, and the report.
 
-### 7. Reference fixtures
-- The DIPPR values from `chemicals` were done in step 2. What's left is
-  CoolProp's constants and Cp⁰ for the overlapping fluids, added to
-  `tools/gen_m2_fixtures.py`.
-- The V tests read them (criterion 6).
+### 7. Reference fixtures — done
+- The DIPPR values from `chemicals` were done in step 2.
+  `tools/gen_m2_fixtures.py` now also writes
+  [testdata/m2_coolprop.json](../testdata/m2_coolprop.json) (CoolProp 8.0.0,
+  pinned as in M1).
+  - It covers every CoolProp fluid that ChemSep has, matched by CAS number:
+    85 of CoolProp's 136. Ortho- and parahydrogen match too, since CoolProp
+    uses the same CAS suffixes as ChemSep. CoolProp's air is a pseudo-pure
+    fluid with no real CAS number, so it doesn't.
+  - For each fluid it records CoolProp's Tc, Pc, ω and M. It also takes four
+    temperatures each for the ideal-gas Cp and the vapour pressure, where
+    ChemSep's range and CoolProp's overlap (the vapour pressure up to
+    0.98 Tc).
+  - Each value carries ChemSep's deviation from CoolProp at generation:
+    relative, except ω, which is absolute. ChemSep's correlations are read
+    from `data/components/` and evaluated with the generator's own mpmath
+    formulas. The vapour-pressure rule (fall back to Antoine) is restated
+    there.
+- [components/coolprop_test.v](../components/coolprop_test.v) recomputes all
+  1,016 deviations through the database, its unit conversions, tdep and
+  `thermo.Correlated`. Each must match the recorded one to 1e-10 and must
+  not be larger. That's criterion 6's first half; the PR-Psat half is
+  step 8.
+- What the comparison shows. The medians are pinned by a test:
+
+  | Quantity | Median deviation |
+  |---|---|
+  | Tc | 0.03% |
+  | Pc | 0.4% |
+  | ω | 0.0025 (absolute) |
+  | M | 4e-7 |
+  | Ideal-gas Cp | 0.3% |
+  | Vapour pressure | 0.8% |
+
+  The outliers go to step 8's report.
+- Mutation check: 8 mistakes planted along the path the comparison
+  exercises, all caught. They covered:
+  - the unit scales, one of them off by just 1e-4;
+  - the Antoine fallback;
+  - the eq. 10, 16, 101 and 107 formulas;
+  - the scale in `thermo.Correlated`.
 
 ### 8. Sanity sweep and data-quality report
 - Over every compound: finiteness, sign, Psat(Tb) ≈ 1 atm, and the PR-Psat
@@ -476,6 +512,18 @@ flowchart LR
     ChemSep's eq. 200 looks like a Wagner equation, with Pc as its fifth
     coefficient and Tmax at Tc. Supporting it would turn 5 of those back
     into their own fits.
+- And what step 7's CoolProp comparison found:
+  - R-236fa's ω is 2.171 in ChemSep; CoolProp has 0.377.
+  - Propylene glycol is far off throughout: Tc by 7%, Pc by 16%, the
+    ideal-gas Cp by up to 35%, and the vapour pressure by a factor of 1250
+    at 234 K.
+  - The siloxanes D4 and D5, and the methyl esters, are off by 4–23% in Tc
+    and Pc. CoolProp's equations for these are less certain too.
+  - n-butane's eq.-16 ideal-gas Cp is within 1% above 400 K, but 8% low at
+    157 K.
+  - The six CAS numbers in `pr.ipd` and `srk.ipd` that aren't in the
+    database (step 6).
+  - The 60 compounds listed more than once in `mc-PR.lib`.
 
 ### 9. End to end
 - `db.fluid(.pr, names)`; the integration test from criterion 9; the demo

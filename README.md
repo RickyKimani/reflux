@@ -131,7 +131,10 @@ So far:
   into thermo's components and ideal gases. A directory of your own
   overrides the built-in data;
 - PR and SRK kᵢⱼ come from ChemSep's DECHEMA tables, with a report of where
-  each value came from, and Mathias–Copeman α from its PR fits.
+  each value came from, and Mathias–Copeman α from its PR fits;
+- ChemSep's data is checked against CoolProp's reference equations for the
+  85 fluids both have. The typical deviations are 0.03% in Tc, 0.3% in
+  ideal-gas Cp and 0.8% in vapour pressure, and none may grow.
 
 ## Roadmap
 
