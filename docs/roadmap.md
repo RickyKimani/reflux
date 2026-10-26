@@ -76,6 +76,9 @@ flowchart LR
 ```
 
 ### M0 — Foundations
+**Done.** CI is green on both OSes with both compilers, and a deliberately
+failing test turned all four jobs red.
+
 - git repository, GitHub, licence decision (MIT in `v.mod` for now).
 - CI on Windows and Linux. Jobs: `v fmt -verify .`, `v vet .`,
   `v -W test .`, each with tcc and with gcc.
@@ -88,7 +91,11 @@ flowchart LR
 broken test turns it red.
 
 ### M1 — Thermo core
-Detailed plan: [m1-plan.md](m1-plan.md).
+**Done.** The detailed plan and the criterion-by-criterion exit review are
+in [m1-plan.md](m1-plan.md). The plan refined the exit criteria below. In
+particular, n-butane was checked against CoolProp's reference equation
+rather than NIST WebBook spot values: it's the same reference equation
+(Bücker & Wagner) without the copying by hand.
 
 - Second derivatives in the `Model` contract: F_TT, F_TV, F_Vnᵢ, F_Tnᵢ,
   F_nᵢnⱼ (Track C1).

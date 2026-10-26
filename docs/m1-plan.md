@@ -1,6 +1,7 @@
 # M1 plan — thermo core
 
-Status: **in progress.** Steps 1–9 are done. The roadmap entry is
+Status: **done** (2026-10-26). All ten steps are complete, and every exit
+criterion is met; see the [exit review](#exit-review). The roadmap entry is
 [M1 in roadmap.md](roadmap.md#m1--thermo-core); this file is the detailed
 plan.
 
@@ -334,11 +335,17 @@ sound 15–20% low.
 - Still open: two Python threads allocating inside V at the same moment,
   since `ctypes` releases the GIL. That's a test for the start of M10a.
 
-### 10. Docs
-- `design.md`: the second-derivative formulas, the full property table, the
-  reference state, and `Fluid`.
-- `README.md`: status. `v-for-go.md`: Option fields, `@[export]`,
-  `v -shared`, `json2`.
+### 10. Docs — done
+- `design.md` gained each piece as its step landed: the second-derivative
+  formulas, the full property table, the reference state, `Fluid` and the
+  volume shift.
+- `README.md`: the status list, the layout block (now covering every file)
+  and the docs list.
+- `v-for-go.md`: Option fields (step 4); a rewritten C interop section
+  covering both directions (`#flag`/`#include`/`fn C.…`, `@[export]`,
+  `v -shared`, globals, `init()`, `defer`); generics with `json2`; `.vsh`
+  scripts; the 64-bit `int` gotcha.
+- The roadmap marks M0 and M1 done and points here for the review.
 
 ## Risks
 
@@ -349,6 +356,58 @@ sound 15–20% low.
 | Aly–Lee terms overflow (sinh) at extreme T | NaN in H or S | stable formulations, and tests at the edges of each fit's range |
 | Soave α reaches 0 and turns back up at very high Tr | division by √α in A_T | guard it, and note that Twu (step 5) is the physical fix |
 | Changing the `Model` interface | every model must add `residual2` | only `Cubic` exists today, so it's cheapest to do now |
+
+## Exit review
+
+Checked on 2026-10-26 at the tip of `m1-thermo-core`. All 12 test files
+pass locally (2,235 assertions). CI is green on Windows and Linux, with tcc
+and gcc, on the last pushed commit (`323f46d`, run 40235957118).
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Every new derivative matches finite differences to 1e-6, for every cubic and α and a ternary with kᵢⱼ | **met** | `residual2_test.v` (588): vdW, RK, SRK and PR pure; PR ternaries with PRSV, and with Twu + Mathias–Copeman; an SRK ternary; liquid-like and gas-like V at two T. `alpha_test.v` (138): all seven α forms. `translated_test.v`, `properties_test.v` |
+| 2 | Identities to 1e-10 unless noted | **met, with two notes** | Hessian symmetric (1e-14); both Euler identities, plus a third for F_T (1e-12); Gibbs–Duhem (1e-12); ∫Cp along an isobar (1e-9, tighter than the 1e-8 asked); residuals below 1e-5·nR at 1 Pa. The notes follow the table. |
+| 3 | Triple root at (Tc, Pc) for each cubic | **met, at 1e-5** | `critical_test.v`. The criterion said 1e-6. Rounding of about 1e-16 in the coefficients moves a triple root by about (1e-16)^⅓ ≈ 5e-6, so 1e-6 isn't achievable in f64. |
+| 4 | Z, ln φᵢ, Hʳ, Sʳ, Cpʳ match `thermo` to 1e-9 | **met** | `fixtures_test.v`: 21 phases, PR and SRK, pure and ternary, plus V. Six small model changes (down to R from CODATA 2014) were each caught. |
+| 5 | PR's deviations from the n-butane reference equation are recorded and can't grow | **met** | `fixtures_test.v` against `m1_coolprop_butane.json` (CoolProp 8.0.0): six states, five quantities. |
+| 6 | Péneloux leaves Psat unchanged and shifts ln φ correctly | **met** | `translated_test.v`: Psat at four T to 1e-9, ln φ shift to 1e-10; V, Gʳ and Hʳ shifts also exact. |
+| 7 | LU residual ≤ 1e-12·‖A‖·‖x‖; singular → error | **met** | `lu_test.v` (397): 30 random systems up to 50×50, three singular matrices, Hilbert(8). |
+| 8 | Python spike written up with a go / no-go | **met: go** | [spike-python-ffi.md](spike-python-ffi.md): seven findings, M10a rules, CI on Linux and Windows. |
+| 9 | CI green; design notes, README, V notes updated | **met** | Run 40235957118; step 10 above. |
+
+**Notes on criterion 2.**
+- *∂ln φᵢ/∂T = −H̄ʳᵢ/RT² and ∂ln φᵢ/∂P = V̄ᵢ/RT − 1/P.* reflux doesn't
+  compute partial molar enthalpies yet, so these are checked two ways.
+  Component by component, against finite differences of re-solved states
+  (1e-6). Exactly, in summed form: Σ nᵢ·∂ln φᵢ/∂T = −Hʳ/RT² and
+  Σ nᵢ·∂ln φᵢ/∂P = Vʳ/RT, both to 1e-10. V̄ᵢ itself is checked with
+  Σ nᵢV̄ᵢ = V (1e-10) and finite differences.
+- *Cp − Cv = −T(∂P/∂T)²/(∂P/∂V).* This identity is how Cp is computed, so
+  it holds exactly by construction. The meaningful test is that Cp and Cv
+  each match an independent finite difference (∂H/∂T at constant P,
+  ∂U/∂T at constant V), to 1e-6. So does the speed of sound, against an
+  isentropic finite difference.
+
+**Changed from the plan along the way:**
+- the fixture file is `m1_thermo.json`, covering SRK too, not
+  `m1_thermo_pr.json`;
+- the spike's CI step runs with gcc only, since tcc can't build loadable
+  shared libraries on either OS;
+- `check.vsh` uses a fresh binary name per run, after an intermittent
+  Windows build failure whose most likely cause was a locked binary from the
+  previous run.
+
+**Carried forward, not done in M1:**
+- **The Soave α → 0 guard from the risk table.** At very high Tr (roughly
+  above 5) the Soave form passes through α = 0, where sᵢ′ divides by zero.
+  Nothing guards it yet. Twu is the physical fix, and a guard or a warning
+  belongs with the Boston–Mathias exercise or in M3, when flashes first
+  meet supercritical components.
+- **Concurrent calls from several Python threads:** the first test of M10a.
+- **Allocation in hot paths (D8):** to be measured in M3 with the
+  benchmark harness, not optimised blind.
+
+**Verdict: M1 is done.**
 
 ## Not in M1
 
