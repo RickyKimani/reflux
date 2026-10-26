@@ -133,6 +133,9 @@ compounds is checked against the database's own vapour-pressure
 correlations.
 
 ### M3 — Flash
+Detailed plan, with the algorithms, references and exit criteria:
+[m3-plan.md](m3-plan.md).
+
 - Michelsen tangent-plane stability analysis (E1).
 - Two-phase PT flash: Rachford–Rice, successive substitution with
   acceleration, then second-order Newton (E2).
@@ -254,9 +257,12 @@ Results match the V API bit for bit.
   back as dicts of NumPy arrays, ready for `pandas.DataFrame`.
 - Sensitivity sweeps driven from Python keep warm starts on the reflux
   side, so a Python loop isn't slower than a built-in case study.
+- Unit operations written in Python (G7), the counterpart of DWSIM's
+  Python Script block. They run on CPython, so NumPy and SciPy work.
 
 **Exit:** a notebook-style script builds the M4 reference flowsheet in
-Python, sweeps one parameter, and gets the same numbers as the CLI.
+Python, sweeps one parameter, and gets the same numbers as the CLI. A unit
+written in Python converges inside a flowsheet.
 
 ### M11 — CAPE-OPEN and FMI
 - reflux as a CAPE-OPEN 1.1 property package, tested inside COCO and
@@ -373,6 +379,15 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
   strippers; three-phase and rate-based later. **M7**
 - G5 Extractors and other separators. **after M7**
 - G6 User unit operations through the V interface, CAPE-OPEN or FMI. **M11**
+- G7 Python unit operations: a unit written in Python, with NumPy, SciPy
+  and your own packages, that the solver calls back through the C API.
+  - The callback goes through `ctypes`, under the M10a spike's rules
+    (threads registered with the GC, no panics across the boundary).
+  - It starts as a black box, inlet streams in and outlet streams out,
+    with reflux taking finite-difference Jacobians. A unit that supplies
+    its own residuals and Jacobian, from JAX for example, comes later.
+  - It's meant for a few custom units, since each evaluation is a Python
+    call. **M10b**
 
 ### H — Analysis
 - H1 Sensitivity analysis: warm starts, parallel cases, exact sensitivities. **M8**
