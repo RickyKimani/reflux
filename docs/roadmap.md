@@ -76,6 +76,9 @@ flowchart LR
 ```
 
 ### M0 — Foundations
+**Done.** CI is green on both OSes with both compilers, and a deliberately
+failing test turned all four jobs red.
+
 - git repository, GitHub, licence decision (MIT in `v.mod` for now).
 - CI on Windows and Linux. Jobs: `v fmt -verify .`, `v vet .`,
   `v -W test .`, each with tcc and with gcc.
@@ -88,6 +91,12 @@ flowchart LR
 broken test turns it red.
 
 ### M1 — Thermo core
+**Done.** The detailed plan and the criterion-by-criterion exit review are
+in [m1-plan.md](m1-plan.md). The plan refined the exit criteria below. In
+particular, n-butane was checked against CoolProp's reference equation
+rather than NIST WebBook spot values: it's the same reference equation
+(Bücker & Wagner) without the copying by hand.
+
 - Second derivatives in the `Model` contract: F_TT, F_TV, F_Vnᵢ, F_Tnᵢ,
   F_nᵢnⱼ (Track C1).
 - Residual Hʳ, Sʳ, Gʳ, Cpʳ, Cvʳ; speed of sound; Joule–Thomson coefficient.
@@ -210,9 +219,19 @@ anything else.
 - A `reflux` Python package over the C API using `ctypes`, so there's no
   compile step for users. Wheels that bundle the shared library come later
   (I2).
-- Technical risk to retire first: V's runtime (its garbage collector and
-  module initialisation) has to start correctly inside a shared library
-  loaded by Python. Prove this with a spike during M1.
+- **Retired in M1 by a spike** ([spike-python-ffi.md](spike-python-ffi.md)):
+  V's runtime starts and collects correctly inside Python. The spike also
+  set the design rules:
+  - explicit integer widths at the boundary (V's `int` is 64-bit);
+  - gcc or clang only (tcc can't build loadable shared libraries on Windows
+    or Linux), with `-static-libgcc` on Windows;
+  - handles pinned in a V-side registry (the GC frees anything only Python
+    holds);
+  - the calling thread registered with the GC at every entry point (Python
+    threads abort a Linux collection otherwise);
+  - no panics reachable from the API.
+- Still to test: concurrent calls from several Python threads, since
+  `ctypes` releases the GIL.
 
 **Exit:** a script computes a T–x–y diagram and a phase-fraction map into
 NumPy arrays and plots them with matplotlib, and that script runs in CI.

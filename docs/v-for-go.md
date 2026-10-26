@@ -18,6 +18,12 @@ changes between releases, so if something here stops compiling, check
 | lint                     | `go vet ./...`         | `v vet .`                   |
 | docs                     | `go doc thermo`        | `v doc thermo`              |
 | add a dependency         | `go get …`             | `v install …`               |
+| script a task            | Makefile / shell       | `v run tools/check.vsh`     |
+
+A `.vsh` file is a V script. Top-level statements run in order, and the
+`os` module is imported implicitly, so `system_args`, `chdir` and friends
+need no prefix. It's how reflux avoids a Makefile that wouldn't work in
+nushell or PowerShell. See [tools/check.vsh](../tools/check.vsh).
 
 **The big difference:** V compiles to C and then calls a C compiler. On your
 machine the only C compiler is the **tcc** that ships inside V (`v doctor`
@@ -98,12 +104,31 @@ fn scale(mut v []f64, k f64) { for mut x in v { x *= k } }
 scale(mut volumes, 1e6)
 ```
 
+`LU.solve_into(b, mut x)` in [numeric/lu.v](../numeric/lu.v) is the pattern
+for iterations: the caller owns `x`, says `mut` at the call, and the solve
+writes into it instead of allocating a new slice on every Newton step.
+
 `for mut x in arr` changes the elements in place. In Go, `for _, x := range arr`
 gives you a **copy**, which is a classic bug. V's `for mut` does what it
 looks like it does. See `cubic_real_roots` in [numeric/cubic.v](../numeric/cubic.v).
 
 V also has no shadowing. Redeclaring `x` in an inner block is a compile
 error ("redefinition of `x`"), which removes another family of Go bugs.
+
+**Closures capture explicitly, and by value.** A Go closure silently
+captures variables by reference, so a loop variable or a later assignment
+can change what it sees. A V closure must list what it uses, and it gets a
+copy taken when the closure is created:
+
+```v
+mut x := 1.0
+f := fn [x] () f64 { return x }   // without [x]: compile error
+x = 5.0
+f()                               // 1.0, not 5.0
+```
+
+See `critical_constants` in [thermo/cubic.v](../thermo/cubic.v), which
+passes `fn [s, m] (b f64) f64 { … }` to `numeric.bisect`.
 
 ---
 
@@ -160,6 +185,21 @@ v := liquid_volume(m, t, p, n) or { vapor_volume(m, t, p, n) or { return no_root
 
 - Map lookups use the same form, in place of Go's `v, ok := m[k]`:
   `want := book[kind] or { panic('missing') }`.
+- **Option fields.** A struct field can be `?f64`. Leave it out of the
+  literal and it's `none`; assign a plain `f64` and it's set. Read it with
+  `or`. Go would use a `*float64` (and risk a nil dereference) or a
+  separate `HasDhf bool`. See `IdealGas` in
+  [thermo/ideal.v](../thermo/ideal.v):
+
+```v
+pub struct IdealGas {
+	cp  CpForm @[required]
+	dhf ?f64   // ΔH°f, J/mol, if known
+}
+
+ig := thermo.IdealGas{ cp: form }        // dhf is none
+dhf := ig.dhf or { 0.0 }                 // a value either way
+```
 - **Typed errors** (Go's `errors.As`): make a struct that embeds `Error`
   and implements `msg()`, then test it with `is`:
 
@@ -210,8 +250,15 @@ pub fn solve_tp(m Model, t f64, p f64, n []f64, root Root) !State
 ```
 
 `Cubic` never says `implements Model`. Passing a `Cubic` to `solve_tp`
-compiles because it has the four methods. Inside a function, `if m is Cubic`
+compiles because it has the five methods. Inside a function, `if m is Cubic`
 checks the concrete type and smart-casts `m`, like a Go type assertion.
+
+**An interface can hold an interface.** `Translated` in
+[thermo/translated.v](../thermo/translated.v) has a field `inner Model` and
+implements `Model` itself, by evaluating `inner` at a shifted volume. So
+`thermo.translate(thermo.translate(eos, c1)!, c2)!` is a valid model, and
+`solve_tp` can't tell it from a cubic. It's the same decorator pattern as
+wrapping an `io.Reader` in Go.
 
 **Sum types** are what Go lacks: a *closed* set of variants, checked by the
 compiler. `Alpha` in [thermo/alpha.v](../thermo/alpha.v) is one, because the
@@ -292,6 +339,7 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 |-----------------------------------|-------------------------------------|
 | `make([]float64, 0, 3)`           | `[]f64{cap: 3}`                     |
 | `make([]float64, n)`              | `[]f64{len: n}`                     |
+| make + loop filling `s[i] = f(i)` | `[]f64{len: n, init: f(index)}`     |
 | `s = append(s, x)`                | `s << x`                            |
 | `slices.Sort(s)`                  | `s.sort()`                          |
 | `slices.Clone(s)`                 | `s.clone()`                         |
@@ -313,6 +361,14 @@ clone the arrays they store, so the caller can reuse theirs.
 
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
+
+**Gotcha: `int` is 64-bit, but C's `int` is 32-bit.** Like Go's `int`, V's
+`int` is 64-bit on 64-bit platforms (`sizeof(int)` is 8 in this V). In any
+function that C, or Python's `ctypes`, calls, use explicit widths: `i32`
+or `i64`. The Python spike found this the hard way. A `status &int` array
+filled from a 4-byte NumPy buffer corrupted the heap
+([docs/spike-python-ffi.md](spike-python-ffi.md)). Go programmers who've
+used cgo know this as `C.int` versus `int`.
 
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
@@ -354,22 +410,63 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
 
 ---
 
-## 11. C interop (for LAPACK, SUNDIALS, CoolProp later)
+## 11. C interop, both directions
 
 This is V's biggest practical advantage over Go: there's no cgo tax and no
-separate build mode.
+separate build mode. The Python spike ([spike/python_ffi/](../spike/python_ffi))
+does it both ways.
+
+**V calling C.** `#flag` adds compiler flags, `#include` pulls in a header,
+and `fn C.name(...)` declares what you'll call. `@VEXEROOT` is V's install
+directory and `@VMODROOT` the folder holding `v.mod`. From
+[ffi/ffi.v](../spike/python_ffi/ffi/ffi.v):
 
 ```v
-#flag -lCoolProp
-#include "CoolPropLib.h"
-fn C.PropsSI(output &char, n1 &char, v1 f64, n2 &char, v2 f64, fluid &char) f64
+#flag -I @VEXEROOT/thirdparty/libgc/include
+#flag -I @VMODROOT/spike/python_ffi/ffi
+#include "gc_threads.h"
 
-p := C.PropsSI(c'P', c'T', 350.0, c'Q', 0.0, c'n-Butane')
+fn C.reflux_enter() int
+
+reg := C.reflux_enter()
 ```
 
-You won't need any of this for a while. The [`vsl`](https://github.com/vlang/vsl)
-package wraps BLAS and LAPACK, and has pure-V fallbacks, if a dense solver is
-ever the bottleneck.
+When the C side needs the preprocessor (`#if defined(GC_THREADS)`), write a
+small C header and call it, as `gc_threads.h` does. V code can't see C
+macros.
+
+**C (or Python) calling V.** `@[export: 'name']` gives a function a fixed C
+symbol, and `v -shared` builds a `.dll` or `.so`:
+
+```v
+@[export: 'reflux_scale']
+pub fn reflux_scale(x &f64, n i32, k f64) {
+	for i in 0 .. n {
+		unsafe {
+			x[i] *= k // pointer indexing is allowed only inside unsafe
+		}
+	}
+}
+```
+
+```bash
+v -cc gcc -shared -enable-globals -o reflux_ffi spike/python_ffi/ffi
+```
+
+What the spike learned, in V terms:
+- **`int` is 64-bit.** Use `i32` or `i64` at the boundary (§8).
+- **Globals** (`__global pinned = []voidptr{}`) need `-enable-globals`. V
+  discourages them, but a registry of handles that the garbage collector
+  must see is a legitimate use.
+- **A module's `fn init()`** runs when the library loads, like a Go package's
+  `init()`.
+- **`defer { … }`** runs at function exit, as in Go, except that it takes a
+  block rather than a call.
+- **tcc can't build usable shared libraries** on Windows or Linux; use gcc.
+
+For dense linear algebra beyond the built-in LU, the
+[`vsl`](https://github.com/vlang/vsl) package wraps BLAS and LAPACK, with
+pure-V fallbacks.
 
 ---
 
@@ -383,7 +480,30 @@ sensitivity analysis are independent, which makes them the first place
 
 ---
 
-## 13. A V limit that shaped this code
+## 13. Generics and JSON
+
+Generics use square brackets, as in Go 1.18+, and are monomorphised (one
+copy per type). V's `json2` decodes straight into a struct by field name.
+Together they make the fixture loader in
+[thermo/fixtures_test.v](../thermo/fixtures_test.v) one function for every
+fixture type:
+
+```v
+fn read_fixture[T](name string) !T {
+	text := os.read_file(os.join_path(os.dir(@FILE), '..', 'testdata', name))!
+	return json2.decode[T](text)!
+}
+
+fx := read_fixture[ThermoFixture]('m1_thermo.json')!
+```
+
+`@FILE` is the path of the source file, filled in at compile time, so the
+test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
+module is gone; it's `json2` now.)
+
+---
+
+## 14. A V limit that shaped this code
 
 **Operator overloading needs both operands to be the same type.** `2.0 * x`
 doesn't compile when `x` is a user-defined `Dual`. That's why the models use

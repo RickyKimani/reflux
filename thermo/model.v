@@ -28,6 +28,10 @@ pub interface Model {
 	volume_derivs(t f64, v f64, n []f64) VolumeDerivs
 	// residual returns F with its derivatives in V, T and n.
 	residual(t f64, v f64, n []f64) Residual
+	// residual2 returns everything residual does plus every second
+	// derivative. The composition Hessian makes it O(nc²), so only callers
+	// that need it (Cp, Newton flash, Jacobians) should use it.
+	residual2(t f64, v f64, n []f64) Residual2
 }
 
 // VolumeDerivs is the part of the residual the volume solver needs. Since
@@ -40,7 +44,6 @@ pub:
 }
 
 // Residual is F with the derivatives needed for P, ln φᵢ, Hʳ and Sʳ.
-// Second derivatives in T and n (for Cp and for Newton flash) come later.
 pub struct Residual {
 pub:
 	f    f64   // F, mol
@@ -48,6 +51,19 @@ pub:
 	f_vv f64   // ∂²F/∂V², mol/m⁶
 	f_t  f64   // ∂F/∂T, mol/K
 	f_n  []f64 // ∂F/∂nᵢ, dimensionless
+}
+
+// Residual2 is a Residual plus every second derivative of F. Embedding
+// Residual works like Go's struct embedding: r.f_v, r.f_n and the rest are
+// reachable directly on a Residual2.
+pub struct Residual2 {
+	Residual
+pub:
+	f_tt f64   // ∂²F/∂T², mol/K²
+	f_tv f64   // ∂²F/∂T∂V, mol/(K·m³)
+	f_vn []f64 // ∂²F/∂V∂nᵢ, 1/m³
+	f_tn []f64 // ∂²F/∂T∂nᵢ, 1/K
+	f_nn []f64 // ∂²F/∂nᵢ∂nⱼ, nc×nc row-major, 1/mol
 }
 
 // Root says which volume root to return.

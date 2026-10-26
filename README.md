@@ -5,7 +5,7 @@ An open-source steady-state chemical process simulator written in
 than DWSIM. The short-term goal is to learn V by building it.
 
 ```bash
-v run .               # n-butane at 350 K and 9.4573 bar, plus PRSV and mixture examples
+v run .               # n-butane at 350 K and 9.4573 bar, PRSV, a mixture, and Cp, w, μ_JT
 ```
 
 ```bash
@@ -17,11 +17,14 @@ v -W test .           # all tests, warnings treated as errors
 ```
 
 - [docs/roadmap.md](docs/roadmap.md) is what gets built, in what order, and
-  how each piece is tested.
+  how each piece is tested. [docs/m1-plan.md](docs/m1-plan.md) is M1's
+  plan, step by step, with its exit review at the end.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
-  and why.
+  and why, with every formula the code uses.
 - [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:
   LHHW and friends as checkable data, not text.
+- [docs/spike-python-ffi.md](docs/spike-python-ffi.md) is what we learned
+  calling reflux from Python and NumPy, and the rules M10a follows.
 - [docs/v-for-go.md](docs/v-for-go.md) is V for Go programmers. It points
   back into this code for every feature.
 
@@ -43,15 +46,24 @@ These goals come from what went wrong with DWSIM:
 ```
 v.mod               module manifest (Go's go.mod)
 main.v              demo CLI
-numeric/            plain numerics: cubic roots, small vector helpers
+numeric/
+  cubic.v           real roots of a cubic
+  roots.v           bracketed root finding (bisection)
+  lu.v              dense LU with partial pivoting
+  vec.v             small vector helpers
 thermo/
   model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
-  cubic.v           cubic EOS (vdW, RK, SRK, PR) with vdW mixing and kᵢⱼ
-  alpha.v           per-component α functions (Soave, PRSV, …)
+  properties.v      P derivatives, ln φ derivatives, residual H, S, G, U, A, Cv, Cp
+  cubic.v           cubic EOS (vdW, RK, SRK, PR), exact Ωa and Ωb, vdW mixing with kᵢⱼ
+  alpha.v           per-component α (Soave, PRSV, Twu, Mathias–Copeman)
+  translated.v      Péneloux volume shift, as a wrapper around any Model
+  ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
+  fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
   saturation.v      pure-component Psat, for any Model
-docs/               roadmap, design notes and V notes
-tools/              check.vsh (the CI checks) and, later, fixture generators
-testdata/           test fixtures, each value with its source
+docs/               roadmap, M1 plan, design notes, spike write-up, V notes
+tools/              check.vsh (the CI checks), gen_m1_fixtures.py (references)
+testdata/           reference fixtures from thermo and CoolProp, with provenance
+spike/python_ffi/   calling reflux from Python and NumPy (M1 step 9)
 .v-version          the V commit CI builds
 ```
 
@@ -60,15 +72,30 @@ at the edges, i.e. input files and printed output.
 
 ## Status
 
-- [x] Model contract built on the residual Helmholtz energy F(T, V, n)
+**M0 (foundations) and M1 (thermo core) are done.** The exit review is at
+the end of [docs/m1-plan.md](docs/m1-plan.md). What exists now:
+
+- [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
+      first and second derivatives
 - [x] Generic volume solver that works for non-cubic models; checked against
       cubic polynomial roots
-- [x] Cubic EOS for mixtures (vdW, RK, SRK, PR), van der Waals mixing with kᵢⱼ
-- [x] Per-component α functions: Soave, PRSV
-- [x] Fugacity coefficients, pure-component Psat
-- [x] Derivatives checked against finite differences, Euler homogeneity and
-      Σnᵢ ln φᵢ = Gʳ/RT
-- [x] Reproduces Smith, Van Ness & Abbott Example 3.9 for all four EOS
+- [x] Cubic EOS for mixtures (vdW, RK, SRK, PR) with exact critical
+      constants and van der Waals mixing with kᵢⱼ
+- [x] Per-component α functions: Soave, PRSV, Twu, Mathias–Copeman
+- [x] Péneloux volume shift for any model
+- [x] Fugacity coefficients and their T, P and composition derivatives;
+      pure-component Psat
+- [x] Residual and total H, S, G, U, A, Cp, Cv, speed of sound and
+      Joule–Thomson coefficient, on a formation-enthalpy reference state
+- [x] Ideal-gas Cp: polynomial and Aly–Lee (DIPPR 107)
+- [x] Dense LU solver for the Newton flash to come
+- [x] Agrees with Caleb Bell's `thermo` to 1e-9. PR's deviations from
+      CoolProp's reference equation for n-butane are recorded and can't
+      grow.
+- [x] Proven callable from Python and NumPy on Windows and Linux (a spike;
+      the real API is M10a)
+
+Next is M2: component data from ChemSep.
 
 ## Roadmap
 
@@ -76,10 +103,10 @@ The full roadmap is in [docs/roadmap.md](docs/roadmap.md). It covers
 milestones with exit criteria, headless testing, C numeric backends and
 how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
-**M0** foundations (git, CI, gcc) → **M1** thermo core (second derivatives,
-H, S, Cp) → **M2** component data (ChemSep) → **M3** flash →
-**M4** first flowsheet, compared with DWSIM 9. As soon as M3 lands,
-**M10a** makes thermo and flash callable from Python with NumPy arrays.
+**M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
+(ChemSep) → **M3** flash → **M4** first flowsheet, compared with DWSIM 9. As
+soon as M3 lands, **M10a** makes thermo and flash callable from Python with
+NumPy arrays.
 
 ## Development
 
@@ -106,20 +133,19 @@ DDB) can't be redistributed.
 
 ## Exercises
 
-These are left for you to do while learning V. Each is small.
+These are left for you to do while learning V. Each is small. (Earlier
+exercises, the Twu α and residual H and S, are now part of M1.)
 
-1. **Add the Twu (1991) α.** Add `Twu{l f64, m f64, n f64}` to the `Alpha`
-   sum type, with α = Tr^(N(M−1))·exp(L(1 − Tr^(NM))). The compiler will
-   list every `match` that needs a branch, and the finite-difference test
-   pattern in `thermo/cubic_test.v` will check your dα/dTr.
-2. **Residual enthalpy and entropy.** Write `fn residual_hs(m Model, s State)`
-   using Hʳ = −RT²F_T + PV − nRT and Sʳ = −RT F_T − RF + nR ln Z. To test it,
-   use the fact that for a pure component ∂(ln φ)/∂T at constant P is
-   −Hʳ/(RT²).
-3. **Volume translation as a wrapper.** Write a struct `Translated` with
-   fields `inner Model` and `c []f64`, and make it implement `Model`.
-   With C = Σnᵢcᵢ: F′(T, V, n) = F(T, V + C, n) + n·ln(V/(V + C)). This is
-   an interface that holds an interface, and none of the solvers will
-   notice the difference.
-4. **Benchmark.** Time one million `solve_tp` calls under tcc, then under
+1. **Boston–Mathias α.** Boston & Mathias (1980) replace the Soave form
+   above Tc with an exponential that stays positive. Add it as a new `Alpha`
+   variant. The compiler will list every `match` that needs a branch, and
+   [thermo/alpha_test.v](thermo/alpha_test.v) shows what to check: α(1) = 1,
+   α′ and α″ against finite differences, and continuity with Soave at
+   Tr = 1.
+2. **Second virial coefficient.** Write
+   `fn second_virial(m Model, t f64) f64` for a pure component, using
+   B = lim_(V→∞) V·F/n² (evaluate at a very large V). Then check something
+   step 4 found: at zero pressure the Joule–Thomson coefficient tends to
+   (T·dB/dT − B)/Cp⁰, not to zero.
+3. **Benchmark.** Time one million `solve_tp` calls under tcc, then under
    `v -prod -cc gcc`. Compare the same loop written in Go.

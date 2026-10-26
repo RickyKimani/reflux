@@ -9,6 +9,7 @@ const butane = Component{
 	tc:    425.1
 	pc:    37.96e5
 	omega: 0.200
+	mw:    0.058123
 }
 
 const methane = Component{
@@ -16,6 +17,7 @@ const methane = Component{
 	tc:    190.6
 	pc:    45.99e5
 	omega: 0.012
+	mw:    0.016043
 }
 
 const kinds = [CubicKind.vdw, .rk, .srk, .pr]
@@ -208,16 +210,8 @@ fn test_prsv_with_zero_kappa1_is_close_to_pr() {
 	assert math.abs(p2 / p1 - 1.0) < 0.01, 'PR ${p1}, PRSV ${p2}'
 }
 
-fn test_prsv_alpha_derivative_is_smooth_through_tr_0_7() {
-	a := thermo.prsv(0.2, 0.05)
-	for tr in [0.3, 0.6999, 0.7, 0.7001, 1.5] {
-		_, d := a.eval(tr)
-		h := 1e-6
-		up, _ := a.eval(tr + h)
-		dn, _ := a.eval(tr - h)
-		assert close(d, (up - dn) / (2.0 * h)), 'Tr = ${tr}'
-	}
-}
+// The α derivative tests, PRSV through Tr = 0.7 included, are in
+// residual2_test.v with the other second-derivative checks.
 
 // ---- Errors ------------------------------------------------------------------
 
@@ -227,6 +221,7 @@ fn test_bad_input_is_a_typed_error() {
 		tc:    0.0
 		pc:    1e6
 		omega: 0.0
+		mw:    0.1
 	}
 	thermo.new_cubic(.pr, [broken]) or {
 		// `is` checks the concrete error type: Go's errors.As.
