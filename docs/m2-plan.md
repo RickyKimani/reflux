@@ -603,9 +603,21 @@ flowchart LR
   bank and overrides, the PR-only rule and use of Mathias–Copeman, the
   default α, the order of the ideal gases, and the fallback note.
 
-### 10. Docs and exit review
-- README, roadmap, the data-format doc, the V notes (`encoding.xml`,
-  `toml`, file walking), and a criterion-by-criterion review, as in M1.
+### 10. Docs and exit review — done
+- **README:** M2 marked done, with the status list rewritten.
+- **Roadmap:** M2 marked done. Wagner is called out as the one listed form
+  not done.
+- **Data format:** a generated file as the full example, and a section on
+  your own components.
+- **V notes:** `encoding.xml`'s node sum type, `os.ls` order and line
+  endings. Earlier steps already covered `toml`.
+- **What the review added:**
+  - a test of lookup by alias. ChemSep has no aliases, so criterion 7's
+    alias path was untested;
+  - [testdata/m2_pr_psat.json](../testdata/m2_pr_psat.json). PR's vapour
+    pressure for the 20 compounds is now recorded independently, with
+    Caleb Bell's `thermo`, as M1 did, rather than only in the report reflux
+    generates. reflux matches `thermo` to 1e-9 at all 80 points.
 
 ## Risks
 
@@ -618,11 +630,80 @@ flowchart LR
 | Bad entries in the data | wrong results downstream | the sanity sweep and data-quality report make them visible; no silent fixes |
 | Repository size (about 5 MB vendored plus the converted files) | slower clones | acceptable at this scale; revisit with Git LFS if it grows |
 
+## Exit review
+
+Checked on 2026-10-26 at the tip of `m2-component-data`. All 24 test files
+pass locally, with 14,041 assertions, under `v run tools/check.vsh` with
+tcc and with gcc (Windows). **CI hasn't run on M2 yet:** the branch hasn't
+been pushed, so criterion 10's "CI is green" waits for the push. M1's CI
+covers the same jobs on Linux.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Import is complete | **met** | `chemsep_test.v`. All 644 records parse, as 642 compounds; an unparsable record would fail the import, so none can be skipped. 43 stray SMILES `<`s repaired (41 in records kept). The two in-file duplicates resolved by D8, with R-23's named exception. Unsupported forms kept verbatim and listed in [CHANGES.md](../data/components/CHANGES.md). |
+| 2 | The data files are reproducible | **met** | `generate_test.v`: `data/components/` equals a fresh import byte for byte, with no extra or missing files, and all six vendored files match the size and SHA-256 in their NOTICE. |
+| 3 | Units are right | **met** | `chemsep_test.v`: n-butane value by value against hand conversions (M = 0.0581222 kg/mol, ΔH°f = −125790 J/mol, …), the decimal shift, and the per-kmol table rule. `coolprop_test.v` then confirms the conversions end to end. |
+| 4 | Correlations are exact | **met, with two exceptions** | `tdep/fixtures_test.v`: all 24 forms against mpmath (values 1e-13, derivatives and integrals 1e-11) and `chemicals` (1e-12). Tighter than the 1e-12 and 1e-10 asked. The exceptions are forms the five properties use that aren't evaluated. **ChemSep's eq. 200** (5 vapour pressures): its form isn't documented in what ChemSep ships, so it falls back to Antoine. **DIPPR 124** (one liquid Cp, oleyl alcohol): neither ChemSep's help nor `chemicals` defines it, so there's nothing to check an implementation against. |
+| 5 | The data is sane, and outliers are visible | **met** | `quality_test.v` keeps [data-quality.md](data-quality.md) current. It covers 8,932 correlations (222 fail, 211 of them at Tc) and Psat(Tb) for 641 compounds (132 miss by more than 2%: data, not reflux). |
+| 6 | Cross-checks are recorded and can't grow | **met** | `coolprop_test.v`: 85 CoolProp fluids, 1,016 deviations; the criterion expected about a dozen fluids. `quality_test.v` against `m2_pr_psat.json`: PR's Psat for 20 compounds × 4 Tr, from `thermo`, matched to 1e-9. |
+| 7 | Lookup works | **met** | `database_test.v`: by CAS, name (any case, spaces trimmed), alias and InChIKey; a miss lists the 5 closest; an ambiguous query lists every match, as the real CO/formaldehyde InChIKey clash shows. |
+| 8 | kᵢⱼ works | **met** | `params_test.v`: PR and SRK load (302 and 306 entries, no defects); pairs checked by hand against the files; matrices symmetric with zero diagonal; missing pairs 0 and listed in `report()`; repeated pairs take the first listing (D12), with the rest reported. |
+| 9 | End to end | **met** | `fluid_test.v`: `db.fluid(.pr, …)` is bit-identical to a hand-built fluid. M1's six CoolProp states are reproduced with ChemSep's constants (within 0.2% of M1's recorded deviations). Psat(350 K) is +0.18% on SVA Example 3.9. Enthalpy changes against CoolProp are recorded. |
+| 10 | CI green; docs updated | **pending CI** | Local checks pass with both compilers. Docs: step 10 above. CI runs when the branch is pushed. |
+
+**Planted mistakes.** 153 were planted across the milestone, one per
+change, and all but one were caught. The miss was the reader's NaN check on
+floats (step 4), which no file can reach because V's toml never produces a
+non-finite float. Two misses along the way exposed real test gaps, and both
+were fixed:
+- eq. 104's D and E terms, invisible in ChemSep's data (step 2);
+- the index's top-level key check (step 4).
+
+**Changed from the plan along the way:**
+- **Records.** 644 records and 642 compounds, not 642 records, because two
+  compounds are listed twice in `chemsep2.xml`. D8 became "first occurrence
+  wins", with one named exception for R-23's vapour pressures (your call,
+  step 8).
+- **ChemSep's own defects** turned out to be many more than the plan's one,
+  and each is handled by a stated rule:
+  - summed duplicate ASOG groups, and a dropped zero group count;
+  - impossible ranges kept and refused at use;
+  - eq.-106 ranges past Tc, extended by zero;
+  - CO's borrowed InChIKey.
+- **Reading strictness.** `.ipd` and `.lib` files are read where they're
+  vendored, not converted, and a line that can't be read becomes a reported
+  defect rather than an error. Their defects are rows, not structure.
+- **Repeated kᵢⱼ pairs** were a decision of their own (D12, your call):
+  the first listing is used, and the rest are reported.
+- **`mc-PR.lib` was vendored and read** (D10). Its sets agree with none of
+  the XML's.
+- **thermo changes.** It gained `Correlated` (D9). `AlyLee` now evaluates
+  through tdep, and `CubicKind.default_alpha` is public.
+- **One more fixture file:** `m2_pr_psat.json`.
+
+**Carried forward, not done in M2:**
+- **ChemSep's eq. 200** looks like a Wagner equation. Supporting it needs
+  its form confirmed, from ChemSep's documentation or its authors. Then it
+  can be checked against CoolProp for the fluids both have.
+- **DIPPR 124,** for the one liquid Cp, needs a reference to check against.
+- **The data defects** in [data-quality.md](data-quality.md) are worth
+  reporting upstream to ChemSep's authors: R-236fa's ω, R-23's duplicate,
+  CO's InChIKey, and the reduced-pressure Tb values.
+- **Speed.** The database loads lazily, and a compound file parses in
+  about 2 ms under tcc. `thermo.Correlated` integrates numerically on every
+  H and S evaluation. Both are for M3 to measure, with the allocation work
+  carried over from M1.
+- **From M1:** the Soave α → 0 guard, and concurrent Python calls (M10a).
+
+**Verdict: M2 is done, subject to CI on the push.**
+
 ## Not in M2
 
 - Transport properties (viscosity, thermal conductivity, surface tension):
   their correlations are imported verbatim but not wired up until M5.
-- UNIFAC, UNIQUAC and NRTL parameters: imported and stored raw, used in M6.
+- Activity models. The group counts (UNIFAC, modified UNIFAC, ASOG, UMR,
+  PPR78) and UNIQUAC's r, q and q′ are imported, for M6. The NRTL, UNIQUAC
+  and Wilson binary tables in ChemSep's `ipd/` folder aren't vendored yet.
 - Estimation methods (Joback and others): M6.
 - Petroleum pseudo-components: after M7.
 - The Soave α → 0 guard carried over from M1: still open, and not part of

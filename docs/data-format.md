@@ -51,10 +51,11 @@ units = "J/kmol/K"
 "2" = 2
 ```
 
-The step 1 spike's hand-written file,
-[spike/data_format/106-97-8.toml](../spike/data_format/106-97-8.toml), shows
-a whole compound. Writing the importer (step 3) changed three things since
-then:
+A whole generated compound is
+[data/components/106-97-8.toml](../data/components/106-97-8.toml). The
+step 1 spike's hand-written file,
+[spike/data_format/106-97-8.toml](../spike/data_format/106-97-8.toml), came
+first. Writing the importer (step 3) changed three things since then:
 - `name` is now the source's own name;
 - `ids.chemsep_name` is gone;
 - Mathias–Copeman is three keys rather than an array.
@@ -191,6 +192,25 @@ test fails if the committed files differ from a fresh generation.
 - `CHANGES.md` documents how they differ from the original, as the licence
   asks: the systematic conversions, every repair, the duplicates dropped,
   and what was noticed but left as it is.
+
+## Your own components
+
+Put your files, in this same format, in a directory of your own, and load
+it after the built-in one:
+
+```v
+db := components.load([components.default_dir, 'my_components'])!
+```
+
+- A directory without an `index.toml` has every `*.toml` file in it read.
+- A compound whose CAS number is already in an earlier directory replaces
+  it **whole**: copy the built-in file and edit it, rather than writing
+  only the values you want to change.
+- A compound with a new CAS number is added.
+- If your compound has a name an existing one already uses, looking that
+  name up is an error listing both. Ask for it by CAS number instead.
+- A value from a source other than the file's `source` takes an inline
+  table: `tc = { value = 425.125, source = "CoolProp 8.0.0" }`.
 
 ## Rules the reader enforces
 

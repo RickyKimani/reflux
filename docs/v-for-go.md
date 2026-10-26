@@ -335,6 +335,33 @@ Rule of thumb: interface when others will add implementations, sum type
 when you own the list and want the compiler to check you've handled every
 case.
 
+**The standard library uses sum types too.** In `encoding.xml`, a node's
+children are `[]XMLNodeContents`, where
+`XMLNodeContents = XMLCData | XMLComment | XMLNode | string`. Go's
+`encoding/xml` decodes into tagged structs instead. Walking the tree in
+V is a `match` that must say what to do with each kind. The ChemSep
+importer ([components/chemsep/chemsep.v](../components/chemsep/chemsep.v))
+keeps elements, skips comments and formatting whitespace, and turns
+anything else into an error, so stray text can't be ignored by accident:
+
+```v
+for c in node.children {
+	match c {
+		xml.XMLNode { out << c }
+		xml.XMLComment {}
+		string { if c.trim_space() != '' { return error('stray text') } }
+		xml.XMLCData { return error('unexpected CDATA') }
+	}
+}
+```
+
+Two `encoding.xml` behaviours shaped the importer:
+- it rejects a `<` inside an attribute value, which ChemSep's files have
+  43 of;
+- it reads a 3.8 MB file in about 1.5 s under tcc. That's fine for an
+  importer that runs only when the data changes, which is why reflux loads
+  its own TOML at run time instead.
+
 ---
 
 ## 6. Enums
@@ -443,6 +470,15 @@ used cgo know this as `C.int` versus `int`.
 
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
+
+**Files:**
+- `os.ls(dir)` returns bare names, not paths, in whatever order the file
+  system gives. Go's `os.ReadDir` sorts by name. So sort wherever order
+  can matter: `components.load` sorts a user directory's file names, so
+  which duplicate wins is the same on every machine.
+- `os.read_file` returns the bytes as they are, CRLF and all, and
+  `split_into_lines()` handles both line endings. The ChemSep `.ipd` and
+  `.lib` readers rely on that, since the vendored files keep their CRLFs.
 
 ---
 

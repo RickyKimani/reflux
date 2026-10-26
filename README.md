@@ -95,8 +95,9 @@ at the edges, i.e. input files and printed output.
 
 ## Status
 
-**M0 (foundations) and M1 (thermo core) are done.** The exit review is at
-the end of [docs/m1-plan.md](docs/m1-plan.md). What exists now:
+**M0 (foundations), M1 (thermo core) and M2 (component data) are done.**
+The exit reviews are at the ends of [docs/m1-plan.md](docs/m1-plan.md) and
+[docs/m2-plan.md](docs/m2-plan.md). What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
       first and second derivatives
@@ -118,30 +119,31 @@ the end of [docs/m1-plan.md](docs/m1-plan.md). What exists now:
 - [x] Proven callable from Python and NumPy on Windows and Linux (a spike;
       the real API is M10a)
 
-M2, component data from ChemSep, is under way ([docs/m2-plan.md](docs/m2-plan.md)).
-So far:
-- the official database is vendored;
-- the file format is chosen;
-- every correlation form the data uses for vapour pressure, heat capacity,
-  density and heat of vaporization can be evaluated, differentiated and
-  integrated;
-- the whole database imports, as 642 compounds, with its defects repaired
-  or reported rather than silently fixed;
-- the converted files are committed in `data/components/`, and CI checks
-  that they're exactly what the importer writes;
-- compounds can be looked up by name, CAS number or InChIKey, and turned
-  into thermo's components and ideal gases. A directory of your own
-  overrides the built-in data;
-- `db.fluid(.pr, ['methane', 'n-butane'])` builds a working fluid from the
-  database, kᵢⱼ and α included. It reproduces M1's n-butane results with
-  ChemSep's constants;
-- PR and SRK kᵢⱼ come from ChemSep's DECHEMA tables, with a report of where
-  each value came from, and Mathias–Copeman α from its PR fits;
-- ChemSep's data is checked against CoolProp's reference equations for the
-  85 fluids both have. The typical deviations are 0.03% in Tc, 0.3% in
-  ideal-gas Cp and 0.8% in vapour pressure, and none may grow;
-- every correlation is swept for sanity, and what fails is listed, not
-  hidden, in [docs/data-quality.md](docs/data-quality.md).
+And from M2:
+
+- [x] The official ChemSep 8.50 database, vendored verbatim with its
+      licence, checksums verified in CI
+- [x] A strict importer to reflux's own TOML format: 642 compounds, with
+      every defect repaired or reported
+      ([data/components/CHANGES.md](data/components/CHANGES.md)), never
+      fixed silently
+- [x] 24 correlation forms (ChemSep's and DIPPR's), each with its value,
+      derivative and both integrals, checked against mpmath and `chemicals`.
+      Two rare forms aren't evaluated yet: ChemSep's eq. 200 for 5 vapour
+      pressures, which fall back to Antoine, and DIPPR 124 for one liquid Cp.
+- [x] Lookup by name, CAS number, InChIKey or alias, with suggestions for a
+      miss. A directory of your own adds to or overrides the built-in data.
+- [x] `db.fluid(.pr, ['methane', 'n-butane'])`: a working fluid, with kᵢⱼ
+      from ChemSep's DECHEMA tables (and a report of where each came from)
+      and optional Mathias–Copeman α. It reproduces M1's n-butane results
+      with ChemSep's constants.
+- [x] ChemSep checked against CoolProp for the 85 fluids both have. The
+      typical deviations are 0.03% in Tc, 0.3% in ideal-gas Cp and 0.8% in
+      vapour pressure, and none may grow.
+- [x] Every correlation swept for sanity. What fails is listed, not hidden,
+      in [docs/data-quality.md](docs/data-quality.md).
+
+Next is M3: the flash.
 
 ## Roadmap
 
@@ -150,7 +152,7 @@ milestones with exit criteria, headless testing, C numeric backends and
 how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
-(ChemSep) → **M3** flash → **M4** first flowsheet, compared with DWSIM 9. As
+(ChemSep) ✓ → **M3** flash → **M4** first flowsheet, compared with DWSIM 9. As
 soon as M3 lands, **M10a** makes thermo and flash callable from Python with
 NumPy arrays.
 

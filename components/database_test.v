@@ -91,6 +91,24 @@ fn test_a_users_directory_adds_and_overrides() {
 	assert builtin.find('n-butane')!.constants.tc or { 0.0 } == 425.12
 }
 
+fn test_find_by_alias() {
+	// ChemSep's data has no aliases, so a file of the user's own supplies
+	// some. They're matched like names, ignoring case, and suggestions
+	// draw on them too.
+	dir := user_dir('alias', {
+		'12345-67-4.toml': made_up.replace('cas = "12345-67-4"',
+			'cas = "12345-67-4"\naliases = ["Element 119", "eka-francium"]')
+	})
+	defer {
+		os.rmdir_all(dir) or {}
+	}
+	mine := load([default_dir, dir])!
+	for q in ['element 119', 'EKA-FRANCIUM', '  eka-francium '] {
+		assert mine.find(q)!.ids.cas == '12345-67-4', q
+	}
+	assert lookup_error(mine, 'eka-franc').suggestions[0] == 'Unobtainium (12345-67-4)'
+}
+
 fn test_a_name_used_twice_is_ambiguous() {
 	dir := user_dir('clash', {
 		'12345-67-4.toml': made_up.replace('Unobtainium', 'Water')

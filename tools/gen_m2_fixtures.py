@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["chemicals==1.5.2", "mpmath==1.3.0", "CoolProp==8.0.0"]
+# dependencies = ["chemicals==1.5.2", "mpmath==1.3.0", "CoolProp==8.0.0", "thermo==0.6.1"]
 # ///
 """Generate the M2 reference fixtures for reflux.
 
@@ -30,6 +30,14 @@ m2_coolprop.json
     through reflux and requires that they match and haven't grown. That's a
     regression guard on the data and its conversion, not a claim that
     ChemSep is as accurate as CoolProp.
+
+m2_pr_psat.json
+    Peng–Robinson's vapour pressure, from ChemSep's Tc, Pc and ω, against
+    ChemSep's own vapour-pressure correlation, for 20 representative
+    compounds at Tr 0.5, 0.65, 0.8 and 0.95 (M2 exit criterion 6). PR is
+    Caleb Bell's `thermo`, the same equation as reflux's, as in M1.
+    components/quality/quality_test.v requires reflux's PR to match it to
+    1e-9, and the deviations from ChemSep to match and not have grown.
 """
 
 import datetime
@@ -46,6 +54,8 @@ import chemicals.dippr as dippr
 import CoolProp
 import CoolProp.CoolProp as CP
 import mpmath as mp
+import thermo
+from thermo import PR
 
 mp.mp.dps = 40
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -53,6 +63,14 @@ VENDOR = ROOT / "data" / "vendor" / "chemsep"
 COMPONENTS = ROOT / "data" / "components"
 OUT = ROOT / "testdata" / "m2_tdep.json"
 OUT_COOLPROP = ROOT / "testdata" / "m2_coolprop.json"
+OUT_PR_PSAT = ROOT / "testdata" / "m2_pr_psat.json"
+
+# The same 20 compounds and reduced temperatures as components/quality/quality.v;
+# quality_test.v checks the two lists agree.
+REPRESENTATIVE = ["74-82-8", "74-84-0", "74-98-6", "106-97-8", "75-28-5", "109-66-0", "110-54-3",
+                  "142-82-5", "124-18-5", "110-82-7", "71-43-2", "108-88-3", "74-85-1", "115-07-1",
+                  "124-38-9", "7727-37-9", "7783-06-4", "7732-18-5", "67-56-1", "67-64-1"]
+REDUCED_T = [0.5, 0.65, 0.8, 0.95]
 
 TAU_FORMS = {106, 114, 116}
 
@@ -383,6 +401,35 @@ def coolprop_fixture():
     }
 
 
+def pr_psat_fixture():
+    compounds = []
+    for cas in REPRESENTATIVE:
+        rec = tomllib.loads((COMPONENTS / f"{cas}.toml").read_text(encoding="utf-8"))
+        c, cor = rec["constants"], rec["correlations"]
+        key = "vapor_pressure" if usable(cor.get("vapor_pressure")) else "antoine_vapor_pressure"
+        vp = cor[key]
+        pts = []
+        for tr in REDUCED_T:
+            t = tr * c["tc"]
+            pr = PR(Tc=c["tc"], Pc=c["pc"], omega=c["omega"], T=t, P=1e5).Psat(t, polish=True)
+            chem = chemsep_value(vp, t, c["tc"], 1.0)
+            pts.append({"tr": tr, "t": t, "pr": pr, "chemsep": chem, "deviation": pr / chem - 1.0})
+        compounds.append({"cas": cas, "name": rec["name"], "key": key, "points": pts})
+    return {
+        "source": {
+            "generated": datetime.date.today().isoformat(),
+            "generator": "tools/gen_m2_fixtures.py",
+            "python": platform.python_version(),
+            "thermo": thermo.__version__,
+            "chemsep": "data/components (ChemSep 8.50, converted)",
+        },
+        "note": "pr is thermo's Peng-Robinson Psat (Pa, polished to equal fugacities) from ChemSep's "
+        "Tc, Pc and omega with the Soave alpha; chemsep is the compound's vapour-pressure correlation "
+        "(key) at the same T; deviation is pr/chemsep - 1.",
+        "compounds": compounds,
+    }
+
+
 def summarize(data):
     """Print the worst deviation of each kind, for the record."""
     worst = {}
@@ -431,6 +478,12 @@ def main():
     n = len(cp_data["fluids"])
     print(f"wrote {OUT_COOLPROP.relative_to(ROOT)}: {n} CoolProp fluids also in ChemSep")
     summarize(cp_data)
+
+    pr_data = pr_psat_fixture()
+    OUT_PR_PSAT.write_text(json.dumps(pr_data, indent=1) + "\n", encoding="utf-8", newline="\n")
+    worst = max((abs(p["deviation"]), c["name"], p["tr"]) for c in pr_data["compounds"] for p in c["points"])
+    print(f"wrote {OUT_PR_PSAT.relative_to(ROOT)}: {len(pr_data['compounds'])} compounds; "
+          f"worst PR/ChemSep - 1: {worst[0]:.3f} ({worst[1]} at Tr {worst[2]})")
 
 
 if __name__ == "__main__":

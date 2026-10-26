@@ -1,9 +1,11 @@
 module quality
 
+import json2
 import math
 import os
 import components
 import tdep
+import thermo
 
 // The sweep over the built-in data, once for the tests below.
 const swept = sweep(components.load_default() or { panic(err) }) or { panic(err) }
@@ -35,6 +37,55 @@ fn test_what_the_sweep_found() {
 	// R-23 takes its vapour pressure from its second ChemSep copy, which
 	// gives 1 atm at Tb; the first copy's gave 0.7% of it.
 	assert !s.boiling.any(it.cas == '75-46-7')
+}
+
+// testdata/m2_pr_psat.json: PR's vapour pressure from Caleb Bell's
+// `thermo`, against ChemSep's correlation, computed independently of reflux.
+struct PrPoint {
+	tr        f64
+	t         f64
+	pr        f64
+	chemsep   f64
+	deviation f64
+}
+
+struct PrCompound {
+	cas    string
+	name   string
+	key    string
+	points []PrPoint
+}
+
+struct PrFixture {
+	compounds []PrCompound
+}
+
+fn test_pr_psat_is_recorded_and_cant_grow() {
+	// M2 exit criterion 6, second half, as M1 did it for n-butane: the
+	// deviations were recorded at generation by an independent PR, and
+	// reflux must match them and not do worse.
+	text := os.read_file(os.join_path(@VMODROOT, 'testdata', 'm2_pr_psat.json'))!
+	fx := json2.decode[PrFixture](text)!
+	assert fx.compounds.map(it.cas) == representative
+	db := components.load_default()!
+	for c in fx.compounds {
+		r := db.find(c.cas)!
+		eos := thermo.new_cubic(.pr, [r.component()!])!
+		vp := r.property('vapor_pressure')!
+		assert vp.key == c.key, c.name
+		assert c.points.map(it.tr) == reduced_temperatures
+		for p in c.points {
+			at := '${c.name} at Tr ${p.tr}'
+			ps := thermo.saturation_pressure(eos, p.t)!
+			// The same equation as thermo's, to 1e-9.
+			assert math.abs(ps / p.pr - 1.0) <= 1e-9, '${at}: PR ${ps} Pa, thermo ${p.pr} Pa'
+			assert math.abs(vp.at(p.t).value / p.chemsep - 1.0) <= 1e-12, '${at}: ChemSep'
+			dev := ps / vp.at(p.t).value - 1.0
+			tol := 1e-8 * math.max(1.0, math.abs(p.deviation))
+			assert math.abs(dev - p.deviation) <= tol, '${at}: deviation ${dev}, recorded ${p.deviation}'
+			assert math.abs(dev) <= math.abs(p.deviation) + tol, '${at}: deviation grew from ${p.deviation} to ${dev}'
+		}
+	}
 }
 
 fn test_pr_against_chemsep() {
