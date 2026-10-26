@@ -72,6 +72,16 @@ pub fn (db Database) count() int {
 	return db.entries.len
 }
 
+// list returns every compound's index entry, sorted by CAS number.
+pub fn (db Database) list() []IndexEntry {
+	mut out := []IndexEntry{}
+	for _, e in db.entries {
+		out << e.IndexEntry
+	}
+	out.sort(a.cas < b.cas)
+	return out
+}
+
 // LookupError is find's error. It carries the closest matches, so a caller
 // can offer them; its message lists them too.
 pub struct LookupError {

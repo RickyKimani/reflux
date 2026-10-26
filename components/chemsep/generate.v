@@ -95,10 +95,15 @@ pub fn (imp Import) changes() string {
 	s << ''
 	s << 'The first occurrence of a CAS number is kept.'
 	s << ''
-	s << '| CAS | Compound | Kept | Dropped | Elements that differ |'
-	s << '|---|---|---|---|---|'
+	s << "Where the kept copy's element is wrong and the dropped one's right, it is"
+	s << 'taken from the dropped copy: see `take_from_duplicate` in'
+	s << '[components/chemsep/chemsep.v](../../components/chemsep/chemsep.v), and the'
+	s << 'repairs above.'
+	s << ''
+	s << '| CAS | Compound | Kept | Dropped | Elements that differ | Taken from the dropped copy |'
+	s << '|---|---|---|---|---|---|'
 	for d in imp.duplicates {
-		s << '| ${d.cas} | ${md(d.name)} | ${d.kept} | ${d.dropped} | ${d.differing.join(', ')} |'
+		s << '| ${d.cas} | ${md(d.name)} | ${d.kept} | ${d.dropped} | ${d.differing.join(', ')} | ${d.taken.join(', ')} |'
 	}
 	s << ''
 	s << '## Noted, not changed'

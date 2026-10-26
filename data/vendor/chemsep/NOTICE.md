@@ -57,9 +57,12 @@ case, and lists every repair in its import report.
 
 Two compounds are in `chemsep2.xml` twice: trifluoromethane (75-46-7) and
 3-chloropropene (107-05-1), with the same library index each time. In both,
-the first copy is the more complete and more recently edited one, and it's
-the one reflux keeps. The import report lists everything else the importer
-noticed: summed ASOG groups, impossible correlation ranges and similar.
+the first copy is the more complete one, and it's the one reflux keeps,
+with one exception. R-23's first-copy vapour pressure is 94–100% below
+CoolProp's across its range, where the second copy's is within 3%. So
+reflux takes its vapour pressure and Antoine fit from the second copy. The
+import report lists that, and everything else the importer noticed: summed
+ASOG groups, impossible correlation ranges and similar.
 
 The parameter files have defects of their own:
 - **Repeated pairs.** In `pr.ipd` and `srk.ipd`, about a quarter of the

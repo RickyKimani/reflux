@@ -659,9 +659,21 @@ takes an integer as a float only when it's exact (|i| ≤ 2⁵³).
 
 ---
 
-## 14. A V limit that shaped this code
+## 14. V limits that shaped this code
 
 **Operator overloading needs both operands to be the same type.** `2.0 * x`
 doesn't compile when `x` is a user-defined `Dual`. That's why the models use
 hand-written derivatives rather than automatic differentiation (see
 [docs/design.md](design.md)).
+
+**Formatted numbers depend on the C compiler.** V compiles to C, and
+`${x:.4g}` ends up in the C library's printf. Go's `fmt` is Go's own code,
+the same on every platform. When a value is an exact tie, such as 267.25
+to four figures, C libraries disagree: a tcc build printed 267.3 and a gcc
+build 267.2. The generated data-quality report differed by that one
+character between the two CI compilers. So
+[components/quality/quality.v](../components/quality/quality.v) rounds each
+value itself, half away from zero with `math.round`, before printing it,
+and a rounded value is never a tie. Plain `${x}` (shortest round-trip,
+`f64.str()`) is V's own code and was never affected, which is why the
+component files always matched.

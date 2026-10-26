@@ -65,6 +65,7 @@ components/
                     correlations in SI per mol
   params.v, kij.v   ChemSep's kᵢⱼ (PR, SRK) and Mathias–Copeman (PR) files,
                     and kᵢⱼ matrices with a report of where each value came from
+  quality/          the sweep behind docs/data-quality.md
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
   model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
@@ -76,8 +77,9 @@ thermo/
   fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
   saturation.v      pure-component Psat, for any Model
 docs/               roadmap, milestone plans, design notes, data format,
-                    spike write-up, V notes
-tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references)
+                    data-quality report, spike write-up, V notes
+tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
+                    import_chemsep.vsh and data_quality.vsh (generated data)
 testdata/           reference fixtures from thermo, CoolProp, chemicals and
                     mpmath, with provenance
 data/vendor/        the ChemSep 8.50 database, verbatim, with its licence
@@ -134,7 +136,9 @@ So far:
   each value came from, and Mathias–Copeman α from its PR fits;
 - ChemSep's data is checked against CoolProp's reference equations for the
   85 fluids both have. The typical deviations are 0.03% in Tc, 0.3% in
-  ideal-gas Cp and 0.8% in vapour pressure, and none may grow.
+  ideal-gas Cp and 0.8% in vapour pressure, and none may grow;
+- every correlation is swept for sanity, and what fails is listed, not
+  hidden, in [docs/data-quality.md](docs/data-quality.md).
 
 ## Roadmap
 

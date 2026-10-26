@@ -46,7 +46,7 @@ fn test_the_index_lists_every_compound_file() {
 fn test_the_report_says_what_happened() {
 	changes := generated['CHANGES.md'] or { '' }
 	assert changes.contains('644 records became 642 compound files.')
-	assert changes.contains('## Repairs (48)')
+	assert changes.contains('## Repairs (50)')
 	assert changes.contains('## Duplicates dropped (2)')
 	assert changes.contains('### Impossible correlation ranges (42)')
 	assert changes.contains("### Equation forms reflux can't evaluate (334)")

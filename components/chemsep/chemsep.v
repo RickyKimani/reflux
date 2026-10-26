@@ -44,6 +44,7 @@ pub:
 	kept      string   // where, e.g. 'chemsep2.xml record 179'
 	dropped   string   // where the dropped copy was
 	differing []string // the elements that differ between the two copies
+	taken     []string // elements taken from the dropped copy (take_from_duplicate)
 }
 
 pub enum FindingKind {
@@ -78,8 +79,21 @@ mut:
 }
 
 struct Kept {
+	index    int // into records
 	where    string
 	elements map[string]string // element name → canonical form
+}
+
+// Elements taken from a dropped duplicate instead of the kept copy, by CAS
+// number. The first-occurrence rule (D8) keeps a duplicate's first copy, but
+// where that copy's element is wrong and the dropped one's is right, this
+// names the exception, and each takeover is reported as a repair.
+//
+// 75-46-7, trifluoromethane (R-23): the first copy's vapour pressure is
+// 94–100% below CoolProp's across its range, and its Antoine fit up to 11.5%
+// off; the second copy's are within 3% and 4% (M2 step 8, decided by you).
+const take_from_duplicate = {
+	'75-46-7': ['VaporPressure', 'AntoineVaporPressure']
 }
 
 // Parsed is one compound record, with what was found while reading it.
@@ -100,7 +114,41 @@ pub fn import_files(root string, paths []string) !Import {
 		text := os.read_file(os.join_path(root, path))!
 		imp.add_file(text, path.replace('\\', '/'))!
 	}
+	imp.check_takeovers()!
 	return imp
+}
+
+// take puts correlation `tag` of a dropped duplicate into the kept record,
+// and reports it.
+fn (mut imp Import) take(kept Kept, dropped components.Record, tag string, where string) ! {
+	f := fields[tag] or { return error('take_from_duplicate names unknown element <${tag}>') }
+	if f.kind != .correlation {
+		return error('take_from_duplicate can only take correlations, not <${tag}>')
+	}
+	d := dropped.correlations.get(f.key) or {
+		return error('take_from_duplicate: the dropped copy has no <${tag}>')
+	}
+	mut r := imp.records[kept.index]
+	before := r.correlations.get(f.key) or { components.CorrelationData{} }
+	r.correlations.set(f.key, d)!
+	imp.records[kept.index] = r
+	imp.repairs << Repair{
+		cas:    r.ids.cas
+		name:   r.name
+		key:    'correlations.${f.key}'
+		before: '${kept.where}: eq ${before.eq} ${before.coeffs}'
+		after:  '${where}: eq ${d.eq} ${d.coeffs}'
+	}
+}
+
+// check_takeovers fails if a take_from_duplicate entry no longer applies:
+// the source changed, and the curated fix must be looked at again.
+fn (imp Import) check_takeovers() ! {
+	for cas, _ in take_from_duplicate {
+		if !imp.duplicates.any(it.cas == cas && it.taken.len > 0) {
+			return error('take_from_duplicate names ${cas}, which is no longer listed twice')
+		}
+	}
 }
 
 // add_file imports the text of one file. `path` is how the records'
@@ -132,16 +180,22 @@ fn (mut imp Import) add_file(text string, path string) ! {
 		cas := p.record.ids.cas
 		elems := canonical_elements(node)
 		if kept := imp.kept[cas] {
+			taken := take_from_duplicate[cas] or { []string{} }
+			for tag in taken {
+				imp.take(kept, p.record, tag, where) or { return error('${where}: ${err}') }
+			}
 			imp.duplicates << Duplicate{
 				cas:       cas
 				name:      p.record.name
 				kept:      kept.where
 				dropped:   where
 				differing: differing(kept.elements, elems)
+				taken:     taken
 			}
 			continue
 		}
 		imp.kept[cas] = Kept{
+			index:    imp.records.len
 			where:    where
 			elements: elems
 		}

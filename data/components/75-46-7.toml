@@ -49,13 +49,13 @@ chao_seader_liquid_volume = 0.000102034
 
 [correlations.vapor_pressure]
 eq = 101
-coeffs = [67.1034, -4591.28, -6.99324, 1.08307e-05, 1.92868]
+coeffs = [66.043, -3244.0, -7.2767, 1.8665e-05, 2.0]
 t_range = [117.97, 299.01]
 units = "Pa"
 
 [correlations.antoine_vapor_pressure]
 eq = 10
-coeffs = [21.8027, 1770.24, -18.7306]
+coeffs = [21.4411, 1693.5, -20.3837]
 t_range = [114.594, 298.89]
 units = "Pa"
 

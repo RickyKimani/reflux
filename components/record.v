@@ -166,6 +166,16 @@ pub fn (mut c Correlations) set(key string, d CorrelationData) ! {
 	return error('no correlation `${key}`')
 }
 
+// correlation_keys returns the names of every correlation in the format, in
+// file order.
+pub fn correlation_keys() []string {
+	mut keys := []string{}
+	$for f in Correlations.fields {
+		keys << f.name
+	}
+	return keys
+}
+
 // get returns correlation `key`. It fails if the record has none, or if
 // the format has no correlation of that name.
 pub fn (c Correlations) get(key string) !CorrelationData {

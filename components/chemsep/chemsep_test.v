@@ -40,11 +40,38 @@ fn test_duplicates_keep_the_first_copy() {
 	assert d[0].cas == '75-46-7' && d[0].name == 'Trifluoromethane'
 	assert d[0].kept == 'chemsep2.xml record 179' && d[0].dropped == 'chemsep2.xml record 182'
 	assert d[1].cas == '107-05-1' && d[1].differing == ['LiquidViscosity']
-	// Only the first copies have a liquid viscosity, and the first
-	// trifluoromethane has the refitted vapour pressure.
+	// Only the first copies have a liquid viscosity.
 	assert find('107-05-1').correlations.liquid_viscosity != none
-	vp := find('75-46-7').correlations.vapor_pressure or { panic('no Psat') }
-	assert vp.coeffs[0] == 67.1034
+	assert find('75-46-7').correlations.liquid_viscosity != none
+}
+
+fn test_r23_takes_its_vapour_pressures_from_the_second_copy() {
+	// The first copy's vapour pressure is 94–100% below CoolProp's; the
+	// second copy's agrees within 3% (take_from_duplicate).
+	d := imported.duplicates[0]
+	assert d.taken == ['VaporPressure', 'AntoineVaporPressure']
+	r := find('75-46-7')
+	vp := r.correlations.vapor_pressure or { panic('no Psat') }
+	assert vp.coeffs == [66.043, -3244.0, -7.2767, 1.8665e-05, 2.0]
+	ant := r.correlations.antoine_vapor_pressure or { panic('no Antoine') }
+	assert ant.coeffs == [21.4411, 1693.5, -20.3837]
+	// (R-23's kept copy also has one of the stray-`<` SMILES repairs.)
+	taken := imported.repairs.filter(it.cas == '75-46-7' && it.key.starts_with('correlations.'))
+	assert taken.map(it.key) == ['correlations.vapor_pressure', 'correlations.antoine_vapor_pressure']
+	assert taken[0].before.starts_with('chemsep2.xml record 179: eq 101 [67.1034,')
+	assert taken[0].after.starts_with('chemsep2.xml record 182: eq 101 [66.043,')
+}
+
+fn test_a_takeover_that_no_longer_applies_is_an_error() {
+	// The curated list must be looked at again if its compound stops being
+	// listed twice: an import of one file without the duplicate says so.
+	mut imp := Import{}
+	imp.add_file(file_with(minimal), 't.xml')!
+	if _ := imp.check_takeovers() {
+		assert false, 'a stale takeover passed'
+	} else {
+		assert err.msg() == 'take_from_duplicate names 75-46-7, which is no longer listed twice'
+	}
 }
 
 fn test_repairs_are_the_known_defects() {
@@ -64,7 +91,7 @@ fn test_repairs_are_the_known_defects() {
 	assert zero.len == 1 && zero[0].cas == '882-33-7' && zero[0].before == 'group 10: 0'
 		&& zero[0].after == 'dropped'
 	assert find('882-33-7').groups.unifac_lle.len == 0
-	assert imported.repairs.len == 48
+	assert imported.repairs.len == 50
 	// Diglyme's three ether oxygens: ASOG group 19, listed as 2 and 1.
 	assert find('111-96-6').groups.asog[19] == 3
 	assert sums.any(it.cas == '111-96-6' && it.before == 'group 19: 2 + 1'
