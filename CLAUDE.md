@@ -32,11 +32,9 @@ Keep this section current: update it whenever a step is committed.
     Rachford–Rice, PIP and the Soave guard, stability, the PT flash
     (`flash/pt.v`), and the reference fixtures (`testdata/m3_thermo.json`,
     `testdata/m3_dwsim.json`).
-  - Open question for the owner: criterion 6 has two DWSIM misses, both
-    explained in step 5's write-up. One is a dew pressure that DWSIM's
-    rounded constants move by 1.8e-4. The other is pure n-butane's Tsat,
-    0.118 K off because DWSIM uses a correlation there. Amend the criterion
-    only if he decides to.
+  - Criterion 6 was amended after step 5, with the owner's approval. A
+    DWSIM deviation may exceed a target only when the fixture reproduces it
+    from DWSIM itself, and reflux still matches the exact model to 1e-8.
   - Next is step 6: vapour-fraction flashes, and bubble and dew points.
     Their references are `m3_thermo.json`'s boundaries and PT states, and
     `m3_dwsim.json`'s bubble and dew cases.

@@ -150,6 +150,13 @@ which are tools whose committed output tests check.
    using DWSIM's own constants and kᵢⱼ, reflux agrees within DWSIM's
    convergence tolerance. The target is β and compositions to 1e-4, T to
    0.01 K and P to 0.01%. The deviations are recorded and can't grow.
+   **Amended in step 5:** a deviation may exceed a target only when the
+   fixture explains it by reproducing DWSIM's number, to DWSIM's own
+   convergence, from something in DWSIM itself (its rounded constants, or
+   a modelling choice such as saturating a pure component on a
+   correlation). The test then records it with a bound that can't grow.
+   reflux must still match the exact model with DWSIM's constants to 1e-8,
+   so no deviation can hide an error of reflux's.
 7. **The Newton solver works.** It solves a standard set of test problems
    (from Moré, Garbow & Hillstrom) and reports non-convergence as an error,
    never a wrong answer.
@@ -551,13 +558,16 @@ flowchart LR
     - DWSIM lands back within 1e-7 K of its own state, and for mixtures
       within 0.01 K of the exact one.
     - reflux's own landings come with steps 6 and 7.
-- **Criterion 6: two DWSIM numbers miss its targets** (flagged for a
-  decision). Both are explained, and neither is reflux's:
+- **Criterion 6: two DWSIM numbers miss its targets,** so the criterion
+  was amended (approved). Both are explained, and neither is reflux's:
   - the methane/n-butane dew pressure at 300 K is 1.8e-4 from the exact PR,
-    against the 0.01% target, and all of it is DWSIM's rounded constants;
+    against the 0.01% target. It is 8e-7 from the rounded-constant PR, so
+    all of it is DWSIM's rounded constants.
   - pure n-butane's Tsat at 5 bar is 0.118 K below PR's, against the
-    0.01 K target, because DWSIM uses its correlation there.
-  - The tests record both, with bounds that can't grow.
+    0.01 K target. DWSIM's own vapour-pressure correlation gives 5 bar at
+    its Tsat to 1e-6, so it's the correlation.
+  - The tests reproduce both explanations and record both deviations, with
+    bounds that can't grow.
 - **The gcc check now takes about 6 minutes instead of 30, and the tcc
   check about 2 instead of 5** (382 s and 136 s, 35 test files).
   [tools/check.vsh](../tools/check.vsh) passes `-nocache` to gcc builds
