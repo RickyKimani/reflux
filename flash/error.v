@@ -5,6 +5,9 @@ pub enum Failure {
 	bad_input      // a specification it can't use: a negative mole fraction, T ≤ 0, …
 	no_convergence // the iteration ran out of steps without an answer it could prove
 	no_volume_root // the model has no volume root at a state it needed
+	// more_phases: a phase of the two-phase split is itself unstable. There
+	// are three or more phases, or a better split, and M3 handles two (M6).
+	more_phases
 }
 
 // FlashError is every failure in this module: a kind and a reason, never a

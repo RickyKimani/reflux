@@ -171,7 +171,7 @@ which are tools whose committed output tests check.
 |---|---|---|---|
 | D1 | Where it lives | A new module `flash`, importing `thermo` and `numeric`. | `thermo` stays about models, as `components` is about data. |
 | D2 | Which models | Any `thermo.Model`: the flash uses only ln φ, its derivatives and volume roots. | CPA and SAFT (M12) must drop in without touching the flash. |
-| D3 | Stability | Michelsen's TPD: Wilson vapour- and liquid-like trials; successive substitution with DEM acceleration every fifth step; a second-order finish in α = 2√W. Re-checking a split uses each phase as a trial too. | The standard, well-tested formulation, and the one `thermo` follows. |
+| D3 | Stability | Michelsen's TPD: Wilson vapour- and liquid-like trials; successive substitution with DEM acceleration every fifth step; a second-order finish in α = 2√W. Re-checking a split uses each phase as a trial too. **Amended in step 4:** plus a nearly pure trial of each component, since Wilson's trials alone miss liquid–liquid splits. | The standard, well-tested formulation, and the one `thermo` follows. |
 | D4 | PT flash | Initial K from stability's unstable trial. Rachford–Rice in the Leibovici–Neoschil window, with Newton safeguarded by bisection. Successive substitution with DEM, then Newton on G in vapour mole numbers with a line search when it slows. Negative flash internally. | Fast where easy, robust where hard (near-critical), and the negative flash is what phase boundaries need. |
 | D5 | PH, PS, TV, UV | Michelsen's state-function (Q-function) formulation. TV and UV work directly in F(T, V, n). | It handles pure components and narrow-boiling mixtures, where nested T-loops fail. |
 | D6 | Phase labels | PIP, with finite-difference second derivatives of P. In a split, the less dense phase is the vapour. | `thermo`'s choice, so comparisons line up. No change to the `Model` contract. |
@@ -417,11 +417,68 @@ flowchart LR
     effect on 6,000 states), to `max_steps` and its tests, and to the
     derivative and budget tests.
 
-### 4. PT flash
-- `flash.pt(model, t, p, z)`: stability, then the split (D4), returning a
-  `FlashResult` (D7).
-- Tests: criterion 3's invariants at every split; the hard cases (near
-  critical, retrograde, a component far below its Tc beside one far above).
+### 4. PT flash — done
+- **[flash/pt.v](../flash/pt.v):** `pt(model, t, p, z)` returns a
+  `FlashResult` (D7): T, P, the feed, β, the phases (label, `thermo.State`,
+  fraction; vapour first), the path (single phase, substitution or Newton),
+  the iterations and the feed's stability test.
+  - A stable feed is one phase, labelled by PIP.
+  - An unstable one is split (D4). K starts at W/z from the unstable
+    trials, lowest tm first. Then successive substitution with
+    Rachford–Rice (negative flash on the way) and DEM.
+  - After 20 steps it switches to Newton on G in the vapour mole numbers
+    through `numeric.minimize`, with the analytic Hessian.
+  - Each phase takes its lower-Gibbs root, and the less dense phase is the
+    vapour (D6).
+  - A split is accepted only at |ln fⱽ − ln fᴸ| ≤ tol (1e-12) with
+    0 < β < 1, and not once it has collapsed onto the feed.
+  - `verify` (on by default) re-tests each phase. An unstable phase is a
+    `FlashError` of the new kind `more_phases`.
+- **D3 amended: pure-component trials in stability, on by default.**
+  - Water, n-decane and methane (PR, water–hydrocarbon kᵢⱼ 0.5) at 350 K
+    and 5 bar has three phases: a methane-rich vapour, nearly pure water,
+    and a decane-rich liquid.
+  - A two-phase flash, reflux's or `thermo`'s FlashVL, finds a split whose
+    fugacities are equal. Wilson's trials call each of its phases stable,
+    but a nearly pure water trial finds tm = −2.2.
+  - With a nearly pure trial of each component, the flash correctly
+    reports `more_phases`.
+  - On 6,000 random PR mixtures the pure trials find 29 instabilities that
+    Wilson's two miss. With them on, dropping either Wilson trial changes
+    no verdict.
+  - They cost about 2.4 times the stability work. `pure_trials: false`
+    turns them off. Whether Wilson's trials are still worth their cost is
+    a question for step 10's benchmarks.
+- **Tests,** on the stability fixture's 513 states and some new ones:
+  - **Against `thermo`'s splits:** all 166 have β and both compositions
+    within 1e-8 (exit criterion 2 for PT; 4e-9 and 2e-10 measured).
+  - **Every split an equilibrium** (exit criterion 3), checked from
+    scratch:
+    - fugacities to 1e-10 (1e-12 measured);
+    - mass balance to 1e-12;
+    - Σx = Σy = 1;
+    - each phase stable.
+  - **Single phases** labelled by PIP.
+  - **Retrograde condensation:** the 10-component condensate at 400 K
+    condenses up to 110 bar, vaporises again, and is single-phase at
+    170 bar.
+  - **Light beside heavy:** N₂ (Tr ≈ 2) beside n-decane (Tr ≈ 0.4), with
+    the decane trace in the gas matching Raoult's law to 5%.
+  - **Three phases** refused as `more_phases`.
+  - **The tolerance contract:** at `tol` 1e-16 every answer meets it, or
+    is an error.
+  - **A split budget:** 2,246 steps and 44 Newton finishes over the 166
+    splits, recorded with 2.4% room.
+  - **Internal tests** of the negative-flash and collapse guards.
+- **Planted mistakes:** all 16 caught.
+  - The first survivors showed three things. Newton on G rescues any poor
+    start, so the budget became the test of efficiency. The start's
+    orientation (W/z or z/W) is exactly equivalent, by the K ↔ 1/K
+    symmetry, so that logic was deleted. The Wilson fallback was never
+    needed, so it was deleted too.
+  - The stability mistakes, rerun with pure trials on: all caught but the
+    two explained before, plus the liquid-like Wilson trial, which is now
+    redundant on all the evidence.
 
 ### 5. Reference fixtures
 - `tools/gen_m3_fixtures.py` writes `testdata/m3_thermo.json`: `thermo`'s

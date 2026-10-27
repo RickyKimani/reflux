@@ -85,6 +85,7 @@ thermo/
   phase.v           phase identification parameter and liquid/vapour labels
 flash/
   stability.v       Michelsen's tangent-plane stability test, for any Model
+  pt.v              the PT flash: stability, then the two-phase split
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
 docs/               roadmap, milestone plans, design notes, data format,

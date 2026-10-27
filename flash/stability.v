@@ -8,6 +8,7 @@ import thermo
 pub enum TrialStart {
 	vapor_wilson  // Wᵢ = zᵢKᵢ with Wilson's K: a vapour-like trial phase
 	liquid_wilson // Wᵢ = zᵢ/Kᵢ: a liquid-like one
+	pure          // a nearly pure phase of one component, which finds liquid–liquid splits
 	given         // a composition the caller passed in, such as a phase of a split
 }
 
@@ -61,6 +62,12 @@ pub:
 	// trials are extra starting compositions, as mole fractions: the phases
 	// of a split being re-checked, for instance (D3).
 	trials [][]f64
+	// pure_trials adds a nearly pure trial phase of each component present.
+	// Wilson's two trials can miss a liquid–liquid split entirely: next to
+	// water and a hydrocarbon they never reach a water-rich liquid. These
+	// find it, at about 2.4 times the cost on the reference set. Turn them
+	// off only where no second liquid can form.
+	pure_trials bool = true
 	// The feed is unstable when some trial reaches tm < −tol.
 	tol f64 = 1e-10
 	// max_steps caps each trial's successive-substitution steps; the Newton
@@ -90,7 +97,8 @@ const trivial_tol = 1e-5
 // root of lower Gibbs energy.
 //
 // Two trials start from Wilson's K, one vapour-like and one liquid-like,
-// plus any in params.trials. Each runs successive substitution,
+// then one nearly pure phase of each component (params.pure_trials), plus
+// any in params.trials. Each runs successive substitution,
 // ln Wᵢ ← dᵢ − ln φᵢ(w), which lowers tm* at every step, accelerated every
 // fifth step by Michelsen's dominant-eigenvalue extrapolation when that
 // lowers tm* further. A trial still going after 20 steps, typically near a
@@ -153,6 +161,16 @@ pub fn stability(m thermo.Model, t f64, p f64, z []f64, params StabilityParams) 
 		Start{.vapor_wilson, []f64{len: nc, init: feed_x[index] * k[index]}},
 		Start{.liquid_wilson, []f64{len: nc, init: feed_x[index] / k[index]}},
 	]
+	if params.pure_trials {
+		// Component i at Wᵢ = 1, every other component present as a trace.
+		for i in present {
+			starts << Start{.pure, []f64{len: nc, init: if index == i {
+				1.0
+			} else {
+				1e-10 * feed_x[index]
+			}}}
+		}
+	}
 	for w in params.trials {
 		if w.len != nc {
 			return fail(.bad_input, 'a given trial has ${w.len} entries for ${nc} components')
@@ -247,9 +265,9 @@ fn (f Feed) at(u []f64) !Point {
 
 // stationary reports whether the gradient of tm* in α = 2√W, √Wᵢ·rᵢ, has
 // vanished.
-fn (f Feed) stationary(pt Point) bool {
+fn (f Feed) stationary(cur Point) bool {
 	for i in f.present {
-		if math.abs(math.sqrt(pt.w[i]) * pt.r[i]) > stationary_tol {
+		if math.abs(math.sqrt(cur.w[i]) * cur.r[i]) > stationary_tol {
 			return false
 		}
 	}
@@ -257,21 +275,21 @@ fn (f Feed) stationary(pt Point) bool {
 }
 
 // trivial reports whether W is the feed itself.
-fn (f Feed) trivial(pt Point) bool {
+fn (f Feed) trivial(cur Point) bool {
 	for i in f.present {
-		if math.abs(pt.u[i] - math.log(f.z[i])) > trivial_tol {
+		if math.abs(cur.u[i] - math.log(f.z[i])) > trivial_tol {
 			return false
 		}
 	}
 	return true
 }
 
-fn (f Feed) result(start TrialStart, pt Point, converged bool, newton bool, iterations int) Trial {
+fn (f Feed) result(start TrialStart, cur Point, converged bool, newton bool, iterations int) Trial {
 	return Trial{
 		start:      start
-		w:          pt.w.map(it / pt.sum)
-		tm:         pt.tm
-		trivial:    f.trivial(pt)
+		w:          cur.w.map(it / cur.sum)
+		tm:         cur.tm
+		trivial:    f.trivial(cur)
 		converged:  converged
 		newton:     newton
 		iterations: iterations
@@ -286,25 +304,25 @@ fn (f Feed) trial(s Start, max_steps int) !Trial {
 	for i in f.present {
 		u[i] = math.log(math.max(s.w[i], 1e-300))
 	}
-	mut pt := f.at(u)!
-	mut best := pt // the lowest tm*, the proof of instability if nothing converges
+	mut cur := f.at(u)!
+	mut best := cur // the lowest tm*, the proof of instability if nothing converges
 	mut last_step := []f64{}
 	mut since_dem := 0
 	mut tried_newton := false
 	for iter in 1 .. max_steps + 1 {
-		if f.stationary(pt) || f.trivial(pt) {
-			return f.result(s.kind, pt, true, tried_newton, iter - 1)
+		if f.stationary(cur) || f.trivial(cur) {
+			return f.result(s.kind, cur, true, tried_newton, iter - 1)
 		}
 		if iter > ss_before_newton && !tried_newton {
 			tried_newton = true
-			if done := f.newton(pt) {
+			if done := f.newton(cur) {
 				return f.result(s.kind, done.point, true, true, iter - 1 + done.iterations)
 			}
 			// Newton failed from here: carry on substituting.
 		}
 		// Successive substitution: ln Wᵢ ← dᵢ − ln φᵢ(w), a step of −rᵢ.
-		step := []f64{len: nc, init: -pt.r[index]}
-		next_u := []f64{len: nc, init: pt.u[index] + step[index]}
+		step := []f64{len: nc, init: -cur.r[index]}
+		next_u := []f64{len: nc, init: cur.u[index] + step[index]}
 		mut next := ?Point(none)
 		since_dem++
 		if since_dem >= 5 && last_step.len > 0 {
@@ -323,9 +341,9 @@ fn (f Feed) trial(s Start, max_steps int) !Trial {
 			}
 		}
 		last_step = step.clone()
-		pt = next or { f.at(next_u)! }
-		if pt.tm_star < best.tm_star {
-			best = pt
+		cur = next or { f.at(next_u)! }
+		if cur.tm_star < best.tm_star {
+			best = cur
 		}
 	}
 	// Out of steps. A negative tm still proves instability.
@@ -368,18 +386,18 @@ fn (f Feed) objective(a []f64, mut g []f64, mut h []f64) !f64 {
 			return error('α must stay positive')
 		}
 	}
-	pt := f.at(f.u_of(a))!
-	der := thermo.ln_phi_derivs(f.m, pt.st)
+	cur := f.at(f.u_of(a))!
+	der := thermo.ln_phi_derivs(f.m, cur.st)
 	k := f.present.len
 	nc := f.z.len
 	for j, i in f.present {
-		g[j] = math.sqrt(pt.w[i]) * pt.r[i]
+		g[j] = math.sqrt(cur.w[i]) * cur.r[i]
 		for l, q in f.present {
-			h[j * k + l] = math.sqrt(pt.w[i] * pt.w[q]) * der.dn[i * nc + q] / pt.sum
+			h[j * k + l] = math.sqrt(cur.w[i] * cur.w[q]) * der.dn[i * nc + q] / cur.sum
 		}
-		h[j * k + j] += 1.0 + 0.5 * pt.r[i]
+		h[j * k + j] += 1.0 + 0.5 * cur.r[i]
 	}
-	return pt.tm_star
+	return cur.tm_star
 }
 
 // u_of maps α, over the components present, to ln W over all of them:

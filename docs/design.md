@@ -385,8 +385,18 @@ then that w is the first estimate of the new phase. Every phase takes its
 volume root of lower Gibbs energy.
 
 **Trials.** One starts vapour-like (Wᵢ = zᵢKᵢ) and one liquid-like
-(Wᵢ = zᵢ/Kᵢ), with Wilson's K. A caller can add more: the phases of a split,
-to re-check it.
+(Wᵢ = zᵢ/Kᵢ), with Wilson's K. Then comes one nearly pure phase of each
+component present: Wᵢ = 1, with the others at 1e-10·zⱼ. A caller can add
+more: the phases of a split, to re-check it.
+
+The pure trials were added in M3 step 4. Wilson's two trials can miss a
+liquid–liquid split entirely. With water, n-decane and methane (PR, a
+water–hydrocarbon kᵢⱼ of 0.5) at 350 K and 5 bar, they call the methane-rich
+phase stable, yet a nearly pure water phase lies at tm = −2.2 against it.
+On 6,000 random PR mixtures the pure trials find 29 instabilities that
+Wilson's missed, and once they're there, dropping either Wilson trial
+changes no verdict. They cost about 2.4 times the work on the reference
+set. `pure_trials: false` turns them off where no second liquid can form.
 
 **Successive substitution,** ln Wᵢ ← dᵢ − ln φᵢ(w), lowers tm* at every
 step. Every fifth step Michelsen's dominant-eigenvalue method extrapolates:
@@ -427,6 +437,48 @@ flagged trivial and never offered as a new phase.
 tm < −1e-10. A trial that runs out of steps still proves instability that
 way, since any W with tm < 0 is a proof. If no trial does and one didn't
 converge, the result is a FlashError, not "stable".
+
+## PT flash
+
+`flash.pt` ([flash/pt.v](../flash/pt.v)) tests the feed's stability first.
+A stable feed is one phase, labelled by its PIP, with β = 1 for a vapour and
+0 for a liquid. An unstable feed is split into two phases.
+
+**Starting K.** From an unstable trial phase W, stationarity,
+Wᵢφᵢ(w) = zᵢφᵢ(z), gives Kᵢ = Wᵢ/zᵢ. The trials are tried in order of their
+tm, lowest first. Whether W is the lighter phase doesn't matter: K and 1/K
+describe the same split with the roles swapped. Rachford–Rice then gives
+β′ = 1 − β, x′ = y and y′ = x, every later step mirrors the other, and the
+phases are labelled by density at the end.
+
+**Successive substitution,** ln Kᵢ ← ln φᵢᴸ(x) − ln φᵢⱽ(y), with x, y and β
+from Rachford–Rice at each step. Every fifth step it uses the same
+dominant-eigenvalue extrapolation as stability. Rachford–Rice may give β
+outside [0, 1] on the way (the negative flash); only the converged split
+must have 0 < β < 1.
+
+**Newton on G.** After 20 steps it switches to minimising the Gibbs energy
+of the split over the vapour mole numbers v (one mole of feed, l = z − v):
+
+    G/RT = Σᵢ vᵢ ln fᵢ(y) + Σᵢ lᵢ ln fᵢ(x),   gᵢ = ln fᵢ(y) − ln fᵢ(x),
+    Hᵢⱼ = (δᵢⱼ/yᵢ − 1 + Φⱽᵢⱼ)/V + (δᵢⱼ/xᵢ − 1 + Φᴸᵢⱼ)/L,
+
+where Φ is each phase's n·∂ln φᵢ/∂nⱼ. This uses numeric.minimize, with
+fscale set to the size of the terms G is summed from. Near the critical
+locus, 44 of the reference set's 166 splits end this way.
+
+**Accepted** only with every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol (1e-12) and 0 < β < 1,
+and a Newton result is held to the same test. A split that slides onto the
+feed (every |ln K| < 1e-4) is refused: there the fugacities are equal too,
+and it would pass for two identical phases.
+
+**Verified** (`verify`, on by default): each phase is re-tested for
+stability, with the other phase as a trial. An unstable phase means a third
+phase or a better split. That's a FlashError (`more_phases`) rather than an
+answer, since M3 handles two phases. The water, n-decane and methane
+mixture above is the example. There, a two-phase flash, reflux's without
+the re-test or `thermo`'s FlashVL, returns a split whose fugacities are
+equal but which isn't the equilibrium.
 
 ## How CPA will fit
 

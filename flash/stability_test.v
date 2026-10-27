@@ -126,10 +126,11 @@ fn test_stability_agrees_with_the_references() {
 }
 
 fn test_the_iteration_budget() {
-	// Recorded, and can't grow by more than 5%: 10,850 steps over the
-	// fixture's 1,026 trials, 125 of which needed the second-order finish.
-	// Dominant-eigenvalue acceleration is what keeps it there: without it
-	// the same trials take 14,485 steps and 356 finishes.
+	// Recorded, and can't grow by more than 5%: 25,631 steps over the
+	// fixture's 2,399 trials (Wilson's two and the pure-component ones),
+	// 266 of which needed the second-order finish. Dominant-eigenvalue
+	// acceleration is what keeps it there: without it the same trials take
+	// 35,138 steps and 895 finishes.
 	f := read_fixture()!
 	mut total, mut finishes := 0, 0
 	for c in f.cases {
@@ -142,8 +143,8 @@ fn test_the_iteration_budget() {
 			}
 		}
 	}
-	assert total <= 11400, '${total} steps'
-	assert finishes <= 140, '${finishes} second-order finishes'
+	assert total <= 26900, '${total} steps'
+	assert finishes <= 290, '${finishes} second-order finishes'
 }
 
 fn test_an_unstable_verdict_comes_with_its_proof() {
@@ -352,6 +353,46 @@ fn test_an_unconverged_trial_still_proves_instability() {
 	inc := s.incipient()?
 	assert !inc.converged && inc.tm < -1e-10
 	assert tpd(m, 250.0, 30e5, [0.4, 0.6], inc.w)! < -1e-10
+}
+
+fn test_pure_trials_find_what_wilson_misses() {
+	// The methane-rich phase of a water/n-decane/methane split at 350 K and
+	// 5 bar (PR, a water–hydrocarbon kᵢⱼ of 0.5). Wilson's vapour- and
+	// liquid-like trials never reach a water-rich liquid and call it stable,
+	// but nearly pure water lies far below its tangent plane: a third phase.
+	// A trial phase of nearly pure water finds it.
+	water := Component{
+		name:  'water'
+		tc:    647.1
+		pc:    220.55e5
+		omega: 0.345
+		mw:    0.018015
+	}
+	decane := Component{
+		name:  'n-decane'
+		tc:    617.7
+		pc:    21.10e5
+		omega: 0.492
+		mw:    0.142285
+	}
+	methane := Component{
+		name:  'methane'
+		tc:    190.6
+		pc:    45.99e5
+		omega: 0.012
+		mw:    0.016043
+	}
+	m := thermo.new_cubic(.pr, [water, decane, methane],
+		kij: [0.0, 0.5, 0.5, 0.5, 0.0, 0.04, 0.5, 0.04, 0.0]
+	)!
+	x := [0.7066684313380365, 0.00809338270313943, 0.28523818595882405]
+	assert flash.stability(m, 350.0, 5e5, x, pure_trials: false)!.stable
+	s := flash.stability(m, 350.0, 5e5, x)!
+	assert !s.stable
+	inc := s.incipient()?
+	assert inc.start == .pure && inc.w[0] > 0.99, '${inc.w}'
+	check := tpd(m, 350.0, 5e5, x, inc.w)!
+	assert check < -1.0 && math.abs(check - inc.tm) <= 1e-10
 }
 
 fn test_wilson_k() {
