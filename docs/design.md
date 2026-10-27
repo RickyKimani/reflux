@@ -271,6 +271,51 @@ What follows, and is tested:
 - the packing limit moves to B − C, which is why `translate` rejects any
   cᵢ ≥ bᵢ.
 
+## Rachford–Rice
+
+`numeric.rachford_rice` ([numeric/rachford_rice.v](../numeric/rachford_rice.v))
+solves, for fixed K-values,
+
+    f(β) = Σᵢ zᵢ(Kᵢ − 1) / (1 + β(Kᵢ − 1)) = 0,   xᵢ = zᵢ / (1 + β(Kᵢ − 1)),   yᵢ = Kᵢxᵢ.
+
+The pole-free window runs from c₁ = 1/(1 − K_max) < 0 to cₙ = 1/(1 − K_min) > 1,
+taking K_max and K_min over the components present. f falls from +∞ to −∞
+across it, so the root is unique. It may lie outside [0, 1]: that's the
+negative flash, and the compositions are still positive.
+
+The numerical danger is the denominator eᵢ = 1 + β(Kᵢ − 1). It is tiny for
+a heavy component when the liquid is a trace, and computing it from β
+subtracts two numbers near 1. So β is written as a position in the window,
+β = c₁ + t(cₙ − c₁) with s = 1 − t. Substituting gives
+
+    eᵢ = s·uᵢ + t·vᵢ,   uᵢ = (K_max − Kᵢ)/(K_max − 1),   vᵢ = (Kᵢ − K_min)/(1 − K_min),
+
+and both uᵢ and vᵢ are non-negative for every component present. (Check
+the ends: at t = 0, β = c₁ and the K_max component's e is 0; at t = 1,
+β = cₙ and the K_min component's is.) A sum of non-negative terms has no
+cancellation, so every eᵢ has full relative precision anywhere in the
+window, given t and s to full relative precision. The smaller of the two is
+stored and the larger is 1 minus it. So a root 1e-30 from an end still has
+all its digits, and so do β and L near their own small values: β from
+c₁ + (cₙ − c₁)t, L from (1 − cₙ) + (cₙ − c₁)s.
+
+The equation solved is Leibovici and Neoschil's, f multiplied by the
+distances to both poles:
+
+    Φ(t) = t·s·Σᵢ zᵢ(Kᵢ − 1)/(s·uᵢ + t·vᵢ).
+
+It's finite at both ends, Φ(0) = Σ over the K_max components of zᵢ(Kᵢ − 1)/vᵢ
+and Φ(1) = Σ over the K_min ones of zᵢ(Kᵢ − 1)/uᵢ, and close to linear near
+each. For two components it is exactly linear, so the first guess, the
+straight line between Φ(0) and Φ(1), is the root. Newton runs on Φ in t,
+and bisection takes over whenever a step would leave the bracket.
+
+What β can be trusted to is set by the K-values, not the method. Given eᵢ
+to a few ulps, β = (eᵢ − 1)/(Kᵢ − 1) carries an absolute error of about
+ε·(|β| + min(|c₁|, cₙ)). That's about ε for an ordinary mixture, but about
+2e-8 when every K is within 1e-8 of 1. Mass balance doesn't suffer, because
+L·xᵢ + β·yᵢ = xᵢ·eᵢ = zᵢ holds whatever β's error.
+
 ## How CPA will fit
 
 ```v

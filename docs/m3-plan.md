@@ -226,15 +226,80 @@ flowchart LR
 - Timings for D10: warm PT 1.0–1.6 ms, PH 6.7–15 ms, a one-stream
   flowsheet solve 2.3–4 ms, and 7–10 s to start.
 
-### 1. Newton solver and Rachford–Rice
-- `numeric`: Newton with line search and trust region (B2), and a
-  two-phase Rachford–Rice solver that's safe for extreme K (a heavy
-  component's K can be 1e-20).
-- Tests:
-  - a Moré–Garbow–Hillstrom subset;
-  - Rachford–Rice against `chemicals`' solvers and an mpmath reference, on
-    random and extreme K;
-  - β outside [0, 1] for the negative flash.
+### 1. Newton solver and Rachford–Rice — done
+- **[numeric/rachford_rice.v](../numeric/rachford_rice.v):**
+  `rachford_rice(z, k)` returns β, L = 1 − β, x, y and the iteration count.
+  - β is written as a position t in the pole-free window, with s = 1 − t.
+    Every denominator then becomes 1 + β(Kᵢ − 1) = s·uᵢ + t·vᵢ, where
+    uᵢ, vᵢ ≥ 0, so no composition is ever formed by a cancelling
+    subtraction.
+  - Whichever of t and s is smaller is stored exactly, so trace phases
+    keep their digits.
+  - It runs Newton on the Leibovici–Neoschil function, safeguarded by
+    bisection, from a guess interpolated between the window's ends.
+  - It needs a median of 4 iterations and at most 7, and a binary is done
+    in 1, because the function is linear in t for two components.
+  - It solves the negative flash (β outside [0, 1]) as is, and fails only
+    when every K is on one side of 1.
+- **[numeric/newton.v](../numeric/newton.v):** `newton(system, x0)`
+  globalises Newton with a line search (Dennis & Schnabel A6.3.1) or a
+  dogleg trust region.
+  - Where J is singular it takes a Levenberg–Marquardt step.
+  - A system can refuse a point outside its domain, and the solver then
+    steps back.
+  - It succeeds only when |F| ≤ ftol, or when a true Newton step is
+    shorter than xtol. Every other outcome is a `NewtonError` with a
+    reason and the best point reached.
+- **Rachford–Rice tests**, against `testdata/m3_rachford_rice.json` from
+  the new [tools/gen_m3_fixtures.py](../tools/gen_m3_fixtures.py):
+  - **The fixture:** 87 seeded cases. The reference is the exact root of
+    each case's floats, by bisection at 100 digits, and agrees with
+    `chemicals`' own mpmath solver.
+  - **Accuracy:**
+    - compositions to 1e-15 relative;
+    - β and L to 4 ulps of what the K-values allow (ε·(|β| + min(|c₁|, cₙ)));
+    - trace liquid or vapour fractions down to 1e-15, to 4 ulps of
+      themselves.
+  - **Against `chemicals`:** across the fixture, reflux's worst error is
+    below that of each of `chemicals`' four float solvers. Their worst
+    errors, in β and then in the compositions:
+    - Leibovici–Neoschil: 2.4e-8 and 3.9e-15;
+    - LN2: 2.4e-8 and 2.9e-12;
+    - `flash_inner_loop`: 4.4e3 and 8.2e-4;
+    - `Rachford_Rice_solution`: 1.7e-2 and 1.0, the last on a trace liquid.
+    - All four worst β errors come from the near-critical cases.
+  - **Mass balance** holds component by component on 2,000 random feeds
+    with K over twenty decades.
+- **Newton tests:**
+  - **The MGH runs:** 12 Moré–Garbow–Hillstrom problems, each from 1× and
+    10× its standard start and with both methods: 48 runs.
+    - 46 converge. Each answer is checked by evaluating F afresh, and
+      against the root where it's known.
+    - The 2 that fail are the trigonometric problem from 10× its start.
+      Both are reported errors, and the dogleg's stopping point is checked
+      to be a genuine non-root minimum of ‖F‖: JᵀF is 4e-10 where |F| is
+      6e-4.
+    - This failure list is recorded and can't grow.
+  - **Freudenstein–Roth** is either solved at (5, 4) or refused.
+  - **Edge cases:**
+    - a system with no root;
+    - stepping back into the domain;
+    - a singular Jacobian;
+    - a stationary starting point;
+    - the xtol path where ftol is out of reach;
+    - bad input.
+- **Bugs found and fixed:**
+  1. The line search refused a full Newton step shorter than its
+     backtracking floor, so the variably dimensioned problem stopped at
+     |F| = 2.6e-10.
+  2. Rachford–Rice's last, tiny Newton step could leave its own bracket
+     and set off bisection: up to 48 iterations instead of 7.
+  3. At a rounding floor the decrease test could reject a converged
+     Newton step, so such steps are now taken without it.
+- **Planted mistakes:** 22 of 22 caught. Three survivors along the way
+  showed code no test needed: geometric bisection, an equivalent branch in
+  the window arithmetic, and a second formula for L. That code was
+  deleted, and the xtol test was added.
 
 ### 2. Phase identification and the Soave guard
 - `thermo`: PIP (D6), and Soave α through its square root (D11).

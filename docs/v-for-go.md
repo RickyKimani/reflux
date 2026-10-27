@@ -713,3 +713,28 @@ value itself, half away from zero with `math.round`, before printing it,
 and a rounded value is never a tie. Plain `${x}` (shortest round-trip,
 `f64.str()`) is V's own code and was never affected, which is why the
 component files always matched.
+
+**An `if` can't produce two values.** Go has no `if` expressions at all;
+V has them, but a branch yields one value, not a tuple, so
+`beta, liquid := if t <= s { a, b } else { c, d }` doesn't compile.
+[numeric/rachford_rice.v](../numeric/rachford_rice.v) declares both first
+and assigns them in each branch.
+
+**A result is forwarded with `!`, never as is.** In Go,
+`return solve()` passes a `(T, error)` pair straight through. In V,
+`return s.line_search()` from a function returning `!NewtonSolution` is a
+compile error. It has to be `return s.line_search()!`, which returns the
+value or propagates the error unchanged, a custom `NewtonError` included
+([numeric/newton.v](../numeric/newton.v)).
+
+**Function types can take `mut` parameters**, so a callback can fill
+buffers the caller owns, with no allocation and no pointers:
+`pub type SystemFn = fn (x []f64, mut f []f64, mut jac []f64) !`. A struct
+field of function type should then be `@[required]` or given a default:
+V flags one that would otherwise start as a nil function ("uninitialized
+`fn` struct fields are not allowed").
+
+**Double-quoted strings interpolate too.** `'${x}'` and `"${x}"` are the
+same in V, unlike Go's `"..."` and backquoted raw strings. A script that
+builds V source as text has to use raw strings, `r'${x}'`, or it
+interpolates its own variables.
