@@ -452,6 +452,15 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 `.clone()` when you keep a copy of an argument. `new_cubic` and `State`
 clone the arrays they store, so the caller can reuse theirs.
 
+V does stop the dangerous case, which Go doesn't: a mutable variable may
+not alias an immutable array. With `b := [1, 2]`, both `mut a := b` and
+`a = b` (for an existing `mut a`) are compile errors ("use
+`array2 = array1.clone()`"). With `mut b`, `mut a := b` compiles and shares:
+`a[0] = 9` changes `b` too, until `b << 3` reallocates and they part, just
+like Go. The stability iteration hit the first case, keeping last step's
+array (`last_step = step.clone()` in
+[flash/stability.v](../flash/stability.v)).
+
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 

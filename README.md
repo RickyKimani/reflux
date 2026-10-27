@@ -53,8 +53,12 @@ numeric/
   cubic.v           real roots of a cubic
   roots.v           bracketed root finding (bisection)
   lu.v              dense LU with partial pivoting
+  cholesky.v        Cholesky factorisation, the positive-definiteness test
   vec.v             small vector helpers
   integrate.v       adaptive Gauss–Kronrod quadrature
+  newton.v          Newton for nonlinear systems: line search or dogleg
+  minimize.v        Newton minimisation with a Levenberg–Marquardt shift
+  rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
 tdep/
   tdep.v            temperature-dependent correlations (ChemSep and DIPPR
                     forms): value, derivative and both integrals
@@ -78,6 +82,11 @@ thermo/
   ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
   fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
   saturation.v      pure-component Psat, for any Model
+  phase.v           phase identification parameter and liquid/vapour labels
+flash/
+  stability.v       Michelsen's tangent-plane stability test, for any Model
+  wilson.v          Wilson's K-values
+  error.v           FlashError: every failure, typed, never a panic
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),

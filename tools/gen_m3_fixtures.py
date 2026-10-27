@@ -41,6 +41,16 @@ m3_pip.json
     fixtures check. For a pure component thermo computes alpha from
     k = 1 + m(1 - sqrt(Tr)) without dividing by it, so it's a valid
     reference right through T0.
+
+m3_stability.json
+    Stability, read by flash/stability_test.v: PR (and SRK for one binary)
+    states of binaries, a ternary and a 10-component gas condensate, over
+    grids of T, P and z, with extra states near the methane/n-butane
+    critical locus. For each binary a brute-force scan of the tangent-plane
+    distance over the whole composition range gives the global minimum and
+    the verdict, independent of any iteration. Every state also records
+    thermo's FlashVL result (its stability test plus split), and for a split
+    the lowest tm of its phases against the feed, which must be negative.
 """
 
 import datetime
@@ -54,11 +64,13 @@ import chemicals
 import chemicals.rachford_rice as rr
 import mpmath as mp
 import thermo
-from thermo import PR, PRMIX, SRK, SRKMIX
+from thermo import (PR, PRMIX, SRK, SRKMIX, CEOSGas, CEOSLiquid, ChemicalConstantsPackage, FlashVL,
+                    HeatCapacityGas, PropertyCorrelationsPackage)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT_RR = ROOT / "testdata" / "m3_rachford_rice.json"
 OUT_PIP = ROOT / "testdata" / "m3_pip.json"
+OUT_STAB = ROOT / "testdata" / "m3_stability.json"
 SEED = 20261027
 
 # As in tools/gen_m1_fixtures.py (Smith, Van Ness & Abbott, Table B.1),
@@ -356,7 +368,238 @@ def write_pip():
           f"{len(pip['soave_zero'])} CO2 states around the Soave zero")
 
 
+# Stability (m3_stability.json). Smith, Van Ness & Abbott, Table B.1, as above.
+STAB_COMPONENTS = [
+    {"name": "methane", "tc": 190.6, "pc": 45.99e5, "omega": 0.012, "mw": 0.016043},
+    {"name": "ethane", "tc": 305.3, "pc": 48.72e5, "omega": 0.100, "mw": 0.030070},
+    {"name": "propane", "tc": 369.8, "pc": 42.48e5, "omega": 0.152, "mw": 0.044097},
+    {"name": "n-butane", "tc": 425.1, "pc": 37.96e5, "omega": 0.200, "mw": 0.058123},
+    {"name": "n-pentane", "tc": 469.7, "pc": 33.70e5, "omega": 0.252, "mw": 0.072150},
+    {"name": "n-hexane", "tc": 507.6, "pc": 30.25e5, "omega": 0.301, "mw": 0.086177},
+    {"name": "n-heptane", "tc": 540.2, "pc": 27.40e5, "omega": 0.350, "mw": 0.100204},
+    {"name": "n-decane", "tc": 617.7, "pc": 21.10e5, "omega": 0.492, "mw": 0.142285},
+    {"name": "carbon dioxide", "tc": 304.2, "pc": 73.83e5, "omega": 0.224, "mw": 0.044010},
+    {"name": "nitrogen", "tc": 126.2, "pc": 34.00e5, "omega": 0.038, "mw": 0.028014},
+]
+C1, C2, C3, NC4, NC5, NC6, NC7, NC10, CO2, N2 = range(10)
+
+
+def stab_kij(i, j):
+    """Illustrative kij: CO2 and N2 with hydrocarbons, and methane with the
+    heavier ones. The tests check the algorithm, not the data."""
+    pair = {i, j}
+    if i == j:
+        return 0.0
+    if pair == {CO2, N2}:
+        return -0.02
+    if CO2 in pair:
+        return 0.12
+    if N2 in pair:
+        return 0.03
+    if C1 in pair:
+        other = (pair - {C1}).pop()
+        return {NC4: 0.02, NC10: 0.04}.get(other, 0.0)
+    return 0.0
+
+
+def stab_eos(kind, idx, zs, t, p):
+    comps = [STAB_COMPONENTS[i] for i in idx]
+    cls = PRMIX if kind == "pr" else SRKMIX
+    kij = [[stab_kij(i, j) for j in idx] for i in idx]
+    return cls(Tcs=[c["tc"] for c in comps], Pcs=[c["pc"] for c in comps], omegas=[c["omega"] for c in comps],
+               zs=zs, kijs=kij, T=t, P=p), kij
+
+
+def lnphis_stable(eos):
+    """ln phi at the root of lower Gibbs energy, as stability and reflux use."""
+    if hasattr(eos, "V_l") and hasattr(eos, "V_g"):
+        return list(eos.lnphis_l) if eos.G_dep_l < eos.G_dep_g else list(eos.lnphis_g)
+    return list(eos.lnphis_l) if hasattr(eos, "V_l") else list(eos.lnphis_g)
+
+
+def tpd(kind, idx, t, p, d, w):
+    """The normalised tangent-plane distance of composition w against a feed
+    whose d_i = ln z_i + ln phi_i(z)."""
+    eos, _ = stab_eos(kind, idx, w, t, p)
+    lp = lnphis_stable(eos)
+    return sum(wi * (math.log(wi) + lpi - di) for wi, lpi, di in zip(w, lp, d) if wi > 0)
+
+
+def brute_binary(kind, idx, t, p, z):
+    """The global minimum of tm over the whole binary composition range: a
+    scan of 4,002 compositions, linear and logistic in w1, then each local
+    minimum refined by golden-section search. It depends on no iteration, so
+    it settles stable or unstable outright. The trivial minimum at w = z
+    (tm = 0) is left out."""
+    eos, _ = stab_eos(kind, idx, z, t, p)
+    d = [math.log(zi) + lpi for zi, lpi in zip(z, lnphis_stable(eos))]
+
+    def tm_of(s):  # s is the logistic coordinate: w1 = 1/(1 + exp(-s))
+        w1 = 1.0 / (1.0 + math.exp(-s))
+        return tpd(kind, idx, t, p, d, [w1, 1.0 - w1])
+
+    grid = sorted({math.log(w / (1 - w)) for w in [(k + 0.5) / 2001 for k in range(2001)]}
+                  | {-40.0 + 80.0 * k / 2000 for k in range(2001)})
+    vals = [tm_of(s) for s in grid]
+    s_feed = math.log(z[0] / z[1])
+    best = (0.0, None)
+    for k in range(1, len(grid) - 1):
+        if vals[k] <= vals[k - 1] and vals[k] <= vals[k + 1]:
+            a, b = grid[k - 1], grid[k + 1]
+            g = (math.sqrt(5) - 1) / 2
+            c, e = b - g * (b - a), a + g * (b - a)
+            fc, fe = tm_of(c), tm_of(e)
+            for _ in range(120):
+                if fc < fe:
+                    b, e, fe = e, c, fc
+                    c = b - g * (b - a)
+                    fc = tm_of(c)
+                else:
+                    a, c, fc = c, e, fe
+                    e = a + g * (b - a)
+                    fe = tm_of(e)
+                if b - a < 1e-13 * max(1.0, abs(a)):
+                    break
+            s = 0.5 * (a + b)
+            if abs(s - s_feed) < 1e-4:
+                continue  # the trivial minimum, w = z
+            val = tm_of(s)
+            if val < best[0]:
+                w1 = 1.0 / (1.0 + math.exp(-s))
+                best = (val, [w1, 1.0 - w1])
+    return {"tm_min": best[0], "w": best[1]}
+
+
+def thermo_flash(kind, idx, t, p, z):
+    """thermo's FlashVL at the tolerance step 0's spike found it needs."""
+    comps = [STAB_COMPONENTS[i] for i in idx]
+    kij = [[stab_kij(i, j) for j in idx] for i in idx]
+    tcs, pcs, ws = [c["tc"] for c in comps], [c["pc"] for c in comps], [c["omega"] for c in comps]
+    constants = ChemicalConstantsPackage(Tcs=tcs, Pcs=pcs, omegas=ws, MWs=[c["mw"] * 1000 for c in comps],
+                                         CASs=[None] * len(comps))
+    # A PT flash doesn't use Cp; FlashVL only needs the objects.
+    cps = [HeatCapacityGas(poly_fit=(1.0, 2000.0, [0.0, 30.0])) for _ in comps]
+    correlations = PropertyCorrelationsPackage(constants, HeatCapacityGases=cps, skip_missing=True)
+    eos_cls = PRMIX if kind == "pr" else SRKMIX
+    args = dict(Tcs=tcs, Pcs=pcs, omegas=ws, kijs=kij)
+    flasher = FlashVL(constants, correlations, liquid=CEOSLiquid(eos_cls, args, HeatCapacityGases=cps),
+                      gas=CEOSGas(eos_cls, args, HeatCapacityGases=cps))
+    # At 1e-30 its substitution can end in a rounding cycle (OscillationError),
+    # so step the tolerance down until one converges; the spike found 1e-25
+    # still leaves the fugacities equal to 1e-13.
+    res, tol = None, None
+    for tol in (1e-30, 1e-25, 1e-20, 1e-13):
+        flasher.PT_SS_TOL = tol
+        try:
+            res = flasher.flash(T=t, P=p, zs=z)
+            break
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"[:200]
+    if res is None:
+        return {"phases": 0, "error": err}
+    if res.phase_count == 1:
+        return {"phases": 1, "tol": tol}
+    phases = [res.gas] + list(res.liquids) if res.gas is not None else list(res.liquids)
+    return {"phases": res.phase_count, "tol": tol, "betas": list(res.betas),
+            "compositions": [list(ph.zs) for ph in phases]}
+
+
+def stability_cases():
+    out = []
+
+    def add(kind, idx, z, t, p, brute):
+        eos, kij = stab_eos(kind, idx, z, t, p)
+        case = {"eos": kind, "components": idx, "kij": [x for row in kij for x in row], "z": z, "t": t, "p": p,
+                "thermo": thermo_flash(kind, idx, t, p, z)}
+        d = [math.log(zi) + lpi for zi, lpi in zip(z, lnphis_stable(eos))]
+        if case["thermo"]["phases"] > 1:
+            # A split with lower G is a witness: at least one of its phases
+            # has tm < 0 against the feed's tangent plane.
+            case["witness_tm"] = min(tpd(kind, idx, t, p, d, w) for w in case["thermo"]["compositions"])
+        if brute:
+            case["brute"] = brute_binary(kind, idx, t, p, z)
+            case["stable"] = case["brute"]["tm_min"] > -1e-10
+        elif case["thermo"]["phases"] == 0:
+            print("  left out, no reference:", kind, idx, z, t, p, case["thermo"]["error"])
+            return
+        else:
+            case["stable"] = case["thermo"]["phases"] == 1
+        out.append(case)
+
+    for kind in ("pr", "srk"):
+        for t in (200.0, 250.0, 300.0, 350.0, 380.0):
+            for p in (5e5, 20e5, 50e5, 80e5, 110e5, 130e5):
+                for z1 in (0.1, 0.3, 0.5, 0.7, 0.9):
+                    add(kind, [C1, NC4], [z1, 1 - z1], t, p, True)
+    for t in (300.0, 400.0, 500.0):
+        for p in (20e5, 100e5, 200e5, 300e5):
+            for z1 in (0.3, 0.6, 0.9):
+                add("pr", [C1, NC10], [z1, 1 - z1], t, p, True)
+    for t in (280.0, 320.0, 360.0, 400.0):
+        for p in (20e5, 50e5, 80e5, 100e5):
+            for z1 in (0.2, 0.5, 0.8):
+                add("pr", [CO2, NC4], [z1, 1 - z1], t, p, True)
+    # Near the methane/n-butane critical locus, where the two phases become
+    # alike and substitution crawls.
+    for t in (340.0, 350.0, 360.0):
+        for k in range(9):
+            add("pr", [C1, NC4], [0.6, 0.4], t, 116e5 + k * 2e5, True)
+    # Closer still: where substitution alone needs 100 to 465 steps to reach
+    # the trivial solution, and the second-order finish has to do the work.
+    # (z1, T, the first P in units of 0.1 bar); 11 pressures 0.1 bar apart
+    # from each. The pressures are built from integers so that they're the
+    # exact doubles 9.23e6 and so on: a few of these states are sensitive
+    # enough that an ulp decides whether the hard path is taken.
+    for z1, t, p0 in ((0.5, 380.0, 915), (0.6, 340.0, 1245), (0.7, 330.0, 1315)):
+        for k in range(11):
+            add("pr", [C1, NC4], [z1, 1 - z1], t, (p0 + k) * 1e4, True)
+    for z1, t, p in ((0.6, 370.0, 963), (0.8, 340.0, 938)):
+        add("pr", [C1, NC4], [z1, 1 - z1], t, p * 1e4, True)
+    for t in (250.0, 300.0, 350.0):
+        for p in (20e5, 50e5, 80e5):
+            for z in ([0.5, 0.3, 0.2], [0.2, 0.5, 0.3], [0.3, 0.3, 0.4]):
+                add("pr", [C1, NC4, CO2], z, t, p, False)
+    condensate = [0.70, 0.08, 0.05, 0.04, 0.03, 0.03, 0.02, 0.02, 0.02, 0.01]
+    for t in (250.0, 300.0, 350.0, 400.0, 450.0):
+        for p in (10e5, 50e5, 100e5, 150e5, 200e5, 250e5, 300e5, 350e5):
+            add("pr", list(range(10)), condensate, t, p, False)
+    return out
+
+
+def stability_fixture():
+    return {
+        "source": {
+            "generated": datetime.date.today().isoformat(),
+            "generator": "tools/gen_m3_fixtures.py",
+            "python": platform.python_version(),
+            "thermo": thermo.__version__,
+        },
+        "note": "stable is the reference verdict: the brute-force scan's where there is one (tm_min > -1e-10), "
+        "otherwise thermo's FlashVL (one phase). thermo holds FlashVL's result at PT_SS_TOL 1e-30; witness_tm "
+        "is the lowest tm of its phases against the feed. tm is normalised: sum w_i(ln w_i + ln phi_i(w) - d_i).",
+        "components": STAB_COMPONENTS,
+        "cases": stability_cases(),
+    }
+
+
+def write_stability():
+    data = stability_fixture()
+    OUT_STAB.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8", newline="\n")
+    cases = data["cases"]
+    unstable = sum(1 for c in cases if not c["stable"])
+    disagree = [c for c in cases if "brute" in c and c["thermo"]["phases"] > 0
+                and (c["thermo"]["phases"] == 1) != c["stable"]]
+    failed = sum(1 for c in cases if c["thermo"]["phases"] == 0)
+    weak = [c for c in cases if "witness_tm" in c and c["witness_tm"] >= 0]
+    print(f"wrote {OUT_STAB.relative_to(ROOT)}: {len(cases)} states, {unstable} unstable; "
+          f"thermo failed on {failed}, disagrees with the brute-force scan on {len(disagree)}; "
+          f"{len(weak)} thermo splits without a witness")
+    for c in disagree:
+        print("  disagreement:", c["eos"], c["components"], c["z"], c["t"], c["p"], c["brute"]["tm_min"], c["thermo"])
+
+
 def main():
+    write_stability()
     write_pip()
     data = cases()
     for case in data:

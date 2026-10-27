@@ -370,6 +370,64 @@ to a few ulps, β = (eᵢ − 1)/(Kᵢ − 1) carries an absolute error of about
 2e-8 when every K is within 1e-8 of 1. Mass balance doesn't suffer, because
 L·xᵢ + β·yᵢ = xᵢ·eᵢ = zᵢ holds whatever β's error.
 
+## Stability
+
+`flash.stability` ([flash/stability.v](../flash/stability.v)) is Michelsen's
+(1982) tangent-plane test. For a trial phase of mole numbers W, with
+w = W/ΣW and dᵢ = ln zᵢ + ln φᵢ(z),
+
+    tm*(W) = 1 + Σᵢ Wᵢ(ln Wᵢ + ln φᵢ(w) − dᵢ − 1).
+
+Its stationary points satisfy ln Wᵢ + ln φᵢ(w) = dᵢ. There tm* = 1 − ΣW,
+and the normalised distance tm = Σ wᵢ(ln wᵢ + ln φᵢ(w) − dᵢ) equals
+−ln ΣW. The feed is unstable when some stationary point has tm < 0, and
+then that w is the first estimate of the new phase. Every phase takes its
+volume root of lower Gibbs energy.
+
+**Trials.** One starts vapour-like (Wᵢ = zᵢKᵢ) and one liquid-like
+(Wᵢ = zᵢ/Kᵢ), with Wilson's K. A caller can add more: the phases of a split,
+to re-check it.
+
+**Successive substitution,** ln Wᵢ ← dᵢ − ln φᵢ(w), lowers tm* at every
+step. Every fifth step Michelsen's dominant-eigenvalue method extrapolates:
+with Δ the last step and λ = Δ·Δ/(Δ_prev·Δ), substitution behaves like a
+geometric series of ratio λ, and adding λ/(1 − λ) times the last step sums
+the rest. Michelsen and Mollerup keep the extrapolated point only if it
+lowers tm*. On 6,000 random states that test changed no verdict, so reflux
+doesn't make it. Without the extrapolation the reference set takes a third
+more steps and nearly three times as many second-order finishes.
+
+**The second-order finish.** After 20 steps the trial switches to Newton
+in αᵢ = 2√Wᵢ, minimising tm* itself. The gradient and Hessian are
+
+    gᵢ = √Wᵢ·rᵢ,   Hᵢⱼ = δᵢⱼ(1 + rᵢ/2) + √(WᵢWⱼ)·(n∂ln φᵢ/∂nⱼ)/ΣW,
+
+with rᵢ = ln Wᵢ + ln φᵢ − dᵢ. The δᵢⱼ term keeps H well conditioned even
+with traces. Two choices mattered, both found near the methane/n-butane
+critical locus:
+- **Minimise tm*, don't solve g = 0.** On the way to the trivial solution
+  near a critical point, tm* has a long valley whose curvature is nearly
+  zero, and ‖g‖ has dips there that aren't stationary points. A root-finder
+  (numeric.newton) stopped in them and handed the trial back to
+  substitution, which then took up to 465 steps. One state failed outright.
+- **Know f's rounding.** tm* = 1 + Σ… is a small difference of terms of
+  size 1, so its rounding is about ε, not ε·|tm*|. numeric.minimize takes
+  that as `fscale`. Where f stops showing progress it finishes on the
+  gradient (the polish), and it counts that as convergence only if the
+  unshifted Newton model agrees.
+
+On 33,600 states 0.1 bar apart near that critical locus, no trial takes
+more than 42 steps and none fails.
+
+**The trivial solution.** A trial that ends within 1e-5 of the feed in
+every ln(Wᵢ/zᵢ) is the feed itself: tm = 0, and it says nothing. It's
+flagged trivial and never offered as a new phase.
+
+**The verdict.** The feed is unstable when a non-trivial trial reaches
+tm < −1e-10. A trial that runs out of steps still proves instability that
+way, since any W with tm < 0 is a proof. If no trial does and one didn't
+converge, the result is a FlashError, not "stable".
+
 ## How CPA will fit
 
 ```v

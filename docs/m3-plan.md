@@ -349,12 +349,73 @@ flowchart LR
   to the other branch could hide a failing branch, so the critical-point
   test now requires the two roots to differ.
 
-### 3. Stability analysis
-- `flash.stability(model, t, p, z)`: TPD with the trials, successive
-  substitution with DEM, the second-order finish, and trivial-solution
-  detection (D3).
-- Tests: agreement with `thermo`'s stability test on the reference set;
-  TPD ≥ 0 at converged stable points; the trivial solution caught.
+### 3. Stability analysis — done
+- **The new `flash` module** (D1), with
+  [flash/stability.v](../flash/stability.v): `stability(model, t, p, z)`
+  for any `thermo.Model` (D2).
+  - It runs Wilson's vapour- and liquid-like trials, plus any the caller
+    passes in to re-check a split (D3).
+  - Each trial is successive substitution with DEM every fifth step. After
+    20 steps comes a second-order finish that minimises tm* in α = 2√W.
+  - A trial ending within 1e-5 of z is flagged trivial and never offered
+    as a phase. The feed is unstable when a non-trivial trial reaches
+    tm < −1e-10; a trial out of steps still proves it so.
+  - Failures are a typed `FlashError` (D7). There's also `wilson_k`, and
+    a `max_steps` option.
+- **New in `numeric`:** `cholesky`, and `minimize`, Newton minimisation
+  with a Levenberg–Marquardt shift.
+  - Each step solves (H + μI)p = −g, with μ raised until the factorisation
+    exists and f falls.
+  - Where f stops showing progress it finishes on the gradient (`fscale`
+    sets the size of f's rounding). That counts as convergence only if the
+    unshifted Newton model agrees.
+  - It reports whether the end is a minimum or a saddle.
+- **What made the finish work:** near the methane/n-butane critical locus,
+  the first version, Newton on g = 0 through `numeric.newton`, stopped in
+  dips of ‖g‖ along a flat valley of tm*.
+  - Substitution then took up to 465 steps, and one state failed.
+  - Minimising tm* itself, with `fscale` and the polish, brings 33,600
+    states 0.1 bar apart there to 0 failures and at most 42 steps.
+  - On 6,000 random PR states with 2 to 10 components, at 150–600 K and
+    1–400 bar, there are 0 failures.
+- **Tests:**
+  - **The fixture:** `testdata/m3_stability.json` has 513 states.
+    - Binaries on grids, plus 62 near the critical locus, 33 of them
+      0.1 bar apart. The pressures are exact doubles, since an ulp decides
+      the hard path.
+    - A ternary, and a 10-component gas condensate.
+    - Every binary is judged by a brute-force TPD scan over the whole
+      composition range; every state also has `thermo`'s FlashVL, which
+      agrees with all the scans.
+    - `thermo` hits rounding cycles at `PT_SS_TOL` 1e-30, so the generator
+      steps the tolerance down to 1e-25.
+  - **Verdicts:** all 513 match (166 unstable). For the binaries, the
+    lowest tm matches the scans' global minima to 1e-11 (measured: 2e-14).
+  - **Instability:** every "unstable" is proved by a TPD computed from
+    scratch at the incipient phase, which is also checked to be a
+    stationary point.
+  - **Stability:** stable feeds have no negative stationary point, trivial
+    trials are flagged and never offered, and each phase of `thermo`'s
+    splits is stable, with the other phase as a given trial at tm ≈ 0.
+  - **Running out of steps:** with no proof it's a FlashError; a negative
+    tm is still proof.
+  - **Derivatives:** the finish's gradient and Hessian are checked against
+    finite differences.
+  - **Iteration budget:** 10,850 steps and 125 finishes over 1,026 trials,
+    recorded with 5% room. Without DEM it's 14,485 and 356.
+  - **`minimize`** is tested on Rosenbrock (including from an indefinite
+    start), Wood (past its saddle), Powell's singular quartic, a domain
+    wall, a saddle, noise in f and in g, a step that raises f, and an
+    unbounded function.
+- **Planted mistakes:** 24 of 26 caught. Two survive, for stated reasons:
+  - Counting trivial trials in the verdict can't change one, since their
+    |tm| is below the threshold.
+  - Dropping `fscale` at the stability call shows only at 2 of the 33,600
+    near-critical states, and only under `gcc -prod`. The same mistake
+    inside `minimize` is caught.
+  - Three earlier survivors led to deleting Michelsen's DEM guard (no
+    effect on 6,000 states), to `max_steps` and its tests, and to the
+    derivative and budget tests.
 
 ### 4. PT flash
 - `flash.pt(model, t, p, z)`: stability, then the split (D4), returning a
