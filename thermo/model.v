@@ -161,6 +161,9 @@ fn no_root(t f64, p f64) IError {
 const volume_max_iter = 100
 const volume_rtol = 1e-12
 
+// f64_epsilon is the gap between 1.0 and the next f64, 2⁻⁵².
+const f64_epsilon = 2.220446049250313e-16
+
 // liquid_volume finds the smallest root of P(T, V, n) = p. It starts just
 // above the minimum volume, where P is huge, and walks right. P(V) is convex
 // on the liquid branch, so Newton approaches the root from the left without
@@ -181,6 +184,9 @@ fn liquid_volume(m Model, t f64, p f64, n []f64) ?f64 {
 			return none // past the liquid spinodal: the liquid branch never reaches p
 		}
 		mut dv := -(s.p - p) / s.dpdv
+		if math.abs(s.p - p) <= s.noise && math.abs(dv) > volume_rtol * v {
+			return v // rounding has the last word (see PDpdv.noise)
+		}
 		dv = math.clamp(dv, -0.5 * (v - vmin), 0.5 * (v - vmin))
 		v += dv
 		if math.abs(dv) <= volume_rtol * v {
@@ -207,6 +213,9 @@ fn vapor_volume(m Model, t f64, p f64, n []f64) ?f64 {
 			return none // past the vapor spinodal
 		}
 		mut drho := -(s.p - p) / dp_drho
+		if math.abs(s.p - p) <= s.noise && math.abs(drho) > volume_rtol * rho {
+			return v // rounding has the last word (see PDpdv.noise)
+		}
 		drho = math.clamp(drho, -0.5 * rho, math.min(0.5 * rho, 0.5 * (rho_max - rho)))
 		rho += drho
 		if math.abs(drho) <= volume_rtol * rho {
@@ -222,14 +231,25 @@ fn vapor_volume(m Model, t f64, p f64, n []f64) ?f64 {
 struct PDpdv {
 	p    f64
 	dpdv f64
+	// noise is how closely P can be computed here: a few rounding errors of
+	// its two terms, RT·n/V and RT·F_V. Normally Newton's step test is met
+	// long before. But at a critical point P(V) − p has a triple root, where
+	// dP/dV and d²P/dV² vanish too, so Newton slows to linear convergence and
+	// V is only determined to about ε^(1/3) relative. Close to one, dP/dV is
+	// tiny and V is poorly determined too. Either way rounding takes over
+	// before the step test can be met, and a residual at this level is then
+	// as converged as V can get. Without this, the solver failed on half of
+	// the states within 1e-6 of a pure component's Tc and 1e-8 of its Pc.
+	noise f64
 }
 
 fn p_dpdv(m Model, t f64, v f64, n []f64, ntot f64) PDpdv {
 	d := m.volume_derivs(t, v, n)
 	rt := r_gas * t
 	return PDpdv{
-		p:    rt * (ntot / v - d.f_v)
-		dpdv: -rt * (d.f_vv + ntot / (v * v))
+		p:     rt * (ntot / v - d.f_v)
+		dpdv:  -rt * (d.f_vv + ntot / (v * v))
+		noise: 16.0 * f64_epsilon * rt * (ntot / v + math.abs(d.f_v))
 	}
 }
 

@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["chemicals==1.5.2", "mpmath==1.3.0"]
+# dependencies = ["chemicals==1.5.2", "mpmath==1.3.0", "thermo==0.6.1"]
 # ///
 """Generate the M3 reference fixtures for reflux.
 
@@ -25,6 +25,22 @@ m3_rachford_rice.json
     records what chemicals' own Rachford-Rice solvers return, for
     comparison. The script stops if chemicals' mpmath solver disagrees with
     the reference.
+
+m3_pip.json
+    Phase identification, read by thermo/phase_test.v. Caleb Bell's `thermo`
+    computes PR and SRK states, the same models and constants as reflux,
+    for pure components and mixtures on a grid of reduced T and P that
+    crosses the saturation curve and the critical point. Each root carries
+    its molar volume and thermo's analytic phase identification parameter
+    (PIP). Pure components' exact critical points are left out, since the
+    PIP is 0/0 there. No state in the grid is past any component's Soave
+    zero, where reflux and thermo differ on purpose (see thermo/alpha.v).
+
+    It also holds pure CO2 through the point where Soave's alpha reaches
+    zero, T0 = Tc(1 + 1/m)^2, for PR and SRK, with the properties M1's
+    fixtures check. For a pure component thermo computes alpha from
+    k = 1 + m(1 - sqrt(Tr)) without dividing by it, so it's a valid
+    reference right through T0.
 """
 
 import datetime
@@ -37,10 +53,23 @@ import random
 import chemicals
 import chemicals.rachford_rice as rr
 import mpmath as mp
+import thermo
+from thermo import PR, PRMIX, SRK, SRKMIX
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT_RR = ROOT / "testdata" / "m3_rachford_rice.json"
+OUT_PIP = ROOT / "testdata" / "m3_pip.json"
 SEED = 20261027
+
+# As in tools/gen_m1_fixtures.py (Smith, Van Ness & Abbott, Table B.1),
+# plus n-decane from the same table.
+COMPONENTS = [
+    {"name": "methane", "tc": 190.6, "pc": 45.99e5, "omega": 0.012, "mw": 0.016043},
+    {"name": "n-butane", "tc": 425.1, "pc": 37.96e5, "omega": 0.200, "mw": 0.058123},
+    {"name": "carbon dioxide", "tc": 304.2, "pc": 73.83e5, "omega": 0.224, "mw": 0.044010},
+    {"name": "n-decane", "tc": 617.7, "pc": 21.10e5, "omega": 0.492, "mw": 0.142285},
+]
+KIJ = [[0.0, 0.02, 0.10, 0.04], [0.02, 0.0, 0.13, 0.0], [0.10, 0.13, 0.0, 0.11], [0.04, 0.0, 0.11, 0.0]]
 
 mp.mp.dps = 100
 
@@ -212,7 +241,123 @@ def cases():
     return out
 
 
+def soave_m(kind, omega):
+    if kind == "pr":
+        return 0.37464 + 1.54226 * omega - 0.26992 * omega * omega
+    return 0.480 + 1.574 * omega - 0.176 * omega * omega
+
+
+def eos_at(kind, idx, zs, t, p):
+    comps = [COMPONENTS[i] for i in idx]
+    if len(comps) == 1:
+        c = comps[0]
+        cls = PR if kind == "pr" else SRK
+        return cls(Tc=c["tc"], Pc=c["pc"], omega=c["omega"], T=t, P=p), [0.0]
+    cls = PRMIX if kind == "pr" else SRKMIX
+    kij = [[KIJ[i][j] for j in idx] for i in idx]
+    eos = cls(Tcs=[c["tc"] for c in comps], Pcs=[c["pc"] for c in comps],
+              omegas=[c["omega"] for c in comps], zs=zs, kijs=kij, T=t, P=p)
+    return eos, [x for row in kij for x in row]
+
+
+def roots(eos, full):
+    """Each root thermo found, with its PIP and, if full, what M1 checks."""
+    out = []
+    for suffix in ("l", "g"):
+        if not hasattr(eos, "V_" + suffix):
+            continue
+        pip = getattr(eos, "PIP_" + suffix)
+        r = {"root": "liquid" if suffix == "l" else "vapor", "v": getattr(eos, "V_" + suffix), "pip": pip,
+             "label": "liquid" if pip > 1 else "vapor"}
+        if full:
+            mixture = hasattr(eos, "zs") and len(eos.zs) > 1
+            ln_phi = getattr(eos, "lnphis_" + suffix) if mixture else [getattr(eos, "lnphi_" + suffix)]
+            r.update({"z": getattr(eos, "Z_" + suffix), "ln_phi": list(ln_phi),
+                      "h_dep": getattr(eos, "H_dep_" + suffix), "s_dep": getattr(eos, "S_dep_" + suffix),
+                      "cp_dep": getattr(eos, "Cp_dep_" + suffix)})
+        out.append(r)
+    return out
+
+
+def pip_cases():
+    systems = [([0], [1.0]), ([1], [1.0]), ([2], [1.0]), ([3], [1.0]),
+               ([0, 1], [0.6, 0.4]), ([0, 1, 2], [0.2, 0.5, 0.3]), ([0, 3], [0.7, 0.3])]
+    trs = [0.6, 0.8, 0.95, 0.99, 1.0, 1.01, 1.05, 1.2, 1.6, 2.5]
+    prs = [0.01, 0.3, 0.9, 0.99, 1.0, 1.01, 1.1, 2.0, 5.0]
+    out = []
+    for kind in ("pr", "srk"):
+        for idx, zs in systems:
+            tpc = sum(z * COMPONENTS[i]["tc"] for z, i in zip(zs, idx))
+            ppc = sum(z * COMPONENTS[i]["pc"] for z, i in zip(zs, idx))
+            for tr in trs:
+                t = tr * tpc
+                # No state past a Soave zero: there reflux and thermo differ on purpose.
+                for i in idx:
+                    c = COMPONENTS[i]
+                    t0 = c["tc"] * (1 + 1 / soave_m(kind, c["omega"])) ** 2
+                    assert t < 0.9 * t0, (kind, c["name"], t, t0)
+                for pr in prs:
+                    if len(idx) == 1 and tr == 1.0 and pr == 1.0:
+                        # A pure component's critical point: dP/dV and d2P/dV2 are both
+                        # zero, so the PIP is 0/0 there, and any label is arbitrary.
+                        continue
+                    eos, kij = eos_at(kind, idx, zs, t, pr * ppc)
+                    out.append({"eos": kind, "components": idx, "kij": kij, "n": zs, "t": t, "p": pr * ppc,
+                                "roots": roots(eos, False)})
+        # Liquids squeezed to within 0.02% to 2.5% of the covolume (V/b from
+        # 1.0002 to 1.025). Not physical pressures, but they test that the
+        # PIP's volume step scales with V - b, not V.
+        for idx in ([1], [3]):
+            t = 0.6 * COMPONENTS[idx[0]]["tc"]
+            for p in (1e9, 1e10, 1e11):
+                eos, kij = eos_at(kind, idx, [1.0], t, p)
+                out.append({"eos": kind, "components": idx, "kij": kij, "n": [1.0], "t": t, "p": p,
+                            "roots": roots(eos, False)})
+    return out
+
+
+def soave_zero_cases():
+    out = []
+    co2 = COMPONENTS[2]
+    for kind in ("pr", "srk"):
+        t0 = co2["tc"] * (1 + 1 / soave_m(kind, co2["omega"])) ** 2
+        for ratio in (0.9, 0.99, 0.999, 1.0, 1.001, 1.01, 1.1, 1.5):
+            for p in (1e5, 1e6, 1e7):
+                eos, _ = eos_at(kind, [2], [1.0], ratio * t0, p)
+                out.append({"eos": kind, "components": [2], "kij": [0.0], "n": [1.0], "t": ratio * t0, "p": p,
+                            "t0": t0, "roots": roots(eos, True)})
+    return out
+
+
+def pip_fixture():
+    return {
+        "source": {
+            "generated": datetime.date.today().isoformat(),
+            "generator": "tools/gen_m3_fixtures.py",
+            "python": platform.python_version(),
+            "thermo": thermo.__version__,
+        },
+        "note": "thermo's PR and SRK with these constants and kij. Each root: molar volume v (m3/mol), thermo's "
+        "analytic PIP, and its label (liquid when PIP > 1). soave_zero is pure CO2 around T0 = Tc(1 + 1/m)^2, "
+        "where Soave's alpha is zero, with Z, ln phi and the departures (J/mol, J/(mol K)) as in M1.",
+        "components": COMPONENTS,
+        "cases": pip_cases(),
+        "soave_zero": soave_zero_cases(),
+    }
+
+
+def write_pip():
+    pip = pip_fixture()
+    OUT_PIP.write_text(json.dumps(pip, indent=1) + "\n", encoding="utf-8", newline="\n")
+    labels = [r["label"] for c in pip["cases"] for r in c["roots"]]
+    near = sum(1 for c in pip["cases"] for r in c["roots"] if abs(r["pip"] - 1) < 1e-6)
+    print(f"wrote {OUT_PIP.relative_to(ROOT)}: {len(pip['cases'])} states, {len(labels)} roots "
+          f"({labels.count('liquid')} liquid, {labels.count('vapor')} vapour, {near} within 1e-6 of PIP = 1); "
+          f"{len(pip['soave_zero'])} CO2 states around the Soave zero")
+
+
 def main():
+    write_pip()
     data = cases()
     for case in data:
         case["reference"] = reference(case["z"], case["k"])

@@ -128,6 +128,42 @@ loop onto the other branch. Each returns `none` (a V Option) when its branch
 doesn't reach the requested pressure. For cubics the tests check both
 against the polynomial roots from `Cubic.z_roots`, over a grid of T and P.
 
+**Near a critical point** the iterations stop on the residual instead. At
+(Tc, Pc), P(V) − p has a triple root: dP/dV and d²P/dV² vanish there too.
+Newton then converges only linearly, and rounding limits V to about ε^(1/3),
+roughly 1e-5 relative. Close to the critical point dP/dV is merely tiny,
+with the same effect. So once |P − p| is down to a few rounding errors of
+P's own terms, 16ε·RT(n/V + |F_V|), and the Newton step still isn't below
+1e-12, the volume is as converged as it can get and is returned. Elsewhere
+the step test is met first, and nothing changes. M3 found this: before it,
+the solver failed on 276 of 528 requests within 1e-6 of a pure component's
+Tc and 1e-8 of its Pc. At the critical point itself, the liquid iteration
+now stops just below Vc and the vapour one just above.
+
+## Phase identification
+
+`thermo.pip` ([thermo/phase.v](../thermo/phase.v)) is the phase
+identification parameter of Venkatarathnam and Oellrich (2011):
+
+    Π = V·[(∂²P/∂T∂V)/(∂P/∂T) − (∂²P/∂V²)/(∂P/∂V)]
+
+`phase_label` calls a single phase liquid when Π > 1 and vapour otherwise,
+as Caleb Bell's `thermo` does. It needs no saturation curve or critical
+point, so it works for any mixture, supercritical ones included.
+
+∂P/∂V and ∂P/∂T are analytic. The second derivatives are third derivatives
+of F, which the `Model` contract doesn't have, so they're central
+differences of the analytic first ones (D6). ∂²P/∂V² is differenced in V,
+with a step of 1e-5·(V − V_min) so that a liquid squeezed against its
+covolume still gets a small enough step. ∂²P/∂T∂V is differenced in T, with
+a step of 1e-5·T, as the T-derivative of ∂P/∂V. Π then agrees with
+`thermo`'s analytic value to about 5e-9.
+
+At a pure component's exact critical point ∂P/∂V and ∂²P/∂V² are both zero,
+so Π is 0/0 and no label means anything. In a two-phase split the flash
+labels by density instead, the less dense phase being the vapour, because
+Π can call both phases liquid-like. (`thermo` then calls both liquids.)
+
 ## Derivatives
 
 Each model writes its derivatives analytically. The tests make that safe:
@@ -190,12 +226,13 @@ is d/dT:
 | D_TT | 2Σᵢ nᵢ(s″ᵢqᵢ + s′ᵢrᵢ) |
 
 The symmetric forms need kᵢⱼ = kⱼᵢ, which `new_cubic` enforces. Since
-sᵢ² = a_c,i·αᵢ(Tr), the s derivatives come from the α function:
+sᵢ = √a_c,i·√αᵢ(Tr), the s derivatives come from the square root of α,
+with no division:
 
-    s′ = a_c·α_T / (2s),   s″ = (a_c·α_TT/2 − s′²) / s,
-    α_T = α′/Tc,   α_TT = α″/Tc²
+    s′ = √a_c·(√α)′/Tc,   s″ = √a_c·(√α)″/Tc²
 
-where α′ and α″ are taken with respect to Tr.
+where the primes on √α are taken with respect to Tr (`Alpha.root`; see
+"Through the Soave zero" below).
 
 **F.** Writing RT for R·T:
 
@@ -237,9 +274,26 @@ default (`truncated`) keeps only c₁, as in the original paper and in
 `thermo`. At Tr = 1, u = 0, so α and α′ are continuous, but α″ drops by
 exactly c₂, and Cp steps with it. `truncated: false` gives the smooth form.
 
-**A caveat.** At very high Tr the Soave form passes through k = 0, which
-makes α = 0, and s′ divides by s there. It's unphysical territory anyway
-(roughly Tr > 5 for typical m), and the Twu α is the physical fix.
+**Through the Soave zero.** At Tr = (1 + 1/m)² the Soave form reaches
+k = 0, so α = 0. With PR that's about 1,400 K for nitrogen and 2,400 K for
+methane, so a furnace or a reformer gets there. Building s as √(a_c·α) and
+dividing by it for s′ and s″ would give 0/0 at that point. So each α
+function also returns its square root, `Alpha.root`. For the forms written
+as α = k² (Soave, PRSV, Mathias–Copeman) that's k itself, signed, and
+
+    s = √a_c·k,   s′ = √a_c·k′/Tc,   s″ = √a_c·k″/Tc²,
+
+with no division at all. The other forms take √α directly: Tr^(−1/4) for
+1/√Tr, and exp(½ ln α) for Twu, with (√α)′ = √α·½(ln α)′.
+
+Past the zero k is negative and α = k² rises again, as the published form
+does, and a pure component is unchanged. A mixture's cross term
+(1 − kᵢⱼ)sᵢsⱼ turns negative while only one of the pair has passed its
+zero. Taking |k| instead, as `thermo` does, would put a kink in a(T) and a
+step in Hʳ at the zero; the signed root keeps everything smooth. Neither is
+physical: Soave's α isn't meant for such Tr. The Twu α, which stays positive
+and keeps falling, is the one to use for components that far above their
+Tc.
 
 ## Volume shift
 

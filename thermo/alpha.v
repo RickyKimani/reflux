@@ -102,18 +102,59 @@ pub fn (a Alpha) eval(tr f64) (f64, f64, f64) {
 			sq := math.sqrt(tr)
 			return 1.0 / sq, -0.5 / (tr * sq), 0.75 / (tr * tr * sq)
 		}
+		Twu {
+			alpha, g1, g2 := a.ln_derivs(tr)
+			return alpha, alpha * g1, alpha * (g2 + g1 * g1)
+		}
+		// One branch for three variants: `a` stays an Alpha here, with no
+		// smart cast, which is all a.root needs.
+		Soave, Prsv, MathiasCopeman {
+			k, dk, d2k := a.root(tr)
+			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
+		}
+	}
+}
+
+// root returns √α, d√α/dTr and d²√α/dTr². cubic.v builds √aᵢ from it, so
+// nothing divides by √α.
+//
+// Soave, PRSV and Mathias–Copeman are written as α = k², and for them √α is
+// k itself, signed. Soave's k = 1 + m(1 − √Tr) reaches zero at
+// Tr = (1 + 1/m)², about 11 for nitrogen with PR (1,400 K) and 12.6 for
+// methane (2,400 K). Through that point k passes smoothly through zero, and
+// α = k² touches zero and rises again, as the published form does. Taking
+// √α = |k| instead would put a kink in √aᵢ there, and so in a mixture's
+// a(T) and a jump in its enthalpy. One consequence past the zero: a cross
+// term (1 − kᵢⱼ)·√aᵢ·√aⱼ is negative while only one of the pair has passed
+// its zero. Caleb Bell's `thermo` takes |k|, so the two differ there, and
+// only there. Neither is physical: Soave's α isn't meant for such Tr, and
+// Twu's α, which stays positive and keeps falling, is the one to use.
+pub fn (a Alpha) root(tr f64) (f64, f64, f64) {
+	match a {
+		Unity {
+			return 1.0, 0.0, 0.0
+		}
+		InvSqrtTr {
+			// √α = Tr^(−1/4).
+			q := 1.0 / math.sqrt(math.sqrt(tr))
+			return q, -0.25 * q / tr, 0.3125 * q / (tr * tr)
+		}
+		Twu {
+			// ln √α = ½ ln α, so (√α)′ = √α·½(ln α)′ and
+			// (√α)″ = √α·[½(ln α)″ + ¼(ln α)′²].
+			alpha, g1, g2 := a.ln_derivs(tr)
+			r := math.sqrt(alpha)
+			return r, 0.5 * r * g1, r * (0.5 * g2 + 0.25 * g1 * g1)
+		}
 		Soave {
 			// Inside this branch `a` is a Soave, so a.m is accessible:
 			// a smart cast, like a Go type switch variable.
 			sq := math.sqrt(tr)
-			k := 1.0 + a.m * (1.0 - sq)
-			dk := -a.m / (2.0 * sq)
-			d2k := a.m / (4.0 * tr * sq)
-			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
+			return 1.0 + a.m * (1.0 - sq), -a.m / (2.0 * sq), a.m / (4.0 * tr * sq)
 		}
 		Prsv {
 			sq := math.sqrt(tr)
-			// κ = κ₀ + κ₁·h(Tr) and α = k², with k = 1 + κ·u(Tr).
+			// κ = κ₀ + κ₁·h(Tr) and k = 1 + κ·u(Tr).
 			h := (1.0 + sq) * (0.7 - tr)
 			dh := (0.7 - tr) / (2.0 * sq) - (1.0 + sq)
 			d2h := -1.0 / sq - (0.7 - tr) / (4.0 * tr * sq)
@@ -123,20 +164,8 @@ pub fn (a Alpha) eval(tr f64) (f64, f64, f64) {
 			u := 1.0 - sq
 			du := -1.0 / (2.0 * sq)
 			d2u := 1.0 / (4.0 * tr * sq)
-			k := 1.0 + kappa * u
-			dk := dkappa * u + kappa * du
-			d2k := d2kappa * u + 2.0 * dkappa * du + kappa * d2u
-			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
-		}
-		Twu {
-			// Work with ln α = N(M−1)·ln Tr + L(1 − Tr^(NM)); then
-			// α′ = α·(ln α)′ and α″ = α·[(ln α)″ + (ln α)′²].
-			nm := a.n * a.m
-			trp := math.pow(tr, nm)
-			alpha := math.pow(tr, a.n * (a.m - 1.0)) * math.exp(a.l * (1.0 - trp))
-			g1 := a.n * (a.m - 1.0) / tr - a.l * nm * trp / tr
-			g2 := -a.n * (a.m - 1.0) / (tr * tr) - a.l * nm * (nm - 1.0) * trp / (tr * tr)
-			return alpha, alpha * g1, alpha * (g2 + g1 * g1)
+			return 1.0 + kappa * u, dkappa * u + kappa * du, d2kappa * u + 2.0 * dkappa * du +
+				kappa * d2u
 		}
 		MathiasCopeman {
 			sq := math.sqrt(tr)
@@ -145,12 +174,20 @@ pub fn (a Alpha) eval(tr f64) (f64, f64, f64) {
 			d2u := 1.0 / (4.0 * tr * sq)
 			// Above Tc the truncated form keeps only c₁.
 			c2, c3 := if a.truncated && tr >= 1.0 { 0.0, 0.0 } else { a.c2, a.c3 }
-			k := 1.0 + u * (a.c1 + u * (c2 + u * c3))
 			dk_du := a.c1 + u * (2.0 * c2 + 3.0 * c3 * u)
 			d2k_du2 := 2.0 * c2 + 6.0 * c3 * u
-			dk := dk_du * du
-			d2k := d2k_du2 * du * du + dk_du * d2u
-			return k * k, 2.0 * k * dk, 2.0 * (dk * dk + k * d2k)
+			return 1.0 + u * (a.c1 + u * (c2 + u * c3)), dk_du * du, d2k_du2 * du * du + dk_du * d2u
 		}
 	}
+}
+
+// ln_derivs returns Twu's α with (ln α)′ and (ln α)″, from
+// ln α = N(M−1)·ln Tr + L(1 − Tr^(NM)). eval and root both build on them.
+fn (a Twu) ln_derivs(tr f64) (f64, f64, f64) {
+	nm := a.n * a.m
+	trp := math.pow(tr, nm)
+	alpha := math.pow(tr, a.n * (a.m - 1.0)) * math.exp(a.l * (1.0 - trp))
+	g1 := a.n * (a.m - 1.0) / tr - a.l * nm * trp / tr
+	g2 := -a.n * (a.m - 1.0) / (tr * tr) - a.l * nm * (nm - 1.0) * trp / (tr * tr)
+	return alpha, g1, g2
 }

@@ -301,10 +301,53 @@ flowchart LR
   the window arithmetic, and a second formula for L. That code was
   deleted, and the xtol test was added.
 
-### 2. Phase identification and the Soave guard
-- `thermo`: PIP (D6), and Soave α through its square root (D11).
-- Tests: PIP labels match `thermo`'s; α stays finite and smooth through its
-  zero; M1's fixtures are unchanged.
+### 2. Phase identification and the Soave guard — done
+- **The Soave guard (D11)** is in [thermo/alpha.v](../thermo/alpha.v) and
+  [thermo/cubic.v](../thermo/cubic.v).
+  - `Alpha.root` returns √α and its derivatives: k itself, signed, for the
+    α = k² forms (Soave, PRSV, Mathias–Copeman).
+  - `sqrt_a` builds sᵢ = √a_c·k from it, with no division, so the old 0/0
+    at the zero is gone.
+  - Soave's zero falls at about 1,400 K for N₂ and 2,400 K for CH₄ with
+    PR.
+  - Past it, a pure component is the published α = k². A mixture's cross
+    term goes negative instead of taking `thermo`'s |k|, which would kink
+    a(T) and make Hʳ jump. This is documented, with Twu as the α to use.
+- **PIP (D6)** is in [thermo/phase.v](../thermo/phase.v).
+  - `pip` uses analytic ∂P/∂V and ∂P/∂T, and central differences for the
+    second derivatives. The V step scales with V − V_min.
+  - `phase_label` returns liquid when Π > 1, as `thermo` does.
+- **A volume-solver fix**, found here, in
+  [thermo/model.v](../thermo/model.v).
+  - At (Tc, Pc), P(V) − p has a triple root, so Newton slows to linear
+    convergence and rounding limits V to about 1e-5. M1's solver failed
+    there, and on 276 of 528 requests within 1e-6 of Tc and 1e-8 of Pc.
+  - It now stops once the residual is at P's rounding floor and the step
+    test can't be met. Elsewhere nothing changes.
+- **Tests:**
+  - `testdata/m3_pip.json` comes from
+    [tools/gen_m3_fixtures.py](../tools/gen_m3_fixtures.py) and `thermo`
+    0.6.1: 1,327 PR and SRK roots, pure and mixed, across saturation and
+    the critical point, plus liquids within 0.02% of the covolume.
+    - Volumes agree to 1e-9 (1.8e-11 measured), PIP to 1e-7 (5e-9
+      measured), and every label is the same.
+    - Pure components' exact critical points are left out, since Π is 0/0
+      there.
+  - Pure CO₂ from 0.9 to 1.5 times its Soave zero matches `thermo` to
+    1e-9 (Z, ln φ, Hʳ, Sʳ, Cpʳ). For a pure component `thermo`'s α has no
+    division, so it's a valid reference there.
+  - A mixture with a component exactly at its zero (m = 0.5, Tr = 9)
+    stays finite, and its F_T and F_TT match central differences.
+  - `root` is checked against `eval` and against finite differences for
+    every α form.
+  - At every critical point the liquid and vapour roots straddle Vc within
+    1e-4, and all 528 states around them solve.
+  - M1's fixtures are unchanged.
+- **Planted mistakes:** 16 of 16 caught. Two survivors along the way led
+  to the compressed-liquid states and to dropping a redundant second exit
+  in the volume solver. The same exercise found that `solve_tp`'s fallback
+  to the other branch could hide a failing branch, so the critical-point
+  test now requires the two roots to differ.
 
 ### 3. Stability analysis
 - `flash.stability(model, t, p, z)`: TPD with the trials, successive

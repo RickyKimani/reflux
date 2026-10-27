@@ -329,7 +329,13 @@ pub fn (a Alpha) eval(tr f64) (f64, f64) {
 - You can define methods on the sum type itself. Go can't put methods on
   an interface.
 - `match` and `if` are **expressions**, so they can return a value. Go has
-  no ternary, but V's `x := if c { a } else { b }` does the same job.
+  no ternary, but V's `x := if c { a } else { b }` does the same job. They
+  can return several, too: `c2, c3 := if truncated { 0.0, 0.0 } else { a.c2, a.c3 }`
+  (`MathiasCopeman` in alpha.v).
+- **One branch can take several variants**, `Soave, Prsv, MathiasCopeman { … }`,
+  like a Go `case A, B:`. There's no smart cast in such a branch, since `a`
+  could be any of them, so it stays an `Alpha`. That's enough for `eval`,
+  which only calls `a.root(tr)` there.
 
 Rule of thumb: interface when others will add implementations, sum type
 when you own the list and want the compiler to check you've handled every
@@ -714,18 +720,15 @@ and a rounded value is never a tie. Plain `${x}` (shortest round-trip,
 `f64.str()`) is V's own code and was never affected, which is why the
 component files always matched.
 
-**An `if` can't produce two values.** Go has no `if` expressions at all;
-V has them, but a branch yields one value, not a tuple, so
-`beta, liquid := if t <= s { a, b } else { c, d }` doesn't compile.
-[numeric/rachford_rice.v](../numeric/rachford_rice.v) declares both first
-and assigns them in each branch.
-
-**A result is forwarded with `!`, never as is.** In Go,
-`return solve()` passes a `(T, error)` pair straight through. In V,
-`return s.line_search()` from a function returning `!NewtonSolution` is a
-compile error. It has to be `return s.line_search()!`, which returns the
-value or propagates the error unchanged, a custom `NewtonError` included
-([numeric/newton.v](../numeric/newton.v)).
+**Inside a `match` or `if` expression, a result needs its `!`.** A plain
+`return solve()` forwards a `!T` straight through, as Go's `return solve()`
+forwards a `(T, error)` pair. But each arm of
+`return match method { .line_search { s.line_search() } … }` is an
+expression, not a return, and V refuses a bare result there. It has to be
+`s.line_search()!`, which yields the value or propagates the error
+unchanged, a custom `NewtonError` included
+([numeric/newton.v](../numeric/newton.v)). The same goes for
+`return if c { f() } else { g() }`.
 
 **Function types can take `mut` parameters**, so a callback can fill
 buffers the caller owns, with no allocation and no pointers:

@@ -319,6 +319,10 @@ fn (c Cubic) vb_terms(v f64, bb f64) VbTerms {
 
 // sqrt_a returns sᵢ = √aᵢ(T) for every component, with ds/dT and d²s/dT².
 // Working with s instead of a makes aᵢⱼ = (1 − kᵢⱼ)·sᵢ·sⱼ.
+//
+// s comes straight from α's square root, sᵢ = √a_c,i·√αᵢ, rather than as
+// √(a_c,i·αᵢ) with derivatives that divide by it. Soave's α reaches zero
+// at high Tr, and there the division was 0/0 (see Alpha.root).
 fn (c Cubic) sqrt_a(t f64) ([]f64, []f64, []f64) {
 	nc := c.comps.len
 	mut s := []f64{len: nc}
@@ -326,10 +330,11 @@ fn (c Cubic) sqrt_a(t f64) ([]f64, []f64, []f64) {
 	mut s_tt := []f64{len: nc}
 	for i in 0 .. nc {
 		tc := c.comps[i].tc
-		alpha, d1, d2 := c.alphas[i].eval(t / tc)
-		s[i] = math.sqrt(c.ac[i] * alpha)
-		s_t[i] = c.ac[i] * d1 / tc / (2.0 * s[i])
-		s_tt[i] = (0.5 * c.ac[i] * d2 / (tc * tc) - s_t[i] * s_t[i]) / s[i]
+		r, d1, d2 := c.alphas[i].root(t / tc)
+		sqrt_ac := math.sqrt(c.ac[i])
+		s[i] = sqrt_ac * r
+		s_t[i] = sqrt_ac * d1 / tc
+		s_tt[i] = sqrt_ac * d2 / (tc * tc)
 	}
 	return s, s_t, s_tt
 }
