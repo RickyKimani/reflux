@@ -8,7 +8,9 @@ Run from the repository root:
 
     uv run tools/gen_m3_fixtures.py
 
-It writes to testdata/:
+It writes to testdata/ the files below. To write only some of them, name
+them: `uv run tools/gen_m3_fixtures.py thermo stability` (the others are
+pip and rachford_rice).
 
 m3_rachford_rice.json
     Rachford-Rice splits for fixed K-values, read by
@@ -51,6 +53,30 @@ m3_stability.json
     the verdict, independent of any iteration. Every state also records
     thermo's FlashVL result (its stability test plus split), and for a split
     the lowest tm of its phases against the feed, which must be negative.
+
+m3_thermo.json
+    The flash references, read by flash/thermo_test.v now and by the tests
+    of the PH, PS, TV, UV and vapour-fraction flashes to come. thermo's PR
+    (and SRK for one binary), with the stability components plus isobutane,
+    and a shared ideal-gas Cp: a quadratic in T, which thermo takes as a
+    poly_fit and reflux as a Polynomial, so total H and S compare as exactly
+    as the departures do.
+
+    - pt: PT flashes of binaries, the ternary, the gas condensate, states
+      near the methane/n-butane critical locus, pure components and a
+      narrow-boiling n-butane/isobutane mixture. Each has the split (phases
+      sorted by molar volume, the vapour first) with its fugacity residual,
+      and molar V, H, S and U. These are the specifications the other
+      flashes are given, and the PT state is the answer they must recover.
+      Each case also records what thermo's own PH, PS and TV flashes return
+      from those values, or the error they raise: thermo 0.6.1's FlashVL
+      fails on PS and TV and on vapour fractions strictly between 0 and 1
+      (an unbound local in flash_vl.py), so the PT state is the reference.
+    - saturation: pure components at a given P or T and vapour fraction,
+      from FlashPureVLS, which covers what no PT flash can: a pure
+      component's two-phase states.
+    - boundaries: bubble and dew points of the mixtures at a given P or T,
+      with the incipient phase.
 """
 
 import datetime
@@ -59,18 +85,21 @@ import math
 import pathlib
 import platform
 import random
+import sys
 
 import chemicals
 import chemicals.rachford_rice as rr
 import mpmath as mp
 import thermo
-from thermo import (PR, PRMIX, SRK, SRKMIX, CEOSGas, CEOSLiquid, ChemicalConstantsPackage, FlashVL,
+from thermo import (PR, PRMIX, SRK, SRKMIX, CEOSGas, CEOSLiquid, ChemicalConstantsPackage, FlashPureVLS, FlashVL,
                     HeatCapacityGas, PropertyCorrelationsPackage)
+from thermo.phases import Phase
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT_RR = ROOT / "testdata" / "m3_rachford_rice.json"
 OUT_PIP = ROOT / "testdata" / "m3_pip.json"
 OUT_STAB = ROOT / "testdata" / "m3_stability.json"
+OUT_THERMO = ROOT / "testdata" / "m3_thermo.json"
 SEED = 20261027
 
 # As in tools/gen_m1_fixtures.py (Smith, Van Ness & Abbott, Table B.1),
@@ -598,9 +627,369 @@ def write_stability():
         print("  disagreement:", c["eos"], c["components"], c["z"], c["t"], c["p"], c["brute"]["tm_min"], c["thermo"])
 
 
-def main():
-    write_stability()
-    write_pip()
+# Flash references (m3_thermo.json): the stability components plus
+# isobutane (Smith, Van Ness & Abbott, Table B.1), each with an ideal-gas
+# Cp/R = A + B T + C T^2 after the same book's Table C.1. N2 and CO2 drop
+# their D/T^2 term, and n-decane, which the table lacks, is n-heptane plus
+# three CH2 increments (n-heptane minus n-hexane). As with the kij, the tests
+# check the algorithm, not the data. The fixture stores Cp itself, in
+# J/(mol K), so both programs read the same floats whichever R made them.
+R_GAS = 8.314462618
+CP_OVER_R = {
+    "methane": (1.702, 9.081e-3, -2.164e-6),
+    "ethane": (1.131, 19.225e-3, -5.561e-6),
+    "propane": (1.213, 28.785e-3, -8.824e-6),
+    "n-butane": (1.935, 36.915e-3, -11.402e-6),
+    "n-pentane": (2.464, 45.351e-3, -14.111e-6),
+    "n-hexane": (3.025, 53.722e-3, -16.791e-6),
+    "n-heptane": (3.570, 62.127e-3, -19.486e-6),
+    "n-decane": (5.205, 87.342e-3, -27.571e-6),
+    "carbon dioxide": (5.457, 1.045e-3, 0.0),
+    "nitrogen": (3.280, 0.593e-3, 0.0),
+    "isobutane": (1.677, 37.853e-3, -11.945e-6),
+}
+FLASH_COMPONENTS = [
+    dict(c, cp=[R_GAS * a for a in CP_OVER_R[c["name"]]])
+    for c in STAB_COMPONENTS + [{"name": "isobutane", "tc": 408.1, "pc": 36.48e5, "omega": 0.181, "mw": 0.058123}]
+]
+IC4 = 10
+CONDENSATE = [0.70, 0.08, 0.05, 0.04, 0.03, 0.03, 0.02, 0.02, 0.02, 0.01]
+
+
+def flash_kij(i, j):
+    """stab_kij, with isobutane taking n-butane's values, and 0 with n-butane."""
+    a, b = (NC4 if i == IC4 else i), (NC4 if j == IC4 else j)
+    return 0.0 if a == b else stab_kij(a, b)
+
+
+def flasher_for(kind, idx):
+    """thermo's flasher for these components: FlashPureVLS for one, FlashVL
+    for a mixture. Returns it with the kij matrix, flattened."""
+    comps = [FLASH_COMPONENTS[i] for i in idx]
+    kij = [[flash_kij(i, j) for j in idx] for i in idx]
+    # poly_fit takes the coefficients highest power first. 50 to 3000 K
+    # covers every state, so thermo never extrapolates.
+    cps = [HeatCapacityGas(poly_fit=(50.0, 3000.0, list(reversed(c["cp"])))) for c in comps]
+    return make_flasher(PRMIX if kind == "pr" else SRKMIX, comps, kij, cps), [x for row in kij for x in row]
+
+
+def make_flasher(eos_cls, comps, kij, cps=None):
+    """thermo's flasher with this equation of state, constants (Tc, Pc,
+    omega and M in kg/mol) and kij matrix: FlashPureVLS for one component,
+    FlashVL for a mixture. Without cps it gets a constant Cp, which PT,
+    bubble and dew flashes never use."""
+    tcs, pcs, ws = [c["tc"] for c in comps], [c["pc"] for c in comps], [c["omega"] for c in comps]
+    constants = ChemicalConstantsPackage(Tcs=tcs, Pcs=pcs, omegas=ws, MWs=[c["mw"] * 1000 for c in comps],
+                                         CASs=[None] * len(comps))
+    if cps is None:
+        cps = [HeatCapacityGas(poly_fit=(1.0, 3000.0, [0.0, 30.0])) for _ in comps]
+    correlations = PropertyCorrelationsPackage(constants, HeatCapacityGases=cps, skip_missing=True)
+    args = dict(Tcs=tcs, Pcs=pcs, omegas=ws, kijs=kij)
+    liquid = CEOSLiquid(eos_cls, args, HeatCapacityGases=cps)
+    gas = CEOSGas(eos_cls, args, HeatCapacityGases=cps)
+    if len(comps) == 1:
+        f = FlashPureVLS(constants, correlations, gas=gas, liquids=[liquid], solids=[])
+        f.PVF_xtol = f.TVF_xtol = f.TPV_HSGUA_xtol = 1e-14
+    else:
+        f = FlashVL(constants, correlations, liquid=liquid, gas=gas)
+        f.DEW_BUBBLE_QUASI_NEWTON_XTOL = 1e-14
+        f.DEW_BUBBLE_NEWTON_XTOL = 1e-14
+        # Every other flash type runs PT flashes inside it, at this tolerance.
+        f.PT_SS_TOL = 1e-30
+    return f
+
+
+def thermo_pt(f, t, p, z):
+    """A PT flash, stepping FlashVL's tolerance down from 1e-30 as in
+    thermo_flash. Returns the result and the tolerance, or the error. The
+    flasher is left at 1e-30, so that what runs next doesn't depend on the
+    order of the cases."""
+    if isinstance(f, FlashPureVLS):
+        return f.flash(T=t, P=p, zs=z), None
+    err = None
+    try:
+        for tol in (1e-30, 1e-25, 1e-20, 1e-13):
+            f.PT_SS_TOL = tol
+            try:
+                return f.flash(T=t, P=p, zs=z), tol
+            except Exception as e:
+                err = f"{type(e).__name__}: {e}"[:200]
+    finally:
+        f.PT_SS_TOL = 1e-30
+    raise RuntimeError(err)
+
+
+def by_volume(res):
+    """A result's phases, the least dense first, each with its fraction."""
+    pairs = list(zip(res.betas, res.phases))
+    return sorted(pairs, key=lambda bp: -bp[1].V())
+
+
+def fugacity_residual(a, b):
+    """max |ln f_i(a) - ln f_i(b)| over the components in both phases."""
+    return max(abs(math.log(x) + lx - math.log(y) - ly)
+               for x, lx, y, ly in zip(a.zs, a.lnphis(), b.zs, b.lnphis()) if x > 0 and y > 0)
+
+
+def describe(res):
+    """A thermo result as the fixture stores it: each phase (fraction,
+    composition, molar V, H and S, and thermo's label for it), the
+    mixture's molar V, H, S and U, and the fugacity residual of a split."""
+    pairs = by_volume(res)
+    out = {
+        "phases": [{"fraction": beta, "z": list(ph.zs), "v": ph.V(), "h": ph.H(), "s": ph.S(),
+                    "label": "vapor" if ph is res.gas else "liquid"} for beta, ph in pairs],
+        "v": res.V(), "h": res.H(), "s": res.S(), "u": res.U(),
+    }
+    if len(pairs) == 2:
+        out["residual"] = fugacity_residual(pairs[0][1], pairs[1][1])
+    return out
+
+
+def landing(f, z, **spec):
+    """Where thermo's own flash lands for this specification, or its error."""
+    try:
+        res = f.flash(zs=z, **spec)
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"[:120]}
+    pairs = by_volume(res)
+    return {"t": res.T, "p": res.P, "phases": len(pairs), "beta": pairs[0][0]}
+
+
+def flash_pt_cases():
+    out = []
+
+    def add(kind, idx, z, t, p):
+        f, kij = flasher_for(kind, idx)
+        res, tol = thermo_pt(f, t, p, z)
+        state = describe(res)
+        case = {"eos": kind, "components": idx, "kij": kij, "z": z, "t": t, "p": p, "tol": tol, **state}
+        case["thermo"] = {"ph": landing(f, z, P=p, H=state["h"]), "ps": landing(f, z, P=p, S=state["s"]),
+                          "tv": landing(f, z, T=t, V=state["v"])}
+        out.append(case)
+
+    for t in (250.0, 300.0, 350.0):
+        for p in (5e5, 30e5, 60e5, 100e5):
+            for z1 in (0.3, 0.6):
+                add("pr", [C1, NC4], [z1, 1 - z1], t, p)
+    for t, p in ((300.0, 30e5), (300.0, 60e5), (350.0, 30e5)):
+        add("srk", [C1, NC4], [0.5, 0.5], t, p)
+    for t in (300.0, 360.0):
+        for p in (30e5, 60e5):
+            add("pr", [CO2, NC4], [0.5, 0.5], t, p)
+    for t in (300.0, 450.0):
+        for p in (50e5, 200e5):
+            add("pr", [C1, NC10], [0.6, 0.4], t, p)
+    for t, p in ((120.0, 10e5), (150.0, 20e5), (150.0, 40e5)):
+        add("pr", [N2, C1], [0.3, 0.7], t, p)
+    for t, p in ((250.0, 20e5), (300.0, 50e5), (350.0, 80e5)):
+        add("pr", [C1, NC4, CO2], [0.5, 0.3, 0.2], t, p)
+    for t in (300.0, 400.0):
+        for p in (50e5, 100e5, 200e5, 350e5):
+            add("pr", list(range(10)), CONDENSATE, t, p)
+    # Near the methane/n-butane critical locus, from the stability fixture's
+    # states 0.1 bar apart (exact doubles, as there).
+    for k in (0, 3, 6, 9):
+        add("pr", [C1, NC4], [0.6, 0.4], 340.0, (1245 + k) * 1e4)
+    # Pure components: liquid, vapour and supercritical states.
+    for t in (250.0, 300.0, 350.0, 450.0):
+        for p in (1e5, 5e5, 20e5, 50e5):
+            add("pr", [NC4], [1.0], t, p)
+    for t in (280.0, 310.0):
+        for p in (50e5, 80e5):
+            add("pr", [CO2], [1.0], t, p)
+    # Narrow-boiling: n-butane with isobutane, whose two-phase range at
+    # 5 bar is under 4 K wide (and under 0.4 K at 5% isobutane).
+    for z1 in (0.5, 0.95):
+        f, _ = flasher_for("pr", [NC4, IC4])
+        bubble = f.flash(P=5e5, VF=0.0, zs=[z1, 1 - z1]).T
+        dew = f.flash(P=5e5, VF=1.0, zs=[z1, 1 - z1]).T
+        for frac in (-0.5, 0.25, 0.5, 0.75, 1.5):
+            add("pr", [NC4, IC4], [z1, 1 - z1], bubble + frac * (dew - bubble), 5e5)
+    return out
+
+
+def saturation_cases():
+    """Pure components on their saturation curve, at a given P or T and
+    vapour fraction, from FlashPureVLS."""
+    out = []
+    for idx, ps, ts in (([NC4], (1e5, 5e5, 20e5), (280.0, 350.0, 410.0)),
+                        ([CO2], (10e5, 40e5, 70e5), (230.0, 280.0, 300.0))):
+        f, kij = flasher_for("pr", idx)
+        for spec, values in (("p", ps), ("t", ts)):
+            for value in values:
+                for vf in (0.0, 0.3, 1.0):
+                    res = f.flash(zs=[1.0], VF=vf, **{spec.upper(): value})
+                    out.append({"eos": "pr", "components": idx, "kij": kij, "z": [1.0], "spec": spec, "vf": vf,
+                                "t": res.T, "p": res.P, **describe(res)})
+    return out
+
+
+def polish_boundary(f, z, vf, spec, t, p, w):
+    """Newton from thermo's bubble or dew point, on thermo's own ln phi.
+
+    The unknowns are u_i = ln(w_i / z_i), for the incipient composition w,
+    and ln T (P given) or ln P (T given). The equations are
+    u_i + ln phi_i(w) - ln phi_i(z) = 0, each phase on thermo's root for it
+    (the feed's own, the liquid for a bubble point), and sum(w) = 1. The
+    Jacobian is by central differences, so each step gains about seven
+    digits; three steps take thermo's 1e-7 to round-off."""
+    import numpy as np
+
+    feed_phase, new_phase = (f.liquid, f.gas) if vf == 0.0 else (f.gas, f.liquid)
+    n = len(z)
+
+    def tp(x):
+        return (math.exp(x), p) if spec == "p" else (t, math.exp(x))
+
+    def g(v):
+        tt, pp = tp(v[-1])
+        ws = [z[i] * math.exp(v[i]) for i in range(n)]
+        total = math.fsum(ws)
+        lf = feed_phase.to(T=tt, P=pp, zs=z).lnphis()
+        ln = new_phase.to(T=tt, P=pp, zs=[x / total for x in ws]).lnphis()
+        return np.array([v[i] + ln[i] - lf[i] for i in range(n)] + [total - 1.0])
+
+    v = np.array([math.log(w[i] / z[i]) for i in range(n)] + [math.log(t if spec == "p" else p)])
+    for _ in range(6):
+        r = g(v)
+        if max(abs(r)) < 1e-15:
+            break
+        jac = np.empty((n + 1, n + 1))
+        for k in range(n + 1):
+            h = 1e-6 * max(1.0, abs(v[k]))
+            up, down = v.copy(), v.copy()
+            up[k] += h
+            down[k] -= h
+            jac[:, k] = (g(up) - g(down)) / (2 * h)
+        v = v - np.linalg.solve(jac, r)
+    tt, pp = tp(v[-1])
+    ws = [z[i] * math.exp(v[i]) for i in range(n)]
+    total = math.fsum(ws)
+    return tt, pp, [x / total for x in ws]
+
+
+def boundary_problem(f, z, spec, t, p, w, residual, shift):
+    """Why a polished bubble or dew point isn't one, or None. The polish
+    must have converged without moving far, and PT flashes 1e-7 to either
+    side (relatively, in the unknown T or P) must show a phase boundary:
+    one side a single phase, the other a split in which the phase nearer
+    the incipient composition is under 0.1% of the feed. (The step is
+    small because n-butane with isobutane splits over only 1.2 K.)"""
+    if not residual < 1e-12 or not abs(shift) < 1e-6:
+        return f"the polish didn't converge (residual {residual:.2g}, shift {shift:.2g})"
+    sides = []
+    for d in (1e-7, -1e-7):
+        tt, pp = (t * (1 + d), p) if spec == "p" else (t, p * (1 + d))
+        res, _ = thermo_pt(f, tt, pp, z)
+        if res.phase_count == 1:
+            sides.append(0.0)
+            continue
+        near = min(zip(res.betas, res.phases), key=lambda bp: sum(abs(a - b) for a, b in zip(bp[1].zs, w)))
+        sides.append(near[0])
+    if sorted(sides)[0] != 0.0 or not 0.0 < sorted(sides)[1] < 1e-3:
+        return f"PT flashes either side give incipient-phase fractions {sides}"
+    return None
+
+
+def boundary_cases():
+    """Bubble and dew points of mixtures, at a given P or T. incipient is
+    the composition of the phase that is just appearing. thermo's own
+    answer stops at a fugacity residual up to 2e-7 (thermo_residual), so
+    each is polished by polish_boundary; shift is how far that moved the
+    unknown T or P, relatively. An answer that boundary_problem finds isn't
+    a bubble or dew point is recorded as rejected, with the reason."""
+    out = []
+    systems = [
+        ("pr", [C1, NC4], [0.4, 0.6], (10e5, 30e5, 60e5), (250.0, 300.0)),
+        ("srk", [C1, NC4], [0.4, 0.6], (30e5,), (300.0,)),
+        ("pr", [CO2, NC4], [0.5, 0.5], (30e5,), (300.0,)),
+        ("pr", [C1, NC10], [0.6, 0.4], (50e5,), (450.0,)),
+        ("pr", [C1, NC4, CO2], [0.5, 0.3, 0.2], (30e5,), (250.0,)),
+        ("pr", [NC4, IC4], [0.5, 0.5], (1e5, 5e5), (300.0,)),
+        ("pr", [NC4, IC4], [0.95, 0.05], (5e5,), (300.0,)),
+        ("pr", list(range(10)), CONDENSATE, (50e5,), (300.0, 400.0)),
+    ]
+    for kind, idx, z, ps, ts in systems:
+        f, kij = flasher_for(kind, idx)
+        for spec, values in (("p", ps), ("t", ts)):
+            for value in values:
+                for vf in (0.0, 1.0):
+                    case = {"eos": kind, "components": idx, "kij": kij, "z": z, "spec": spec, "vf": vf}
+                    try:
+                        res = f.flash(zs=z, VF=vf, **{spec.upper(): value})
+                    except Exception as e:
+                        case[spec] = value
+                        case["error"] = f"{type(e).__name__}: {e}"[:120]
+                        out.append(case)
+                        continue
+                    feed, new = (res.liquid0, res.gas) if vf == 0.0 else (res.gas, res.liquid0)
+                    raw = fugacity_residual(feed, new)
+                    t, p, w = polish_boundary(f, z, vf, spec, res.T, res.P, list(new.zs))
+                    feed_phase, new_phase = (f.liquid, f.gas) if vf == 0.0 else (f.gas, f.liquid)
+                    feed, new = feed_phase.to(T=t, P=p, zs=z), new_phase.to(T=t, P=p, zs=w)
+                    shift = (t - res.T) / res.T if spec == "p" else (p - res.P) / res.P
+                    residual = fugacity_residual(feed, new)
+                    problem = boundary_problem(f, z, spec, t, p, w, residual, shift)
+                    if problem:
+                        case.update({"t": res.T, "p": res.P, "thermo_residual": raw,
+                                     "rejected": "thermo's answer isn't a boundary: " + problem})
+                        out.append(case)
+                        continue
+                    case.update({"t": t, "p": p, "incipient": w, "residual": residual,
+                                 "thermo_residual": raw, "shift": shift,
+                                 "v": feed.V(), "h": feed.H(), "s": feed.S()})
+                    out.append(case)
+    return out
+
+
+def write_thermo():
+    pt = flash_pt_cases()
+    saturation = saturation_cases()
+    boundaries = boundary_cases()
+    data = {
+        "source": {
+            "generated": datetime.date.today().isoformat(),
+            "generator": "tools/gen_m3_fixtures.py",
+            "python": platform.python_version(),
+            "thermo": thermo.__version__,
+        },
+        "note": "thermo's PR (SRK where eos says so) with these constants, kij and ideal-gas Cp = cp[0] + "
+        "cp[1] T + cp[2] T^2 in J/(mol K). Molar v (m3/mol), h (J/mol), s (J/(mol K)) and u (J/mol); h is "
+        "relative to the ideal gas at t_ref, and s to the ideal gas at t_ref and p_ref_s. Phases are sorted "
+        "by molar volume, the vapour first; label is thermo's (by PIP), residual is max |ln fV - ln fL|. tol is "
+        "FlashVL's PT_SS_TOL. thermo holds where thermo's own PH, PS and TV flashes land from h, s and v, or "
+        "the error they raise.",
+        "t_ref": Phase.T_REF_IG,
+        "p_ref_s": Phase.P_REF_IG,
+        "components": FLASH_COMPONENTS,
+        "pt": pt,
+        "saturation": saturation,
+        "boundaries": boundaries,
+    }
+    OUT_THERMO.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8", newline="\n")
+    splits = [c for c in pt if len(c["phases"]) == 2]
+    good = [c for c in boundaries if "incipient" in c]
+    print(f"wrote {OUT_THERMO.relative_to(ROOT)}: {len(pt)} PT states ({len(splits)} split, worst residual "
+          f"{max(c['residual'] for c in splits):.2g}), {len(saturation)} saturation states (worst residual "
+          f"{max(c.get('residual', 0.0) for c in saturation):.2g}), {len(boundaries)} bubble and dew points "
+          f"({sum(1 for c in boundaries if 'error' in c)} refused by thermo, "
+          f"{sum(1 for c in boundaries if 'rejected' in c)} rejected; worst residual "
+          f"{max(c['residual'] for c in good):.2g} after polishing thermo's "
+          f"{max(c['thermo_residual'] for c in good):.2g}, which moved T or P by up to "
+          f"{max(abs(c['shift']) for c in good):.2g}; incipient phase at least "
+          f"{min(max(abs(a - b) for a, b in zip(c['incipient'], c['z'])) for c in good):.2g} from the feed)")
+    for c in boundaries:
+        if "rejected" in c or "error" in c:
+            print(f"  {c['components']} {c['spec']} {c['vf']}: {c.get('rejected') or c.get('error')}")
+    for name in ("ph", "ps", "tv"):
+        landed = [c for c in pt if "error" not in c["thermo"][name]]
+        worst = max((max(abs(c["thermo"][name]["t"] - c["t"]) / c["t"], abs(c["thermo"][name]["p"] - c["p"]) / c["p"])
+                     for c in landed), default=0.0)
+        print(f"  thermo's {name.upper()} flash: {len(landed)} of {len(pt)} ran, worst |dT/T|, |dP/P| {worst:.2g}")
+
+
+def write_rachford_rice():
     data = cases()
     for case in data:
         case["reference"] = reference(case["z"], case["k"])
@@ -627,6 +1016,17 @@ def main():
             if "error" in r:
                 refused[r["method"]] = refused.get(r["method"], 0) + 1
     print(f"wrote {OUT_RR.relative_to(ROOT)}: {len(data)} cases; chemicals refused: {refused or 'none'}")
+
+
+def main():
+    writers = {"stability": write_stability, "pip": write_pip, "rachford_rice": write_rachford_rice,
+               "thermo": write_thermo}
+    which = sys.argv[1:] or list(writers)
+    unknown = [w for w in which if w not in writers]
+    if unknown:
+        sys.exit(f"no fixture called {', '.join(unknown)}; the fixtures are {', '.join(writers)}")
+    for name in which:
+        writers[name]()
 
 
 if __name__ == "__main__":

@@ -91,6 +91,7 @@ flash/
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
+                    gen_m3_dwsim.py (DWSIM 9's, by hand on Windows),
                     import_chemsep.vsh and data_quality.vsh (generated data)
 testdata/           reference fixtures from thermo, CoolProp, chemicals and
                     mpmath, with provenance

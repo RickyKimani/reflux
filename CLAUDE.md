@@ -28,13 +28,18 @@ Keep this section current: update it whenever a step is committed.
     D1–D12 and steps 0–11.
   - A finished step's heading says "— done", with a write-up beneath. That
     file, not this one, is the record of what each step did.
-  - Steps 0–4 are committed and pushed: the DWSIM spike, Newton and
-    Rachford–Rice, PIP and the Soave guard, stability, and the PT flash
-    (`flash/pt.v`).
-  - Next is step 5, reference fixtures: `thermo` PT, PH, PS, TV and
-    vapour-fraction flashes, plus bubble and dew points, into
-    `testdata/m3_thermo.json`, and DWSIM cases into `testdata/m3_dwsim.json`.
-    Follow "What step 5 must do" in `docs/spike-dwsim.md`.
+  - Steps 0–5 are committed and pushed: the DWSIM spike, Newton and
+    Rachford–Rice, PIP and the Soave guard, stability, the PT flash
+    (`flash/pt.v`), and the reference fixtures (`testdata/m3_thermo.json`,
+    `testdata/m3_dwsim.json`).
+  - Open question for the owner: criterion 6 has two DWSIM misses, both
+    explained in step 5's write-up. One is a dew pressure that DWSIM's
+    rounded constants move by 1.8e-4. The other is pure n-butane's Tsat,
+    0.118 K off because DWSIM uses a correlation there. Amend the criterion
+    only if he decides to.
+  - Next is step 6: vapour-fraction flashes, and bubble and dew points.
+    Their references are `m3_thermo.json`'s boundaries and PT states, and
+    `m3_dwsim.json`'s bubble and dew cases.
 
 ## How we work
 
@@ -59,8 +64,8 @@ Keep this section current: update it whenever a step is committed.
 ## Commands
 
 ```bash
-v run tools/check.vsh            # what CI runs, with tcc: about 5 min
-v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 30 min
+v run tools/check.vsh            # what CI runs, with tcc: about 2 min
+v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 6 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) and P (bar)
@@ -68,10 +73,12 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,
   then builds and runs `main.v`. With gcc it also builds and runs `-prod`.
-- **The gcc check is slow** because each `_test.v` file is compiled from
-  scratch. V's runner also uses one job per 8 GiB of RAM, so this 14 GiB
-  machine runs one at a time. Run it in the background, and don't edit or
-  regenerate anything it compiles or reads until it finishes.
+- **Test builds are the slow part:** each `_test.v` file is compiled into a
+  program of its own. `check.vsh` runs up to 4 at once (V's runner would
+  allow one per 8 GiB of RAM: one here), and builds with `-nocache` under
+  gcc, where V 0.5.2's module cache made each build about three times
+  slower. Run the gcc check in the background, and don't edit or regenerate
+  anything it compiles or reads until it finishes.
 - **CI** (`.github/workflows/ci.yml`) runs `check.vsh` on Ubuntu and Windows
   with both tcc and gcc. The gcc jobs also run the Python FFI spike. V is
   pinned to the commit in `.v-version` (0.5.2, eab77e7).
@@ -90,11 +97,19 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
     PYTHONIOENCODING=utf-8 uv run --python "C:/Users/Ricky/AppData/Roaming/uv/python/cpython-3.13.17-windows-x86_64-none/python.exe" tools/gen_m3_fixtures.py
     ```
 
+  - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
+    `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
     same day. Check with `cmp` after regenerating.
-- **DWSIM 9.0.5** is installed at `%LOCALAPPDATA%\DWSIM`. Drive it with
-  `uv run --python 3.13 spike/dwsim/run.py`. pythonnet 3.0.5 stops at
-  Python 3.13.
+- **DWSIM 9.0.5** is installed at `%LOCALAPPDATA%\DWSIM`. pythonnet 3.0.5
+  stops at Python 3.13, so pass the same interpreter as above.
+  - `tools/gen_m3_dwsim.py` writes `testdata/m3_dwsim.json`. It imports
+    `gen_m3_fixtures.py` for its `thermo` helpers.
+  - `spike/dwsim/run.py` is step 0's spike.
+  - DWSIM's PR uses rounded constants, saturates pure components on
+    ChemSep's vapour-pressure correlation, and has a wrong ideal mixing
+    entropy. "What step 5 found" in `docs/spike-dwsim.md` has the details.
+    Compare with it by state, and explain each difference.
 
 ## Architecture
 
@@ -174,7 +189,15 @@ or a test:
   arm the call needs `!`. An Option can't be propagated with `?` from a
   function that returns `!T`.
 - **Arrays:** a `mut` variable can't alias an immutable array, so use
-  `.clone()`. Two `mut` variables share, as Go slices do.
+  `.clone()`. Two `mut` variables share, as Go slices do. There's no `a + b`;
+  `a << b` appends every element of b.
+- **`v vet` doesn't type-check**, so compile what you change, `.vsh`
+  scripts included.
+- **On Windows, `import runtime` defeats V's default compiler** (tcc can't
+  parse `psapi.h`). Only the fallback compiler builds such a program.
+- **V reports its own failed builds** to bugs.vlang.io when its fallback
+  compiler succeeds: build options and C errors, with local paths. Set
+  `V_C_ERROR_BUG_REPORT_DISABLED=1` when probing V's edges.
 - **Structs:** a struct field of function type needs `@[required]` or a
   default. Writing `= false` on a `bool` field is an error, because fields
   are zeroed already.

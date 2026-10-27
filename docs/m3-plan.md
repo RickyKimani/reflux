@@ -480,17 +480,101 @@ flowchart LR
     two explained before, plus the liquid-like Wilson trial, which is now
     redundant on all the evidence.
 
-### 5. Reference fixtures
-- `tools/gen_m3_fixtures.py` writes `testdata/m3_thermo.json`: `thermo`'s
-  PT, PH, PS, TV and vapour-fraction flashes and bubble and dew points on
-  the reference set, with a shared polynomial Cp.
-- `tools/gen_m3_dwsim.py`, grown from the spike, writes
-  `testdata/m3_dwsim.json`: about 20 DWSIM cases, with DWSIM's constants,
-  kᵢⱼ and version.
-- Both generators follow "What step 5 must do" in
-  [spike-dwsim.md](spike-dwsim.md): tight tolerances, each case's
-  fugacity residual stored, and PH and PS compared by state.
-- Tests: criteria 1, 2 and 6.
+### 5. Reference fixtures — done
+- **`testdata/m3_thermo.json`**, from
+  [tools/gen_m3_fixtures.py](../tools/gen_m3_fixtures.py) and `thermo`
+  0.6.1, uses the stability components plus isobutane, with one quadratic
+  ideal-gas Cp shared by both programs (`thermo`'s `poly_fit`, reflux's
+  `Polynomial`). It holds:
+  - **83 PT states:** binaries, the ternary, the condensate, near-critical
+    points, pure n-butane and CO₂, and narrow-boiling n-butane/isobutane.
+    Each has its split, its fugacity residual (at most 2.1e-13) and molar
+    V, H, S and U. These are the specifications steps 6 to 8 get, and the
+    PT state is the answer those flashes must recover.
+  - **36 saturation states** of the pure components, from `FlashPureVLS`.
+    No PT flash can reach these.
+  - **42 bubble and dew points.**
+    - `thermo` stops at fugacity residuals up to 1.1e-7, so the generator
+      polishes each point with Newton on `thermo`'s own ln φ. That brings
+      the residual to 1.2e-13 and moves T or P by at most 5.2e-9.
+    - Each point is then checked to be a real boundary, with PT flashes
+      1e-7 to either side.
+    - 2 are `thermo` errors: the condensate's bubble points at a given T.
+- **`thermo` 0.6.1 bugs, recorded in the fixture:**
+  - FlashVL's PS and TV flashes fail on 24 and 60 of the 83 states. When
+    its bisection fails, the Newton fallback has no starting guess (an
+    `UnboundLocalError`).
+  - Any vapour fraction strictly between 0 and 1 raises the same error,
+    because `dew` is unbound in `flash_PVF_2P`.
+  - So the PT state is the reference. Where `thermo`'s own PH, PS and TV
+    flashes do run, they land within 6.1e-10 of it.
+  - Once, `thermo` returned a non-boundary as a bubble point, with a feed
+    volume that wasn't the feed's root. That happened because a previous
+    case had left `PT_SS_TOL` changed. The generator now pins it at 1e-30,
+    so no answer depends on the order of the cases, and the boundary check
+    would reject such a point anyway.
+- **`testdata/m3_dwsim.json`**, from the new
+  [tools/gen_m3_dwsim.py](../tools/gen_m3_dwsim.py), grown from the spike,
+  has 25 cases from DWSIM 9.0.5: PT, PH and PS by state, and bubble and dew
+  points. Each case has three answers:
+  - DWSIM's own, with its fugacity residual;
+  - the exact PR with DWSIM's constants and kᵢⱼ (`thermo`, plus mpmath for
+    the eq. 16 Cp integrals);
+  - the PR with DWSIM's rounded constants, which explains the difference.
+  - What it found about DWSIM is in "What step 5 found" in
+    [spike-dwsim.md](spike-dwsim.md). The main points: DWSIM saturates a
+    pure component on its vapour-pressure correlation instead of the EOS,
+    and its ideal mixing entropy uses −R Σ zᵢ ln zᵢ·(M/Mᵢ).
+- **Tests in [flash/thermo_test.v](../flash/thermo_test.v):**
+  - **PT:** β and compositions to 1e-8 (2e-12 measured), and molar V, H, S
+    and U to 1e-9 (9.8e-11 at worst). Single phases carry `thermo`'s PIP
+    label.
+  - **Saturation:** equal fugacities to 1e-10 (5.6e-13), and
+    `saturation_pressure` to 1e-9 (3.8e-10, CO₂ at Tr = 0.99).
+  - **Boundaries:** fugacities to 1e-10 (1.3e-13). reflux's PT flash sees
+    every boundary: a single phase 1e-7 to one side, and a trace of the
+    incipient phase (up to 2.5e-4) to the other.
+- **Tests in [flash/dwsim_test.v](../flash/dwsim_test.v):**
+  - **Against the exact PR:** the split to 1e-8 (1.9e-13), and H and S to
+    1e-9 (1.9e-11 and 2.6e-11, through tdep's numerical eq. 16 integrals).
+  - **Against DWSIM:** within 1e-4, and no further away than the exact
+    answer is (plus 1e-8) in the split, H and S. That makes the fixture's
+    deviations the recorded ones, which can't grow.
+  - **DWSIM's differences explained:**
+    - its split matches the rounded PR's to 1e-6;
+    - its H is the exact one to 2e-4;
+    - its S is the exact one plus its mixing error, to 0.02 J/(mol·K);
+    - its bubble and dew points match the rounded PR's to 5e-5 K and 1e-6
+      in P.
+  - **PH and PS by state:**
+    - reflux's H and S at each state match the exact ones to 1e-9.
+    - DWSIM lands back within 1e-7 K of its own state, and for mixtures
+      within 0.01 K of the exact one.
+    - reflux's own landings come with steps 6 and 7.
+- **Criterion 6: two DWSIM numbers miss its targets** (flagged for a
+  decision). Both are explained, and neither is reflux's:
+  - the methane/n-butane dew pressure at 300 K is 1.8e-4 from the exact PR,
+    against the 0.01% target, and all of it is DWSIM's rounded constants;
+  - pure n-butane's Tsat at 5 bar is 0.118 K below PR's, against the
+    0.01 K target, because DWSIM uses its correlation there.
+  - The tests record both, with bounds that can't grow.
+- **The gcc check now takes about 6 minutes instead of 30, and the tcc
+  check about 2 instead of 5** (382 s and 136 s, 35 test files).
+  [tools/check.vsh](../tools/check.vsh) passes `-nocache` to gcc builds
+  (V 0.5.2's module cache made each one about three times slower) and runs
+  up to 4 test programs at once (V's runner allows one per 8 GiB).
+- **Planted mistakes:** 13 of 15 caught by the two new tests. They covered
+  ideal mixing, the S and H references, U, the polynomial and eq. 16
+  integrals, Ωb rounded like DWSIM's, Psat, the stability and flash
+  tolerances, and swapped PIP labels.
+  - The two survivors are caught where their code is tested:
+    - loosening tdep's quadrature to 1e-5 changes nothing here, because one
+      Gauss–Kronrod panel integrates a smooth eq. 16 Cp to round-off. tdep's
+      own tests catch it.
+    - moving the PIP threshold to 1.2 relabels no state here. Step 2's
+      phase tests catch it.
+  - On the way, the U check was changed to use reflux's own U rather than
+    H − PV recomputed in the test.
 
 ### 6. Vapour-fraction flashes, bubble and dew points
 - β given with T, or with P; bubble (β = 0) and dew (β = 1) points.

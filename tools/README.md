@@ -9,6 +9,8 @@ Scripts for working on reflux. Nothing here is part of the simulator.
 | `data_quality.vsh` | Regenerates `../docs/data-quality.md`: the sweep over every compound's data, PR against ChemSep's vapour pressures, and the outliers against CoolProp. Run it after changing the data or anything the sweep evaluates; a test fails until you do. |
 | `gen_m1_fixtures.py` | Writes the M1 reference fixtures in `../testdata` from Caleb Bell's `thermo` and CoolProp. |
 | `gen_m2_fixtures.py` | Writes `../testdata/m2_tdep.json`: every correlation form on real ChemSep records, evaluated with mpmath and checked against `chemicals`. Also writes `../testdata/m2_coolprop.json`, ChemSep against CoolProp for the 85 fluids both have, and `../testdata/m2_pr_psat.json`, PR's vapour pressure from `thermo` against ChemSep's for 20 compounds. |
+| `gen_m3_fixtures.py` | Writes the M3 fixtures: Rachford–Rice, phase identification, stability and the flash references (`m3_thermo.json`), from `thermo`, `chemicals` and mpmath. Name some of them (`thermo`, `stability`, `pip`, `rachford_rice`) to write only those. |
+| `gen_m3_dwsim.py` | Writes `../testdata/m3_dwsim.json` from DWSIM 9 through pythonnet. Windows only, with DWSIM 9 installed; run it by hand: `uv run --python 3.13 tools/gen_m3_dwsim.py`. |
 
 ```bash
 v run tools/check.vsh
@@ -20,7 +22,9 @@ v run tools/check.vsh -cc gcc
 
 The first form uses tcc, V's bundled compiler. It's fast, so use it while
 working. The second also makes an optimised `-prod` build; gcc compiles much
-more slowly than tcc.
+more slowly than tcc. The script runs up to four test programs at once
+(`VJOBS` overrides that), and builds with `-nocache` under gcc, where V
+0.5.2's module cache makes each build three times slower.
 
 ## Fixture generators
 

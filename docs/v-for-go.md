@@ -37,6 +37,30 @@ It is a good way to find out what a feature costs.
 
 `-W` turns warnings into errors. Use it for tests and CI (see §4 for why).
 
+**`v test` is slower than `go test`, and two settings matter.** Go compiles
+each package once and links its tests. V compiles every `_test.v` file into
+a program of its own, with all of `vlib` it uses: 33 C compilations for
+reflux's 33 test files.
+- **Jobs:** the runner allows one job per 8 GiB of RAM, at most 4, so a
+  14 GiB machine runs them one at a time. A build peaks near 1 GB, so
+  `VJOBS=4` is safe there, and [tools/check.vsh](../tools/check.vsh) sets it.
+- **gcc and the module cache:** with gcc, V 0.5.2's module cache made each
+  build about three times slower on Windows: 40 s against 12 s with
+  `-nocache` for a small test. Most of the time goes on scanning cached
+  objects' dependencies, plus replaying a build the cached path gives up on.
+  tcc is as fast either way.
+
+Together they took the gcc check from about 30 minutes to about 6 (382 s,
+257 s of it the tests), and the tcc check from about 5 minutes to 2.
+
+**This V reports its own build failures.** V 0.5.2 at eab77e7 carries two
+compilers. When the new default one fails to build a program's C and the
+old one, kept as a fallback, succeeds, V sends a "metadata-only" report to
+bugs.vlang.io. The report holds the V version, the OS, the C compiler, the
+build command and up to 64 KB of the C compiler's errors, so it includes
+your paths, but no source. It's off under GitHub Actions, and
+`V_C_ERROR_BUG_REPORT_DISABLED=1` turns it off anywhere.
+
 A `.vsh` script inside the project can import the project's own modules,
 just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
 is a 30-line script around `import components.chemsep`. Go would need a
@@ -434,6 +458,7 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 | `make([]float64, n)`              | `[]f64{len: n}`                     |
 | make + loop filling `s[i] = f(i)` | `[]f64{len: n, init: f(index)}`     |
 | `s = append(s, x)`                | `s << x`                            |
+| `s = append(s, t...)`             | `s << t` (there's no `s + t`)       |
 | `slices.Sort(s)`                  | `s.sort()`                          |
 | `slices.Clone(s)`                 | `s.clone()`                         |
 | loop + `if`                       | `s.filter(it > big_b)`              |
@@ -650,7 +675,30 @@ if want := p.chemicals_y {
 ```
 
 A JSON key can't be a V keyword such as `int`. The fixture generator writes
-`integral` instead.
+`integral` instead. `error` is fine: it's a builtin function, not a keyword,
+so a struct field can be called that.
+
+A generic *struct* decodes too, which helps when one JSON list holds records
+of several shapes. [flash/dwsim_test.v](../flash/dwsim_test.v) has PT cases,
+PH and PS cases, and bubble and dew points in one `cases` list, and decodes
+the list once per shape. Each record's `kind` says which shape it is:
+
+```v
+struct DwCases[T] {
+	cases []T
+}
+
+fn read_cases[T](kinds []string) ![]T {
+	all := json2.decode[DwCases[T]](read_text()!)!
+	return all.cases.filter(it.kind in kinds)
+}
+
+pts := read_cases[DwCase](['pt'])!
+```
+
+Keys that a shape lacks are left at their zero values, and keys it doesn't
+know are ignored. Go's `encoding/json` behaves the same way, and Go 1.18+
+would write the wrapper as `type cases[T any] struct{ Cases []T }`.
 
 **Reflection happens at compile time.** Go's `reflect` inspects values at
 run time, through `interface{}`, and a mistake is a run-time panic. V's
@@ -745,6 +793,14 @@ buffers the caller owns, with no allocation and no pointers:
 field of function type should then be `@[required]` or given a default:
 V flags one that would otherwise start as a nil function ("uninitialized
 `fn` struct fields are not allowed").
+
+**On Windows, `import runtime` breaks the default build.** Even a
+three-line program that prints `runtime.nr_cpus()` fails: tcc can't parse
+the `psapi.h` that `runtime` includes, and V's gcc retry fails in its
+module cache. Only the fallback compiler builds it, slowly, and it files a
+report (above). [tools/check.vsh](../tools/check.vsh) sets its job count
+to a constant instead. `v vet` wouldn't have warned about either this or
+`a + b` on arrays: it checks style, not types, so build what you change.
 
 **Double-quoted strings interpolate too.** `'${x}'` and `"${x}"` are the
 same in V, unlike Go's `"..."` and backquoted raw strings. A script that

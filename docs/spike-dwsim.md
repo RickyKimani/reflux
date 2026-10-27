@@ -153,6 +153,47 @@ look; step 10 measures properly.
 - **Run by hand on Windows**, like the CoolProp fixtures. CI never runs
   DWSIM, and the fixture records DWSIM's version.
 
+## What step 5 found
+
+Step 5's capture, [tools/gen_m3_dwsim.py](../tools/gen_m3_dwsim.py), ran 25
+cases: PT, PH and PS by state, and bubble and dew points. Rebuilding each
+one with a PR on DWSIM's rounded constants explains nearly everything:
+
+- **PT:** DWSIM is within 3e-5 of the exact PR in β and both compositions,
+  under criterion 6's 1e-4. All but 1e-6 of that is the rounded constants,
+  and the rest is DWSIM's convergence. Its own fugacity residual is at most
+  1.4e-6.
+- **Bubble and dew points:** T within 0.0071 K of the exact PR, and within
+  3.2e-5 K of the rounded PR. One misses criterion 6's 0.01% in P: the
+  methane/n-butane dew pressure at 300 K, 1.8e-4 from the exact PR and
+  8e-7 from the rounded one.
+- **A pure component's saturation isn't PR's.** DWSIM's PR package puts
+  pure n-butane's Tsat where ChemSep's vapour-pressure correlation (eq. 101)
+  gives P, not where the EOS's fugacities balance. At 5 bar that's 0.118 K
+  below PR's Tsat, and PR's own ln φᴸ − ln φⱽ there is 0.0025. Its PT flash
+  switches phase at the same temperature. Any pure-component stream in M4,
+  steam for one, will saturate on the correlation.
+- **Its ideal mixing entropy is wrong.** DWSIM's `RET_Sid` adds
+  −R Σ zᵢ ln zᵢ·(M/Mᵢ), where −R Σ zᵢ ln zᵢ belongs: the mass-basis formula
+  with mole fractions in it. That's 9.65 instead of 5.60 J/(mol·K) for
+  methane/n-butane at 40/60. The formula matches DWSIM's numbers on three
+  binaries and a ternary, at every composition tried. Within DWSIM, S is
+  still one consistent function, so a PS flash from DWSIM's own S returns
+  to its state. That's why PS is compared by state.
+- **Its reference for S** is the ideal gas at 298.15 K and 101325 Pa, with
+  R = 8.314 in −R ln(P/P°).
+- **Its mixture H** weights the phases by mass. Its reported β, y and x
+  balance the feed only to its convergence (7e-8 at 250 K and 30 bar), so
+  the mixture can't be rebuilt from them exactly; each phase can, to 1e-12.
+- **The API's gaps:**
+  - A bubble point at a given T fails from DWSIM's own start ("Unable to
+    calculate compressility factor"). Given a pressure estimate 5% above
+    the answer, it converges.
+  - A bubble or dew result reports the incipient phase only through its
+    K-values.
+  - DWSIM's PH and PS flashes land back within 8e-8 K of the state for
+    mixtures.
+
 ## For the benchmarks (D10)
 
 - DWSIM's timings come from the same automation route: warm, through
@@ -170,7 +211,6 @@ look; step 10 measures properly.
   minimisation might converge past the 8e-7 floor. That's worth one try in
   step 5 if the floor gets in the way. It doesn't block anything: the floor
   is well inside criterion 6.
-- **Harder points.** The spike flashed one easy two-phase point. Near-
-  critical points, single-phase points and pure components are step 5's
-  20 cases. Since DWSIM's convergence there is unknown, each case records
-  its residual.
+- **Harder points.** Done in step 5 (above), except close to a critical
+  point: at 340 K and 110 bar the methane/n-butane feed is a single phase
+  for DWSIM and the exact PR alike.
