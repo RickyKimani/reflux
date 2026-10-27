@@ -201,14 +201,30 @@ flowchart LR
   S10 --> S11[11 Docs and exit review]
 ```
 
-### 0. DWSIM automation spike
-- From Python, through `pythonnet` and `Automation3`:
-  - build a flowsheet with a methane/n-butane stream on PR;
-  - run one PT flash and one PH flash;
-  - read back β, the compositions and H;
-  - read the constants and kᵢⱼ DWSIM used.
-- Go or no-go for D9, written up in `docs/spike-dwsim.md`, as M1 did for
-  the Python spike.
+### 0. DWSIM automation spike — done: go, with conditions
+- [spike/dwsim/run.py](../spike/dwsim/run.py) drives DWSIM 9.0.5 headless
+  through `pythonnet` and `Automation3`:
+  - it builds the methane/n-butane PR flowsheet;
+  - it flashes PT both through the flowsheet solver and through the
+    property package (bit-identical), then PH back to the same T;
+  - it reads back β, the compositions, H, the constants, the Cp
+    coefficients and kᵢⱼ.
+- The write-up is [spike-dwsim.md](spike-dwsim.md). The GUI fallback in D9
+  isn't needed.
+- Every part of DWSIM's difference from an exact PR is accounted for:
+  - its PR has Ωa = 0.45724, Ωb = 0.0778 and R = 8.314, reproduced to
+    5e-16 in the enthalpy departures;
+  - its flash stops at a fugacity residual of 8e-7, however tight the
+    tolerance;
+  - its ideal-gas enthalpy is a 1e-5 approximation of the Cp integral.
+- Two things step 5 has to change:
+  - compare PH and PS with DWSIM by state, not by feeding DWSIM's H to
+    reflux, because the rounded constants move a liquid's H by 1e-4
+    (about 0.015 K);
+  - tighten `thermo`'s `PT_SS_TOL` to 1e-30, since its default leaves β
+    2.7e-8 off, more than criterion 2's 1e-8.
+- Timings for D10: warm PT 1.0–1.6 ms, PH 6.7–15 ms, a one-stream
+  flowsheet solve 2.3–4 ms, and 7–10 s to start.
 
 ### 1. Newton solver and Rachford–Rice
 - `numeric`: Newton with line search and trust region (B2), and a
@@ -245,6 +261,9 @@ flowchart LR
 - `tools/gen_m3_dwsim.py`, grown from the spike, writes
   `testdata/m3_dwsim.json`: about 20 DWSIM cases, with DWSIM's constants,
   kᵢⱼ and version.
+- Both generators follow "What step 5 must do" in
+  [spike-dwsim.md](spike-dwsim.md): tight tolerances, each case's
+  fugacity residual stored, and PH and PS compared by state.
 - Tests: criteria 1, 2 and 6.
 
 ### 6. Vapour-fraction flashes, bubble and dew points
