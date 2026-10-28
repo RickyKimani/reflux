@@ -59,6 +59,20 @@ pub:
 const split_ss_before_newton = 20
 // A split whose every |ln Kᵢ| is below this has collapsed onto the feed.
 const split_trivial_tol = 1e-4
+// A K-value is held within e^±700 so that it, and the mole fractions it
+// makes, stay finite doubles. A component whose K would lie beyond that,
+// such as tripalmitin's below 150 K, has a mole fraction below 1e-300 in
+// one phase: zero to double precision.
+const ln_k_max = 700.0
+// Below this mole fraction in either phase a component's fugacities aren't
+// compared: its amount there is zero to double precision, and it can't be
+// represented well enough for the two to agree.
+pub const trace_floor = 1e-300
+
+// k_of turns ln K into K, held within e^±ln_k_max.
+fn k_of(lnk f64) f64 {
+	return math.exp(math.max(-ln_k_max, math.min(ln_k_max, lnk)))
+}
 
 // pt flashes a feed z at (T, P), for any thermo.Model (D4).
 //
@@ -76,7 +90,8 @@ const split_trivial_tol = 1e-4
 // the Gibbs energy in the vapour mole numbers, minimising G itself.
 //
 // The first K-values come from the stability test's incipient phase, and
-// if that split fails, from its other unstable trials in turn.
+// if that split fails, or a phase of it is unstable, from its other
+// unstable trials in turn.
 // Each phase takes its volume root of lower Gibbs energy, and the phase of
 // lower mass density is the vapour (D6).
 //
@@ -113,14 +128,26 @@ pub fn pt(m thermo.Model, t f64, p f64, z []f64, params FlashParams) !FlashResul
 		params:  params
 	}
 	mut last := IError(fail(.no_convergence, 'no starting K-values'))
+	mut more := ?IError(none)
 	for k0 in sp.starts(stab) {
 		split := sp.split(k0) or {
 			last = err
 			continue
 		}
-		return sp.result(split, stab)!
+		// A split with an unstable phase may be a local minimum of G that
+		// another start avoids, so it isn't the end. (A verified split is
+		// the global one: no phase anywhere lies below either phase's
+		// tangent plane.) But if no start does better, that split's proof of
+		// a further phase is the answer, not a later start's failure.
+		return sp.result(split, stab) or {
+			if err is FlashError && err.kind == .more_phases {
+				more = err
+			}
+			last = err
+			continue
+		}
 	}
-	return last
+	return more or { last }
 }
 
 // check_feed refuses a feed that isn't one: the wrong length for the
@@ -195,10 +222,14 @@ fn (sp Splitter) state(x []f64) !thermo.State {
 	}
 }
 
-// residual is max |ln fᵢ(y) − ln fᵢ(x)|.
+// residual is max |ln fᵢ(y) − ln fᵢ(x)|, over the components above
+// trace_floor in both phases.
 fn (sp Splitter) residual(x []f64, sx thermo.State, y []f64, sy thermo.State) f64 {
 	mut worst := 0.0
 	for i in sp.present {
+		if x[i] < trace_floor || y[i] < trace_floor {
+			continue
+		}
 		worst = math.max(worst, math.abs(math.log(y[i]) + sy.ln_phi[i] - math.log(x[i]) - sx.ln_phi[i]))
 	}
 	return worst
@@ -213,7 +244,7 @@ fn (sp Splitter) split(k0 []f64) !Split {
 	mut since_dem := 0
 	mut tried_newton := false
 	for iter in 1 .. sp.params.max_steps + 1 {
-		rr := numeric.rachford_rice(sp.z, lnk.map(math.exp(it))) or {
+		rr := numeric.rachford_rice(sp.z, lnk.map(k_of(it))) or {
 			return fail(.no_convergence, 'the K-values left the two-phase range: ${err.msg()}')
 		}
 		sx := sp.state(rr.x)!
@@ -270,7 +301,7 @@ fn (sp Splitter) split(k0 []f64) !Split {
 			if lambda > 0.0 && lambda < 1.0 {
 				jump := lambda / (1.0 - lambda)
 				acc := []f64{len: nc, init: next[index] + jump * step[index]}
-				if _ := numeric.rachford_rice(sp.z, acc.map(math.exp(it))) {
+				if _ := numeric.rachford_rice(sp.z, acc.map(k_of(it))) {
 					next = acc.clone()
 				}
 			}

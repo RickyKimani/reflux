@@ -25,6 +25,13 @@ A `.vsh` file is a V script. Top-level statements run in order, and the
 need no prefix. It's how reflux avoids a Makefile that wouldn't work in
 nushell or PowerShell. See [tools/check.vsh](../tools/check.vsh).
 
+A `.vsh` file always runs when V compiles it: `v -o sweep.exe
+tools/flash_sweep.vsh` builds `sweep.exe`, runs it once with no arguments,
+and keeps it, so `sweep.exe 1000` works afterwards. `go build` never runs
+anything. For a script that's slow to run, that first run can be the whole
+cost, so write it as a `.v` file with a `main` function when you only want
+the binary.
+
 **The big difference:** V compiles to C and then calls a C compiler. On your
 machine the only C compiler is the **tcc** that ships inside V (`v doctor`
 shows it). tcc compiles very fast but does almost no optimisation. That's
@@ -228,6 +235,10 @@ p := thermo.saturation_pressure(eos, 350.0) or {       // handle it; `err` is in
   complaint.
 - `!` with no type (`fn check() !`) is Go's `func check() error`. See
   `Component.check` in [thermo/component.v](../thermo/component.v).
+- **Several values or an error** is `!(A, B)`, Go's `(A, B, error)`, and
+  `a, b := f()!` unpacks it. `overlapping_split` in
+  [sweep/sweep_internal_test.v](../sweep/sweep_internal_test.v) returns
+  `!(Point, thermo.Model, flash.FlashResult)`.
 - **`?T` is an Option**: a value or `none`, with no error message. Use it
   when "nothing here" is a normal answer, not a failure. `liquid_volume` in
   [thermo/model.v](../thermo/model.v) returns `?f64`, and `none` there
@@ -446,7 +457,11 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `pub mut:` meant "mutable only inside the module", as older V docs said.
   A probe showed it doesn't.)
 - **Struct update syntax**, which Go lacks: `Repair{...it, cas: rec.ids.cas}`
-  copies `it` and changes one field.
+  copies `it` and changes one field. It works from another module on
+  `pub:` fields too, which can be read there but not assigned, so it's how
+  to get a changed copy of such a struct. The sweep's tests build wrong
+  flash answers that way, `flash.FlashResult{...r, beta: r.beta + 1e-9}`,
+  to show that its checks refuse them.
 
 ---
 
@@ -459,7 +474,9 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 | make + loop filling `s[i] = f(i)` | `[]f64{len: n, init: f(index)}`     |
 | `s = append(s, x)`                | `s << x`                            |
 | `s = append(s, t...)`             | `s << t` (there's no `s + t`)       |
+| a fold over a slice               | `arrays.fold(s, 0.0, fn …)`, not `s.reduce(…)`, which arrays lack |
 | `slices.Sort(s)`                  | `s.sort()`                          |
+| `slices.SortFunc(s, cmp)`         | `s.sort_with_compare(fn (a &T, b &T) int {…})`: the comparison takes pointers |
 | `slices.Clone(s)`                 | `s.clone()`                         |
 | loop + `if`                       | `s.filter(it > big_b)`              |
 | loop + append                     | `s.map(it * 1e6)`                   |
@@ -634,6 +651,27 @@ pure-V fallbacks.
 Go's. A single flowsheet solve is mostly sequential, but the cases of a
 sensitivity analysis are independent, which makes them the first place
 `spawn` will pay off.
+
+**A deadline** is Go's `select` with `time.After`, written with a duration
+as the case:
+
+```v
+ch := chan string{cap: 1}
+spawn fn [ch] () {
+	ch <- work()
+}()
+select {
+	s := <-ch { println(s) }
+	10 * time.second { println('gave up') }
+}
+```
+
+The spawned closure lists what it captures, like any V closure. A test
+that would otherwise hang can fail this way:
+`test_minimize_gives_up_on_a_huge_hessian` in
+[numeric/minimize_test.v](../numeric/minimize_test.v) does. The test
+program still exits while the thread spins, as a Go program does when
+`main` returns.
 
 ---
 

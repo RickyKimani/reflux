@@ -71,3 +71,16 @@ fn test_a_split_that_collapses_onto_the_feed_is_refused() {
 		}
 	}
 }
+
+fn test_k_stays_a_finite_positive_double() {
+	// Unbounded, K = e^ln K is +inf beyond ln K ≈ 709.78 and 0 below about
+	// −745, which Rachford–Rice refuses: 49 points of the robustness sweep
+	// failed that way. Held within e^±700, K is finite and normal, and
+	// inside that range it's e^ln K itself.
+	assert k_of(3.0) == math.exp(3.0)
+	assert k_of(-700.0) == math.exp(-700.0)
+	for lnk in [1e3, 1e300, math.inf(1)] {
+		assert math.is_finite(k_of(lnk)) && k_of(lnk) > 1e304
+		assert k_of(-lnk) > 2.2250738585072014e-308 && k_of(-lnk) < 1e-304
+	}
+}

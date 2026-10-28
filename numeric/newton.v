@@ -68,6 +68,7 @@ pub:
 	evaluations int
 }
 
+// msg is the reason, with the steps taken and the residual left.
 pub fn (e NewtonError) msg() string {
 	return 'newton: ${e.reason} (${e.iterations} steps, ${e.evaluations} evaluations, max |F| = ${e.residual})'
 }

@@ -91,11 +91,14 @@ flash/
   tv.v              TV and UV flashes, in the model's own variables (T, V, n)
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
+sweep/              the flash robustness sweep: seeded database mixtures,
+                    every answer checked, every failure classified
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m3_dwsim.py (DWSIM 9's, by hand on Windows),
-                    import_chemsep.vsh and data_quality.vsh (generated data)
+                    import_chemsep.vsh, data_quality.vsh and flash_sweep.vsh
+                    (generated data and reports)
 testdata/           reference fixtures from thermo, CoolProp, chemicals and
                     mpmath, with provenance
 data/vendor/        the ChemSep 8.50 database, verbatim, with its licence

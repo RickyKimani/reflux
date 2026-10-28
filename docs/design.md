@@ -468,10 +468,32 @@ where Φ is each phase's n·∂ln φᵢ/∂nⱼ. This uses numeric.minimize, wit
 fscale set to the size of the terms G is summed from. Near the critical
 locus, 44 of the reference set's 166 splits end this way.
 
+A component with almost no moles in a phase, 1e-305 say, puts 1/(V·yᵢ) ≈
+1e305 on H's diagonal. Its step leaves the domain unless the shift μ is as
+large as that, and then no step moves anything else. So μ climbs to
+overflow, and minimize fails, as it must. Until step 9 it looped forever
+there, because its limit on μ, 1e20 times H's largest diagonal, had
+overflowed to +inf first. A failed Newton leaves substitution to carry on.
+
 **Accepted** only with every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol (1e-12) and 0 < β < 1,
 and a Newton result is held to the same test. A split that slides onto the
 feed (every |ln K| < 1e-4) is refused: there the fugacities are equal too,
 and it would pass for two identical phases.
+
+**Extreme K-values.** A K is held within e^±700, so that it and the mole
+fractions it makes stay finite doubles. A component whose K would lie
+beyond that has a mole fraction below 1e-300 in one phase, which is zero
+to double precision: tripalmitin's in the vapour below about 150 K, or
+mercury's in PR with ChemSep's constants. Below that floor (`trace_floor`)
+its fugacities aren't compared, since they can't be represented well
+enough to agree. The robustness sweep found 49 such points that the
+unbounded K turned into 0 or +inf for Rachford–Rice.
+
+**More than one start.** The starts are tried in turn until one gives a
+verified split. A split with an unstable phase can be a local minimum of G
+that another start avoids. If none does better, the answer is
+`more_phases`, with that split's proof, rather than a later start's
+failure to converge.
 
 **Verified** (`verify`, on by default): each phase is re-tested for
 stability, with the other phase as a trial. An unstable phase means a third
@@ -699,6 +721,50 @@ on the root of that volume.
 bulk modulus over P, a factor of a thousand here and there. `thermo`'s V
 differs from reflux's by about 1e-11, which is 1e-8 in a liquid's P, so
 the round trips start from reflux's own V and U.
+
+## The robustness sweep
+
+`sweep` runs PT flashes of random PR mixtures (D8) and checks each answer
+from scratch, without trusting the flash's own tests.
+
+**The points** come from splitmix64 (Steele, Lea & Flood 2014), seeded, so
+they're the same on every platform:
+- a u64 to f64 in (0, 1) is (⌊u/2¹¹⌋ + ½)/2⁵³, never 0;
+- 2 to 10 compounds, drawn without replacement from the 640 with Tc, Pc,
+  ω, M and an ideal-gas Cp;
+- T = T_min·(T_max/T_min)^u, and P likewise: log-uniform over 100–1000 K
+  and 0.1–1000 bar;
+- zᵢ = eᵢ/Σe with eᵢ = −ln uᵢ, exponential draws, which makes z uniform
+  over the simplex.
+
+**Stability is judged from scratch.** `flash.stability` only searches, from
+its own trials and five random compositions drawn the same way. At every
+composition w its trials reach, the sweep computes
+
+    tpd(w) = Σᵢ wᵢ(ln wᵢ + ln φᵢ(w) − ln xᵢ − ln φᵢ(x))
+
+from `thermo.solve_tp` alone, each phase at its root of lower G, and the
+lowest tpd is the verdict. A negative tpd at any w shows that x lies above
+some phase's tangent plane, so x is unstable. A phase of a converged split
+is no use as a trial for the other: it sits on that phase's tangent plane,
+a stationary point with tm = 0.
+
+**One phase** must have no tpd below −1e-10, the flash's own tolerance.
+
+**A split** must satisfy criterion 3:
+- 0 < β < 1;
+- the phases differ, some |ln(yᵢ/xᵢ)| ≥ 1e-4, since two copies of a stable
+  feed pass every other check;
+- |β·yᵢ + (1 − β)·xᵢ − zᵢ| ≤ 1e-12;
+- |ln yᵢ + ln φᵢ(y) − ln xᵢ − ln φᵢ(x)| ≤ 1e-10, except where xᵢ or yᵢ is
+  below `trace_floor`;
+- |Σx − 1| and |Σy − 1| ≤ 1e-14;
+- neither phase with a tpd below −1e-8.
+
+**A third phase** (`more_phases`) is proved, not taken on trust. Unverified,
+the flash returns the first split it found, which is the one the verified
+flash found first and refused. One of its phases must have a tpd below
+−1e-8.
 
 ## How CPA will fit
 

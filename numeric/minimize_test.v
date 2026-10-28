@@ -1,6 +1,7 @@
 module numeric
 
 import math
+import time
 
 fn rosenbrock(x []f64, mut g []f64, mut h []f64) !f64 {
 	a, b := x[0], x[1]
@@ -263,5 +264,43 @@ fn test_minimize_fails_honestly() {
 		assert false, 'Rosenbrock in two steps'
 	} else {
 		assert (err as NewtonError).reason == 'no convergence in 2 steps'
+	}
+}
+
+fn test_minimize_gives_up_on_a_huge_hessian() {
+	// f = x(ln x + 765) + (y − 1)²/2 from x = 1e-305 and y = 0, for x > 0.
+	// It's what a component with almost no moles in a phase does to the PT
+	// flash's G: its minimum in x, at e^-766, is below the smallest double,
+	// and its Hessian there is 1/x = 1e305. Any step that would move y also
+	// takes x below 0, so μ climbs until it overflows. The shift's limit,
+	// 1e20 times H's scale, overflowed first, and until μ's own overflow
+	// ended the loop this ran forever. It hung the flash at point 3430 of
+	// the robustness sweep.
+	trace := fn (x []f64, mut g []f64, mut h []f64) !f64 {
+		if !(x[0] > 0.0) {
+			return error('x ≤ 0')
+		}
+		g[0] = math.log(x[0]) + 766.0
+		g[1] = x[1] - 1.0
+		h[0], h[1], h[2], h[3] = 1.0 / x[0], 0.0, 0.0, 1.0
+		return x[0] * (math.log(x[0]) + 765.0) + 0.5 * (x[1] - 1.0) * (x[1] - 1.0)
+	}
+	// In a thread with a deadline, so that a hang fails the test instead of
+	// stalling it. It takes about a millisecond.
+	ch := chan string{cap: 1}
+	spawn fn [ch, trace] () {
+		ch <- if s := minimize(trace, [1e-305, 0.0]) {
+			'claimed a minimum at ${s.x}'
+		} else {
+			err.msg()
+		}
+	}()
+	select {
+		verdict := <-ch {
+			assert verdict.contains('no step lowers f'), verdict
+		}
+		10 * time.second {
+			assert false, 'minimize ran for 10 s'
+		}
 	}
 }

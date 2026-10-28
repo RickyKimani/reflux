@@ -28,21 +28,25 @@ Keep this section current: update it whenever a step is committed.
     D1–D12 and steps 0–11.
   - A finished step's heading says "— done", with a write-up beneath. That
     file, not this one, is the record of what each step did.
-  - Steps 0–8 are committed (0–6 pushed): the DWSIM spike, Newton and
+  - Steps 0–9 are committed (0–6 pushed): the DWSIM spike, Newton and
     Rachford–Rice, PIP and the Soave guard, stability, the PT flash
     (`flash/pt.v`), the reference fixtures (`testdata/m3_thermo.json`,
     `testdata/m3_dwsim.json`), the vapour-fraction flashes with bubble and
-    dew points (`flash/vf.v`), the PH and PS flashes (`flash/ph.v`), and the
-    TV and UV flashes (`flash/tv.v`).
+    dew points (`flash/vf.v`), the PH and PS flashes (`flash/ph.v`), the
+    TV and UV flashes (`flash/tv.v`), and the robustness sweep (`sweep/`,
+    `docs/flash-robustness.md`).
   - Amended so far: D3 in step 4 (pure-component stability trials), D6 in
-    step 6 (the vapour is the phase of lower mass density), and criterion
-    6 after step 5 (a DWSIM deviation may exceed a target only when the
+    step 6 (the vapour is the phase of lower mass density), criterion 6
+    after step 5 (a DWSIM deviation may exceed a target only when the
     fixture reproduces it from DWSIM itself, and reflux still matches the
-    exact model to 1e-8).
-  - Next is step 9: the robustness sweep (D8, criterion 5). A seeded
-    10,000-point PT sweep over database mixtures writes
-    `docs/flash-robustness.md` with every failure classified, and a test
-    runs the first 1,000 points in CI.
+    exact model to 1e-8), and D8 in step 9 (a third phase, proved by a
+    negative tangent-plane distance, is an explained failure: VLLE is M6).
+  - Next is step 10: the `benchmark` module and `docs/benchmarks.md` (D10,
+    criterion 8). PT, PH and bubble-point flashes of 2-, 5- and
+    10-component mixtures, timed with gcc `-prod` against `thermo` and
+    DWSIM on the same flashes. Then the carried items, measured before
+    anything changes: allocation in hot paths, and the cost of
+    `Correlated` in PH and PS.
 
 ## How we work
 
@@ -67,7 +71,7 @@ Keep this section current: update it whenever a step is committed.
 ## Commands
 
 ```bash
-v run tools/check.vsh            # what CI runs, with tcc: about 5 min
+v run tools/check.vsh            # what CI runs, with tcc: about 7 min
 v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 10 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
@@ -89,6 +93,10 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
   - `v run tools/import_chemsep.vsh` regenerates `data/components/` from the
     vendored ChemSep XML. A test fails if it's stale.
   - `v run tools/data_quality.vsh` writes `docs/data-quality.md`.
+  - `v -prod -cc gcc run tools/flash_sweep.vsh` writes
+    `docs/flash-robustness.md`, 10,000 PT flashes (about three minutes,
+    the build included; about twenty under tcc). Regenerate it after
+    changing the flash or the sweep's checks.
 - **Reference fixtures** come from uv scripts whose headers pin their
   dependencies: `thermo` 0.6.1, `chemicals` 1.5.2, `mpmath` 1.3.0,
   `CoolProp` 8.0.0.
@@ -118,7 +126,8 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
 
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
-`components`.
+`components`. `sweep`, the flash robustness sweep, is the one module that
+uses both `components` and `flash`.
 
 - **`thermo` is built on one contract.** `Model` (thermo/model.v) supplies
   the reduced residual Helmholtz energy F(T, V, n) = Aʳ/RT and its

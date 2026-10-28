@@ -32,6 +32,7 @@ pub:
 	reason string
 }
 
+// msg is the reason, marked as the flash's.
 pub fn (e FlashError) msg() string {
 	return 'flash: ${e.reason}'
 }

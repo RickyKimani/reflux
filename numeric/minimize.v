@@ -96,7 +96,10 @@ pub fn minimize(objective ObjectiveFn, x0 []f64, params MinimizeParams) !Minimiz
 		}
 		mu_min := 1e-10 * scale
 		for {
-			if mu > 1e20 * scale {
+			// Every refusal below raises μ fourfold, so this ends: at 1e20
+			// times H's scale, or where μ overflows when that bound already
+			// has. An H of 1e300 comes from a phase with 1e-300 of a component.
+			if mu > 1e20 * scale || !math.is_finite(mu) {
 				return s.fail('no step lowers f: a stationary point the shifts cannot leave, or a function unbounded below')
 			}
 			mut shifted := s.h.clone()

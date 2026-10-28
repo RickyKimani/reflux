@@ -183,7 +183,7 @@ which are tools whose committed output tests check.
 | D5 | PH, PS, TV, UV | Michelsen's state-function (Q-function) formulation. TV and UV work directly in F(T, V, n). | It handles pure components and narrow-boiling mixtures, where nested T-loops fail. |
 | D6 | Phase labels | PIP, with finite-difference second derivatives of P. In a split, the less dense phase is the vapour. **Amended in step 6:** less dense by mass. Step 4 compared molar volumes, which called the decane-rich phase of methane/n-decane at 300 K and 200 bar the vapour (585 kg/m³, against the methane-rich phase's 168). | `thermo`'s choice, so comparisons line up. No change to the `Model` contract. Mass density is what a separator acts on. |
 | D7 | The result | `FlashResult`: T, P, β, the phases (each a label, a `thermo.State` and its fraction), iterations, and which path converged. It allows N phases for M6. Failure is a typed `FlashError` (no convergence, bad specification, …), never a panic. | M10a wraps this for Python next: no panics across the C boundary, and failures carry a reason. |
-| D8 | The robustness sweep | Seeded. Components drawn from the database among those with Tc, Pc, ω, M and an ideal-gas Cp. T and P log-uniform over wide ranges; z random. **Unexplained:** no convergence, a broken invariant (criterion 3), or a contradiction such as a single-phase answer that stability calls unstable. **Explained, and counted separately:** a specification outside the model's range, or a point within 1e-6 of a critical point, where the two phases can't be told apart. | "Zero failures" needs a definition, or it means nothing. |
+| D8 | The robustness sweep | Seeded. Components drawn from the database among those with Tc, Pc, ω, M and an ideal-gas Cp. T and P log-uniform over wide ranges; z random. **Unexplained:** no convergence, a broken invariant (criterion 3), or a contradiction such as a single-phase answer that stability calls unstable. **Explained, and counted separately:** a specification outside the model's range, or a point within 1e-6 of a critical point, where the two phases can't be told apart. **Amended in step 9:** also a third phase. That's when every two-phase split the flash finds, from every start, has a phase that stability proves unstable (`more_phases`). M3 handles two phases, and VLLE is M6. | "Zero failures" needs a definition, or it means nothing. A refusal backed by a negative tm is a proof, not a failure. |
 | D9 | References | `thermo` 0.6.1 fixtures with the same PR, constants and kᵢⱼ, and a shared polynomial Cp, to 1e-8. DWSIM 9.0.5 through `pythonnet` and `DWSIM.Automation`, run by hand like the CoolProp fixtures, with DWSIM's own constants and kᵢⱼ recorded and used. **Fallback** if automation fails: capture by hand in the DWSIM GUI, following a written procedure. | `thermo` checks the implementation; DWSIM checks what M4 will be compared with. |
 | D10 | Benchmarks | A `benchmark` module (roadmap A5), built with gcc `-prod`. Results, with machine and compiler, in `docs/benchmarks.md`. DWSIM's timings come from the same automation script. | Speed claims have to be real, and kept so that regressions show. |
 | D11 | The Soave α guard | Compute Soave's α through its square root, s = 1 + m(1 − √Tr), so the zero at Tr = (1 + 1/m)² is harmless instead of a division by zero. Past it, keep the published form, which rises again, document that, and recommend Twu for supercritical components such as H₂. | The fix is exact and changes nothing below the zero, so M1's fixtures hold. |
@@ -833,10 +833,130 @@ flowchart LR
   - Counting UV's TV flashes rather than its total steps let the budget
     catch a missing Newton finish, for a split and for one phase.
 
-### 9. Robustness sweep
-- `tools/flash_sweep.vsh` runs the 10,000-point sweep (D8) and writes
-  `docs/flash-robustness.md`, with every failure classified.
-- A test runs the seeded 1,000-point subset in CI.
+### 9. Robustness sweep — done
+- **[sweep/](../sweep/)** is a module of its own: the one place that uses
+  both `components` and `flash`.
+  - `points` draws seeded points with splitmix64. Each has 2 to 10
+    compounds from the 640 with Tc, Pc, ω, M and an ideal-gas Cp. T is
+    log-uniform over 100–1000 K, P over 0.1–1000 bar, and z is uniform
+    over the simplex.
+  - `run` flashes a point with PR and ChemSep's kᵢⱼ, then checks the
+    answer from scratch and classifies it (D8). "The robustness sweep" in
+    [design.md](design.md) has every check.
+  - **No verdict rests on the flash's own tests.** `flash.stability` only
+    searches. At every composition its trials reach, the sweep computes the
+    tangent-plane distance from `thermo` alone, and the lowest one decides.
+  - **A third phase is proved, not taken on trust.** Unverified, the flash
+    returns the split it refused, and one of that split's phases must have
+    a tangent-plane distance below −1e-8.
+- **[tools/flash_sweep.vsh](../tools/flash_sweep.vsh)** runs 10,000 points
+  and writes [flash-robustness.md](flash-robustness.md), which lists every
+  failure. With gcc and `-prod` it takes 157–193 s, the build included.
+
+  | Outcome | All 10,000 | First 1,000 (CI) |
+  |---|---|---|
+  | One phase, checked stable | 5480 | 564 |
+  | Two phases, every invariant checked | 3344 | 311 |
+  | Explained: a third phase | 1176 | 125 |
+  | Explained: at a critical point | 0 | 0 |
+  | **Unexplained** | **0** | **0** |
+
+- **D8 amended: a third phase is explained.** The flash refuses a split
+  with an unstable phase, and the sweep proves each refusal, so these are
+  M6's VLLE points rather than failures. They're mostly cold: 789 of the
+  1,176 lie below 200 K, where only 30% of all points do. Their tm runs
+  from −1.6e-6 to −987, all far below −1e-8.
+- **No point landed at a critical point,** near enough for its split to
+  collapse onto the feed. Random points almost never do, so that class
+  stays empty.
+- **Bugs found:**
+  - **K beyond a double.** The first full run had 54 unexplained points,
+    49 of them with K = 0 or +inf in Rachford–Rice. A component with
+    |ln K| beyond 709 had overflowed: tripalmitin in the vapour below about
+    150 K, for one. Every K that Rachford–Rice sees, in substitution and in
+    DEM's jump, is now held within e^±700 (`k_of`). A component below
+    1e-300 (`trace_floor`) in either phase is left out of the fugacity
+    test, since its amount there is zero to double precision.
+  - **One refused split ended the flash.** A split with an unstable phase
+    can be a local minimum of G that another start avoids. Now every start
+    is tried before the flash refuses, and at 11 points a later one finds
+    the verified split.
+  - **The refusal could be lost.** Once every start was tried, a later
+    start's failure to converge replaced an earlier start's proof of a
+    third phase. Points 322, 1269 and 1989 failed that way. Now the proof
+    is the answer.
+  - **`numeric.minimize` could loop forever.** A planted mistake found it,
+    at point 3430: 9.4e-306 of trilinolein in the vapour puts 1.06e305 on
+    the Hessian's diagonal. The shift's limit, 1e20 times that, had
+    overflowed to +inf, so μ reached +inf and stayed there. Now μ's own
+    overflow ends the loop too, and the flash carries on substituting.
+  - **The sweep's own checks** took stability's word, so a wrong "stable"
+    or "unstable" could have passed. Planted mistakes showed it, and the
+    verdict now comes from the tangent-plane distance alone, as above.
+- **Tests:**
+  - **[sweep/sweep_test.v](../sweep/sweep_test.v):**
+    - the first 1,000 points, with no unexplained failure: 98–119 s
+      under tcc;
+    - the 14 points beyond them that found the bugs above;
+    - the 11 points where a later start finds the verified split;
+    - the committed report's counts row;
+    - the seeded points, against splitmix64's reference values, in range,
+      with z normalised.
+  - **[sweep/sweep_internal_test.v](../sweep/sweep_internal_test.v)**
+    shows each check refusing a wrong answer. A check that passes every
+    flash proves nothing until it's seen to fail.
+    - **A split:** check_split refuses each of these:
+      - β off by 1e-9;
+      - 1e-12 moved between phases, so Σx ≠ 1 while the mass balance and
+        fugacities hold;
+      - some of one component traded for another, which leaves the sums
+        and mass balance exact but breaks the fugacities;
+      - two copies of a stable feed;
+      - β = 1;
+      - the unverified split at a third-phase point.
+    - **One phase:** check_single refuses a two-phase feed.
+    - **The proof** fails for a verified split and for one phase.
+    - **The report** counts every class, with the CI column holding only
+      the first 1,000.
+  - **In flash and numeric:** `k_of` keeps K finite and normal for any
+    ln K, and `minimize` fails, within a 10 s deadline, on a Hessian of
+    1e305 rather than hanging.
+- **Planted mistakes:** 31 in the first round, and 21 caught at first, one
+  of them (comparing trace components' fugacities) by the sweep test
+  running past 40 minutes. Of the other ten:
+  - three found bugs, and each now has a test:
+    - DEM's K unclamped found the `minimize` hang;
+    - refusing at the first refused split found the 11 points;
+    - letting any tm prove a third phase showed that the threshold was
+      only consulted after stability had already said "unstable".
+  - two now have new tests:
+    - a clamp at e^710, beyond the largest double: `k_of`'s own test;
+    - z off the simplex: the seeded-points test.
+  - three showed code that wasn't needed, now deleted:
+    - the clamp on the starting K, which the split's clamp covers (an
+      infinite start enters ln K for one step, and DEM never sees it);
+    - the other phase as a stability trial, twice: at a converged split it
+      sits on the other phase's tangent plane, a stationary point with
+      tm = 0, so it can't show anything.
+  - two are explained:
+    - without the five random trials, the single-phase check would repeat
+      the flash's own test exactly. They're what make it a check, and in
+      10,000 points they found nothing the flash's trials missed;
+    - not recognising a critical point changes nothing, since no point
+      lands at one.
+- **Second round,** on the code that changed: 11, and 8 caught. The
+  `minimize` mistake first hung its test past the timeout. The test now
+  runs it in a thread with a 10 s deadline, and fails instead. Of the
+  other three:
+  - dropping the random trials, or using stability's own tm in place of
+    the from-scratch tpd, changes nothing while stability is right: at a
+    converged trial its tm and the tpd are the same number. The random
+    trials widen stability's search, and the tpd keeps the verdict from
+    resting on it;
+  - DEM's K unclamped now costs only speed, with `minimize` fixed. At
+    point 3430 it takes 64 ms instead of 33. Unclamped, a jump that takes
+    any K beyond a double fails Rachford–Rice and isn't taken, so DEM
+    stops working for exactly the mixtures with heavy traces.
 
 ### 10. Benchmarks and a performance pass
 - The `benchmark` module and `docs/benchmarks.md` (D10), with reflux,
