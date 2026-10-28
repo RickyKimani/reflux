@@ -28,19 +28,21 @@ Keep this section current: update it whenever a step is committed.
     D1–D12 and steps 0–11.
   - A finished step's heading says "— done", with a write-up beneath. That
     file, not this one, is the record of what each step did.
-  - Steps 0–7 are committed (0–6 pushed): the DWSIM spike, Newton and
+  - Steps 0–8 are committed (0–6 pushed): the DWSIM spike, Newton and
     Rachford–Rice, PIP and the Soave guard, stability, the PT flash
     (`flash/pt.v`), the reference fixtures (`testdata/m3_thermo.json`,
     `testdata/m3_dwsim.json`), the vapour-fraction flashes with bubble and
-    dew points (`flash/vf.v`), and the PH and PS flashes (`flash/ph.v`).
+    dew points (`flash/vf.v`), the PH and PS flashes (`flash/ph.v`), and the
+    TV and UV flashes (`flash/tv.v`).
   - Amended so far: D3 in step 4 (pure-component stability trials), D6 in
     step 6 (the vapour is the phase of lower mass density), and criterion
     6 after step 5 (a DWSIM deviation may exceed a target only when the
     fixture reproduces it from DWSIM itself, and reflux still matches the
     exact model to 1e-8).
-  - Next is step 8: TV and UV flashes, the Helmholtz-natural
-    specifications (D5), with round trips from `m3_thermo.json`'s PT states
-    (their V and U) and agreement with `thermo` where its TV flash ran.
+  - Next is step 9: the robustness sweep (D8, criterion 5). A seeded
+    10,000-point PT sweep over database mixtures writes
+    `docs/flash-robustness.md` with every failure classified, and a test
+    runs the first 1,000 points in CI.
 
 ## How we work
 
@@ -65,8 +67,8 @@ Keep this section current: update it whenever a step is committed.
 ## Commands
 
 ```bash
-v run tools/check.vsh            # what CI runs, with tcc: about 2 min
-v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 6 min
+v run tools/check.vsh            # what CI runs, with tcc: about 5 min
+v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 10 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) and P (bar)
@@ -143,6 +145,10 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     sign of H(T) − H_spec, narrowed by Brent, and finished by Newton in
     (v, ln T). A pure component inside its jump at Tsat gets β from the
     energy balance.
+  - `tv` and `uv` (`tv.v`) find P (and T) from a molar V (and U). The finish
+    minimises A over the vapour's mole numbers and volume, in F(T, V, n)
+    alone, with no volume roots (D5); UV adds ln T and the energy balance to
+    that Newton.
   - In a split, the vapour is the phase of lower *mass* density (D6, as
     amended in step 6), not the larger molar volume.
   - Results are `FlashResult`; failures are `FlashError` with a

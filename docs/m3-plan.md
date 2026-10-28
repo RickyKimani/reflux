@@ -769,9 +769,69 @@ flowchart LR
   - One survivor is explained: steps of 3× take 1959, as few as 1.5×
     (1947), so the factor is a tuning choice, not a mistake.
 
-### 8. TV and UV flashes
-- The Helmholtz-natural specifications (D5).
-- Tests: round trips from PT; agreement with `thermo` (TV).
+### 8. TV and UV flashes — done
+- **[flash/tv.v](../flash/tv.v):** `tv(model, T, V, z)` finds P and the
+  split from a molar volume, and `uv(fluid, U, V, z)` finds T, P and the
+  split from a molar internal energy and volume.
+- **Michelsen's Q-functions (D5).** At fixed T and V, dQ*/dP = V(P) − V_spec
+  with V(P) falling; at fixed U and V, dQ*/dT = −(U(T) − U_spec)/T² with
+  U(T) rising. So each has a monotone residual to bracket and narrow, as
+  in step 7.
+- **TV works in F(T, V, n), as D5 asks.** It minimises A over the vapour's
+  mole numbers and volume, the liquid taking the rest, with
+  `numeric.minimize`, the gradient (μⱽ − μᴸ, Pᴸ − Pⱽ) and the Hessian from
+  F's second derivatives. No volume root is solved there.
+  - The feed as one phase at P(T, V) is tried first: a PT flash there
+    confirms it, or splits, and the split starts the minimisation.
+  - Starting the minimisation from the liquid's own volume rather than the
+    PT split's, and these two fast paths, cut TV from 15.6 s to 5.8 s on
+    the round trips.
+- **UV** brackets ln T with TV flashes and finishes with Newton:
+  - in (nⱽ, Vⱽ, ln T) for a split, the Helmholtz conditions plus the
+    energy balance with F_Tn, F_TV and Cv;
+  - on U(T) at fixed V from F alone for one phase.
+  - UV's `iterations` counts TV flashes only, the expensive part. Counting
+    Newton steps alongside them hid what the Newton saves.
+  - The bracket starts from 300 K when the ideal gas's T for a liquid's U
+    (24 K for CO₂) has no TV answer.
+- **Found:** starting UV with the one-phase Newton was rejected. From a
+  split's U it found a one-phase answer at 5035 K, where the test data's
+  quadratic Cp has turned negative (n-butane's above 3290 K). The bracket
+  finds the nearest change of sign instead.
+- **Tests in [flash/tv_test.v](../flash/tv_test.v):**
+  - **Criterion 4's round trips** start from reflux's own V and U at each
+    of the 83 PT states. A liquid's P amplifies an error in V by its bulk
+    modulus over P, and `thermo`'s V differs from reflux's by 1e-11,
+    worth 9e-8 in liquid n-butane's P.
+    - TV comes back to P within 1e-8 (2e-12 measured) and the split
+      within 1e-8 (2e-11), in at most 450 steps (436).
+    - UV comes back to T, P and the split (4.6e-12, 3.9e-11 and 1.2e-11),
+      in at most 980 TV flashes (958; 1122 without the split's Newton,
+      which saves about 18% of the time).
+  - **Agreement with `thermo`** is two facts that are tested already.
+    reflux's V matches `thermo`'s to 1.9e-11 (thermo_test), and `thermo`'s
+    own TV flash, on the 23 states where it runs, lands on the PT state.
+  - **The 36 pure saturation states**, from `thermo`'s V and U: Psat, Tsat
+    and β to 1.2e-10, 1.5e-11 and 1.5e-10. Inside the dome P is Psat
+    whatever V.
+  - **Three phases** refused as `more_phases`.
+  - **The tolerance contract:** at vtol and etol 1e-4 every answer meets
+    them; at 1e-16 every answer meets them or is an error (all 11 refused).
+  - **Bad input** of every kind, each for its own stated reason, including
+    a V below the covolume and an unreachable U.
+- **Internal tests:** the Helmholtz gradient and Hessian, and the UV
+  Jacobian, against central differences.
+- **Speed:** a UV flash makes about 14 TV flashes, so the UV round trips
+  take 28–36 s under tcc, for step 10 to measure and improve.
+- **Planted mistakes:** 23, and 20 caught at first. Of the other three:
+  - one only broke the build; rewritten, it's caught.
+  - two showed code no test needed, which is now deleted:
+    - the bracket's step-halving, which the 300 K fallback makes
+      unnecessary;
+    - a tolerance margin at saturation, which TV, unlike PH, doesn't need
+      (just outside the dome its answer is solved at P(T, V) directly).
+  - Counting UV's TV flashes rather than its total steps let the budget
+    catch a missing Newton finish, for a split and for one phase.
 
 ### 9. Robustness sweep
 - `tools/flash_sweep.vsh` runs the 10,000-point sweep (D8) and writes

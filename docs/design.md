@@ -629,6 +629,77 @@ between the saturated liquid's and vapour's, within etol of either end.
 Outside that range the answer is a single phase on its own side of Tsat,
 found by Brent on that root alone.
 
+## TV and UV flashes
+
+`flash.tv(model, T, V, z)` finds P and the split from a molar volume, and
+`flash.uv(fluid, U, V, z)` finds T, P and the split from a molar internal
+energy and volume ([flash/tv.v](../flash/tv.v)). TV needs only a Model,
+since the ideal gas's part of A is the same for any split at fixed T.
+
+**Q-functions** (D5). At fixed T and V the equilibrium minimises A, and
+Q(P) = G − P·V_spec has dQ*/dP = V(P) − V_spec, with V(P) the equilibrium
+volume, which falls as P rises. At fixed U and V it maximises S, and
+Q(T) = (A − U_spec)/T has dQ*/dT = −(U(T) − U_spec)/T², with U(T) the TV
+flash's U, which rises with T. So each has a monotone residual to bracket,
+as the PH flash does.
+
+**TV, step by step.**
+- **The feed as one phase:** its pressure P(T, V) comes from the model
+  directly, and a PT flash there confirms the phase is stable and has this
+  volume. If that PT flash splits instead, its split starts the Helmholtz
+  minimisation below.
+- **Otherwise,** ln P is stepped by ln 2 with PT flashes until
+  V(P) − V_spec changes sign, and Brent narrows that to 0.1%.
+- **The Helmholtz minimisation,** in the model's own variables. Over the
+  vapour's mole numbers nⱽ and volume Vⱽ, with nᴸ = z − nⱽ and
+  Vᴸ = V − Vⱽ, it minimises
+
+      A/RT = Σ over phases [F(T, V, n) + Σᵢ nᵢ(ln(nᵢ/V) − 1)] + a constant,
+      ∂/∂nᵢⱽ = (F_nᵢ + ln(nᵢ/V))ⱽ − (…)ᴸ = (μᵢⱽ − μᵢᴸ)/RT,
+      ∂/∂Vⱽ = (F_V − n/V)ⱽ − (…)ᴸ = (Pᴸ − Pⱽ)/RT,
+
+  with the Hessian the two phases' sums of F_nn + δᵢⱼ/nᵢ, F_Vn − 1/V and
+  F_VV + n/V². It needs no volume root: only F(T, V, n) and its
+  derivatives.
+- **The start:** the PT split, the liquid keeping its volume, since it
+  hardly compresses, and the vapour taking the rest of V.
+- **The answer** is a verified PT flash at the pressure found, held to
+  |V − V_spec| ≤ vtol·V_spec (vtol 1e-10).
+
+**UV, step by step.**
+- **Bracket:** ln T is stepped by ln 1.5 with TV flashes until
+  U − U_spec changes sign, from the ideal gas's T for U_spec. That T can
+  be far too low for a liquid's U, low enough that no TV flash at this V
+  has an answer; then the search starts from 300 K.
+- **Narrow:** Brent, to 0.1%.
+- **Finish:** Newton.
+  - For a split it works in (nⱽ, Vⱽ, ln T): the Helmholtz conditions plus
+    r_U = (U − U_spec)/RT, with
+    U = Σᵢ zᵢ(ΔH°f,ᵢ + ∫Cpᵢ dT − RT) − RT²·Σ F_T. With
+    cᵢ = T(F_Tnᵢⱽ − F_Tnᵢᴸ) and c_V = T(F_TVⱽ − F_TVᴸ), the extra
+    derivatives are
+    ∂gᵢ/∂ln T = cᵢ, ∂g_V/∂ln T = c_V, ∂r_U/∂nᵢⱽ = −cᵢ, ∂r_U/∂Vⱽ = −c_V
+    and ∂r_U/∂ln T = Cv/R − r_U, with Cv = Σᵢ zᵢ(Cpᵢ − R) − RT·Σ(T·F_TT +
+    2F_T).
+  - For one phase it works on U(T) at this V, from F alone.
+- **The answer** is a verified TV flash at the final T, held to
+  |U − U_spec| ≤ etol·RT.
+
+**Why not start with the one-phase Newton.** Newton on the one phase's U(T)
+from the start would save the bracket, but it can run far. From a split's
+U it found a one-phase answer at 5035 K, where the test data's quadratic
+Cp has turned negative (n-butane's at 3290 K) and U(T) falls again. The
+bracket finds the nearest change of sign instead.
+
+**A pure component** inside its saturation dome has P = Psat(T), from tvf,
+and β = (V − Vᴸ)/(Vⱽ − Vᴸ). Outside it, the one phase's pressure is P(T, V),
+on the root of that volume.
+
+**Conditioning.** A liquid's P moves V little, so V moves P a lot: by the
+bulk modulus over P, a factor of a thousand here and there. `thermo`'s V
+differs from reflux's by about 1e-11, which is 1e-8 in a liquid's P, so
+the round trips start from reflux's own V and U.
+
 ## How CPA will fit
 
 ```v
