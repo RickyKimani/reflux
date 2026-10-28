@@ -122,3 +122,43 @@ fn test_truncated_mathias_copeman_is_smooth_to_first_order_at_tc() {
 	assert math.abs(d_below - d_above) < 1e-8
 	assert math.abs((e_below - e_above) - c2) < 1e-7, 'α″ jump ${e_below - e_above}, expected ${c2}'
 }
+
+fn test_root_is_the_square_root_of_alpha() {
+	// root gives √α and its derivatives, and eval gives α: r² = α,
+	// 2r·r′ = α′ and 2(r′² + r·r″) = α″, for every form, at every Tr.
+	// Tr = 20 is past the Soave and PRSV zeros, where r is negative.
+	for name, a in alphas() {
+		for tr in [0.3, 0.7, 0.999, 1.001, 1.5, 4.0, 20.0] {
+			alpha, d1, d2 := a.eval(tr)
+			r, r1, r2 := a.root(tr)
+			assert close(r * r, alpha), '${name} at Tr=${tr}: r² ${r * r} vs α ${alpha}'
+			assert close(2.0 * r * r1, d1), '${name} at Tr=${tr}: 2rr′ vs α′'
+			assert close(2.0 * (r1 * r1 + r * r2), d2), '${name} at Tr=${tr}: α″'
+			// And root's own derivatives, by central differences.
+			h := 1e-6 * tr
+			up, r1_up, _ := a.root(tr + h)
+			dn, r1_dn, _ := a.root(tr - h)
+			assert close(r1, (up - dn) / (2.0 * h)), '${name} at Tr=${tr}: r′'
+			assert close(r2, (r1_up - r1_dn) / (2.0 * h)), '${name} at Tr=${tr}: r″'
+		}
+	}
+}
+
+fn test_soave_root_passes_through_zero() {
+	// With m = 0.5, k = 1 + m(1 − √Tr) is exactly zero at Tr = 9. √α = k
+	// crosses zero there with a finite slope, and α = k² touches zero and
+	// rises again, as the published form does.
+	a := Alpha(thermo.Soave{
+		m: 0.5
+	})
+	r, r1, r2 := a.root(9.0)
+	assert r == 0.0
+	assert r1 == -0.5 / 6.0 && r2 == 0.5 / 108.0
+	alpha, d1, d2 := a.eval(9.0)
+	assert alpha == 0.0 && d1 == 0.0 && d2 == 2.0 * r1 * r1
+	below, _, _ := a.root(8.99)
+	above, _, _ := a.root(9.01)
+	assert below > 0.0 && above < 0.0
+	alpha_above, _, _ := a.eval(9.01)
+	assert alpha_above > 0.0
+}

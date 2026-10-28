@@ -1,6 +1,7 @@
 # M2 plan — component data
 
-Status: **in progress.** Steps 0 and 1 are done: the official files are in
+Status: **done,** and merged as PR #2. The criterion-by-criterion review is
+in "Exit review", at the end. The official files are in
 `data/vendor/chemsep/` (see their [NOTICE](../data/vendor/chemsep/NOTICE.md)),
 and the format is TOML ([data-format.md](data-format.md)). The roadmap entry
 is
@@ -634,9 +635,9 @@ flowchart LR
 
 Checked on 2026-10-26 at the tip of `m2-component-data`. All 24 test files
 pass locally, with 14,041 assertions, under `v run tools/check.vsh` with
-tcc and with gcc (Windows). **CI hasn't run on M2 yet:** the branch hasn't
-been pushed, so criterion 10's "CI is green" waits for the push. M1's CI
-covers the same jobs on Linux.
+tcc and with gcc (Windows). CI then passed on Windows and Linux, with tcc
+and gcc, on the last pushed commit (`35abfac`, pull-request run
+40388664213), and the branch was merged into main as PR #2.
 
 | # | Criterion | Verdict | Evidence |
 |---|---|---|---|
@@ -649,7 +650,7 @@ covers the same jobs on Linux.
 | 7 | Lookup works | **met** | `database_test.v`: by CAS, name (any case, spaces trimmed), alias and InChIKey; a miss lists the 5 closest; an ambiguous query lists every match, as the real CO/formaldehyde InChIKey clash shows. |
 | 8 | kᵢⱼ works | **met** | `params_test.v`: PR and SRK load (302 and 306 entries, no defects); pairs checked by hand against the files; matrices symmetric with zero diagonal; missing pairs 0 and listed in `report()`; repeated pairs take the first listing (D12), with the rest reported. |
 | 9 | End to end | **met** | `fluid_test.v`: `db.fluid(.pr, …)` is bit-identical to a hand-built fluid. M1's six CoolProp states are reproduced with ChemSep's constants (within 0.2% of M1's recorded deviations). Psat(350 K) is +0.18% on SVA Example 3.9. Enthalpy changes against CoolProp are recorded. |
-| 10 | CI green; docs updated | **pending CI** | Local checks pass with both compilers. Docs: step 10 above. CI runs when the branch is pushed. |
+| 10 | CI green; docs updated | **met** | Run 40388664213: all eight jobs (Windows and Linux, tcc and gcc). Docs: step 10 above. |
 
 **Planted mistakes.** 153 were planted across the milestone, one per
 change, and all but one were caught. The miss was the reader's NaN check on
@@ -695,7 +696,7 @@ were fixed:
   carried over from M1.
 - **From M1:** the Soave α → 0 guard, and concurrent Python calls (M10a).
 
-**Verdict: M2 is done, subject to CI on the push.**
+**Verdict: M2 is done.**
 
 ## Not in M2
 

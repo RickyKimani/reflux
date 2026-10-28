@@ -13,6 +13,9 @@
 *.tmp.c
 *.c.tmp
 .vtmp/
+# V eab77e7 sometimes leaves its C build folder next to the binary,
+# e.g. tools/.check.exe.v3cc.<pid>.<…>/ or .reflux.exe.v3cc.<…>/
+.*.v3cc.*/
 
 # Editors
 .vscode/

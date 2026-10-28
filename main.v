@@ -1,4 +1,5 @@
-// A small demo of the thermo layer, on component data from the database.
+// A small demo of the thermo and flash layers, on component data from the
+// database.
 //
 //     v run .                 # n-butane at 350 K and 9.4573 bar (SVA Example 3.9)
 //     v run . 300 2.5         # T in K, P in bar
@@ -8,6 +9,7 @@ import math
 import os
 import strconv
 import components
+import flash
 import thermo { CubicKind }
 
 fn main() {
@@ -22,6 +24,8 @@ fn main() {
 	mixture_example(db) or { die(err) }
 	println('')
 	fluid_example(db) or { die(err) }
+	println('')
+	flash_example(db) or { die(err) }
 	println('')
 	lookup_example(db)
 }
@@ -102,6 +106,28 @@ fn fluid_example(db components.Database) ! {
 		pr := fl.props(thermo.solve_tp(fl.model, pt[0], pt[1], [1.0], root)!)
 		println('${label:-20} ${pr.h / 1e3:9.3f} ${pr.s:8.2f} ${pr.cp:8.2f} ${pr.cv:8.2f} ${pr.w:8.1f} ${pr.mu_jt * 1e5:8.3f}')
 	}
+}
+
+// flash_example splits a mixture into its two phases at (T, P), finds its
+// bubble point at that P, and flashes back to T from the split's H.
+fn flash_example(db components.Database) ! {
+	fl := db.fluid(.pr, ['methane', 'n-butane'])!
+	z := [0.4, 0.6]
+	t, p := 250.0, 30e5
+	println('40% methane + 60% n-butane, PR, flashed at ${t} K and ${p / 1e5} bar')
+	r := flash.pt(fl.model, t, p, z)!
+	if r.phases.len == 2 {
+		y, x := r.phases[0].state.n, r.phases[1].state.n
+		println('  PT: vapour fraction ${r.beta:.4f}, methane ${y[0]:.4f} in the vapour and ${x[0]:.4f} in the liquid')
+	}
+	bubble := flash.pvf(fl.model, p, 0.0, z)!
+	println('  bubble point at ${p / 1e5} bar: ${bubble.t:.2f} K')
+	mut h := 0.0
+	for ph in r.phases {
+		h += ph.fraction * fl.props(ph.state).h
+	}
+	back := flash.ph(fl, p, h, z)!
+	println("  PH from the split's H (${h / 1e3:.3f} kJ/mol): back to ${back.t:.6f} K")
 }
 
 // lookup_example shows what an unknown name gets: the closest matches.

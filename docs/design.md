@@ -28,17 +28,32 @@ The `Model` interface is in [thermo/model.v](../thermo/model.v):
 ```v
 pub interface Model {
 	components() []Component
-	min_volume(n []f64) f64                            // packing limit, e.g. Σnᵢbᵢ
-	volume_derivs(t f64, v f64, n []f64) VolumeDerivs  // F, F_V, F_VV (cheap)
-	residual(t f64, v f64, n []f64) Residual           // F, F_V, F_VV, F_T, F_n
-	residual2(t f64, v f64, n []f64) Residual2         // all of the above + every second derivative
+	min_volume(n []f64) f64                                 // packing limit, e.g. Σnᵢbᵢ
+	volume_function(t f64, n []f64) VolumeFunction          // F at fixed T and n, as a function of V
+	residual(t f64, v f64, n []f64) Residual                // F, F_V, F_VV, F_T, F_n
+	residual2(t f64, v f64, n []f64) Residual2              // all of the above + every second derivative
+}
+
+pub interface VolumeFunction {
+	at(v f64) VolumeDerivs  // F, F_V, F_VV: what the volume solver needs
+	residual(v f64) Residual // the state at the root it found
 }
 ```
 
 There are three tiers so that each caller pays only for what it uses. The
-volume solver calls the cheapest one on every iteration. The composition
-Hessian in `residual2` costs O(nc²) and is needed only by Cp, Newton flash
-and Jacobians.
+composition Hessian in `residual2` costs O(nc²) and is needed only by Cp,
+Newton flash and Jacobians.
+
+**The volume solver's tier fixes T and n.** A volume root is found at fixed
+T and n by iterating on V alone, ten or twenty steps. So `volume_function`
+computes the parts that depend only on T and n once, and each step costs
+only the terms in V: a cubic's A(T, n) = ΣΣ nᵢnⱼ(1 − kᵢⱼ)√(aᵢaⱼ) and
+B(n) = Σ nᵢbᵢ, CPA's association strengths, SAFT's segment diameters. Its
+`residual` then gives the state at the root without computing them again.
+Until M3 step 10 this tier was `volume_derivs(t, v, n)`, which recomputed
+every αᵢ(T) and the double sum on every step; the step-10 benchmarks found
+the volume roots taking 88% of a PT flash. (That amends M1's D2.)
+`thermo.volume_derivs(m, t, v, n)` remains, for one volume.
 
 ### Properties from F
 
@@ -128,6 +143,43 @@ loop onto the other branch. Each returns `none` (a V Option) when its branch
 doesn't reach the requested pressure. For cubics the tests check both
 against the polynomial roots from `Cubic.z_roots`, over a grid of T and P.
 
+**Near a critical point** the iterations stop on the residual instead. At
+(Tc, Pc), P(V) − p has a triple root: dP/dV and d²P/dV² vanish there too.
+Newton then converges only linearly, and rounding limits V to about ε^(1/3),
+roughly 1e-5 relative. Close to the critical point dP/dV is merely tiny,
+with the same effect. So once |P − p| is down to a few rounding errors of
+P's own terms, 16ε·RT(n/V + |F_V|), and the Newton step still isn't below
+1e-12, the volume is as converged as it can get and is returned. Elsewhere
+the step test is met first, and nothing changes. M3 found this: before it,
+the solver failed on 276 of 528 requests within 1e-6 of a pure component's
+Tc and 1e-8 of its Pc. At the critical point itself, the liquid iteration
+now stops just below Vc and the vapour one just above.
+
+## Phase identification
+
+`thermo.pip` ([thermo/phase.v](../thermo/phase.v)) is the phase
+identification parameter of Venkatarathnam and Oellrich (2011):
+
+    Π = V·[(∂²P/∂T∂V)/(∂P/∂T) − (∂²P/∂V²)/(∂P/∂V)]
+
+`phase_label` calls a single phase liquid when Π > 1 and vapour otherwise,
+as Caleb Bell's `thermo` does. It needs no saturation curve or critical
+point, so it works for any mixture, supercritical ones included.
+
+∂P/∂V and ∂P/∂T are analytic. The second derivatives are third derivatives
+of F, which the `Model` contract doesn't have, so they're central
+differences of the analytic first ones (D6). ∂²P/∂V² is differenced in V,
+with a step of 1e-5·(V − V_min) so that a liquid squeezed against its
+covolume still gets a small enough step. ∂²P/∂T∂V is differenced in T, with
+a step of 1e-5·T, as the T-derivative of ∂P/∂V. Π then agrees with
+`thermo`'s analytic value to about 5e-9.
+
+At a pure component's exact critical point ∂P/∂V and ∂²P/∂V² are both zero,
+so Π is 0/0 and no label means anything. In a two-phase split the flash
+labels by mass density instead, the less dense phase being the vapour,
+because Π can call both phases liquid-like. (`thermo` then calls both
+liquids.)
+
 ## Derivatives
 
 Each model writes its derivatives analytically. The tests make that safe:
@@ -190,12 +242,13 @@ is d/dT:
 | D_TT | 2Σᵢ nᵢ(s″ᵢqᵢ + s′ᵢrᵢ) |
 
 The symmetric forms need kᵢⱼ = kⱼᵢ, which `new_cubic` enforces. Since
-sᵢ² = a_c,i·αᵢ(Tr), the s derivatives come from the α function:
+sᵢ = √a_c,i·√αᵢ(Tr), the s derivatives come from the square root of α,
+with no division:
 
-    s′ = a_c·α_T / (2s),   s″ = (a_c·α_TT/2 − s′²) / s,
-    α_T = α′/Tc,   α_TT = α″/Tc²
+    s′ = √a_c·(√α)′/Tc,   s″ = √a_c·(√α)″/Tc²
 
-where α′ and α″ are taken with respect to Tr.
+where the primes on √α are taken with respect to Tr (`Alpha.root`; see
+"Through the Soave zero" below).
 
 **F.** Writing RT for R·T:
 
@@ -237,9 +290,26 @@ default (`truncated`) keeps only c₁, as in the original paper and in
 `thermo`. At Tr = 1, u = 0, so α and α′ are continuous, but α″ drops by
 exactly c₂, and Cp steps with it. `truncated: false` gives the smooth form.
 
-**A caveat.** At very high Tr the Soave form passes through k = 0, which
-makes α = 0, and s′ divides by s there. It's unphysical territory anyway
-(roughly Tr > 5 for typical m), and the Twu α is the physical fix.
+**Through the Soave zero.** At Tr = (1 + 1/m)² the Soave form reaches
+k = 0, so α = 0. With PR that's about 1,400 K for nitrogen and 2,400 K for
+methane, so a furnace or a reformer gets there. Building s as √(a_c·α) and
+dividing by it for s′ and s″ would give 0/0 at that point. So each α
+function also returns its square root, `Alpha.root`. For the forms written
+as α = k² (Soave, PRSV, Mathias–Copeman) that's k itself, signed, and
+
+    s = √a_c·k,   s′ = √a_c·k′/Tc,   s″ = √a_c·k″/Tc²,
+
+with no division at all. The other forms take √α directly: Tr^(−1/4) for
+1/√Tr, and exp(½ ln α) for Twu, with (√α)′ = √α·½(ln α)′.
+
+Past the zero k is negative and α = k² rises again, as the published form
+does, and a pure component is unchanged. A mixture's cross term
+(1 − kᵢⱼ)sᵢsⱼ turns negative while only one of the pair has passed its
+zero. Taking |k| instead, as `thermo` does, would put a kink in a(T) and a
+step in Hʳ at the zero; the signed root keeps everything smooth. Neither is
+physical: Soave's α isn't meant for such Tr. The Twu α, which stays positive
+and keeps falling, is the one to use for components that far above their
+Tc.
 
 ## Volume shift
 
@@ -271,6 +341,446 @@ What follows, and is tested:
 - the packing limit moves to B − C, which is why `translate` rejects any
   cᵢ ≥ bᵢ.
 
+## Rachford–Rice
+
+`numeric.rachford_rice` ([numeric/rachford_rice.v](../numeric/rachford_rice.v))
+solves, for fixed K-values,
+
+    f(β) = Σᵢ zᵢ(Kᵢ − 1) / (1 + β(Kᵢ − 1)) = 0,   xᵢ = zᵢ / (1 + β(Kᵢ − 1)),   yᵢ = Kᵢxᵢ.
+
+The pole-free window runs from c₁ = 1/(1 − K_max) < 0 to cₙ = 1/(1 − K_min) > 1,
+taking K_max and K_min over the components present. f falls from +∞ to −∞
+across it, so the root is unique. It may lie outside [0, 1]: that's the
+negative flash, and the compositions are still positive.
+
+The numerical danger is the denominator eᵢ = 1 + β(Kᵢ − 1). It is tiny for
+a heavy component when the liquid is a trace, and computing it from β
+subtracts two numbers near 1. So β is written as a position in the window,
+β = c₁ + t(cₙ − c₁) with s = 1 − t. Substituting gives
+
+    eᵢ = s·uᵢ + t·vᵢ,   uᵢ = (K_max − Kᵢ)/(K_max − 1),   vᵢ = (Kᵢ − K_min)/(1 − K_min),
+
+and both uᵢ and vᵢ are non-negative for every component present. (Check
+the ends: at t = 0, β = c₁ and the K_max component's e is 0; at t = 1,
+β = cₙ and the K_min component's is.) A sum of non-negative terms has no
+cancellation, so every eᵢ has full relative precision anywhere in the
+window, given t and s to full relative precision. The smaller of the two is
+stored and the larger is 1 minus it. So a root 1e-30 from an end still has
+all its digits, and so do β and L near their own small values: β from
+c₁ + (cₙ − c₁)t, L from (1 − cₙ) + (cₙ − c₁)s.
+
+The equation solved is Leibovici and Neoschil's, f multiplied by the
+distances to both poles:
+
+    Φ(t) = t·s·Σᵢ zᵢ(Kᵢ − 1)/(s·uᵢ + t·vᵢ).
+
+It's finite at both ends, Φ(0) = Σ over the K_max components of zᵢ(Kᵢ − 1)/vᵢ
+and Φ(1) = Σ over the K_min ones of zᵢ(Kᵢ − 1)/uᵢ, and close to linear near
+each. For two components it is exactly linear, so the first guess, the
+straight line between Φ(0) and Φ(1), is the root. Newton runs on Φ in t,
+and bisection takes over whenever a step would leave the bracket.
+
+What β can be trusted to is set by the K-values, not the method. Given eᵢ
+to a few ulps, β = (eᵢ − 1)/(Kᵢ − 1) carries an absolute error of about
+ε·(|β| + min(|c₁|, cₙ)). That's about ε for an ordinary mixture, but about
+2e-8 when every K is within 1e-8 of 1. Mass balance doesn't suffer, because
+L·xᵢ + β·yᵢ = xᵢ·eᵢ = zᵢ holds whatever β's error.
+
+## Stability
+
+`flash.stability` ([flash/stability.v](../flash/stability.v)) is Michelsen's
+(1982) tangent-plane test. For a trial phase of mole numbers W, with
+w = W/ΣW and dᵢ = ln zᵢ + ln φᵢ(z),
+
+    tm*(W) = 1 + Σᵢ Wᵢ(ln Wᵢ + ln φᵢ(w) − dᵢ − 1).
+
+Its stationary points satisfy ln Wᵢ + ln φᵢ(w) = dᵢ. There tm* = 1 − ΣW,
+and the normalised distance tm = Σ wᵢ(ln wᵢ + ln φᵢ(w) − dᵢ) equals
+−ln ΣW. The feed is unstable when some stationary point has tm < 0, and
+then that w is the first estimate of the new phase. Every phase takes its
+volume root of lower Gibbs energy.
+
+**Trials.** One starts vapour-like (Wᵢ = zᵢKᵢ) and one liquid-like
+(Wᵢ = zᵢ/Kᵢ), with Wilson's K. Then comes one nearly pure phase of each
+component present: Wᵢ = 1, with the others at 1e-10·zⱼ. A caller can add
+more: the phases of a split, to re-check it.
+
+The pure trials were added in M3 step 4. Wilson's two trials can miss a
+liquid–liquid split entirely. With water, n-decane and methane (PR, a
+water–hydrocarbon kᵢⱼ of 0.5) at 350 K and 5 bar, they call the methane-rich
+phase stable, yet a nearly pure water phase lies at tm = −2.2 against it.
+On 6,000 random PR mixtures the pure trials find 29 instabilities that
+Wilson's missed, and once they're there, dropping either Wilson trial
+changes no verdict. They cost about 2.4 times the work on the reference
+set. `pure_trials: false` turns them off where no second liquid can form.
+
+**Successive substitution,** ln Wᵢ ← dᵢ − ln φᵢ(w), lowers tm* at every
+step. Every fifth step Michelsen's dominant-eigenvalue method extrapolates:
+with Δ the last step and λ = Δ·Δ/(Δ_prev·Δ), substitution behaves like a
+geometric series of ratio λ, and adding λ/(1 − λ) times the last step sums
+the rest. Michelsen and Mollerup keep the extrapolated point only if it
+lowers tm*. On 6,000 random states that test changed no verdict, so reflux
+doesn't make it. Without the extrapolation the reference set takes a third
+more steps and nearly three times as many second-order finishes.
+
+**The second-order finish.** After 20 steps the trial switches to Newton
+in αᵢ = 2√Wᵢ, minimising tm* itself. The gradient and Hessian are
+
+    gᵢ = √Wᵢ·rᵢ,   Hᵢⱼ = δᵢⱼ(1 + rᵢ/2) + √(WᵢWⱼ)·(n∂ln φᵢ/∂nⱼ)/ΣW,
+
+with rᵢ = ln Wᵢ + ln φᵢ − dᵢ. The δᵢⱼ term keeps H well conditioned even
+with traces. Two choices mattered, both found near the methane/n-butane
+critical locus:
+- **Minimise tm*, don't solve g = 0.** On the way to the trivial solution
+  near a critical point, tm* has a long valley whose curvature is nearly
+  zero, and ‖g‖ has dips there that aren't stationary points. A root-finder
+  (numeric.newton) stopped in them and handed the trial back to
+  substitution, which then took up to 465 steps. One state failed outright.
+- **Know f's rounding.** tm* = 1 + Σ… is a small difference of terms of
+  size 1, so its rounding is about ε, not ε·|tm*|. numeric.minimize takes
+  that as `fscale`. Where f stops showing progress it finishes on the
+  gradient (the polish), and it counts that as convergence only if the
+  unshifted Newton model agrees.
+
+On 33,600 states 0.1 bar apart near that critical locus, no trial takes
+more than 42 steps and none fails.
+
+**The trivial solution.** A trial that ends within 1e-5 of the feed in
+every ln(Wᵢ/zᵢ) is the feed itself: tm = 0, and it says nothing. It's
+flagged trivial and never offered as a new phase.
+
+**The verdict.** The feed is unstable when a non-trivial trial reaches
+tm < −1e-10. A trial that runs out of steps still proves instability that
+way, since any W with tm < 0 is a proof. If no trial does and one didn't
+converge, the result is a FlashError, not "stable".
+
+## PT flash
+
+`flash.pt` ([flash/pt.v](../flash/pt.v)) tests the feed's stability first.
+A stable feed is one phase, labelled by its PIP, with β = 1 for a vapour and
+0 for a liquid. An unstable feed is split into two phases.
+
+**Starting K.** From an unstable trial phase W, stationarity,
+Wᵢφᵢ(w) = zᵢφᵢ(z), gives Kᵢ = Wᵢ/zᵢ. The trials are tried in order of their
+tm, lowest first. Whether W is the lighter phase doesn't matter: K and 1/K
+describe the same split with the roles swapped. Rachford–Rice then gives
+β′ = 1 − β, x′ = y and y′ = x, every later step mirrors the other, and the
+phases are labelled by density at the end.
+
+**Successive substitution,** ln Kᵢ ← ln φᵢᴸ(x) − ln φᵢⱽ(y), with x, y and β
+from Rachford–Rice at each step. Every fifth step it uses the same
+dominant-eigenvalue extrapolation as stability. Rachford–Rice may give β
+outside [0, 1] on the way (the negative flash); only the converged split
+must have 0 < β < 1.
+
+**Newton on G.** After 20 steps it switches to minimising the Gibbs energy
+of the split over the vapour mole numbers v (one mole of feed, l = z − v):
+
+    G/RT = Σᵢ vᵢ ln fᵢ(y) + Σᵢ lᵢ ln fᵢ(x),   gᵢ = ln fᵢ(y) − ln fᵢ(x),
+    Hᵢⱼ = (δᵢⱼ/yᵢ − 1 + Φⱽᵢⱼ)/V + (δᵢⱼ/xᵢ − 1 + Φᴸᵢⱼ)/L,
+
+where Φ is each phase's n·∂ln φᵢ/∂nⱼ. This uses numeric.minimize, with
+fscale set to the size of the terms G is summed from. Near the critical
+locus, 44 of the reference set's 166 splits end this way.
+
+A component with almost no moles in a phase, 1e-305 say, puts 1/(V·yᵢ) ≈
+1e305 on H's diagonal. Its step leaves the domain unless the shift μ is as
+large as that, and then no step moves anything else. So μ climbs to
+overflow, and minimize fails, as it must. Until step 9 it looped forever
+there, because its limit on μ, 1e20 times H's largest diagonal, had
+overflowed to +inf first. A failed Newton leaves substitution to carry on.
+
+**Accepted** only with every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol (1e-12) and 0 < β < 1,
+and a Newton result is held to the same test. A split that slides onto the
+feed (every |ln K| < 1e-4) is refused: there the fugacities are equal too,
+and it would pass for two identical phases.
+
+**Extreme K-values.** A K is held within e^±700, so that it and the mole
+fractions it makes stay finite doubles. A component whose K would lie
+beyond that has a mole fraction below 1e-300 in one phase, which is zero
+to double precision: tripalmitin's in the vapour below about 150 K, or
+mercury's in PR with ChemSep's constants. Below that floor (`trace_floor`)
+its fugacities aren't compared, since they can't be represented well
+enough to agree. The robustness sweep found 49 such points that the
+unbounded K turned into 0 or +inf for Rachford–Rice.
+
+**More than one start.** The starts are tried in turn until one gives a
+verified split. A split with an unstable phase can be a local minimum of G
+that another start avoids. If none does better, the answer is
+`more_phases`, with that split's proof, rather than a later start's
+failure to converge.
+
+**Verified** (`verify`, on by default): each phase is re-tested for
+stability, with the other phase as a trial. An unstable phase means a third
+phase or a better split. That's a FlashError (`more_phases`) rather than an
+answer, since M3 handles two phases. The water, n-decane and methane
+mixture above is the example. There, a two-phase flash, reflux's without
+the re-test or `thermo`'s FlashVL, returns a split whose fugacities are
+equal but which isn't the equilibrium.
+
+**Which phase is the vapour.** The phase of lower *mass* density, ΣnᵢMᵢ/V
+(D6, amended in step 6). Molar volume isn't a substitute. In methane with
+n-decane at 300 K and 200 bar, the methane-rich phase has the smaller molar
+volume and yet weighs 168 kg/m³, against the decane-rich phase's 585. Step
+4 compared molar volumes and called the decane-rich phase the vapour.
+
+## Vapour-fraction flashes
+
+`flash.tvf(model, T, β, z)` finds P, and `flash.pvf(model, P, β, z)`
+finds T ([flash/vf.v](../flash/vf.v)). `bubble_p`, `dew_p`, `bubble_t`
+and `dew_t` are the β = 0 and β = 1 cases. The answer is a FlashResult
+with both phases even when one has no moles.
+
+**The equations** (Michelsen & Mollerup, chapter 12). The unknowns are ln Kᵢ
+for each component present, and τ = ln P (T given) or ln T (P given):
+
+    Fᵢ = ln Kᵢ + ln φᵢ(y) − ln φᵢ(x) = 0,
+    F_R = Σᵢ (yᵢ − xᵢ) = 0,
+    xᵢ = zᵢ/dᵢ,  yᵢ = Kᵢxᵢ,  dᵢ = 1 + β(Kᵢ − 1),
+
+with each phase solved at its normalised composition. ln φ depends on mole
+numbers only through the mole fractions, so with Φ = n·∂ln φᵢ/∂nⱼ at one
+mole and S the sum of each phase's unnormalised x or y:
+
+    ∂Fᵢ/∂ln Kq = δᵢq + Φⱽᵢq·yq(1 − β)/(dq·Sy) + Φᴸᵢq·βKqxq/(dq·Sx),
+    ∂Fᵢ/∂τ = P(∂ln φᵢⱽ/∂P − ∂ln φᵢᴸ/∂P)   or   T(∂ln φᵢⱽ/∂T − ∂ln φᵢᴸ/∂T),
+    ∂F_R/∂ln Kq = zqKq/dq²,   ∂F_R/∂τ = 0.
+
+Newton stops with every |F| ≤ tol, so the mass balance holds to tol. Its
+last step is quadratic, so in practice F_R ends near round-off.
+
+**The roots.** Phase x takes its liquid root and phase y its vapour root
+throughout. Giving each its lower-Gibbs root instead let an incipient phase
+start on the feed's kind of root, so the phases looked alike and the
+iteration slid to the trivial solution K = 1, which solves these equations
+at any τ. At the end each phase must be on its lower-Gibbs root, or the
+boundary is between metastable phases and is refused.
+
+**Starts.**
+- Newton (with a line search) starts from Wilson's K-values at the τ where they
+  satisfy Rachford–Rice. With Kᵢ = aᵢ/P that's a bisection in ln P.
+  For P given, ln Kᵢ is linear in 1/T, so it's a bisection in 1/T.
+- If Newton fails from there, it starts again from the K-values of the
+  nearest two-phase PT flash it can find: τ is stepped out both ways, 10%
+  in P or 2% in T, up to 20 steps each way.
+- If no PT flash in that range splits, the failure is `outside_envelope`.
+  That's the evidence for "no such point here", such as a dew point above
+  the cricondenbar.
+- A caller's `estimate` starts from the PT split there, if there is one.
+- On the reference set:
+  - Newton takes 163 steps for `thermo`'s 40 bubble and dew points, and
+    the dogleg 182. (While Rachford–Rice's equation was weighted by 100,
+    the line search's merit function was distorted and the dogleg did
+    better; the weight bought nothing and is gone.)
+  - successive substitution first, as in the PT flash, slid to K = 1 from
+    Wilson's poor starts near a critical point.
+
+**Two answers.** At a temperature between a mixture's critical point and its
+cricondentherm there are two dew pressures, and near the critical point both
+ends of an isobar can be bubble points. The flash returns the one Newton
+reaches from its start, and `estimate` chooses another start. At 90 bar,
+methane/n-butane (40/60) splits from 327 to 379 K, and both ends are bubble
+points: there is no dew point at that pressure at all.
+
+**Checks.**
+- The fugacity residual must be ≤ tol (1e-12), and the iteration must not
+  have collapsed onto the feed.
+- Phase y, of fraction β, must come out the less dense by mass. Otherwise
+  the answer's vapour fraction is 1 − β, and it is refused
+  (`phases_swapped`) rather than relabelled.
+- With `verify`, each phase is re-tested for stability, as in the PT flash.
+  In both flashes the re-test calls a phase unstable at
+  tm < −max(1e-8, 10·tol): an answer converged only to a loose tol has tm
+  of about that size against its own phases.
+
+**A pure component** has K = 1 at any answer, so it gets its own Newton in τ
+alone: ln φ on the liquid root equals ln φ on the vapour root. It first
+moves τ until both roots exist. With only a vapour root, P is too low or T
+too high, and the reverse with only a liquid root. Any β gives the same T
+and P.
+
+## PH and PS flashes
+
+`flash.ph(fluid, P, H, z)` and `flash.ps(fluid, P, S, z)`
+([flash/ph.v](../flash/ph.v)) find T and the split from a molar H or S, on
+the Fluid's reference state. They take a Fluid, not a Model, because H and
+S need the ideal gas.
+
+**The Q-function** (Michelsen 1999, D5). At fixed P and H the equilibrium
+is the stationary point of
+
+    Q(T, v) = (G(T, P, v) − H_spec)/RT      (PS: (G + T·S_spec)/R),
+
+a minimum in the vapour mole numbers v and a maximum in T. Minimising over
+v at fixed T is the PT flash, and what is left, Q*(T), has
+
+    dQ*/dT = −(H(T) − H_spec)/RT²           (PS: S_spec − S(T)),
+
+where H(T) is the equilibrium enthalpy. H(T) at fixed P never falls as T
+rises, latent heat included, so the sign of H(T) − H_spec brackets the
+answer, however steep or broken H(T) is.
+
+**The steps.**
+- **Start:** the temperature at which the feed as an ideal gas has
+  H_spec (or S_spec), by bisection, or the caller's `estimate`.
+- **Bracket:** T is stepped out by 50% at a time, with a PT flash at
+  each step, until the residual changes sign. (Steps of 1.5× and 2× take
+  the fewest flashes on the reference set, and 1.25× takes 3% more.)
+- **Narrow:** Brent's method on the residual, to 1e-3 in T.
+- **Finish:** if the PT flash there splits, Newton on Q's stationary
+  conditions in (v, ln T) together, equal fugacities and the energy
+  balance, takes it to round-off.
+- **Fallback:** otherwise, or if Newton fails, Brent goes on.
+- **The answer** is a verified PT flash at the final T, with
+  |H − H_spec| ≤ etol·RT or |S − S_spec| ≤ etol·R (etol 1e-10).
+
+**Q's Hessian**, Newton's Jacobian. With gᵢ = ln fᵢⱽ − ln fᵢᴸ,
+r_E = (H − H_spec)/RT (or (S − S_spec)/R) and
+cᵢ = T·∂(ln φᵢⱽ − ln φᵢᴸ)/∂T at fixed composition:
+
+    ∂gᵢ/∂vⱼ = the PT flash's Hessian (above),   ∂gᵢ/∂ln T = cᵢ,
+    ∂r_E/∂vⱼ = −cⱼ             (PS: −gⱼ − cⱼ),
+    ∂r_E/∂ln T = Cp/R − r_E    (PS: Cp/R),
+
+with Cp the two phases' heat capacity at fixed composition. They follow
+from H = Σᵢ(vᵢh̄ᵢⱽ + lᵢh̄ᵢᴸ) and h̄ᵢⱽ − h̄ᵢᴸ = −RT²·∂(ln φᵢⱽ − ln φᵢᴸ)/∂T.
+For S there is also the mixing entropy:
+s̄ᵢⱽ − s̄ᵢᴸ = −R·gᵢ − RT·∂(ln φᵢⱽ − ln φᵢᴸ)/∂T.
+
+**Brent's method** ([numeric/roots.v](../numeric/roots.v)) is inverse
+quadratic interpolation or the secant where they make progress, and
+bisection where they don't (Brent 1973). On a smooth function it converges
+superlinearly, and it is never much slower than bisection, so a jump in
+H(T) only narrows the bracket onto it. It's slow on a multiple root, as
+Brent's method is, but a flash's residual has none. Its tolerance is
+relative (4ε|x|, plus xtol/2), so a root at 0 needs an xtol.
+
+**A pure component's** H jumps at Tsat by the heat of vaporisation, so no
+T gives an H inside the jump. There the Q-function's maximum is at the
+kink, T = Tsat, with the vapour fraction the energy balance gives:
+
+    β = (H_spec − Hᴸ(Tsat))/(Hⱽ(Tsat) − Hᴸ(Tsat)).
+
+The flash finds Tsat with pvf, then answers this way for an H_spec
+between the saturated liquid's and vapour's, within etol of either end.
+Outside that range the answer is a single phase on its own side of Tsat,
+found by Brent on that root alone.
+
+## TV and UV flashes
+
+`flash.tv(model, T, V, z)` finds P and the split from a molar volume, and
+`flash.uv(fluid, U, V, z)` finds T, P and the split from a molar internal
+energy and volume ([flash/tv.v](../flash/tv.v)). TV needs only a Model,
+since the ideal gas's part of A is the same for any split at fixed T.
+
+**Q-functions** (D5). At fixed T and V the equilibrium minimises A, and
+Q(P) = G − P·V_spec has dQ*/dP = V(P) − V_spec, with V(P) the equilibrium
+volume, which falls as P rises. At fixed U and V it maximises S, and
+Q(T) = (A − U_spec)/T has dQ*/dT = −(U(T) − U_spec)/T², with U(T) the TV
+flash's U, which rises with T. So each has a monotone residual to bracket,
+as the PH flash does.
+
+**TV, step by step.**
+- **The feed as one phase:** its pressure P(T, V) comes from the model
+  directly, and a PT flash there confirms the phase is stable and has this
+  volume. If that PT flash splits instead, its split starts the Helmholtz
+  minimisation below.
+- **Otherwise,** ln P is stepped by ln 2 with PT flashes until
+  V(P) − V_spec changes sign, and Brent narrows that to 0.1%.
+- **The Helmholtz minimisation,** in the model's own variables. Over the
+  vapour's mole numbers nⱽ and volume Vⱽ, with nᴸ = z − nⱽ and
+  Vᴸ = V − Vⱽ, it minimises
+
+      A/RT = Σ over phases [F(T, V, n) + Σᵢ nᵢ(ln(nᵢ/V) − 1)] + a constant,
+      ∂/∂nᵢⱽ = (F_nᵢ + ln(nᵢ/V))ⱽ − (…)ᴸ = (μᵢⱽ − μᵢᴸ)/RT,
+      ∂/∂Vⱽ = (F_V − n/V)ⱽ − (…)ᴸ = (Pᴸ − Pⱽ)/RT,
+
+  with the Hessian the two phases' sums of F_nn + δᵢⱼ/nᵢ, F_Vn − 1/V and
+  F_VV + n/V². It needs no volume root: only F(T, V, n) and its
+  derivatives.
+- **The start:** the PT split, the liquid keeping its volume, since it
+  hardly compresses, and the vapour taking the rest of V.
+- **The answer** is a verified PT flash at the pressure found, held to
+  |V − V_spec| ≤ vtol·V_spec (vtol 1e-10).
+
+**UV, step by step.**
+- **Bracket:** ln T is stepped by ln 1.5 with TV flashes until
+  U − U_spec changes sign, from the ideal gas's T for U_spec. That T can
+  be far too low for a liquid's U, low enough that no TV flash at this V
+  has an answer; then the search starts from 300 K.
+- **Narrow:** Brent, to 0.1%.
+- **Finish:** Newton.
+  - For a split it works in (nⱽ, Vⱽ, ln T): the Helmholtz conditions plus
+    r_U = (U − U_spec)/RT, with
+    U = Σᵢ zᵢ(ΔH°f,ᵢ + ∫Cpᵢ dT − RT) − RT²·Σ F_T. With
+    cᵢ = T(F_Tnᵢⱽ − F_Tnᵢᴸ) and c_V = T(F_TVⱽ − F_TVᴸ), the extra
+    derivatives are
+    ∂gᵢ/∂ln T = cᵢ, ∂g_V/∂ln T = c_V, ∂r_U/∂nᵢⱽ = −cᵢ, ∂r_U/∂Vⱽ = −c_V
+    and ∂r_U/∂ln T = Cv/R − r_U, with Cv = Σᵢ zᵢ(Cpᵢ − R) − RT·Σ(T·F_TT +
+    2F_T).
+  - For one phase it works on U(T) at this V, from F alone.
+- **The answer** is a verified TV flash at the final T, held to
+  |U − U_spec| ≤ etol·RT.
+
+**Why not start with the one-phase Newton.** Newton on the one phase's U(T)
+from the start would save the bracket, but it can run far. From a split's
+U it found a one-phase answer at 5035 K, where the test data's quadratic
+Cp has turned negative (n-butane's at 3290 K) and U(T) falls again. The
+bracket finds the nearest change of sign instead.
+
+**A pure component** inside its saturation dome has P = Psat(T), from tvf,
+and β = (V − Vᴸ)/(Vⱽ − Vᴸ). Outside it, the one phase's pressure is P(T, V),
+on the root of that volume.
+
+**Conditioning.** A liquid's P moves V little, so V moves P a lot: by the
+bulk modulus over P, a factor of a thousand here and there. `thermo`'s V
+differs from reflux's by about 1e-11, which is 1e-8 in a liquid's P, so
+the round trips start from reflux's own V and U.
+
+## The robustness sweep
+
+`sweep` runs PT flashes of random PR mixtures (D8) and checks each answer
+from scratch, without trusting the flash's own tests.
+
+**The points** come from splitmix64 (Steele, Lea & Flood 2014), seeded, so
+they're the same on every platform:
+- a u64 to f64 in (0, 1) is (⌊u/2¹¹⌋ + ½)/2⁵³, never 0;
+- 2 to 10 compounds, drawn without replacement from the 640 with Tc, Pc,
+  ω, M and an ideal-gas Cp;
+- T = T_min·(T_max/T_min)^u, and P likewise: log-uniform over 100–1000 K
+  and 0.1–1000 bar;
+- zᵢ = eᵢ/Σe with eᵢ = −ln uᵢ, exponential draws, which makes z uniform
+  over the simplex.
+
+**Stability is judged from scratch.** `flash.stability` only searches, from
+its own trials and five random compositions drawn the same way. At every
+composition w its trials reach, the sweep computes
+
+    tpd(w) = Σᵢ wᵢ(ln wᵢ + ln φᵢ(w) − ln xᵢ − ln φᵢ(x))
+
+from `thermo.solve_tp` alone, each phase at its root of lower G, and the
+lowest tpd is the verdict. A negative tpd at any w shows that x lies above
+some phase's tangent plane, so x is unstable. A phase of a converged split
+is no use as a trial for the other: it sits on that phase's tangent plane,
+a stationary point with tm = 0.
+
+**One phase** must have no tpd below −1e-10, the flash's own tolerance.
+
+**A split** must satisfy criterion 3:
+- 0 < β < 1;
+- the phases differ, some |ln(yᵢ/xᵢ)| ≥ 1e-4, since two copies of a stable
+  feed pass every other check;
+- |β·yᵢ + (1 − β)·xᵢ − zᵢ| ≤ 1e-12;
+- |ln yᵢ + ln φᵢ(y) − ln xᵢ − ln φᵢ(x)| ≤ 1e-10, except where xᵢ or yᵢ is
+  below `trace_floor`;
+- |Σx − 1| and |Σy − 1| ≤ 1e-14;
+- neither phase with a tpd below −1e-8.
+
+**A third phase** (`more_phases`) is proved, not taken on trust. Unverified,
+the flash returns the first split it found, which is the one the verified
+flash found first and refused. One of its phases must have a tpd below
+−1e-8.
+
 ## How CPA will fit
 
 ```v
@@ -285,8 +795,10 @@ pub struct Cpa {
 fractions X_A come from the site balance at each (T, V, n). Michelsen &
 Hendriks (2001) showed that the association term is stationary with respect
 to X, so its *first* derivatives need no ∂X/∂(T, V, n). `min_volume` is the
-SRK covolume. `model.v`, `saturation.v` and every flash routine stay as
-they are.
+SRK covolume. `volume_function(t, n)` fixes what depends on T alone (the
+association strengths Δ_AB(T) and SRK's a(T, n)) and solves the site
+balance at each V it's asked for.
+`model.v`, `saturation.v` and every flash routine stay as they are.
 
 ## Performance
 
@@ -294,9 +806,29 @@ These notes respond to the slow solves and slow sensitivity runs in DWSIM.
 
 - Analytic derivatives are fast, and they give Newton methods their
   Jacobians for free.
-- Right now each residual call allocates a few small arrays. That's fine
-  until a profile says otherwise. The fix then is to cache the
-  temperature-dependent parts (αᵢ, √aᵢ) and pass in scratch buffers.
+- **What M3 step 10 measured** (`docs/benchmarks.md`, with a profile of the
+  same flashes):
+  - The volume roots took 88% of a PT flash, because every Newton step on
+    V recomputed A(T, n). Fixing T and n first (`volume_function`, above)
+    and sharing A with the residual made every flash 2.3–5.7 times faster,
+    timed back to back against the old code.
+  - Each `solve_tp` then still computed A twice, once for the root and
+    once for the state there. `VolumeFunction.residual` shares it.
+  - `Correlated`'s quadrature of the ideal-gas Cp is 0.6% of a PH flash,
+    so it stays as it is.
+  - A PH flash is about 12 PT flashes, each with its stability test and
+    each split verified. That, not H, is where its time goes, and it's
+    what is left between reflux and DWSIM on PH.
+  - Each residual call still allocates a few small arrays (√aᵢ, ∂A/∂nᵢ,
+    F_n). With the above fixed they're no longer near the top of the
+    profile.
+- **No closures in the solvers.** V 0.5.2 never frees a closure. When the
+  solvers took function values, every PH flash leaked 18 KB and every
+  bubble point 3 KB, a few closures each, which a sensitivity study would
+  have turned into gigabytes. `numeric`'s solvers take interfaces
+  (`Function`, `FallibleFunction`, `System`, `Objective`), and each caller
+  passes a small struct with one method. The heap now stays flat over
+  thousands of flashes.
 - Sensitivity analysis: warm-start each case from its neighbour's converged
   solution, run independent cases in parallel with `spawn`, and later get
   exact local sensitivities from the converged Jacobian (implicit function

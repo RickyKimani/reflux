@@ -45,15 +45,23 @@ fn (k CubicKind) consts() CubicConsts {
 // one equation in B. Computing the constants this way, instead of using
 // rounded textbook values, puts each equation's critical point exactly at
 // (Tc, Pc).
+// CriticalB is the equation in B left after matching the cubic to a triple
+// root, with s = δ₁ + δ₂ and m = δ₁δ₂.
+struct CriticalB {
+	s f64
+	m f64
+}
+
+fn (e CriticalB) at(b f64) f64 {
+	zc := (1.0 - (e.s - 1.0) * b) / 3.0
+	a := 3.0 * zc * zc - e.m * b * b + e.s * b * (b + 1.0)
+	return e.m * b * b * (b + 1.0) + a * b - zc * zc * zc
+}
+
 fn critical_constants(delta1 f64, delta2 f64) !CubicConsts {
 	s := delta1 + delta2
 	m := delta1 * delta2
-	resid := fn [s, m] (b f64) f64 {
-		zc := (1.0 - (s - 1.0) * b) / 3.0
-		a := 3.0 * zc * zc - m * b * b + s * b * (b + 1.0)
-		return m * b * b * (b + 1.0) + a * b - zc * zc * zc
-	}
-	b := numeric.bisect(resid, 1e-6, 0.3)!
+	b := numeric.bisect(CriticalB{s, m}, 1e-6, 0.3)!
 	zc := (1.0 - (s - 1.0) * b) / 3.0
 	return CubicConsts{
 		delta1:  delta1
@@ -175,37 +183,59 @@ pub fn (c Cubic) min_volume(n []f64) f64 {
 	return numeric.dot(n, c.b)
 }
 
-// volume_derivs implements Model.
-pub fn (c Cubic) volume_derivs(t f64, v f64, n []f64) VolumeDerivs {
-	ntot := numeric.sum(n)
-	q := c.vb_terms(v, c.min_volume(n))
-	a_rt := c.attraction(t, n).a / (r_gas * t)
+// volume_function implements Model. A(T, n), its derivatives and B(n) are
+// computed here, once, so that each volume costs only the terms in V.
+pub fn (c Cubic) volume_function(t f64, n []f64) VolumeFunction {
+	att := c.attraction(t, n)
+	rt := r_gas * t
+	return CubicAtTn{
+		c:    c
+		t:    t
+		rt:   rt
+		ntot: numeric.sum(n)
+		bb:   c.min_volume(n)
+		att:  att
+		a_rt: att.a / rt
+	}
+}
+
+// CubicAtTn is a cubic at a fixed T and n: its VolumeFunction.
+struct CubicAtTn {
+	c    Cubic
+	t    f64
+	rt   f64
+	ntot f64
+	bb   f64 // B = Σ nᵢbᵢ
+	att  Attraction
+	a_rt f64 // A/RT
+}
+
+fn (s CubicAtTn) at(v f64) VolumeDerivs {
+	q := s.c.vb_terms(v, s.bb)
 	return VolumeDerivs{
-		f:    -ntot * q.g - a_rt * q.f
-		f_v:  -ntot * q.g_v - a_rt * q.f_v
-		f_vv: -ntot * q.g_vv - a_rt * q.f_vv
+		f:    -s.ntot * q.g - s.a_rt * q.f
+		f_v:  -s.ntot * q.g_v - s.a_rt * q.f_v
+		f_vv: -s.ntot * q.g_vv - s.a_rt * q.f_vv
+	}
+}
+
+fn (s CubicAtTn) residual(v f64) Residual {
+	q := s.c.vb_terms(v, s.bb)
+	b := s.c.b
+	// ∂F/∂nᵢ = −g − n·g_B·bᵢ − f·Aᵢ/RT − (A/RT)·f_B·bᵢ
+	f_n := []f64{len: b.len, init: -q.g - s.ntot * q.g_b * b[index] - q.f * s.att.a_n[index] / s.rt - s.a_rt * q.f_b * b[index]}
+	return Residual{
+		f:    -s.ntot * q.g - s.a_rt * q.f
+		f_v:  -s.ntot * q.g_v - s.a_rt * q.f_v
+		f_vv: -s.ntot * q.g_vv - s.a_rt * q.f_vv
+		f_t:  -q.f / s.rt * (s.att.a_t - s.att.a / s.t)
+		f_n:  f_n
 	}
 }
 
 // residual implements Model.
 pub fn (c Cubic) residual(t f64, v f64, n []f64) Residual {
-	ntot := numeric.sum(n)
-	q := c.vb_terms(v, c.min_volume(n))
-	att := c.attraction(t, n)
-	rt := r_gas * t
-	a_rt := att.a / rt
-	// ∂F/∂nᵢ = −g − n·g_B·bᵢ − f·Aᵢ/RT − (A/RT)·f_B·bᵢ
-	mut f_n := []f64{len: n.len}
-	for i in 0 .. n.len {
-		f_n[i] = -q.g - ntot * q.g_b * c.b[i] - q.f * att.a_n[i] / rt - a_rt * q.f_b * c.b[i]
-	}
-	return Residual{
-		f:    -ntot * q.g - a_rt * q.f
-		f_v:  -ntot * q.g_v - a_rt * q.f_v
-		f_vv: -ntot * q.g_vv - a_rt * q.f_vv
-		f_t:  -q.f / rt * (att.a_t - att.a / t)
-		f_n:  f_n
-	}
+	return c.volume_function(t, n).residual(v)
 }
 
 // residual2 implements Model. Each line matches a row of the F table in
@@ -319,6 +349,10 @@ fn (c Cubic) vb_terms(v f64, bb f64) VbTerms {
 
 // sqrt_a returns sᵢ = √aᵢ(T) for every component, with ds/dT and d²s/dT².
 // Working with s instead of a makes aᵢⱼ = (1 − kᵢⱼ)·sᵢ·sⱼ.
+//
+// s comes straight from α's square root, sᵢ = √a_c,i·√αᵢ, rather than as
+// √(a_c,i·αᵢ) with derivatives that divide by it. Soave's α reaches zero
+// at high Tr, and there the division was 0/0 (see Alpha.root).
 fn (c Cubic) sqrt_a(t f64) ([]f64, []f64, []f64) {
 	nc := c.comps.len
 	mut s := []f64{len: nc}
@@ -326,10 +360,11 @@ fn (c Cubic) sqrt_a(t f64) ([]f64, []f64, []f64) {
 	mut s_tt := []f64{len: nc}
 	for i in 0 .. nc {
 		tc := c.comps[i].tc
-		alpha, d1, d2 := c.alphas[i].eval(t / tc)
-		s[i] = math.sqrt(c.ac[i] * alpha)
-		s_t[i] = c.ac[i] * d1 / tc / (2.0 * s[i])
-		s_tt[i] = (0.5 * c.ac[i] * d2 / (tc * tc) - s_t[i] * s_t[i]) / s[i]
+		r, d1, d2 := c.alphas[i].root(t / tc)
+		sqrt_ac := math.sqrt(c.ac[i])
+		s[i] = sqrt_ac * r
+		s_t[i] = sqrt_ac * d1 / tc
+		s_tt[i] = sqrt_ac * d2 / (tc * tc)
 	}
 	return s, s_t, s_tt
 }

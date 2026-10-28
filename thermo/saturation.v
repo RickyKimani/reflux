@@ -23,21 +23,22 @@ pub fn saturation_pressure(m Model, t f64) !f64 {
 	// Start from the definition of the acentric factor (Edmister):
 	//   log10(Psat/Pc) ≈ (7/3)(1 + ω)(1 − Tc/T)
 	mut p := c.pc * math.pow(10.0, 7.0 / 3.0 * (1.0 + c.omega) * (1.0 - c.tc / t))
+	fx := fix(m, t, n)
 	for _ in 0 .. sat_max_iter {
 		// With no liquid root, P is below the liquid branch's minimum: too
 		// low. With no vapor root, P is above the vapor branch's maximum.
-		vl := liquid_volume(m, t, p, n) or {
+		vl := liquid_volume(fx, p) or {
 			p *= 1.1
 			continue
 		}
-		vv := vapor_volume(m, t, p, n) or {
+		vv := vapor_volume(fx, p) or {
 			p *= 0.9
 			continue
 		}
 		if math.abs(vl - vv) <= 1e-8 * vv {
 			return error('${c.name}: lost the two-phase region at T = ${t} K (too close to Tc?)')
 		}
-		diff := gibbs_residual(m, t, p, vl, n) - gibbs_residual(m, t, p, vv, n)
+		diff := gibbs_residual(fx, p, vl) - gibbs_residual(fx, p, vv)
 		p *= math.exp(diff)
 		if math.abs(diff) < sat_tol {
 			return p

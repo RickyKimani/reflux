@@ -56,33 +56,53 @@ pub fn (m Translated) min_volume(n []f64) f64 {
 	return m.inner.min_volume(n) - numeric.dot(n, m.c)
 }
 
-// volume_derivs implements Model.
-pub fn (m Translated) volume_derivs(t f64, v f64, n []f64) VolumeDerivs {
-	ntot := numeric.sum(n)
-	w := v + numeric.dot(n, m.c)
-	d := m.inner.volume_derivs(t, w, n)
+// volume_function implements Model: the inner function at W = V + C.
+pub fn (m Translated) volume_function(t f64, n []f64) VolumeFunction {
+	return TranslatedAtTn{
+		inner: m.inner.volume_function(t, n)
+		c:     m.c
+		ntot:  numeric.sum(n)
+		shift: numeric.dot(n, m.c)
+	}
+}
+
+// TranslatedAtTn is a translated model at a fixed T and n: its
+// VolumeFunction.
+struct TranslatedAtTn {
+	inner VolumeFunction
+	c     []f64
+	ntot  f64
+	shift f64 // C = Σ nᵢcᵢ
+}
+
+fn (s TranslatedAtTn) at(v f64) VolumeDerivs {
+	w := v + s.shift
+	d := s.inner.at(w)
 	return VolumeDerivs{
-		f:    d.f + ntot * math.log(v / w)
-		f_v:  d.f_v + ntot / v - ntot / w
-		f_vv: d.f_vv - ntot / (v * v) + ntot / (w * w)
+		f:    d.f + s.ntot * math.log(v / w)
+		f_v:  d.f_v + s.ntot / v - s.ntot / w
+		f_vv: d.f_vv - s.ntot / (v * v) + s.ntot / (w * w)
+	}
+}
+
+fn (s TranslatedAtTn) residual(v f64) Residual {
+	w := v + s.shift
+	r := s.inner.residual(w)
+	ln_vw := math.log(v / w)
+	// ∂/∂nᵢ picks up the inner F_V through ∂W/∂nᵢ = cᵢ.
+	f_n := []f64{len: s.c.len, init: r.f_n[index] + s.c[index] * r.f_v + ln_vw - s.ntot * s.c[index] / w}
+	return Residual{
+		f:    r.f + s.ntot * ln_vw
+		f_v:  r.f_v + s.ntot / v - s.ntot / w
+		f_vv: r.f_vv - s.ntot / (v * v) + s.ntot / (w * w)
+		f_t:  r.f_t
+		f_n:  f_n
 	}
 }
 
 // residual implements Model.
 pub fn (m Translated) residual(t f64, v f64, n []f64) Residual {
-	ntot := numeric.sum(n)
-	w := v + numeric.dot(n, m.c)
-	r := m.inner.residual(t, w, n)
-	ln_vw := math.log(v / w)
-	// ∂/∂nᵢ picks up the inner F_V through ∂W/∂nᵢ = cᵢ.
-	f_n := []f64{len: n.len, init: r.f_n[index] + m.c[index] * r.f_v + ln_vw - ntot * m.c[index] / w}
-	return Residual{
-		f:    r.f + ntot * ln_vw
-		f_v:  r.f_v + ntot / v - ntot / w
-		f_vv: r.f_vv - ntot / (v * v) + ntot / (w * w)
-		f_t:  r.f_t
-		f_n:  f_n
-	}
+	return m.volume_function(t, n).residual(v)
 }
 
 // residual2 implements Model.

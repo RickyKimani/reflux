@@ -100,7 +100,7 @@ fn test_derivatives_match_finite_differences() {
 			r := eos.residual(t, v, n)
 			hv := 1e-6 * v
 			assert close(r.f_v, (f_at(eos, t, v + hv, n) - f_at(eos, t, v - hv, n)) / (2.0 * hv))
-			assert close(r.f_vv, (eos.volume_derivs(t, v + hv, n).f_v - eos.volume_derivs(t, v - hv,
+			assert close(r.f_vv, (thermo.volume_derivs(eos, t, v + hv, n).f_v - thermo.volume_derivs(eos, t, v - hv,
 				n).f_v) / (2.0 * hv))
 			ht := 1e-4
 			assert close(r.f_t, (f_at(eos, t + ht, v, n) - f_at(eos, t - ht, v, n)) / (2.0 * ht))
@@ -116,7 +116,7 @@ fn test_derivatives_match_finite_differences() {
 }
 
 fn f_at(m Model, t f64, v f64, n []f64) f64 {
-	return m.volume_derivs(t, v, n).f
+	return thermo.volume_derivs(m, t, v, n).f
 }
 
 fn close(a f64, b f64) bool {

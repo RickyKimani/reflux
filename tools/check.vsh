@@ -23,6 +23,21 @@ fn run(cmd []string) {
 	}
 }
 
+// vcc is `v -cc <cc>` followed by args. With gcc, V 0.5.2's module cache
+// makes every build about three times slower: 40 s against 12 s for a small
+// test on Windows, most of it spent scanning cached objects' dependencies
+// and replaying a build that V's cached path gives up on. So gcc builds get
+// -nocache; tcc is as fast either way. V has no `+` for arrays: `<<` appends
+// one element, or every element of another array, like Go's append(a, b...).
+fn vcc(cc string, args []string) []string {
+	mut cmd := ['v', '-cc', cc]
+	if cc != 'tcc' {
+		cmd << '-nocache'
+	}
+	cmd << args
+	return cmd
+}
+
 args := arguments()
 i := args.index('-cc') // -1 when absent; index does not return an Option
 cc := if i < 0 {
@@ -55,14 +70,23 @@ tag := '${cc}_${getpid()}'
 exe := join_path(temp_dir(), 'reflux_check_${tag}${ext}')
 exe_prod := join_path(temp_dir(), 'reflux_check_${tag}_prod${ext}')
 
+// `v test` compiles each _test.v file into a program of its own, and its
+// runner allows one job per 8 GiB of RAM: one at a time on a 14 GiB
+// machine. A build peaks near 1 GB, so run 4, the runner's own cap. (Not
+// one per CPU: on Windows, `import runtime` defeats V 0.5.2's default
+// compiler, through tcc's psapi.h, and only its fallback builds the
+// script.) VJOBS set by hand still wins.
+if getenv('VJOBS') == '' {
+	setenv('VJOBS', '4', true)
+}
 run(['v', 'fmt', '-verify', '.'])
 run(['v', 'vet', '.'])
-run(['v', '-cc', cc, '-W', 'test', '.'])
-run(['v', '-cc', cc, '-W', '-o', exe, '.'])
+run(vcc(cc, ['-W', 'test', '.']))
+run(vcc(cc, ['-W', '-o', exe, '.']))
 run([exe])
 if cc != 'tcc' {
 	// tcc does no optimisation, so -prod only means something with gcc or clang.
-	run(['v', '-cc', cc, '-prod', '-o', exe_prod, '.'])
+	run(vcc(cc, ['-prod', '-o', exe_prod, '.']))
 	run([exe_prod])
 }
 rm(exe) or {}

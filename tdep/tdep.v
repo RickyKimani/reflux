@@ -321,9 +321,7 @@ pub fn (c Correlation) integral(t1 f64, t2 f64) !f64 {
 			finite(c.antiderivative(t2) - c.antiderivative(t1), c.eq, t1, t2)!
 		}
 		else {
-			numeric.integrate(fn [c] (t f64) f64 {
-				return c.eval(t)
-			}, t1, t2, integral_rtol)!
+			numeric.integrate(c, t1, t2, integral_rtol)!
 		}
 	}
 }
@@ -335,11 +333,23 @@ pub fn (c Correlation) integral_over_t(t1 f64, t2 f64) !f64 {
 			finite(c.antiderivative_over_t(t2) - c.antiderivative_over_t(t1), c.eq, t1, t2)!
 		}
 		else {
-			numeric.integrate(fn [c] (t f64) f64 {
-				return c.eval(t) / t
-			}, t1, t2, integral_rtol)!
+			numeric.integrate(OverT{c}, t1, t2, integral_rtol)!
 		}
 	}
+}
+
+// at is Y(T), which makes a Correlation a numeric.Function to integrate.
+pub fn (c Correlation) at(t f64) f64 {
+	return c.eval(t)
+}
+
+// OverT is Y(T)/T, for the integrals entropies need.
+struct OverT {
+	c Correlation
+}
+
+fn (f OverT) at(t f64) f64 {
+	return f.c.eval(t) / t
 }
 
 // finite passes x through, or fails if a closed form came out non-finite,

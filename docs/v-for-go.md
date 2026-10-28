@@ -25,6 +25,13 @@ A `.vsh` file is a V script. Top-level statements run in order, and the
 need no prefix. It's how reflux avoids a Makefile that wouldn't work in
 nushell or PowerShell. See [tools/check.vsh](../tools/check.vsh).
 
+A `.vsh` file always runs when V compiles it: `v -o sweep.exe
+tools/flash_sweep.vsh` builds `sweep.exe`, runs it once with no arguments,
+and keeps it, so `sweep.exe 1000` works afterwards. `go build` never runs
+anything. For a script that's slow to run, that first run can be the whole
+cost, so write it as a `.v` file with a `main` function when you only want
+the binary.
+
 **The big difference:** V compiles to C and then calls a C compiler. On your
 machine the only C compiler is the **tcc** that ships inside V (`v doctor`
 shows it). tcc compiles very fast but does almost no optimisation. That's
@@ -35,7 +42,62 @@ GCC, Clang or the MSVC Build Tools and build with `v -prod -cc gcc .` (or
 To see the C that V generates for a file, run `v -o out.c file.v`.
 It is a good way to find out what a feature costs.
 
+**Profiling** is built in, where Go has pprof: `v -profile prof.txt -o
+prog.exe prog.v` instruments every function, and running the program
+writes each one's calls, total and own time. The instrumentation costs about
+30 ns a call, so tiny functions look slower than they are, but the call
+counts are exact. It's what found M3's slow volume roots (2,200 attraction
+evaluations for a binary flash). Two catches:
+- With `-prod -cc gcc` the instrumented build of a PH flash crashed, while
+  the same program profiled fine under tcc. Profile with tcc and read the
+  shares, not the times.
+- `gc_heap_usage()` reports the GC heap's size and free bytes, which is
+  how a leak shows: run the code in a loop, call `gc_collect()`, and see
+  whether the heap keeps growing.
+
+**Facts about the build** come from compile-time values: `@VCURRENTHASH`
+is V's commit (`eab77e7` here, as `.v-version` pins), while `@VHASH` is
+something else. `$if gcc { … } $else $if tinyc { … }` and `$if prod { … }`
+say how the program was built; [benchmarks/benchmarks.v](../benchmarks/benchmarks.v)
+puts both in the report.
+
+**Running a command:** `os.exec(['gcc', '-dumpfullversion'])` takes the
+arguments as an array, like Go's `exec.Command`. The string form,
+`os.execute('gcc --version')`, is deprecated because a shell can be
+injected through it, so it's an error under `-W`.
+
+**Don't name a module like a vlib one.** reflux's benchmark harness was
+first `module benchmark`, the name the roadmap gave it. Its internal test
+built, but an external test (`import benchmark`) failed with "redefinition
+of function" for every function in it: V's test runner itself imports
+vlib's `benchmark`. Go would tell two packages apart by import path. V
+resolves the bare name, so the module is now `benchmarks`.
+
 `-W` turns warnings into errors. Use it for tests and CI (see §4 for why).
+
+**`v test` is slower than `go test`, and two settings matter.** Go compiles
+each package once and links its tests. V compiles every `_test.v` file into
+a program of its own, with all of `vlib` it uses: 45 C compilations for
+reflux's 45 test files at the end of M3.
+- **Jobs:** the runner allows one job per 8 GiB of RAM, at most 4, so a
+  14 GiB machine runs them one at a time. A build peaks near 1 GB, so
+  `VJOBS=4` is safe there, and [tools/check.vsh](../tools/check.vsh) sets it.
+- **gcc and the module cache:** with gcc, V 0.5.2's module cache made each
+  build about three times slower on Windows: 40 s against 12 s with
+  `-nocache` for a small test. Most of the time goes on scanning cached
+  objects' dependencies, plus replaying a build the cached path gives up on.
+  tcc is as fast either way.
+
+Together they took the gcc check from about 30 minutes to about 6 (382 s,
+257 s of it the tests), and the tcc check from about 5 minutes to 2.
+
+**This V reports its own build failures.** V 0.5.2 at eab77e7 carries two
+compilers. When the new default one fails to build a program's C and the
+old one, kept as a fallback, succeeds, V sends a "metadata-only" report to
+bugs.vlang.io. The report holds the V version, the OS, the C compiler, the
+build command and up to 64 KB of the C compiler's errors, so it includes
+your paths, but no source. It's off under GitHub Actions, and
+`V_C_ERROR_BUG_REPORT_DISABLED=1` turns it off anywhere.
 
 A `.vsh` script inside the project can import the project's own modules,
 just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
@@ -138,8 +200,40 @@ x = 5.0
 f()                               // 1.0, not 5.0
 ```
 
-See `critical_constants` in [thermo/cubic.v](../thermo/cubic.v), which
-passes `fn [s, m] (b f64) f64 { … }` to `numeric.bisect`.
+[numeric/integrate_test.v](../numeric/integrate_test.v) passes closures
+like this to the quadrature.
+
+**A closure is never freed.** Go's closures are ordinary garbage. V 0.5.2's
+aren't: each one keeps a few hundred bytes for the life of the program. A
+probe made 2 million closures in a loop, and the heap grew by 660 MiB per
+2 million. The same values boxed as an interface stayed at the same size,
+because the GC reclaims those. That's harmless in a test or a one-off
+call, but not in code a solver runs a million times. Until M3 step 10 every
+PH flash leaked 18 KB that way. So reflux's solvers take an interface, the
+way Go's `sort.Sort` takes a `sort.Interface`, and callers pass a struct
+with one method:
+
+```v
+// numeric/functions.v
+pub interface Function {
+	at(x f64) f64
+}
+
+// thermo/cubic.v: the struct carries what a closure would have captured
+struct CriticalB {
+	s f64
+	m f64
+}
+
+fn (e CriticalB) at(b f64) f64 { … }
+
+b := numeric.bisect(CriticalB{s, m}, 1e-6, 0.3)!
+```
+
+As in Go, a type satisfies an interface just by having the methods; there's
+no `implements`. A struct that already has a method of the right name and
+signature can be passed as it is: `flash.StateFlash` has
+`eval(x, mut f, mut jac)`, which makes it a `numeric.System`.
 
 `mut` in the capture list doesn't change this: `fn [mut n] () { n++ }`
 increments the closure's *own* copy, and the outer `n` stays where it was.
@@ -204,6 +298,10 @@ p := thermo.saturation_pressure(eos, 350.0) or {       // handle it; `err` is in
   complaint.
 - `!` with no type (`fn check() !`) is Go's `func check() error`. See
   `Component.check` in [thermo/component.v](../thermo/component.v).
+- **Several values or an error** is `!(A, B)`, Go's `(A, B, error)`, and
+  `a, b := f()!` unpacks it. `overlapping_split` in
+  [sweep/sweep_internal_test.v](../sweep/sweep_internal_test.v) returns
+  `!(Point, thermo.Model, flash.FlashResult)`.
 - **`?T` is an Option**: a value or `none`, with no error message. Use it
   when "nothing here" is a normal answer, not a failure. `liquid_volume` in
   [thermo/model.v](../thermo/model.v) returns `?f64`, and `none` there
@@ -287,8 +385,9 @@ writes later must plug in without editing `thermo`.
 pub interface Model {
 	components() []Component
 	min_volume(n []f64) f64
-	volume_derivs(t f64, v f64, n []f64) VolumeDerivs
+	volume_function(t f64, n []f64) VolumeFunction // itself an interface
 	residual(t f64, v f64, n []f64) Residual
+	residual2(t f64, v f64, n []f64) Residual2
 }
 
 pub fn solve_tp(m Model, t f64, p f64, n []f64, root Root) !State
@@ -329,7 +428,13 @@ pub fn (a Alpha) eval(tr f64) (f64, f64) {
 - You can define methods on the sum type itself. Go can't put methods on
   an interface.
 - `match` and `if` are **expressions**, so they can return a value. Go has
-  no ternary, but V's `x := if c { a } else { b }` does the same job.
+  no ternary, but V's `x := if c { a } else { b }` does the same job. They
+  can return several, too: `c2, c3 := if truncated { 0.0, 0.0 } else { a.c2, a.c3 }`
+  (`MathiasCopeman` in alpha.v).
+- **One branch can take several variants**, `Soave, Prsv, MathiasCopeman { … }`,
+  like a Go `case A, B:`. There's no smart cast in such a branch, since `a`
+  could be any of them, so it stays an `Alpha`. That's enough for `eval`,
+  which only calls `a.root(tr)` there.
 
 Rule of thumb: interface when others will add implementations, sum type
 when you own the list and want the compiler to check you've handled every
@@ -416,7 +521,11 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `pub mut:` meant "mutable only inside the module", as older V docs said.
   A probe showed it doesn't.)
 - **Struct update syntax**, which Go lacks: `Repair{...it, cas: rec.ids.cas}`
-  copies `it` and changes one field.
+  copies `it` and changes one field. It works from another module on
+  `pub:` fields too, which can be read there but not assigned, so it's how
+  to get a changed copy of such a struct. The sweep's tests build wrong
+  flash answers that way, `flash.FlashResult{...r, beta: r.beta + 1e-9}`,
+  to show that its checks refuse them.
 
 ---
 
@@ -428,7 +537,10 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 | `make([]float64, n)`              | `[]f64{len: n}`                     |
 | make + loop filling `s[i] = f(i)` | `[]f64{len: n, init: f(index)}`     |
 | `s = append(s, x)`                | `s << x`                            |
+| `s = append(s, t...)`             | `s << t` (there's no `s + t`)       |
+| a fold over a slice               | `arrays.fold(s, 0.0, fn …)`, not `s.reduce(…)`, which arrays lack |
 | `slices.Sort(s)`                  | `s.sort()`                          |
+| `slices.SortFunc(s, cmp)`         | `s.sort_with_compare(fn (a &T, b &T) int {…})`: the comparison takes pointers |
 | `slices.Clone(s)`                 | `s.clone()`                         |
 | loop + `if`                       | `s.filter(it > big_b)`              |
 | loop + append                     | `s.map(it * 1e6)`                   |
@@ -445,6 +557,15 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 **Gotcha:** arrays are **shared** when assigned, like Go slices. Use
 `.clone()` when you keep a copy of an argument. `new_cubic` and `State`
 clone the arrays they store, so the caller can reuse theirs.
+
+V does stop the dangerous case, which Go doesn't: a mutable variable may
+not alias an immutable array. With `b := [1, 2]`, both `mut a := b` and
+`a = b` (for an existing `mut a`) are compile errors ("use
+`array2 = array1.clone()`"). With `mut b`, `mut a := b` compiles and shares:
+`a[0] = 9` changes `b` too, until `b << 3` reallocates and they part, just
+like Go. The stability iteration hit the first case, keeping last step's
+array (`last_step = step.clone()` in
+[flash/stability.v](../flash/stability.v)).
 
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
@@ -516,7 +637,8 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 ## 10. Memory and performance
 
 - By default V uses a garbage collector (Boehm), so your mental model from Go
-  carries over. `-autofree` and `-gc none` exist, but you don't need them.
+  carries over, with one exception: **closures are never freed** (§3).
+  `-autofree` and `-gc none` exist, but you don't need them.
 - Dynamic arrays `[]f64` live on the heap. `[3]f64` lives on the stack. In
   hot loops such as flash iterations or column stages, allocate once and reuse.
   This is the same advice as in Go.
@@ -524,6 +646,12 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
   That's cheap compared with a volume solve, but worth knowing.
 - **Measure with `-prod` and a real C compiler** (see §1). tcc numbers
   don't tell you anything about speed.
+- **Measure before optimising, with a profile** (§1, `-profile`). M3's
+  first benchmarks found reflux slower than DWSIM on most flashes, and the
+  profile put 88% of the time in one place: a volume solver recomputing
+  the same a(T, n) on every step. One change there made every flash
+  2.3–5.7 times faster ([docs/benchmarks.md](benchmarks.md)). Allocation,
+  the usual suspect, wasn't near the top.
 
 ---
 
@@ -595,6 +723,27 @@ Go's. A single flowsheet solve is mostly sequential, but the cases of a
 sensitivity analysis are independent, which makes them the first place
 `spawn` will pay off.
 
+**A deadline** is Go's `select` with `time.After`, written with a duration
+as the case:
+
+```v
+ch := chan string{cap: 1}
+spawn fn [ch] () {
+	ch <- work()
+}()
+select {
+	s := <-ch { println(s) }
+	10 * time.second { println('gave up') }
+}
+```
+
+The spawned closure lists what it captures, like any V closure. A test
+that would otherwise hang can fail this way:
+`test_minimize_gives_up_on_a_huge_hessian` in
+[numeric/minimize_test.v](../numeric/minimize_test.v) does. The test
+program still exits while the thread spins, as a Go program does when
+`main` returns.
+
 ---
 
 ## 13. Generics, JSON and reflection
@@ -635,7 +784,30 @@ if want := p.chemicals_y {
 ```
 
 A JSON key can't be a V keyword such as `int`. The fixture generator writes
-`integral` instead.
+`integral` instead. `error` is fine: it's a builtin function, not a keyword,
+so a struct field can be called that.
+
+A generic *struct* decodes too, which helps when one JSON list holds records
+of several shapes. [flash/dwsim_test.v](../flash/dwsim_test.v) has PT cases,
+PH and PS cases, and bubble and dew points in one `cases` list, and decodes
+the list once per shape. Each record's `kind` says which shape it is:
+
+```v
+struct DwCases[T] {
+	cases []T
+}
+
+fn read_cases[T](kinds []string) ![]T {
+	all := json2.decode[DwCases[T]](read_text()!)!
+	return all.cases.filter(it.kind in kinds)
+}
+
+pts := read_cases[DwCase](['pt'])!
+```
+
+Keys that a shape lacks are left at their zero values, and keys it doesn't
+know are ignored. Go's `encoding/json` behaves the same way, and Go 1.18+
+would write the wrapper as `type cases[T any] struct{ Cases []T }`.
 
 **Reflection happens at compile time.** Go's `reflect` inspects values at
 run time, through `interface{}`, and a mistake is a run-time panic. V's
@@ -713,3 +885,61 @@ value itself, half away from zero with `math.round`, before printing it,
 and a rounded value is never a tie. Plain `${x}` (shortest round-trip,
 `f64.str()`) is V's own code and was never affected, which is why the
 component files always matched.
+
+**Inside a `match` or `if` expression, a result needs its `!`.** A plain
+`return solve()` forwards a `!T` straight through, as Go's `return solve()`
+forwards a `(T, error)` pair. But each arm of
+`return match method { .line_search { s.line_search() } … }` is an
+expression, not a return, and V refuses a bare result there. It has to be
+`s.line_search()!`, which yields the value or propagates the error
+unchanged, a custom `NewtonError` included
+([numeric/newton.v](../numeric/newton.v)). The same goes for
+`return if c { f() } else { g() }`.
+
+**A result isn't a value you can keep.** Go's `(T, error)` pair can go in a
+slice; V's `!T` can't. `[flash.tvf(…), flash.pvf(…)]` is refused ("should
+have either an `or {}` block, or `!` at the end"), and so is
+`r := if c { f() } else { g() }` when f and g return results. A `!` on each
+call compiles, but then a failure propagates, and you can't inspect it. To
+keep calls whose failures you want to inspect, keep closures instead and
+call them later. [flash/vf_test.v](../flash/vf_test.v) tests bad input with a map of
+them:
+
+```v
+bad := {
+	'β < 0': fn [m, z] () !flash.FlashResult {
+		return flash.tvf(m, 250.0, -0.1, z)
+	}
+	// …
+}
+for name, call in bad {
+	call() or {
+		assert (err as flash.FlashError).kind == .bad_input, name
+		continue
+	}
+	assert false, '${name} was accepted'
+}
+```
+
+**Interface methods and function types can take `mut` parameters**, so a
+callback can fill buffers the caller owns, with no allocation and no
+pointers: `numeric.System` is `eval(x []f64, mut f []f64, mut jac []f64) !`.
+(The solvers take interfaces rather than function types because V never
+frees a closure; see §3.) The tests wrap function values in a struct, with
+a field `f fn (x []f64, mut f []f64, mut jac []f64) !`. A struct field of
+function type must be `@[required]` or given a default: V flags one that
+would otherwise start as a nil function ("uninitialized `fn` struct fields
+are not allowed").
+
+**On Windows, `import runtime` breaks the default build.** Even a
+three-line program that prints `runtime.nr_cpus()` fails: tcc can't parse
+the `psapi.h` that `runtime` includes, and V's gcc retry fails in its
+module cache. Only the fallback compiler builds it, slowly, and it files a
+report (above). [tools/check.vsh](../tools/check.vsh) sets its job count
+to a constant instead. `v vet` wouldn't have warned about either this or
+`a + b` on arrays: it checks style, not types, so build what you change.
+
+**Double-quoted strings interpolate too.** `'${x}'` and `"${x}"` are the
+same in V, unlike Go's `"..."` and backquoted raw strings. A script that
+builds V source as text has to use raw strings, `r'${x}'`, or it
+interpolates its own variables.
