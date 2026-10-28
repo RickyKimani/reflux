@@ -689,10 +689,85 @@ flowchart LR
   - Two mistakes whose first form only stopped compilation, by leaving a
     variable unused under `-W`, were rewritten and rerun.
 
-### 7. PH and PS flashes
-- Michelsen's Q-function (D5), including pure components (H jumps at Tsat)
-  and a narrow-boiling mixture.
-- Tests: criterion 4's round trips; agreement with `thermo`.
+### 7. PH and PS flashes — done
+- **[flash/ph.v](../flash/ph.v):** `ph(fluid, P, H, z)` and
+  `ps(fluid, P, S, z)` find T and the split from a molar H or S. They take
+  a `thermo.Fluid`, since H and S need the ideal gas.
+- **Michelsen's Q-function (D5).** The equilibrium is the saddle of
+  Q(T, v) = (G − H_spec)/RT, or (G + T·S_spec)/R: a minimum in the vapour
+  mole numbers and a maximum in T. Over the PT flash's minimum,
+  dQ*/dT = −(H(T) − H_spec)/RT², and H(T) never falls as T rises. So:
+  - start at the ideal gas's T for the specification;
+  - step T out by 50% with PT flashes until the residual changes sign;
+  - narrow with Brent's method (new in [numeric/roots.v](../numeric/roots.v))
+    to 1e-3 in T;
+  - finish with Newton on Q's stationary conditions in (v, ln T), with Q's
+    analytic Hessian, from the PT split there;
+  - answer with a verified PT flash at the final T, held to
+    |H − H_spec| ≤ etol·RT (etol 1e-10). Brent goes on wherever Newton
+    can't.
+- **A pure component's H jumps at Tsat.**
+  - Inside the jump, within etol of either end, the answer is the
+    two-phase state at Tsat (from pvf), with β from the energy balance.
+  - Outside it, the answer is a single phase found by Brent on its own
+    side of Tsat.
+  - The etol margin matters. A saturated vapour's H from `thermo` sits
+    1e-10 outside reflux's own, and a single phase found there sat on a
+    tie between its two roots.
+- **Tests in [flash/ph_test.v](../flash/ph_test.v):**
+  - **Criterion 4's round trips:** from each of the 83 PT states' H and S
+    (`thermo`'s own numbers, so this is also agreement with `thermo`),
+    both flashes come back to T and the split within 1e-8 (2.2e-11 and
+    2.6e-11 measured), in at most 1990 PT flashes and Newton steps (1947;
+    2018 without the Q-function Newton).
+    - These include the narrow-boiling n-butane/isobutane at 5 bar, whose
+      6 two-phase states lie within 4 K, and under 0.4 K at 5% isobutane.
+  - **The 36 pure-component saturation states:** saturated liquid,
+    vapour and β = 0.3 come back to Tsat to 1e-9 and β to 1e-8 (1.5e-11
+    and 8e-11 measured).
+  - **Three phases:** water, n-decane and methane at 350 K, given its
+    false split's H, is refused as `more_phases`.
+  - **The tolerance contract:** at etol 1e-4 every answer meets it. At
+    1e-16, below what H can be computed to, every answer meets it or is an
+    error (1 and 10 of 11 states).
+    - That test found a bug. A pure component's single-phase answer
+      wasn't held to etol: Brent stops when its bracket can't shrink,
+      short of ftol, and that answer was returned.
+  - **An H no temperature from 10 K to 10⁴ K reaches** is `bad_input`,
+    and so is every other kind of bad input, each for its stated reason.
+- **In [flash/dwsim_test.v](../flash/dwsim_test.v):** reflux's PH and PS
+  flashes from its own H or S at DWSIM's 9 states land on them, T and β to
+  1e-8.
+  - For mixtures that puts reflux within 0.01 K of DWSIM's landing
+    (criterion 6).
+  - For pure n-butane DWSIM lands 0.118 K away, on its vapour-pressure
+    correlation, as step 5 found.
+- **Internal tests:**
+  - Q's Hessian against central differences, for PH and PS;
+  - Brent's method on smooth roots (8 and 9 evaluations), on a jump, on a
+    flat function with a jump, where its guard falls back to bisection
+    (54 evaluations), at xtol (the last bracket no wider than it) and
+    ftol, and with errors from f passed on.
+  - Brent's method is slow on a multiple root: x³ = 0 takes more than 100
+    steps to 1e-12. A flash's residual has no multiple roots, so this is
+    documented rather than tested.
+- **What Newton buys:** without it the round trips take 2018 steps instead
+  of 1947, and about 10% more time. The PT flashes in bracketing and Brent
+  are most of the cost, which step 10 will measure.
+- **Also:** the feed checks now live in one place, `check_feed`, shared by
+  every flash.
+- **Planted mistakes:** 20 planted, 14 caught at first. The survivors led
+  to:
+  - deleting the pure single-phase metastable-root check, since that root
+    is the stable one by construction;
+  - tests of Brent's method on a flat function with a jump and of its last
+    bracket's width;
+  - the test at etol 1e-16, which found the missing check on the pure
+    single-phase path. Removing that check, planted afterwards, is caught.
+  - choosing the bracket's step from measurements (1.5×), and a budget
+    tight enough to catch the missing Q-function Newton and 1.25× steps.
+  - One survivor is explained: steps of 3× take 1959, as few as 1.5×
+    (1947), so the factor is a tuning choice, not a mistake.
 
 ### 8. TV and UV flashes
 - The Helmholtz-natural specifications (D5).

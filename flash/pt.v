@@ -123,6 +123,22 @@ pub fn pt(m thermo.Model, t f64, p f64, z []f64, params FlashParams) !FlashResul
 	return last
 }
 
+// check_feed refuses a feed that isn't one: the wrong length for the
+// model, a negative or non-finite amount, or no moles at all.
+fn check_feed(m thermo.Model, z []f64) ! {
+	if z.len != m.components().len {
+		return fail(.bad_input, 'z has ${z.len} entries, but the model has ${m.components().len} components')
+	}
+	for i, zi in z {
+		if !(zi >= 0.0) || !math.is_finite(zi) {
+			return fail(.bad_input, 'z[${i}] = ${zi} is not a mole fraction')
+		}
+	}
+	if !(numeric.sum(z) > 0.0) {
+		return fail(.bad_input, 'the feed has no moles')
+	}
+}
+
 fn normalised(z []f64) []f64 {
 	total := numeric.sum(z)
 	return z.map(it / total)

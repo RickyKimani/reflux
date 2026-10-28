@@ -394,3 +394,35 @@ fn test_reflux_bubble_and_dew_points() {
 		}
 	}
 }
+
+fn test_reflux_ph_and_ps_by_state() {
+	// reflux's own PH and PS flashes from its own H or S at each state (the
+	// exact one, to 1e-9: test_ph_and_ps_by_state) land back on the state:
+	// T to 1e-8 relative and β to 1e-8. So for a mixture reflux sits no
+	// further from DWSIM's landing than the exact state does, give or take
+	// 1e-6 K: within criterion 6's 0.01 K. For pure n-butane DWSIM lands on
+	// its own saturation temperature, 0.118 K away, as explained above.
+	fx := json2.decode[DwFixture](read_text()!)!
+	for c in read_cases[DwByStateCase](['ph', 'ps'])! {
+		sys := fx.systems[c.system]
+		at := '${c.kind} ${sys.name} at ${c.t} K, ${c.p} Pa, vf ${c.vf}'
+		m := cubic_of(sys)!
+		fl := fluid_of(sys, m)!
+		st := c.exact.state
+		r := if c.kind == 'ph' {
+			flash.ph(fl, c.p, c.exact.spec, sys.z)!
+		} else {
+			flash.ps(fl, c.p, c.exact.spec + thermo.r_gas * math.log(thermo.p_ref / fx.p_ref_s), sys.z)!
+		}
+		assert math.abs(r.t - st.t) <= 1e-8 * st.t, '${at}: ${r.t} vs ${st.t}'
+		assert math.abs(r.beta - st.beta) <= 1e-8, '${at}: β ${r.beta} vs ${st.beta}'
+		land := c.dwsim.landing
+		if sys.z.len > 1 {
+			assert math.abs(r.t - land.t) <= math.abs(st.t - land.t) + 1e-6, at
+			assert math.abs(r.t - land.t) <= 0.01, at
+		} else {
+			gap := r.t - land.t
+			assert gap > 0.1 && gap <= 0.12, '${at}: ${gap} K'
+		}
+	}
+}

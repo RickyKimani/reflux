@@ -28,21 +28,19 @@ Keep this section current: update it whenever a step is committed.
     D1–D12 and steps 0–11.
   - A finished step's heading says "— done", with a write-up beneath. That
     file, not this one, is the record of what each step did.
-  - Steps 0–6 are committed and pushed: the DWSIM spike, Newton and
+  - Steps 0–7 are committed (0–6 pushed): the DWSIM spike, Newton and
     Rachford–Rice, PIP and the Soave guard, stability, the PT flash
     (`flash/pt.v`), the reference fixtures (`testdata/m3_thermo.json`,
-    `testdata/m3_dwsim.json`), and the vapour-fraction flashes with bubble
-    and dew points (`flash/vf.v`).
+    `testdata/m3_dwsim.json`), the vapour-fraction flashes with bubble and
+    dew points (`flash/vf.v`), and the PH and PS flashes (`flash/ph.v`).
   - Amended so far: D3 in step 4 (pure-component stability trials), D6 in
     step 6 (the vapour is the phase of lower mass density), and criterion
     6 after step 5 (a DWSIM deviation may exceed a target only when the
     fixture reproduces it from DWSIM itself, and reflux still matches the
     exact model to 1e-8).
-  - Next is step 7: PH and PS flashes, by Michelsen's Q-function (D5),
-    pure components and a narrow-boiling mixture included. Their
-    references are `m3_thermo.json`'s PT states (the specification's H or
-    S, with the state as the answer) and saturation states, and
-    `m3_dwsim.json`'s PH and PS cases by state.
+  - Next is step 8: TV and UV flashes, the Helmholtz-natural
+    specifications (D5), with round trips from `m3_thermo.json`'s PT states
+    (their V and U) and agreement with `thermo` where its TV flash ran.
 
 ## How we work
 
@@ -140,6 +138,11 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     points are β = 0 and 1. Newton runs on ln K and ln P (or ln T)
     from Wilson's start, with a PT-split start as fallback. Two answers
     are possible near critical points, and `estimate` picks between them.
+  - `ph` and `ps` (`ph.v`) take a `thermo.Fluid` and find T from a molar H
+    or S, by Michelsen's Q-function. T is bracketed by PT flashes on the
+    sign of H(T) − H_spec, narrowed by Brent, and finished by Newton in
+    (v, ln T). A pure component inside its jump at Tsat gets β from the
+    energy balance.
   - In a split, the vapour is the phase of lower *mass* density (D6, as
     amended in step 6), not the larger molar volume.
   - Results are `FlashResult`; failures are `FlashError` with a

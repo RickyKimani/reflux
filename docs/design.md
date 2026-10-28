@@ -562,6 +562,73 @@ moves τ until both roots exist. With only a vapour root, P is too low or T
 too high, and the reverse with only a liquid root. Any β gives the same T
 and P.
 
+## PH and PS flashes
+
+`flash.ph(fluid, P, H, z)` and `flash.ps(fluid, P, S, z)`
+([flash/ph.v](../flash/ph.v)) find T and the split from a molar H or S, on
+the Fluid's reference state. They take a Fluid, not a Model, because H and
+S need the ideal gas.
+
+**The Q-function** (Michelsen 1999, D5). At fixed P and H the equilibrium
+is the stationary point of
+
+    Q(T, v) = (G(T, P, v) − H_spec)/RT      (PS: (G + T·S_spec)/R),
+
+a minimum in the vapour mole numbers v and a maximum in T. Minimising over
+v at fixed T is the PT flash, and what is left, Q*(T), has
+
+    dQ*/dT = −(H(T) − H_spec)/RT²           (PS: S_spec − S(T)),
+
+where H(T) is the equilibrium enthalpy. H(T) at fixed P never falls as T
+rises, latent heat included, so the sign of H(T) − H_spec brackets the
+answer, however steep or broken H(T) is.
+
+**The steps.**
+- **Start:** the temperature at which the feed as an ideal gas has
+  H_spec (or S_spec), by bisection, or the caller's `estimate`.
+- **Bracket:** T is stepped out by 50% at a time, with a PT flash at
+  each step, until the residual changes sign. (Steps of 1.5× and 2× take
+  the fewest flashes on the reference set, and 1.25× takes 3% more.)
+- **Narrow:** Brent's method on the residual, to 1e-3 in T.
+- **Finish:** if the PT flash there splits, Newton on Q's stationary
+  conditions in (v, ln T) together, equal fugacities and the energy
+  balance, takes it to round-off.
+- **Fallback:** otherwise, or if Newton fails, Brent goes on.
+- **The answer** is a verified PT flash at the final T, with
+  |H − H_spec| ≤ etol·RT or |S − S_spec| ≤ etol·R (etol 1e-10).
+
+**Q's Hessian**, Newton's Jacobian. With gᵢ = ln fᵢⱽ − ln fᵢᴸ,
+r_E = (H − H_spec)/RT (or (S − S_spec)/R) and
+cᵢ = T·∂(ln φᵢⱽ − ln φᵢᴸ)/∂T at fixed composition:
+
+    ∂gᵢ/∂vⱼ = the PT flash's Hessian (above),   ∂gᵢ/∂ln T = cᵢ,
+    ∂r_E/∂vⱼ = −cⱼ             (PS: −gⱼ − cⱼ),
+    ∂r_E/∂ln T = Cp/R − r_E    (PS: Cp/R),
+
+with Cp the two phases' heat capacity at fixed composition. They follow
+from H = Σᵢ(vᵢh̄ᵢⱽ + lᵢh̄ᵢᴸ) and h̄ᵢⱽ − h̄ᵢᴸ = −RT²·∂(ln φᵢⱽ − ln φᵢᴸ)/∂T.
+For S there is also the mixing entropy:
+s̄ᵢⱽ − s̄ᵢᴸ = −R·gᵢ − RT·∂(ln φᵢⱽ − ln φᵢᴸ)/∂T.
+
+**Brent's method** ([numeric/roots.v](../numeric/roots.v)) is inverse
+quadratic interpolation or the secant where they make progress, and
+bisection where they don't (Brent 1973). On a smooth function it converges
+superlinearly, and it is never much slower than bisection, so a jump in
+H(T) only narrows the bracket onto it. It's slow on a multiple root, as
+Brent's method is, but a flash's residual has none. Its tolerance is
+relative (4ε|x|, plus xtol/2), so a root at 0 needs an xtol.
+
+**A pure component's** H jumps at Tsat by the heat of vaporisation, so no
+T gives an H inside the jump. There the Q-function's maximum is at the
+kink, T = Tsat, with the vapour fraction the energy balance gives:
+
+    β = (H_spec − Hᴸ(Tsat))/(Hⱽ(Tsat) − Hᴸ(Tsat)).
+
+The flash finds Tsat with pvf, then answers this way for an H_spec
+between the saturated liquid's and vapour's, within etol of either end.
+Outside that range the answer is a single phase on its own side of Tsat,
+found by Brent on that root alone.
+
 ## How CPA will fit
 
 ```v

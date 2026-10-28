@@ -118,17 +118,7 @@ fn saturate(m thermo.Model, given Given, value f64, beta f64, z []f64, params Vf
 	if !(params.estimate >= 0.0) || !math.is_finite(params.estimate) {
 		return fail(.bad_input, 'estimate = ${params.estimate} must be a positive T or P, or 0 to start from Wilson')
 	}
-	if z.len != m.components().len {
-		return fail(.bad_input, 'z has ${z.len} entries, but the model has ${m.components().len} components')
-	}
-	for i, zi in z {
-		if !(zi >= 0.0) || !math.is_finite(zi) {
-			return fail(.bad_input, 'z[${i}] = ${zi} is not a mole fraction')
-		}
-	}
-	if !(numeric.sum(z) > 0.0) {
-		return fail(.bad_input, 'the feed has no moles')
-	}
+	check_feed(m, z)!
 	feed := normalised(z)
 	s := Saturation{
 		m:       m

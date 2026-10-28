@@ -51,7 +51,7 @@ v.mod               module manifest (Go's go.mod)
 main.v              demo CLI, on database components
 numeric/
   cubic.v           real roots of a cubic
-  roots.v           bracketed root finding (bisection)
+  roots.v           bracketed root finding: bisection, Brent's method
   lu.v              dense LU with partial pivoting
   cholesky.v        Cholesky factorisation, the positive-definiteness test
   vec.v             small vector helpers
@@ -87,6 +87,7 @@ flash/
   stability.v       Michelsen's tangent-plane stability test, for any Model
   pt.v              the PT flash: stability, then the two-phase split
   vf.v              vapour-fraction flashes: bubble and dew points, T or P given
+  ph.v              PH and PS flashes, pure components included
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
 docs/               roadmap, milestone plans, design notes, data format,
