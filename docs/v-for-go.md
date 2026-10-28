@@ -77,8 +77,8 @@ resolves the bare name, so the module is now `benchmarks`.
 
 **`v test` is slower than `go test`, and two settings matter.** Go compiles
 each package once and links its tests. V compiles every `_test.v` file into
-a program of its own, with all of `vlib` it uses: 33 C compilations for
-reflux's 33 test files.
+a program of its own, with all of `vlib` it uses: 45 C compilations for
+reflux's 45 test files at the end of M3.
 - **Jobs:** the runner allows one job per 8 GiB of RAM, at most 4, so a
   14 GiB machine runs them one at a time. A build peaks near 1 GB, so
   `VJOBS=4` is safe there, and [tools/check.vsh](../tools/check.vsh) sets it.
@@ -385,8 +385,9 @@ writes later must plug in without editing `thermo`.
 pub interface Model {
 	components() []Component
 	min_volume(n []f64) f64
-	volume_derivs(t f64, v f64, n []f64) VolumeDerivs
+	volume_function(t f64, n []f64) VolumeFunction // itself an interface
 	residual(t f64, v f64, n []f64) Residual
+	residual2(t f64, v f64, n []f64) Residual2
 }
 
 pub fn solve_tp(m Model, t f64, p f64, n []f64, root Root) !State
@@ -636,7 +637,8 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 ## 10. Memory and performance
 
 - By default V uses a garbage collector (Boehm), so your mental model from Go
-  carries over. `-autofree` and `-gc none` exist, but you don't need them.
+  carries over, with one exception: **closures are never freed** (§3).
+  `-autofree` and `-gc none` exist, but you don't need them.
 - Dynamic arrays `[]f64` live on the heap. `[3]f64` lives on the stack. In
   hot loops such as flash iterations or column stages, allocate once and reuse.
   This is the same advice as in Go.
@@ -644,6 +646,12 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
   That's cheap compared with a volume solve, but worth knowing.
 - **Measure with `-prod` and a real C compiler** (see §1). tcc numbers
   don't tell you anything about speed.
+- **Measure before optimising, with a profile** (§1, `-profile`). M3's
+  first benchmarks found reflux slower than DWSIM on most flashes, and the
+  profile put 88% of the time in one place: a volume solver recomputing
+  the same a(T, n) on every step. One change there made every flash
+  2.3–5.7 times faster ([docs/benchmarks.md](benchmarks.md)). Allocation,
+  the usual suspect, wasn't near the top.
 
 ---
 
@@ -913,12 +921,15 @@ for name, call in bad {
 }
 ```
 
-**Function types can take `mut` parameters**, so a callback can fill
-buffers the caller owns, with no allocation and no pointers:
-`pub type SystemFn = fn (x []f64, mut f []f64, mut jac []f64) !`. A struct
-field of function type should then be `@[required]` or given a default:
-V flags one that would otherwise start as a nil function ("uninitialized
-`fn` struct fields are not allowed").
+**Interface methods and function types can take `mut` parameters**, so a
+callback can fill buffers the caller owns, with no allocation and no
+pointers: `numeric.System` is `eval(x []f64, mut f []f64, mut jac []f64) !`.
+(The solvers take interfaces rather than function types because V never
+frees a closure; see §3.) The tests wrap function values in a struct, with
+a field `f fn (x []f64, mut f []f64, mut jac []f64) !`. A struct field of
+function type must be `@[required]` or given a default: V flags one that
+would otherwise start as a nil function ("uninitialized `fn` struct fields
+are not allowed").
 
 **On Windows, `import runtime` breaks the default build.** Even a
 three-line program that prints `runtime.nr_cpus()` fails: tcc can't parse

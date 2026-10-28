@@ -1,6 +1,7 @@
 # M2 plan — component data
 
-Status: **in progress.** Steps 0 and 1 are done: the official files are in
+Status: **done,** and merged as PR #2. The criterion-by-criterion review is
+in "Exit review", at the end. The official files are in
 `data/vendor/chemsep/` (see their [NOTICE](../data/vendor/chemsep/NOTICE.md)),
 and the format is TOML ([data-format.md](data-format.md)). The roadmap entry
 is

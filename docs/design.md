@@ -795,8 +795,10 @@ pub struct Cpa {
 fractions X_A come from the site balance at each (T, V, n). Michelsen &
 Hendriks (2001) showed that the association term is stationary with respect
 to X, so its *first* derivatives need no ∂X/∂(T, V, n). `min_volume` is the
-SRK covolume. `model.v`, `saturation.v` and every flash routine stay as
-they are.
+SRK covolume. `volume_function(t, n)` fixes what depends on T alone (the
+association strengths Δ_AB(T) and SRK's a(T, n)) and solves the site
+balance at each V it's asked for.
+`model.v`, `saturation.v` and every flash routine stay as they are.
 
 ## Performance
 

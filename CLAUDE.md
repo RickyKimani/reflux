@@ -22,33 +22,36 @@ Keep this section current: update it whenever a step is committed.
 
 - **M0, M1 and M2 are done** and merged into `main` (PRs #1 and #2).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
-- **M3 (flash) is in progress** on branch `m3-flash`, which is pushed and
-  has no PR yet.
+- **M3 (flash) is done** on branch `m3-flash`, which is pushed and has no
+  PR yet. Its exit review, at the end of `docs/m3-plan.md`, finds all ten
+  criteria met. The PR into `main` waits for CI on the last commit, and for
+  the owner to ask.
   - The plan, `docs/m3-plan.md`, holds exit criteria 1–10, decisions
-    D1–D12 and steps 0–11.
-  - A finished step's heading says "— done", with a write-up beneath. That
-    file, not this one, is the record of what each step did.
-  - Steps 0–10 are committed and pushed: the DWSIM spike, Newton and
-    Rachford–Rice, PIP and the Soave guard, stability, the PT flash
-    (`flash/pt.v`), the reference fixtures (`testdata/m3_thermo.json`,
-    `testdata/m3_dwsim.json`), the vapour-fraction flashes with bubble and
-    dew points (`flash/vf.v`), the PH and PS flashes (`flash/ph.v`), the
-    TV and UV flashes (`flash/tv.v`), the robustness sweep (`sweep/`,
-    `docs/flash-robustness.md`), and the benchmarks with a performance
-    pass (`benchmarks/`, `docs/benchmarks.md`).
-  - Amended so far: D3 in step 4 (pure-component stability trials), D6 in
-    step 6 (the vapour is the phase of lower mass density), criterion 6
-    after step 5 (a DWSIM deviation may exceed a target only when the
-    fixture reproduces it from DWSIM itself, and reflux still matches the
-    exact model to 1e-8), D8 in step 9 (a third phase, proved by a
-    negative tangent-plane distance, is an explained failure: VLLE is M6),
-    and in step 10 D10 (the module is `benchmarks`, since vlib has a
+    D1–D12 and steps 0–11, each step "— done" with its write-up: the
+    record of what each step did.
+  - What M3 built: Newton and Rachford–Rice, PIP and the Soave guard,
+    stability, the PT flash (`flash/pt.v`), the reference fixtures
+    (`testdata/m3_thermo.json`, `testdata/m3_dwsim.json`), the
+    vapour-fraction flashes with bubble and dew points (`flash/vf.v`), the
+    PH and PS flashes (`flash/ph.v`), the TV and UV flashes (`flash/tv.v`),
+    the robustness sweep (`sweep/`, `docs/flash-robustness.md`), and the
+    benchmarks with a performance pass (`benchmarks/`,
+    `docs/benchmarks.md`).
+  - Amended along the way: D3 in step 4 (pure-component stability trials),
+    D6 in step 6 (the vapour is the phase of lower mass density),
+    criterion 6 after step 5 (a DWSIM deviation may exceed a target only
+    when the fixture reproduces it from DWSIM itself, and reflux still
+    matches the exact model to 1e-8), D8 in step 9 (a third phase, proved
+    by a negative tangent-plane distance, is an explained failure: VLLE is
+    M6), and in step 10 D10 (the module is `benchmarks`, since vlib has a
     `benchmark`) and M1's D2 (the volume solver's tier on `Model` is
     `volume_function(t, n)`).
-  - Next is step 11, the last: README, roadmap, the design notes on the
-    flash and the V notes brought up to date, then a criterion-by-criterion
-    exit review of criteria 1–10, as in M1 and M2. After it, and only when
-    asked, the PR into `main`.
+  - Carried forward (the review's list): PH for 5 and 10 components takes
+    2–4× as long as DWSIM's, about 12 verified PT flashes per answer; VLLE
+    is M6; upstream reports to V, `thermo` and DWSIM.
+- **Next is M10a** (thermo and the flash from Python, with NumPy arrays),
+  then M4, the first flowsheet. Each starts with its plan,
+  `docs/mN-plan.md`, approved before any code.
 
 ## How we work
 

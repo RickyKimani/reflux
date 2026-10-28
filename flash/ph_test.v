@@ -102,11 +102,53 @@ fn split_dev(r flash.FlashResult, phases []PhPhase) f64 {
 	return d
 }
 
+// density is a phase's mass density, kg/m³.
+fn density(m thermo.Model, st thermo.State) f64 {
+	comps := m.components()
+	mut mass := 0.0
+	for i, n in st.n {
+		mass += n * comps[i].mw
+	}
+	return mass / st.v
+}
+
+// check_equilibrium checks exit criterion 3 on a two-phase result, from
+// scratch: fugacities equal, each component's mass balance, Σx = Σy = 1, and
+// neither phase unstable. (As in pt_test.v: each test file is a program of
+// its own, so the checker is repeated rather than shared.)
+fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
+	assert r.phases.len == 2, at
+	vap, liq := r.phases[0], r.phases[1]
+	assert vap.label == .vapor && liq.label == .liquid, at
+	assert density(m, vap.state) < density(m, liq.state), '${at}: the vapour is the less dense'
+	assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
+	assert math.abs(vap.fraction + liq.fraction - 1.0) <= 1e-15, at
+	y, x := vap.state.n, liq.state.n
+	sy := thermo.solve_tp(m, r.t, r.p, y, .stable)!
+	sx := thermo.solve_tp(m, r.t, r.p, x, .stable)!
+	mut sum_x, mut sum_y := 0.0, 0.0
+	for i, z in r.z {
+		sum_x += x[i]
+		sum_y += y[i]
+		assert math.abs(vap.fraction * y[i] + liq.fraction * x[i] - z) <= 1e-12, '${at}: mass balance of component ${i}'
+		if z > 0.0 {
+			res := math.abs(math.log(y[i]) + sy.ln_phi[i] - math.log(x[i]) - sx.ln_phi[i])
+			assert res <= 1e-10, '${at}: |ln fV − ln fL| of component ${i} is ${res}'
+		}
+	}
+	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
+	for pair in [[x, y], [y, x]] {
+		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		assert s.stable, '${at}: a phase of the split is unstable'
+	}
+}
+
 fn test_round_trips_from_pt_states() {
 	// Exit criterion 4: from each of the 83 PT states' H and S, the PH and
 	// PS flashes come back to T and the split, to 1e-8 (measured 2.2e-11 in
 	// T and 2.6e-11 in the split), in at most 1990 PT flashes and Newton
 	// steps in all (1949 measured; 2018 without the Q-function Newton).
+	// Each split is an equilibrium by criterion 3, checked from scratch.
 	// Among them are n-butane with isobutane
 	// at 5 bar, whose two-phase range is under 4 K wide (under 0.4 K at 5%
 	// isobutane): its 6 two-phase states come back too.
@@ -121,6 +163,9 @@ fn test_round_trips_from_pt_states() {
 		rs := flash.ps(fl, c.p, reflux_s(f, c.s), c.z) or { panic('${at}: ps: ${err}') }
 		for r in [rh, rs] {
 			assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.t} K'
+			if r.phases.len == 2 {
+				check_equilibrium(fl.model, r, at)!
+			}
 			dt := math.abs(r.t - c.t) / c.t
 			if dt > worst_t {
 				worst_t, at_t = dt, at
@@ -141,7 +186,8 @@ fn test_pure_saturation() {
 	// A pure component's H jumps at Tsat. An H or S from inside the jump,
 	// the saturated mixture at vapour fraction vf, must give back Tsat to
 	// 1e-9 and that vf to 1e-8 (measured 1.5e-11 and 8e-11), the saturated
-	// liquid and vapour (vf 0 and 1) included.
+	// liquid and vapour (vf 0 and 1) included. Inside the jump the two
+	// phases are an equilibrium by criterion 3.
 	f := read_thermo()!
 	mut worst_t, mut worst_b := 0.0, 0.0
 	for c in f.saturation {
@@ -152,6 +198,9 @@ fn test_pure_saturation() {
 		for r in [rh, rs] {
 			worst_t = math.max(worst_t, math.abs(r.t - c.t) / c.t)
 			worst_b = math.max(worst_b, math.abs(r.beta - c.vf))
+			if r.phases.len == 2 && r.beta > 0.0 && r.beta < 1.0 {
+				check_equilibrium(fl.model, r, at)!
+			}
 		}
 	}
 	println('pure saturation: T ${worst_t:.2g}, beta ${worst_b:.2g}')

@@ -108,10 +108,52 @@ fn split_dev(r flash.FlashResult, phases []TvPhase) f64 {
 	return d
 }
 
+// density is a phase's mass density, kg/m³.
+fn density(m thermo.Model, st thermo.State) f64 {
+	comps := m.components()
+	mut mass := 0.0
+	for i, n in st.n {
+		mass += n * comps[i].mw
+	}
+	return mass / st.v
+}
+
+// check_equilibrium checks exit criterion 3 on a two-phase result, from
+// scratch: fugacities equal, each component's mass balance, Σx = Σy = 1, and
+// neither phase unstable. (As in pt_test.v: each test file is a program of
+// its own, so the checker is repeated rather than shared.)
+fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
+	assert r.phases.len == 2, at
+	vap, liq := r.phases[0], r.phases[1]
+	assert vap.label == .vapor && liq.label == .liquid, at
+	assert density(m, vap.state) < density(m, liq.state), '${at}: the vapour is the less dense'
+	assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
+	assert math.abs(vap.fraction + liq.fraction - 1.0) <= 1e-15, at
+	y, x := vap.state.n, liq.state.n
+	sy := thermo.solve_tp(m, r.t, r.p, y, .stable)!
+	sx := thermo.solve_tp(m, r.t, r.p, x, .stable)!
+	mut sum_x, mut sum_y := 0.0, 0.0
+	for i, z in r.z {
+		sum_x += x[i]
+		sum_y += y[i]
+		assert math.abs(vap.fraction * y[i] + liq.fraction * x[i] - z) <= 1e-12, '${at}: mass balance of component ${i}'
+		if z > 0.0 {
+			res := math.abs(math.log(y[i]) + sy.ln_phi[i] - math.log(x[i]) - sx.ln_phi[i])
+			assert res <= 1e-10, '${at}: |ln fV − ln fL| of component ${i} is ${res}'
+		}
+	}
+	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
+	for pair in [[x, y], [y, x]] {
+		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		assert s.stable, '${at}: a phase of the split is unstable'
+	}
+}
+
 fn test_tv_round_trips_from_pt_states() {
 	// Exit criterion 4: from each of the 83 PT states' V, at its T, the TV
 	// flash comes back to P and the split, to 1e-8 (measured 2e-12 and
 	// 2e-11), in at most 450 PT flashes and Helmholtz steps in all (436).
+	// Each split is an equilibrium by criterion 3, checked from scratch.
 	f := read_thermo()!
 	mut worst_p, mut worst_split := 0.0, 0.0
 	mut at_p := ''
@@ -122,6 +164,9 @@ fn test_tv_round_trips_from_pt_states() {
 		v, _ := own(fl, c)!
 		r := flash.tv(fl.model, c.t, v, c.z) or { panic('${at}: tv: ${err}') }
 		assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.p} Pa'
+		if r.phases.len == 2 {
+			check_equilibrium(fl.model, r, at)!
+		}
 		dp := math.abs(r.p - c.p) / c.p
 		if dp > worst_p {
 			worst_p, at_p = dp, at
@@ -138,6 +183,7 @@ fn test_uv_round_trips_from_pt_states() {
 	// From each PT state's U and V, the UV flash comes back to T, P and the
 	// split, to 1e-8 (measured 4.6e-12, 3.9e-11 and 1.2e-11), in at most
 	// 980 TV flashes in all (958; 1122 without the split's Newton finish).
+	// Each split is an equilibrium by criterion 3, checked from scratch.
 	f := read_thermo()!
 	mut worst_t, mut worst_p, mut worst_split := 0.0, 0.0, 0.0
 	mut at_t := ''
@@ -148,6 +194,9 @@ fn test_uv_round_trips_from_pt_states() {
 		v, u := own(fl, c)!
 		r := flash.uv(fl, u, v, c.z) or { panic('${at}: uv: ${err}') }
 		assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.t} K, ${r.p} Pa'
+		if r.phases.len == 2 {
+			check_equilibrium(fl.model, r, at)!
+		}
 		dt := math.abs(r.t - c.t) / c.t
 		if dt > worst_t {
 			worst_t, at_t = dt, at
@@ -166,7 +215,8 @@ fn test_pure_saturation() {
 	// TV gives back Psat and the vapour fraction, and UV Tsat, Psat and the
 	// vapour fraction: P and T to 1e-9, the vapour fraction to 1e-8
 	// (measured 1.2e-10, 1.5e-11 and 1.5e-10). Inside the dome P is Psat(T)
-	// whatever V, so thermo's V and U serve here.
+	// whatever V, so thermo's V and U serve here, and the two phases are an
+	// equilibrium by criterion 3.
 	f := read_thermo()!
 	mut worst_p, mut worst_t, mut worst_b := 0.0, 0.0, 0.0
 	for c in f.saturation {
@@ -177,6 +227,11 @@ fn test_pure_saturation() {
 		worst_p = math.max(worst_p, math.max(math.abs(rt.p - c.p), math.abs(ru.p - c.p)) / c.p)
 		worst_t = math.max(worst_t, math.abs(ru.t - c.t) / c.t)
 		worst_b = math.max(worst_b, math.max(math.abs(rt.beta - c.vf), math.abs(ru.beta - c.vf)))
+		for r in [rt, ru] {
+			if r.phases.len == 2 && r.beta > 0.0 && r.beta < 1.0 {
+				check_equilibrium(fl.model, r, at)!
+			}
+		}
 	}
 	println('pure saturation: P ${worst_p:.2g}, T ${worst_t:.2g}, beta ${worst_b:.2g}')
 	assert worst_p <= 1e-9 && worst_t <= 1e-9 && worst_b <= 1e-8

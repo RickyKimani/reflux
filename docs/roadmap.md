@@ -133,8 +133,19 @@ compounds is checked against the database's own vapour-pressure
 correlations.
 
 ### M3 — Flash
-Detailed plan, with the algorithms, references and exit criteria:
-[m3-plan.md](m3-plan.md).
+**Done.** The detailed plan, with the algorithms, references, decisions and
+the criterion-by-criterion exit review, is in [m3-plan.md](m3-plan.md). The
+plan went further than the exit below:
+- UV flashes too, and pure components and a narrow-boiling mixture in
+  every specification;
+- a third phase is detected and refused (`more_phases`) rather than
+  returned as a two-phase answer. VLLE itself is M6;
+- the sweep checks every answer from scratch and proves every refusal,
+  into [flash-robustness.md](flash-robustness.md);
+- reflux is timed against `thermo` and DWSIM 9, in
+  [benchmarks.md](benchmarks.md). That led to a faster volume-solver tier
+  on `Model`, and to solvers that take interfaces, since V never frees a
+  closure.
 
 - Michelsen tangent-plane stability analysis (E1).
 - Two-phase PT flash: Rachford–Rice, successive substitution with
@@ -311,7 +322,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A1 Repo, CI matrix (Windows/Linux × tcc/gcc), fmt and vet gates | M0 |
 | A2 Units at the boundary: parse `25 degC`, `1 atm`, `kmol/h`; SI inside | M4 |
 | A3 Structured diagnostics: every solver returns *why* it stopped | M3 |
-| A4 Iteration tracing (opt-in) for convergence debugging | M3 |
+| A4 Iteration tracing (opt-in) for convergence debugging | M4 (moved from M3, which didn't need it: its flashes report every failure with a reason and the iterations taken) |
 | A5 Benchmark harness (`benchmarks` module) with tracked results | M3 |
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |

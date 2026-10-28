@@ -5,6 +5,9 @@ mixture and two specifications, how many phases are there, and what are
 they? It's planned like M1 and M2: research first, then exit criteria,
 decisions and steps. The roadmap entry is in [roadmap.md](roadmap.md).
 
+Status: **done.** The criterion-by-criterion review is in "Exit review", at
+the end.
+
 ## Goal
 
 Equilibrium flash calculations for any `thermo.Model`:
@@ -1088,21 +1091,129 @@ flowchart LR
   leaves it no change of sign, so it falls back to 300 K. The bracket
   still finds the answer; only the start is worse.
 
-### 11. Docs and exit review
-- README, roadmap, design notes on the flash, the V notes, and a
-  criterion-by-criterion review, as in M1 and M2.
+### 11. Docs and exit review — done
+- **README:** M3 marked done, with what it brought in the status list, its
+  plan and its two reports in the list of docs. `v run .` now ends with a
+  flash: methane/n-butane split at 250 K and 30 bar, its bubble point, and
+  PH back from the split's H.
+- **Roadmap:** M3 marked done, with what the plan went beyond its exit.
+  A4, opt-in iteration tracing, moved to M4. M3 didn't need it, since its
+  flashes report every failure with a reason and the iterations taken, and
+  M4's solver is where per-iteration convergence reports are planned.
+- **Design notes:** how CPA fits the new volume-solver tier. Step 10 had
+  already written the `Model` contract, the measurements and the closures.
+- **V notes:** the `Model` example and the mutable-callback passage
+  brought up to date for interfaces; in §10, closures as the GC's one
+  exception, and the profile that found the volume solver; the test count.
+- **What the review added:** criterion 3 asks for an equilibrium "in every
+  test and sweep", and the PH, PS, TV and UV tests compared their splits
+  only with the PT state's, to 1e-8. Every one of their 204 two-phase
+  answers is now checked from scratch: 39 PT states' splits by four
+  flashes each, and 12 saturated pure components by four flashes each.
+  All pass.
 
 ## Risks
 
 | Risk | Effect | Fallback |
 |---|---|---|
-| DWSIM's automation can't be driven headless from Python | no DWSIM references | capture by hand in the GUI, following a written procedure (D9). The spike in step 0 finds out first. |
-| Near-critical points converge slowly or to the trivial solution | sweep failures | the second-order finish, trivial-solution detection, and D8's explained class for true criticality |
-| Pure and narrow-boiling PH flashes | wrong T or no convergence | the Q-function formulation (D5), with pure components in the tests from the start |
-| `thermo` itself fails at hard points | no reference there | compare only where `thermo` converges, and record where it doesn't |
-| The 10,000-point sweep is too slow under tcc | CI time | the full sweep is a tool with a committed report; CI runs 1,000 points |
-| `Correlated`'s quadrature makes PH and PS slow | slow flashes | measure in step 10 first; then cache or tabulate Cp integrals if it matters |
-| The Soave change perturbs M1's results | regressions | the square-root form is exact below the zero; M1's fixtures must still pass |
+| DWSIM's automation can't be driven headless from Python | no DWSIM references | capture by hand in the GUI, following a written procedure (D9). The spike in step 0 finds out first. **Didn't happen:** the spike drove DWSIM through pythonnet, and steps 5 and 10 used the same route. |
+| Near-critical points converge slowly or to the trivial solution | sweep failures | the second-order finish, trivial-solution detection, and D8's explained class for true criticality. **Happened, and handled:** near the methane/n-butane locus substitution took up to 465 steps, until the stability test's finish minimised tm* itself (step 3). Collapsed splits are refused. No sweep point landed at a critical point. |
+| Pure and narrow-boiling PH flashes | wrong T or no convergence | the Q-function formulation (D5), with pure components in the tests from the start. **Handled:** a pure component inside its jump at Tsat gets β from the energy balance, and n-butane/isobutane, two-phase over less than 4 K, round-trips (step 7). |
+| `thermo` itself fails at hard points | no reference there | compare only where `thermo` converges, and record where it doesn't. **Happened:** FlashVL's PS and TV flashes fail on 24 and 60 of the 83 states, and any vapour fraction strictly between 0 and 1 raises an error (step 5). The PT state is the reference; where `thermo` does run, it agrees. |
+| The 10,000-point sweep is too slow under tcc | CI time | the full sweep is a tool with a committed report; CI runs 1,000 points. **As planned:** CI's 1,000 take 51 s under tcc, and the full sweep 128 s with gcc `-prod`. |
+| `Correlated`'s quadrature makes PH and PS slow | slow flashes | measure in step 10 first; then cache or tabulate Cp integrals if it matters. **Didn't happen:** it's 0.6% of a PH flash (step 10). |
+| The Soave change perturbs M1's results | regressions | the square-root form is exact below the zero; M1's fixtures must still pass. **Didn't happen:** M1's fixtures are unchanged (step 2). |
+
+## Exit review
+
+Checked on 2026-10-29 at the tip of `m3-flash`. All 45 test files pass
+locally under `v run tools/check.vsh` with tcc (232 s) and gcc (576 s, with
+the `-prod` build), on Windows. CI passed on Windows and Linux, with tcc and
+gcc, on step 10's commit (`d005a11`, run 40771840098). It runs again on
+this step's.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Stability is right | **met** | `stability_test.v`: 513 states (binaries on grids, 62 near the methane/n-butane critical locus, a ternary, the 10-component condensate), and every verdict matches `thermo`'s FlashVL and, for each binary, a brute-force TPD scan (166 unstable). The lowest tm matches the scans' global minima to 2e-14. Every "unstable" is proved by a TPD computed from scratch at a stationary point. Trivial trials are flagged and never offered. |
+| 2 | PT flash matches `thermo` | **met** | `pt_test.v`: β and both compositions of all 166 splits within 1e-8 of `thermo`'s (4e-9 and 2e-10 measured). `thermo_test.v`: 83 PT states to 2e-12, and V, H, S and U to 1e-9. |
+| 3 | Every converged split is an equilibrium | **met** | Checked from scratch on every split in `pt_test.v`, every bubble and dew point in `vf_test.v`, every two-phase answer of `ph_test.v` and `tv_test.v` (added by this review), and the sweep's 3,344 splits: fugacities to 1e-10 (1e-12 measured), mass balance to 1e-12, Σx = Σy = 1 to 1e-14, each phase stable at tm ≥ −1e-8. |
+| 4 | Every specification round-trips | **met** | From the 83 PT states: PH and PS to 2.2e-11 in T and 2.6e-11 in the split (`ph_test.v`); TV to 2e-12 in P and UV to 4.6e-12 in T and 3.9e-11 in P (`tv_test.v`); tvf and pvf at each split's β to 2.6e-12 (`vf_test.v`). The 36 pure saturation states to 1.5e-11 (PH, PS) and 1.2e-10 (TV, UV). Narrow-boiling n-butane/isobutane is among them. `thermo`'s 40 bubble and dew points to 1e-11, each an equilibrium. |
+| 5 | Robust | **met** | [flash-robustness.md](flash-robustness.md): 10,000 seeded points, 0 unexplained. 5,480 are one phase, 3,344 splits, and 1,176 third phases (explained, as D8 was amended), each proved by a TPD from scratch. `sweep_test.v` runs the first 1,000 points in CI, and 25 others that found bugs or need a later start, and checks the committed report. |
+| 6 | Agrees with DWSIM 9 | **met, as amended** | `dwsim_test.v`, 25 cases: reflux matches the exact PR with DWSIM's constants to 1e-8 (1.9e-13 measured), and H and S to 1e-9. It's within 1e-4 of DWSIM, and no further than the exact answer is. The two deviations beyond the targets (the dew pressure at 300 K, 1.8e-4; n-butane's Tsat at 5 bar, 0.118 K) are reproduced from DWSIM's rounded constants and its vapour-pressure correlation, with bounds that can't grow. Step 10's benchmark flashes agree too. |
+| 7 | The Newton solver works | **met** | `newton_test.v`: the 12 Moré–Garbow–Hillstrom problems, from 1× and 10× their starts, with both methods: 46 of 48 runs converge, each checked by evaluating F afresh. The 2 failures (the trigonometric problem from 10×) are reported errors at a genuine non-root minimum of ‖F‖, and the list can't grow. |
+| 8 | Speed is measured | **met** | [benchmarks.md](benchmarks.md): PT, PH and bubble-point flashes for 2, 5 and 10 components, with gcc `-prod`, against `thermo` and DWSIM on the same flashes, timed case by case. `benchmarks_test.v` checks that the three got the same answers. |
+| 9 | Soave α is safe at any Tr | **met** | Step 2: √α is computed directly, so the 0/0 at the zero is gone. Pure CO₂ from 0.9 to 1.5 times its zero matches `thermo` to 1e-9; a mixture with a component exactly at its zero stays finite, its F_T and F_TT matching central differences. M1's fixtures are unchanged. |
+| 10 | CI green; docs updated | **met** | Run 40771840098: all four jobs. Docs: step 11 above. |
+
+**Planted mistakes.** 228 were planted across steps 1–10, one change at a
+time, in scratch copies. Every survivor got a new test, had its code
+deleted as unneeded, or is explained in its step. The 12 explained are
+probes that can't fail while the code they double-check is right, timing
+or tuning choices, or a class no input reaches. Survivors also led to two
+of the bugs below, the PH etol check and the `minimize` hang, and to tests
+of code that had none: the one-phase UV Jacobian and the ideal-gas start
+among them (step 10).
+
+**Bugs found along the way,** each fixed in its step:
+- `newton`'s line search refused a full step shorter than its
+  backtracking floor, and Rachford–Rice's last step could leave its own
+  bracket (step 1, by the MGH and fixture tests);
+- M1's volume solver failed at a critical point, on 276 of 528 states near
+  one (step 2, by the PIP tests);
+- Wilson's two trials missed a water-rich liquid, so D3 now adds a nearly
+  pure trial of each component (step 4);
+- comparing molar volumes called the decane-rich phase the vapour, so D6
+  compares mass densities (step 6);
+- a pure component's one-phase PH answer wasn't held to etol (step 7, by a
+  test a survivor led to);
+- K-values beyond a double at 49 sweep points; a start loop that ended at
+  one refused split; and a refusal lost behind a later start's failure
+  (step 9, by the sweep);
+- `numeric.minimize` looping forever on a Hessian of 1e305 (step 9, by a
+  planted mistake);
+- the volume solver recomputing a(T, n) on every step, 88% of a PT flash,
+  and every PH and bubble point leaking memory through closures (step 10,
+  by the benchmarks and a profile);
+- in `thermo` 0.6.1: FlashVL's PS, TV and two-phase vapour-fraction
+  flashes fail, and a `PT_SS_TOL` left changed between calls changed a
+  later answer (step 5);
+- in DWSIM 9: its ideal mixing entropy is −R Σ zᵢ ln zᵢ·(M/Mᵢ) (step 5).
+
+**Changed from the plan along the way:**
+- **Decisions amended:** D3 (step 4), D6 (step 6), criterion 6 (after step
+  5), D8 (step 9), D10 (step 10), and M1's D2 (step 10). Each is marked in
+  its table.
+- **New failure kinds:** `more_phases`, a third phase refused rather than
+  returned; `phases_swapped`, where bubble and dew meet near a critical
+  point; and `outside_envelope`, a vapour fraction that very likely
+  doesn't exist.
+- **`numeric` grew** `cholesky`, `minimize` and `brent`, and its solvers
+  now take interfaces, not closures.
+- **The volume solver** stops at P's rounding floor at a critical point
+  (step 2), and fixes T and n before it iterates (step 10).
+- **The benchmarks** time the three programs case by case, because the
+  same flash's timing drifted by up to 3× between sessions on this laptop.
+- **A4,** iteration tracing, moved to M4.
+
+**Carried forward, not done in M3:**
+- **PH for 5 and 10 components** takes 2–4 times as long as DWSIM's. Each
+  answer is about 12 PT flashes, each with a stability test and verified.
+  Reusing one bracket flash's K-values and stability trials as the next
+  one's start is the obvious step, before M4's flowsheets call PH in every
+  loop.
+- **VLLE.** Third phases are found and refused; solving them is M6.
+- **`ideal_t`** falls back to 300 K when an ideal-gas Cp turns negative
+  before 10,000 K. The answer is still found; only the start is worse.
+- **Allocation:** each residual call still allocates a few small arrays.
+  They're no longer near the top of the profile.
+- **Upstream reports:** to V, that closures are never freed and that
+  `-profile` with gcc `-prod` crashed on a PH flash; to `thermo`, the
+  FlashVL failures; to DWSIM, the mixing entropy. The ChemSep data defects
+  from M2 are still open too.
+- **From M1 and M2:** concurrent Python calls (M10a), ChemSep's eq. 200 and
+  DIPPR 124.
+
+**Verdict: M3 is done.**
 
 ## Not in M3
 

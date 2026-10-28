@@ -5,7 +5,7 @@ An open-source steady-state chemical process simulator written in
 than DWSIM. The short-term goal is to learn V by building it.
 
 ```bash
-v run .               # n-butane at 350 K and 9.4573 bar, Mathias–Copeman water, a mixture, H, S, Cp, w, μ_JT
+v run .               # n-butane at 350 K and 9.4573 bar, Mathias–Copeman water, a mixture, H, S, Cp, w, μ_JT, a flash
 ```
 
 ```bash
@@ -18,8 +18,13 @@ v -W test .           # all tests, warnings treated as errors
 
 - [docs/roadmap.md](docs/roadmap.md) is what gets built, in what order, and
   how each piece is tested. [docs/m1-plan.md](docs/m1-plan.md) is M1's
-  plan, step by step, with its exit review at the end, and
-  [docs/m2-plan.md](docs/m2-plan.md) is the plan for M2, component data.
+  plan, step by step, with its exit review at the end. The same goes for
+  [docs/m2-plan.md](docs/m2-plan.md), component data, and
+  [docs/m3-plan.md](docs/m3-plan.md), the flash.
+- [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
+  10,000 random mixtures from the database, every answer checked, and
+  [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
+  `thermo` and DWSIM 9 on the same flashes.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
   and why, with every formula the code uses.
 - [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:
@@ -122,9 +127,10 @@ at the edges, i.e. input files and printed output.
 
 ## Status
 
-**M0 (foundations), M1 (thermo core) and M2 (component data) are done.**
-The exit reviews are at the ends of [docs/m1-plan.md](docs/m1-plan.md) and
-[docs/m2-plan.md](docs/m2-plan.md). What exists now:
+**M0 (foundations), M1 (thermo core), M2 (component data) and M3 (flash)
+are done.** The exit reviews are at the ends of
+[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md) and
+[docs/m3-plan.md](docs/m3-plan.md). What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
       first and second derivatives
@@ -170,7 +176,33 @@ And from M2:
 - [x] Every correlation swept for sanity. What fails is listed, not hidden,
       in [docs/data-quality.md](docs/data-quality.md).
 
-Next is M3: the flash.
+And from M3, for any `thermo.Model`:
+
+- [x] Michelsen's stability test, with Wilson's trials and a nearly pure
+      phase of each component. It agrees with `thermo` and with brute-force
+      scans on 513 states, near critical points included.
+- [x] The PT flash. β and both compositions match `thermo`'s to 1e-8, and
+      every split is verified: a phase that's itself unstable is reported
+      as a third phase (`more_phases`), not returned.
+- [x] Bubble and dew points with T or P given, and PH, PS, TV and UV
+      flashes, pure components and narrow-boiling mixtures included.
+      Each specification round-trips to its PT state to 1e-8.
+- [x] Agrees with DWSIM 9 on 25 cases, with every difference traced to
+      something in DWSIM itself: its rounded constants, its saturation of a
+      pure component on a vapour-pressure correlation, its ideal mixing
+      entropy.
+- [x] 10,000 random mixtures of 2 to 10 database compounds, with zero
+      unexplained failures; every answer checked from scratch
+      ([docs/flash-robustness.md](docs/flash-robustness.md)).
+- [x] Timed against `thermo` and DWSIM 9
+      ([docs/benchmarks.md](docs/benchmarks.md)): faster than DWSIM on PT
+      flashes (1.4–5.6×) and bubble points (3.9–10×), as fast on a binary's
+      PH, and 2–4× slower on PH for 5 and 10 components.
+- [x] Every failure a typed error, never a panic and never an unproven
+      answer.
+
+Next is M10a: thermo and the flash callable from Python, with NumPy arrays,
+then M4, the first flowsheet.
 
 ## Roadmap
 
@@ -179,9 +211,9 @@ milestones with exit criteria, headless testing, C numeric backends and
 how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
-(ChemSep) ✓ → **M3** flash → **M4** first flowsheet, compared with DWSIM 9. As
-soon as M3 lands, **M10a** makes thermo and flash callable from Python with
-NumPy arrays.
+(ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9.
+Now that M3 has landed, **M10a** makes thermo and flash callable from Python
+with NumPy arrays.
 
 ## Development
 
