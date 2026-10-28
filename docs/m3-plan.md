@@ -1129,8 +1129,9 @@ flowchart LR
 Checked on 2026-10-29 at the tip of `m3-flash`. All 45 test files pass
 locally under `v run tools/check.vsh` with tcc (232 s) and gcc (576 s, with
 the `-prod` build), on Windows. CI passed on Windows and Linux, with tcc and
-gcc, on step 10's commit (`d005a11`, run 40771840098). It runs again on
-this step's.
+gcc, on step 10's commit (`d005a11`, run 40771840098), and again on this
+step's (`f2cf9d0`, runs 40779603116 and 40779775365). The branch was then
+merged into main as PR #3, where CI passed once more (run 40780652847).
 
 | # | Criterion | Verdict | Evidence |
 |---|---|---|---|
