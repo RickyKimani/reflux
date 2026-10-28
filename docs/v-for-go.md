@@ -787,6 +787,31 @@ unchanged, a custom `NewtonError` included
 ([numeric/newton.v](../numeric/newton.v)). The same goes for
 `return if c { f() } else { g() }`.
 
+**A result isn't a value you can keep.** Go's `(T, error)` pair can go in a
+slice; V's `!T` can't. `[flash.tvf(…), flash.pvf(…)]` is refused ("should
+have either an `or {}` block, or `!` at the end"), and so is
+`r := if c { f() } else { g() }` when f and g return results. A `!` on each
+call compiles, but then a failure propagates, and you can't inspect it. To
+keep calls whose failures you want to inspect, keep closures instead and
+call them later. [flash/vf_test.v](../flash/vf_test.v) tests bad input with a map of
+them:
+
+```v
+bad := {
+	'β < 0': fn [m, z] () !flash.FlashResult {
+		return flash.tvf(m, 250.0, -0.1, z)
+	}
+	// …
+}
+for name, call in bad {
+	call() or {
+		assert (err as flash.FlashError).kind == .bad_input, name
+		continue
+	}
+	assert false, '${name} was accepted'
+}
+```
+
 **Function types can take `mut` parameters**, so a callback can fill
 buffers the caller owns, with no allocation and no pointers:
 `pub type SystemFn = fn (x []f64, mut f []f64, mut jac []f64) !`. A struct

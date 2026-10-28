@@ -5,7 +5,7 @@
   "python": "3.13.17",
   "thermo": "0.6.1"
  },
- "note": "thermo's PR (SRK where eos says so) with these constants, kij and ideal-gas Cp = cp[0] + cp[1] T + cp[2] T^2 in J/(mol K). Molar v (m3/mol), h (J/mol), s (J/(mol K)) and u (J/mol); h is relative to the ideal gas at t_ref, and s to the ideal gas at t_ref and p_ref_s. Phases are sorted by molar volume, the vapour first; label is thermo's (by PIP), residual is max |ln fV - ln fL|. tol is FlashVL's PT_SS_TOL. thermo holds where thermo's own PH, PS and TV flashes land from h, s and v, or the error they raise.",
+ "note": "thermo's PR (SRK where eos says so) with these constants, kij and ideal-gas Cp = cp[0] + cp[1] T + cp[2] T^2 in J/(mol K). Molar v (m3/mol), h (J/mol), s (J/(mol K)) and u (J/mol); h is relative to the ideal gas at t_ref, and s to the ideal gas at t_ref and p_ref_s. Phases are sorted by mass density, the vapour first; label is thermo's (by PIP), residual is max |ln fV - ln fL|. tol is FlashVL's PT_SS_TOL. thermo holds where thermo's own PH, PS and TV flashes land from h, s and v, or the error they raise.",
  "t_ref": 298.15,
  "p_ref_s": 101325.0,
  "components": [
@@ -2102,17 +2102,6 @@
    "tol": 1e-30,
    "phases": [
     {
-     "fraction": 0.9788068350238229,
-     "z": [
-      0.591455856934476,
-      0.408544143065524
-     ],
-     "v": 0.0001155497964528767,
-     "h": -21111.998909807036,
-     "s": -77.18968610033369,
-     "label": "liquid"
-    },
-    {
      "fraction": 0.02119316497617702,
      "z": [
       0.9946114533321027,
@@ -2121,6 +2110,17 @@
      "v": 9.972377300406968e-05,
      "h": -3132.8896265257617,
      "s": -51.19165314751023,
+     "label": "liquid"
+    },
+    {
+     "fraction": 0.9788068350238229,
+     "z": [
+      0.591455856934476,
+      0.408544143065524
+     ],
+     "v": 0.0001155497964528767,
+     "h": -21111.998909807036,
+     "s": -77.18968610033369,
      "label": "liquid"
     }
    ],

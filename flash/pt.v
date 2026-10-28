@@ -31,8 +31,8 @@ pub:
 	// dense phase (D6); for a single phase, 1 if it's labelled vapour and 0
 	// if liquid.
 	beta f64
-	// phases are in order of increasing density, so a split's vapour comes
-	// first. M3 finds one or two; the type allows more, for M6.
+	// phases are in order of increasing mass density, so a split's vapour
+	// comes first. M3 finds one or two; the type allows more, for M6.
 	phases []Phase
 	path   Path
 	// iterations counts the split's successive-substitution and Newton
@@ -77,8 +77,8 @@ const split_trivial_tol = 1e-4
 //
 // The first K-values come from the stability test's incipient phase, and
 // if that split fails, from its other unstable trials in turn.
-// Each phase takes its volume root of lower Gibbs energy, and the less
-// dense phase is the vapour (D6).
+// Each phase takes its volume root of lower Gibbs energy, and the phase of
+// lower mass density is the vapour (D6).
 //
 // A split is accepted only with every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol and
 // 0 < β < 1, and, with params.verify, only if neither phase is unstable.
@@ -384,12 +384,36 @@ fn (sp Splitter) gibbs_scale(v []f64) !f64 {
 	return s
 }
 
-// result labels a split's phases, the less dense being the vapour, and with
-// params.verify re-tests each for stability.
+// mass_density is a phase's mass per volume, kg/m³. It's what D6's "less
+// dense" means. Molar volume isn't a substitute: in a mixture of very
+// different sizes, the methane-rich phase of methane and n-decane at 300 K
+// and 200 bar has the smaller molar volume, yet weighs 168 kg/m³ against
+// the decane-rich phase's 585.
+fn mass_density(m thermo.Model, st thermo.State) f64 {
+	comps := m.components()
+	mut mass := 0.0
+	for i, n in st.n {
+		mass += n * comps[i].mw
+	}
+	return mass / st.v
+}
+
+// verify_tol is the tm a converged phase may show against its own split
+// before it counts as unstable: 1e-8, or ten times a looser flash
+// tolerance, since an answer good only to tol has tm of about that size.
+fn verify_tol(tol f64) f64 {
+	return math.max(1e-8, 10.0 * tol)
+}
+
+// result labels a split's phases, the less dense by mass being the vapour,
+// and with params.verify re-tests each for stability.
 fn (sp Splitter) result(s Split, stab Stability) !FlashResult {
 	if sp.params.verify {
 		for pair in [[s.x, s.y], [s.y, s.x]] {
-			check := stability(sp.m, sp.t, sp.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+			check := stability(sp.m, sp.t, sp.p, pair[0],
+				trials: [pair[1]]
+				tol:    verify_tol(sp.params.tol)
+			)!
 			if !check.stable {
 				tm := if inc := check.incipient() { inc.tm } else { 0.0 }
 				return fail(.more_phases, 'a phase of the split at ${sp.t} K and ${sp.p} Pa is unstable (tm = ${tm}): three or more phases, or a better split')
@@ -397,7 +421,7 @@ fn (sp Splitter) result(s Split, stab Stability) !FlashResult {
 		}
 	}
 	// y is the vapour when it's the less dense; otherwise swap.
-	y_lighter := s.sy.molar_volume() > s.sx.molar_volume()
+	y_lighter := mass_density(sp.m, s.sy) < mass_density(sp.m, s.sx)
 	vap, liq := if y_lighter { s.sy, s.sx } else { s.sx, s.sy }
 	beta, liquid := if y_lighter { s.beta, s.liquid } else { s.liquid, s.beta }
 	return FlashResult{

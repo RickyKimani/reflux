@@ -172,7 +172,7 @@ def exact_hs(comps, pairs, t, p):
 
 
 def split_of(pairs, n):
-    """beta, y and x from phases sorted by volume: a single phase is the
+    """beta, y and x from phases sorted by density: a single phase is the
     vapour (beta 1) or the liquid (beta 0) by thermo's label, with zeros for
     the absent phase, as DWSIM reports it."""
     if len(pairs) == 2:
@@ -281,7 +281,7 @@ def pt_case(dw, case, z):
 def exact_pt(dw, t, p, z, eos_cls=PRMIX):
     f = g3.make_flasher(eos_cls, dw.comps, dw.kij)
     res, tol = g3.thermo_pt(f, t, p, z)
-    return g3.by_volume(res), tol
+    return g3.by_density(res), tol
 
 
 def run_pt(dw, case, z):
@@ -341,7 +341,7 @@ def run_by_state(dw, case, z):
         spec = (1 - vf) * (hl if spec_key == "h" else sl) + vf * (hv if spec_key == "h" else sv)
         f = g3.make_flasher(PRMIX, dw.comps, dw.kij)
         res = f.flash(P=p, VF=vf, zs=z)
-        pairs = g3.by_volume(res)
+        pairs = g3.by_density(res)
         if len(pairs) == 1:
             raise RuntimeError("expected both saturated phases")
         t_state = res.T

@@ -57,6 +57,17 @@ fn model_for(f Fixture, c FlashCase) !thermo.Cubic {
 	return thermo.new_cubic(kind, comps, kij: c.kij)!
 }
 
+// density is a phase's mass density, kg/m³: D6's measure of which phase is
+// the vapour.
+fn density(m thermo.Model, st thermo.State) f64 {
+	comps := m.components()
+	mut mass := 0.0
+	for i, n in st.n {
+		mass += n * comps[i].mw
+	}
+	return mass / st.v
+}
+
 // check_equilibrium checks exit criterion 3 on a two-phase result, from
 // scratch: fugacities equal, each component's mass balance, Σx = Σy = 1, and
 // neither phase unstable.
@@ -64,7 +75,7 @@ fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	assert r.phases.len == 2, at
 	vap, liq := r.phases[0], r.phases[1]
 	assert vap.label == .vapor && liq.label == .liquid, at
-	assert vap.state.molar_volume() > liq.state.molar_volume(), '${at}: the vapour is the less dense'
+	assert density(m, vap.state) < density(m, liq.state), '${at}: the vapour is the less dense'
 	assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
 	assert math.abs(vap.fraction + liq.fraction - 1.0) <= 1e-15, at
 	y, x := vap.state.n, liq.state.n

@@ -368,3 +368,29 @@ fn test_bubble_and_dew_points() {
 	}
 	assert cases.len == 6 && over == 1
 }
+
+fn test_reflux_bubble_and_dew_points() {
+	// reflux's own bubble and dew points, from the same specification: the
+	// exact PR's to 1e-10 relative in T or P, and so no further from DWSIM's
+	// than the exact answer is, give or take 1e-8 (exit criterion 6, as
+	// amended: within 0.01 K and 0.01% in P, but for the dew pressure that
+	// DWSIM's rounded constants move by 1.8e-4).
+	fx := json2.decode[DwFixture](read_text()!)!
+	for c in read_cases[DwBoundaryCase](['bubble', 'dew'])! {
+		sys := fx.systems[c.system]
+		at := '${c.kind} ${sys.name} at ${c.t} K, ${c.p} Pa'
+		m := cubic_of(sys)!
+		beta := if c.kind == 'bubble' { 0.0 } else { 1.0 }
+		e, d := c.exact, c.dwsim
+		if c.t > 0.0 {
+			r := flash.tvf(m, c.t, beta, sys.z)!
+			assert math.abs(r.p - e.p) <= 1e-10 * e.p, '${at}: ${r.p} vs ${e.p}'
+			assert math.abs(r.p - d.p) <= math.abs(e.p - d.p) + 1e-8 * e.p, at
+		} else {
+			r := flash.pvf(m, c.p, beta, sys.z)!
+			assert math.abs(r.t - e.t) <= 1e-10 * e.t, '${at}: ${r.t} vs ${e.t}'
+			assert math.abs(r.t - d.t) <= math.abs(e.t - d.t) + 1e-8 * e.t, at
+			assert math.abs(r.t - d.t) <= 0.01, at
+		}
+	}
+}

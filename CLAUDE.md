@@ -28,16 +28,21 @@ Keep this section current: update it whenever a step is committed.
     D1–D12 and steps 0–11.
   - A finished step's heading says "— done", with a write-up beneath. That
     file, not this one, is the record of what each step did.
-  - Steps 0–5 are committed and pushed: the DWSIM spike, Newton and
+  - Steps 0–6 are committed and pushed: the DWSIM spike, Newton and
     Rachford–Rice, PIP and the Soave guard, stability, the PT flash
-    (`flash/pt.v`), and the reference fixtures (`testdata/m3_thermo.json`,
-    `testdata/m3_dwsim.json`).
-  - Criterion 6 was amended after step 5, with the owner's approval. A
-    DWSIM deviation may exceed a target only when the fixture reproduces it
-    from DWSIM itself, and reflux still matches the exact model to 1e-8.
-  - Next is step 6: vapour-fraction flashes, and bubble and dew points.
-    Their references are `m3_thermo.json`'s boundaries and PT states, and
-    `m3_dwsim.json`'s bubble and dew cases.
+    (`flash/pt.v`), the reference fixtures (`testdata/m3_thermo.json`,
+    `testdata/m3_dwsim.json`), and the vapour-fraction flashes with bubble
+    and dew points (`flash/vf.v`).
+  - Amended so far: D3 in step 4 (pure-component stability trials), D6 in
+    step 6 (the vapour is the phase of lower mass density), and criterion
+    6 after step 5 (a DWSIM deviation may exceed a target only when the
+    fixture reproduces it from DWSIM itself, and reflux still matches the
+    exact model to 1e-8).
+  - Next is step 7: PH and PS flashes, by Michelsen's Q-function (D5),
+    pure components and a narrow-boiling mixture included. Their
+    references are `m3_thermo.json`'s PT states (the specification's H or
+    S, with the state as the answer) and saturation states, and
+    `m3_dwsim.json`'s PH and PS cases by state.
 
 ## How we work
 
@@ -131,6 +136,12 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
   - `pt` tests stability, then splits: substitution with Rachford–Rice and
     DEM, then Newton on G through `numeric.minimize`, then each phase
     re-verified.
+  - `tvf` and `pvf` (`vf.v`) find P or T for a given β; bubble and dew
+    points are β = 0 and 1. Newton runs on ln K and ln P (or ln T)
+    from Wilson's start, with a PT-split start as fallback. Two answers
+    are possible near critical points, and `estimate` picks between them.
+  - In a split, the vapour is the phase of lower *mass* density (D6, as
+    amended in step 6), not the larger molar volume.
   - Results are `FlashResult`; failures are `FlashError` with a
     `Failure` kind.
 - **`numeric`** holds the solvers the flash rests on: LU, Cholesky, `newton`

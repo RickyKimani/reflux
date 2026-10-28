@@ -161,8 +161,9 @@ a step of 1e-5·T, as the T-derivative of ∂P/∂V. Π then agrees with
 
 At a pure component's exact critical point ∂P/∂V and ∂²P/∂V² are both zero,
 so Π is 0/0 and no label means anything. In a two-phase split the flash
-labels by density instead, the less dense phase being the vapour, because
-Π can call both phases liquid-like. (`thermo` then calls both liquids.)
+labels by mass density instead, the less dense phase being the vapour,
+because Π can call both phases liquid-like. (`thermo` then calls both
+liquids.)
 
 ## Derivatives
 
@@ -479,6 +480,87 @@ answer, since M3 handles two phases. The water, n-decane and methane
 mixture above is the example. There, a two-phase flash, reflux's without
 the re-test or `thermo`'s FlashVL, returns a split whose fugacities are
 equal but which isn't the equilibrium.
+
+**Which phase is the vapour.** The phase of lower *mass* density, ΣnᵢMᵢ/V
+(D6, amended in step 6). Molar volume isn't a substitute. In methane with
+n-decane at 300 K and 200 bar, the methane-rich phase has the smaller molar
+volume and yet weighs 168 kg/m³, against the decane-rich phase's 585. Step
+4 compared molar volumes and called the decane-rich phase the vapour.
+
+## Vapour-fraction flashes
+
+`flash.tvf(model, T, β, z)` finds P, and `flash.pvf(model, P, β, z)`
+finds T ([flash/vf.v](../flash/vf.v)). `bubble_p`, `dew_p`, `bubble_t`
+and `dew_t` are the β = 0 and β = 1 cases. The answer is a FlashResult
+with both phases even when one has no moles.
+
+**The equations** (Michelsen & Mollerup, chapter 12). The unknowns are ln Kᵢ
+for each component present, and τ = ln P (T given) or ln T (P given):
+
+    Fᵢ = ln Kᵢ + ln φᵢ(y) − ln φᵢ(x) = 0,
+    F_R = Σᵢ (yᵢ − xᵢ) = 0,
+    xᵢ = zᵢ/dᵢ,  yᵢ = Kᵢxᵢ,  dᵢ = 1 + β(Kᵢ − 1),
+
+with each phase solved at its normalised composition. ln φ depends on mole
+numbers only through the mole fractions, so with Φ = n·∂ln φᵢ/∂nⱼ at one
+mole and S the sum of each phase's unnormalised x or y:
+
+    ∂Fᵢ/∂ln Kq = δᵢq + Φⱽᵢq·yq(1 − β)/(dq·Sy) + Φᴸᵢq·βKqxq/(dq·Sx),
+    ∂Fᵢ/∂τ = P(∂ln φᵢⱽ/∂P − ∂ln φᵢᴸ/∂P)   or   T(∂ln φᵢⱽ/∂T − ∂ln φᵢᴸ/∂T),
+    ∂F_R/∂ln Kq = zqKq/dq²,   ∂F_R/∂τ = 0.
+
+Newton stops with every |F| ≤ tol, so the mass balance holds to tol. Its
+last step is quadratic, so in practice F_R ends near round-off.
+
+**The roots.** Phase x takes its liquid root and phase y its vapour root
+throughout. Giving each its lower-Gibbs root instead let an incipient phase
+start on the feed's kind of root, so the phases looked alike and the
+iteration slid to the trivial solution K = 1, which solves these equations
+at any τ. At the end each phase must be on its lower-Gibbs root, or the
+boundary is between metastable phases and is refused.
+
+**Starts.**
+- Newton (with a line search) starts from Wilson's K-values at the τ where they
+  satisfy Rachford–Rice. With Kᵢ = aᵢ/P that's a bisection in ln P.
+  For P given, ln Kᵢ is linear in 1/T, so it's a bisection in 1/T.
+- If Newton fails from there, it starts again from the K-values of the
+  nearest two-phase PT flash it can find: τ is stepped out both ways, 10%
+  in P or 2% in T, up to 20 steps each way.
+- If no PT flash in that range splits, the failure is `outside_envelope`.
+  That's the evidence for "no such point here", such as a dew point above
+  the cricondenbar.
+- A caller's `estimate` starts from the PT split there, if there is one.
+- On the reference set:
+  - Newton takes 163 steps for `thermo`'s 40 bubble and dew points, and
+    the dogleg 182. (While Rachford–Rice's equation was weighted by 100,
+    the line search's merit function was distorted and the dogleg did
+    better; the weight bought nothing and is gone.)
+  - successive substitution first, as in the PT flash, slid to K = 1 from
+    Wilson's poor starts near a critical point.
+
+**Two answers.** At a temperature between a mixture's critical point and its
+cricondentherm there are two dew pressures, and near the critical point both
+ends of an isobar can be bubble points. The flash returns the one Newton
+reaches from its start, and `estimate` chooses another start. At 90 bar,
+methane/n-butane (40/60) splits from 327 to 379 K, and both ends are bubble
+points: there is no dew point at that pressure at all.
+
+**Checks.**
+- The fugacity residual must be ≤ tol (1e-12), and the iteration must not
+  have collapsed onto the feed.
+- Phase y, of fraction β, must come out the less dense by mass. Otherwise
+  the answer's vapour fraction is 1 − β, and it is refused
+  (`phases_swapped`) rather than relabelled.
+- With `verify`, each phase is re-tested for stability, as in the PT flash.
+  In both flashes the re-test calls a phase unstable at
+  tm < −max(1e-8, 10·tol): an answer converged only to a loose tol has tm
+  of about that size against its own phases.
+
+**A pure component** has K = 1 at any answer, so it gets its own Newton in τ
+alone: ln φ on the liquid root equals ln φ on the vapour root. It first
+moves τ until both roots exist. With only a vapour root, P is too low or T
+too high, and the reverse with only a liquid root. Any β gives the same T
+and P.
 
 ## How CPA will fit
 

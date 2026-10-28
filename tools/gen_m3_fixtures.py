@@ -65,7 +65,7 @@ m3_thermo.json
     - pt: PT flashes of binaries, the ternary, the gas condensate, states
       near the methane/n-butane critical locus, pure components and a
       narrow-boiling n-butane/isobutane mixture. Each has the split (phases
-      sorted by molar volume, the vapour first) with its fugacity residual,
+      sorted by mass density, the vapour first) with its fugacity residual,
       and molar V, H, S and U. These are the specifications the other
       flashes are given, and the PT state is the answer they must recover.
       Each case also records what thermo's own PH, PS and TV flashes return
@@ -719,10 +719,14 @@ def thermo_pt(f, t, p, z):
     raise RuntimeError(err)
 
 
-def by_volume(res):
-    """A result's phases, the least dense first, each with its fraction."""
+def by_density(res):
+    """A result's phases, the least dense by mass first (reflux's D6), each
+    with its fraction. Molar volume can order them the other way: for
+    methane with n-decane at 300 K and 200 bar, the methane-rich phase has
+    the smaller molar volume but a third of the mass density."""
+    mws = res.constants.MWs
     pairs = list(zip(res.betas, res.phases))
-    return sorted(pairs, key=lambda bp: -bp[1].V())
+    return sorted(pairs, key=lambda bp: sum(x * mw for x, mw in zip(bp[1].zs, mws)) / bp[1].V())
 
 
 def fugacity_residual(a, b):
@@ -735,7 +739,7 @@ def describe(res):
     """A thermo result as the fixture stores it: each phase (fraction,
     composition, molar V, H and S, and thermo's label for it), the
     mixture's molar V, H, S and U, and the fugacity residual of a split."""
-    pairs = by_volume(res)
+    pairs = by_density(res)
     out = {
         "phases": [{"fraction": beta, "z": list(ph.zs), "v": ph.V(), "h": ph.H(), "s": ph.S(),
                     "label": "vapor" if ph is res.gas else "liquid"} for beta, ph in pairs],
@@ -752,7 +756,7 @@ def landing(f, z, **spec):
         res = f.flash(zs=z, **spec)
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"[:120]}
-    pairs = by_volume(res)
+    pairs = by_density(res)
     return {"t": res.T, "p": res.P, "phases": len(pairs), "beta": pairs[0][0]}
 
 
@@ -957,7 +961,7 @@ def write_thermo():
         "note": "thermo's PR (SRK where eos says so) with these constants, kij and ideal-gas Cp = cp[0] + "
         "cp[1] T + cp[2] T^2 in J/(mol K). Molar v (m3/mol), h (J/mol), s (J/(mol K)) and u (J/mol); h is "
         "relative to the ideal gas at t_ref, and s to the ideal gas at t_ref and p_ref_s. Phases are sorted "
-        "by molar volume, the vapour first; label is thermo's (by PIP), residual is max |ln fV - ln fL|. tol is "
+        "by mass density, the vapour first; label is thermo's (by PIP), residual is max |ln fV - ln fL|. tol is "
         "FlashVL's PT_SS_TOL. thermo holds where thermo's own PH, PS and TV flashes land from h, s and v, or "
         "the error they raise.",
         "t_ref": Phase.T_REF_IG,

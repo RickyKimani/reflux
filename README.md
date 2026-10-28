@@ -86,6 +86,7 @@ thermo/
 flash/
   stability.v       Michelsen's tangent-plane stability test, for any Model
   pt.v              the PT flash: stability, then the two-phase split
+  vf.v              vapour-fraction flashes: bubble and dew points, T or P given
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
 docs/               roadmap, milestone plans, design notes, data format,

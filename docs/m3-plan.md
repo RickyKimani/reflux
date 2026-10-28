@@ -181,7 +181,7 @@ which are tools whose committed output tests check.
 | D3 | Stability | Michelsen's TPD: Wilson vapour- and liquid-like trials; successive substitution with DEM acceleration every fifth step; a second-order finish in α = 2√W. Re-checking a split uses each phase as a trial too. **Amended in step 4:** plus a nearly pure trial of each component, since Wilson's trials alone miss liquid–liquid splits. | The standard, well-tested formulation, and the one `thermo` follows. |
 | D4 | PT flash | Initial K from stability's unstable trial. Rachford–Rice in the Leibovici–Neoschil window, with Newton safeguarded by bisection. Successive substitution with DEM, then Newton on G in vapour mole numbers with a line search when it slows. Negative flash internally. | Fast where easy, robust where hard (near-critical), and the negative flash is what phase boundaries need. |
 | D5 | PH, PS, TV, UV | Michelsen's state-function (Q-function) formulation. TV and UV work directly in F(T, V, n). | It handles pure components and narrow-boiling mixtures, where nested T-loops fail. |
-| D6 | Phase labels | PIP, with finite-difference second derivatives of P. In a split, the less dense phase is the vapour. | `thermo`'s choice, so comparisons line up. No change to the `Model` contract. |
+| D6 | Phase labels | PIP, with finite-difference second derivatives of P. In a split, the less dense phase is the vapour. **Amended in step 6:** less dense by mass. Step 4 compared molar volumes, which called the decane-rich phase of methane/n-decane at 300 K and 200 bar the vapour (585 kg/m³, against the methane-rich phase's 168). | `thermo`'s choice, so comparisons line up. No change to the `Model` contract. Mass density is what a separator acts on. |
 | D7 | The result | `FlashResult`: T, P, β, the phases (each a label, a `thermo.State` and its fraction), iterations, and which path converged. It allows N phases for M6. Failure is a typed `FlashError` (no convergence, bad specification, …), never a panic. | M10a wraps this for Python next: no panics across the C boundary, and failures carry a reason. |
 | D8 | The robustness sweep | Seeded. Components drawn from the database among those with Tc, Pc, ω, M and an ideal-gas Cp. T and P log-uniform over wide ranges; z random. **Unexplained:** no convergence, a broken invariant (criterion 3), or a contradiction such as a single-phase answer that stability calls unstable. **Explained, and counted separately:** a specification outside the model's range, or a point within 1e-6 of a critical point, where the two phases can't be told apart. | "Zero failures" needs a definition, or it means nothing. |
 | D9 | References | `thermo` 0.6.1 fixtures with the same PR, constants and kᵢⱼ, and a shared polynomial Cp, to 1e-8. DWSIM 9.0.5 through `pythonnet` and `DWSIM.Automation`, run by hand like the CoolProp fixtures, with DWSIM's own constants and kᵢⱼ recorded and used. **Fallback** if automation fails: capture by hand in the DWSIM GUI, following a written procedure. | `thermo` checks the implementation; DWSIM checks what M4 will be compared with. |
@@ -586,13 +586,108 @@ flowchart LR
   - On the way, the U check was changed to use reflux's own U rather than
     H − PV recomputed in the test.
 
-### 6. Vapour-fraction flashes, bubble and dew points
-- β given with T, or with P; bubble (β = 0) and dew (β = 1) points.
-  Newton on ln K together with T or P, started from Wilson.
-- Retrograde cases have two dew points at one T, so the API says which one
-  it returns.
-- Tests: consistency with the PT flash; retrograde cases; clear errors near
-  the cricondenbar and cricondentherm.
+### 6. Vapour-fraction flashes, bubble and dew points — done
+- **[flash/vf.v](../flash/vf.v):** `tvf(model, T, β, z)` finds P, and
+  `pvf(model, P, β, z)` finds T. `bubble_p`, `dew_p`, `bubble_t` and
+  `dew_t` are the β = 0 and β = 1 cases. Each returns a FlashResult with
+  both phases, the vapour first, even when one has no moles.
+  - The unknowns are ln Kᵢ and ln P (or ln T). The equations are equal
+    fugacities plus Rachford–Rice at the given β.
+  - Newton (line search, with the analytic Jacobian) starts from Wilson's
+    K-values. If that fails, it starts from the nearest two-phase PT
+    flash. A caller's `estimate` starts from the PT split there.
+  - Phase x takes its liquid root and y its vapour root, and each must end
+    on its lower-Gibbs root.
+  - A pure component gets a one-variable Newton between its two roots.
+- **What it refuses, with a typed FlashError:**
+  - a collapse onto the feed;
+  - a metastable root;
+  - an answer whose phase of fraction β is the denser (the new
+    `phases_swapped`);
+  - no convergence with no PT split anywhere in a wide range of the
+    unknown (the new `outside_envelope`): the evidence step 9's sweep needs
+    to class "no such point";
+  - an unstable phase (`more_phases`).
+- **D6 amended: the vapour is the phase of lower mass density.**
+  - Step 4 compared molar volumes. That called the decane-rich phase of
+    methane/n-decane at 300 K and 200 bar the vapour, at 585 kg/m³ against
+    the methane-rich phase's 168, and step 6's bubble point at 193 K
+    tripped on the same mixture.
+  - The PT flash, the new flash, the tests and both generators now use mass
+    density. `m3_thermo.json` changed only in that one case's phase order
+    and its note; `m3_dwsim.json` didn't change.
+- **Tests in [flash/vf_test.v](../flash/vf_test.v):**
+  - **`thermo`'s 40 bubble and dew points:** T or P to 1e-11 (9e-13
+    measured) and the incipient phase to 1e-11 (1.3e-13). Each is an
+    equilibrium by criterion 3, checked from scratch. The 40 take at most
+    170 Newton steps in all (163 measured; the dogleg takes 182).
+  - **36 pure-component saturation states:** to 1e-11 (9.1e-13).
+  - **Criterion 4's round trips:** from each of the 39 PT splits, tvf and
+    pvf at the same β come back to P, T and the split within 1e-8
+    (2.6e-12, 8.5e-14 and 7e-13 measured).
+    - One state has a twin. Methane/n-decane at 200 bar has β = 0.115 at
+      both 450 K and 345.6 K, and Wilson's start finds the cooler one.
+    - That one is checked to be an equilibrium. A start 2% from 450 K
+      recovers the original.
+  - **Retrograde cases:**
+    - The condensate's two dew pressures at 400 K, 13.26 bar (`thermo`'s)
+      and 157.3 bar.
+    - Methane/n-butane's two at 393 K, 57.9 and 77.6 bar.
+    - Its two bubble temperatures at 90 bar, about 327 and 379 K.
+    - Each is checked to be a boundary by PT flashes 1e-7 to either side.
+  - **Clear errors:**
+    - At 90 bar methane/n-butane has no dew point, though the two-phase
+      region reaches that pressure; the error says so.
+    - At 100 bar, above the cricondenbar, and at 400 K, past the
+      cricondentherm, it reports `outside_envelope`. PT scans confirm no
+      split there.
+  - **Three phases:** pt_test's water, n-decane and methane at 350 K. Asked
+    for its false two-phase split's β, tvf finds 5 bar again and reports
+    `more_phases`; without the re-test it returns the false split.
+  - **A pure component from a poor start:** ten times, or a tenth of, its
+    saturation pressure, where it has only one root, or 100 K off in T.
+    Each start reaches the same answer to 1e-9.
+  - **The tolerance contract:** at tol 1e-4 and 1e-8, every one of the 40
+    boundaries meets tol in the fugacities and the mass balance.
+  - **Bad input** of every kind is a `bad_input` error, each for its own
+    stated reason.
+- **The stability re-test's threshold now follows the flash's tolerance**
+  in both flashes: tm ≥ −max(1e-8, 10·tol). An answer converged only to
+  1e-4 has tm of about that size against its own phases, and the fixed
+  1e-8 called it unstable.
+- **In [flash/dwsim_test.v](../flash/dwsim_test.v):** reflux's bubble and
+  dew points match the exact PR's to 1e-10, and so sit no further from
+  DWSIM's than the exact answer does (criterion 6, as amended).
+- **Internal tests:**
+  - the Jacobian against central differences for each kind of flash;
+  - a swapped answer is refused, not relabelled;
+  - a phase on a metastable root is refused;
+  - a Newton start at K = 1, where K = 1 solves the equations, is refused
+    as a collapse.
+- **Bugs found on the way:**
+  - substitution steps from Wilson's start slid to K = 1 near a critical
+    point, so they were dropped;
+  - each phase on its lower-Gibbs root had the same effect, so the roots
+    now follow the phases' roles;
+  - a fallback search that trusted a single phase's label went the wrong
+    way, so it now searches both ways;
+  - a root check compared volumes exactly, and one root solved from two
+    sides differs by an ulp;
+  - the stability re-test's fixed threshold of 1e-8 refused answers
+    converged to a looser tol, so it now follows tol.
+- **Planted mistakes:** 17, all caught in the end.
+  - **What the survivors led to:**
+    - tests of a three-phase vapour-fraction flash, a pure component from a
+      poor start, the tolerance contract, and bad input refused for its own
+      reason, each added after a mistake survived;
+    - direct tests of the collapse and metastable-root guards;
+    - deleting the Rachford–Rice weight, since no answer could tell it was
+      there;
+    - going back from the dogleg to the line search. Without the weight
+      the line search is faster, 163 steps against 182, and the budget now
+      catches the dogleg.
+  - Two mistakes whose first form only stopped compilation, by leaving a
+    variable unused under `-W`, were rewritten and rerun.
 
 ### 7. PH and PS flashes
 - Michelsen's Q-function (D5), including pure components (H jumps at Tsat)
