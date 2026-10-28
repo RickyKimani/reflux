@@ -42,6 +42,37 @@ GCC, Clang or the MSVC Build Tools and build with `v -prod -cc gcc .` (or
 To see the C that V generates for a file, run `v -o out.c file.v`.
 It is a good way to find out what a feature costs.
 
+**Profiling** is built in, where Go has pprof: `v -profile prof.txt -o
+prog.exe prog.v` instruments every function, and running the program
+writes each one's calls, total and own time. The instrumentation costs about
+30 ns a call, so tiny functions look slower than they are, but the call
+counts are exact. It's what found M3's slow volume roots (2,200 attraction
+evaluations for a binary flash). Two catches:
+- With `-prod -cc gcc` the instrumented build of a PH flash crashed, while
+  the same program profiled fine under tcc. Profile with tcc and read the
+  shares, not the times.
+- `gc_heap_usage()` reports the GC heap's size and free bytes, which is
+  how a leak shows: run the code in a loop, call `gc_collect()`, and see
+  whether the heap keeps growing.
+
+**Facts about the build** come from compile-time values: `@VCURRENTHASH`
+is V's commit (`eab77e7` here, as `.v-version` pins), while `@VHASH` is
+something else. `$if gcc { … } $else $if tinyc { … }` and `$if prod { … }`
+say how the program was built; [benchmarks/benchmarks.v](../benchmarks/benchmarks.v)
+puts both in the report.
+
+**Running a command:** `os.exec(['gcc', '-dumpfullversion'])` takes the
+arguments as an array, like Go's `exec.Command`. The string form,
+`os.execute('gcc --version')`, is deprecated because a shell can be
+injected through it, so it's an error under `-W`.
+
+**Don't name a module like a vlib one.** reflux's benchmark harness was
+first `module benchmark`, the name the roadmap gave it. Its internal test
+built, but an external test (`import benchmark`) failed with "redefinition
+of function" for every function in it: V's test runner itself imports
+vlib's `benchmark`. Go would tell two packages apart by import path. V
+resolves the bare name, so the module is now `benchmarks`.
+
 `-W` turns warnings into errors. Use it for tests and CI (see §4 for why).
 
 **`v test` is slower than `go test`, and two settings matter.** Go compiles
@@ -169,8 +200,40 @@ x = 5.0
 f()                               // 1.0, not 5.0
 ```
 
-See `critical_constants` in [thermo/cubic.v](../thermo/cubic.v), which
-passes `fn [s, m] (b f64) f64 { … }` to `numeric.bisect`.
+[numeric/integrate_test.v](../numeric/integrate_test.v) passes closures
+like this to the quadrature.
+
+**A closure is never freed.** Go's closures are ordinary garbage. V 0.5.2's
+aren't: each one keeps a few hundred bytes for the life of the program. A
+probe made 2 million closures in a loop, and the heap grew by 660 MiB per
+2 million. The same values boxed as an interface stayed at the same size,
+because the GC reclaims those. That's harmless in a test or a one-off
+call, but not in code a solver runs a million times. Until M3 step 10 every
+PH flash leaked 18 KB that way. So reflux's solvers take an interface, the
+way Go's `sort.Sort` takes a `sort.Interface`, and callers pass a struct
+with one method:
+
+```v
+// numeric/functions.v
+pub interface Function {
+	at(x f64) f64
+}
+
+// thermo/cubic.v: the struct carries what a closure would have captured
+struct CriticalB {
+	s f64
+	m f64
+}
+
+fn (e CriticalB) at(b f64) f64 { … }
+
+b := numeric.bisect(CriticalB{s, m}, 1e-6, 0.3)!
+```
+
+As in Go, a type satisfies an interface just by having the methods; there's
+no `implements`. A struct that already has a method of the right name and
+signature can be passed as it is: `flash.StateFlash` has
+`eval(x, mut f, mut jac)`, which makes it a `numeric.System`.
 
 `mut` in the capture list doesn't change this: `fn [mut n] () { n++ }`
 increments the closure's *own* copy, and the outer `n` stays where it was.

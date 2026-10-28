@@ -146,9 +146,7 @@ fn (s VolumeFlash) mixture() !FlashResult {
 	} else {
 		thermo.r_gas * s.t / s.v
 	}
-	f := fn [s] (lnp f64) !f64 {
-		return s.residual(s.flash_at(lnp)!)
-	}
+	f := VolumeGap{s}
 	// V(P) falls as P rises, so the residual does too.
 	lo, hi, mut steps := bracket_down(f, math.log(start), math.ln2, '${s.what()}')!
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3, max_iter: s.params.max_steps)!
@@ -183,11 +181,22 @@ fn (s VolumeFlash) mixture() !FlashResult {
 	}
 }
 
+// VolumeGap is the volume balance of the PT flash at ln P, for the
+// bracket and Brent. The solvers take structs, not closures: see
+// numeric/functions.v.
+struct VolumeGap {
+	s VolumeFlash
+}
+
+fn (g VolumeGap) at(lnp f64) !f64 {
+	return g.s.residual(g.s.flash_at(lnp)!)
+}
+
 // bracket_down steps x from x0 by dx until f, which falls as x rises,
 // changes sign, and returns the bracket and the evaluations.
-fn bracket_down(f numeric.ScalarFn, x0 f64, dx f64, what string) !(f64, f64, int) {
+fn bracket_down(f numeric.FallibleFunction, x0 f64, dx f64, what string) !(f64, f64, int) {
 	mut x := x0
-	f0 := f(x)!
+	f0 := f.at(x)!
 	if f0 == 0.0 {
 		return x, x, 1
 	}
@@ -195,13 +204,22 @@ fn bracket_down(f numeric.ScalarFn, x0 f64, dx f64, what string) !(f64, f64, int
 	up := f0 > 0.0
 	for k in 0 .. 80 {
 		next := if up { x + dx } else { x - dx }
-		fn_ := f(next)!
+		fn_ := f.at(next)!
 		if fn_ == 0.0 || (fn_ > 0.0) != (f0 > 0.0) {
 			return if up { x, next, k + 2 } else { next, x, k + 2 }
 		}
 		x = next
 	}
 	return fail(.no_convergence, '${what}: no change of sign in 80 steps')
+}
+
+// Helmholtz is a split's A/RT at (T, V) as a numeric.Objective.
+struct Helmholtz {
+	s VolumeFlash
+}
+
+fn (o Helmholtz) eval(x []f64, mut g []f64, mut h []f64) !f64 {
+	return o.s.helmholtz_eval(x, mut g, mut h)
 }
 
 // helmholtz minimises A/RT of a split at (T, V) over the vapour's mole
@@ -226,13 +244,10 @@ fn (s VolumeFlash) helmholtz(r FlashResult) !(f64, int) {
 	} else {
 		r.beta * r.phases[0].state.molar_volume()
 	}
-	objective := fn [s] (x []f64, mut g []f64, mut h []f64) !f64 {
-		return s.helmholtz_eval(x, mut g, mut h)
-	}
 	mut g := []f64{len: x0.len}
 	mut h := []f64{len: x0.len * x0.len}
 	a0 := s.helmholtz_eval(x0, mut g, mut h)!
-	sol := numeric.minimize(objective, x0,
+	sol := numeric.minimize(Helmholtz{s}, x0,
 		gtol:     s.params.tol
 		fscale:   math.max(math.abs(a0), 1.0)
 		max_iter: 50
@@ -406,24 +421,43 @@ fn (e EnergyFlash) ideal_t() f64 {
 	if e.tvs.params.estimate > 0.0 {
 		return e.tvs.params.estimate
 	}
-	g := fn [e] (t f64) f64 {
-		mut u := 0.0
-		for i in e.tvs.present {
-			ig := e.fl.ideal[i]
-			u += e.tvs.z[i] * ((ig.dhf or { 0.0 }) + ig.cp.int_cp(thermo.t_ref, t) - thermo.r_gas * t)
-		}
-		return u - e.u
+	return numeric.bisect(IdealUGap{e}, state_t_min, state_t_max) or { 300.0 }
+}
+
+// IdealUGap is the feed's U as an ideal gas at T minus the specification,
+// for ideal_t.
+struct IdealUGap {
+	e EnergyFlash
+}
+
+fn (g IdealUGap) at(t f64) f64 {
+	e := g.e
+	mut u := 0.0
+	for i in e.tvs.present {
+		ig := e.fl.ideal[i]
+		u += e.tvs.z[i] * ((ig.dhf or { 0.0 }) + ig.cp.int_cp(thermo.t_ref, t) - thermo.r_gas * t)
 	}
-	return numeric.bisect(g, state_t_min, state_t_max) or { 300.0 }
+	return u - e.u
+}
+
+// EnergyUGap is the energy balance of the TV flash at ln T, for Brent, and
+// negated for the bracket, which wants a falling function: U rises with T.
+struct EnergyUGap {
+	e    EnergyFlash
+	sign f64 = 1.0
+}
+
+fn (g EnergyUGap) at(lnt f64) !f64 {
+	return g.sign * g.e.residual(g.e.at(lnt)!)
 }
 
 fn (e EnergyFlash) solve() !FlashResult {
-	f := fn [e] (lnt f64) !f64 {
-		return e.residual(e.at(lnt)!)
+	f := EnergyUGap{
+		e: e
 	}
-	// U rises with T, so −residual falls.
-	neg := fn [f] (lnt f64) !f64 {
-		return -f(lnt)!
+	neg := EnergyUGap{
+		e:    e
+		sign: -1.0
 	}
 	// The ideal gas's T can be far too low for a liquid's U, where no TV
 	// flash at this V has an answer; then start from 300 K. (Starting with
@@ -480,28 +514,35 @@ fn (e EnergyFlash) solve() !FlashResult {
 	}
 }
 
+// SingleU is U(T) = U_spec for one phase at V, in ln T, as a numeric.System.
+struct SingleU {
+	e EnergyFlash
+}
+
+fn (s SingleU) eval(x []f64, mut f []f64, mut jac []f64) ! {
+	e := s.e
+	t := math.exp(x[0])
+	if !(t >= state_t_min && t <= state_t_max) {
+		return error('T left the range searched')
+	}
+	r := e.tvs.m.residual2(t, e.tvs.v, e.tvs.z)
+	mut uig, mut cvig := 0.0, 0.0
+	for i in e.tvs.present {
+		ig := e.fl.ideal[i]
+		uig += e.tvs.z[i] * ((ig.dhf or { 0.0 }) + ig.cp.int_cp(thermo.t_ref, t) - thermo.r_gas * t)
+		cvig += e.tvs.z[i] * (ig.cp.cp(t) - thermo.r_gas)
+	}
+	rt := thermo.r_gas * t
+	f[0] = (uig - rt * t * r.f_t - e.u) / rt
+	cv := cvig - rt * (t * r.f_tt + 2.0 * r.f_t)
+	jac[0] = cv / thermo.r_gas - f[0]
+}
+
 // single_newton solves U(T) = U_spec for the feed as one phase at V, by
 // Newton in ln T from t0, from F alone: U = Σᵢ zᵢ(ΔH°f,ᵢ + ∫Cpᵢ dT − RT) −
 // RT²·F_T, with dU/dT = Cv. It returns the temperature and the steps.
 fn (e EnergyFlash) single_newton(t0 f64) !(f64, int) {
-	system := fn [e] (x []f64, mut f []f64, mut jac []f64) ! {
-		t := math.exp(x[0])
-		if !(t >= state_t_min && t <= state_t_max) {
-			return error('T left the range searched')
-		}
-		r := e.tvs.m.residual2(t, e.tvs.v, e.tvs.z)
-		mut uig, mut cvig := 0.0, 0.0
-		for i in e.tvs.present {
-			ig := e.fl.ideal[i]
-			uig += e.tvs.z[i] * ((ig.dhf or { 0.0 }) + ig.cp.int_cp(thermo.t_ref, t) - thermo.r_gas * t)
-			cvig += e.tvs.z[i] * (ig.cp.cp(t) - thermo.r_gas)
-		}
-		rt := thermo.r_gas * t
-		f[0] = (uig - rt * t * r.f_t - e.u) / rt
-		cv := cvig - rt * (t * r.f_tt + 2.0 * r.f_t)
-		jac[0] = cv / thermo.r_gas - f[0]
-	}
-	sol := numeric.newton(system, [math.log(t0)],
+	sol := numeric.newton(SingleU{e}, [math.log(t0)],
 		ftol:     e.tvs.params.etol / 10.0
 		max_iter: e.tvs.params.max_steps
 	)!
@@ -523,10 +564,8 @@ fn (e EnergyFlash) newton(r FlashResult) !(f64, int) {
 	mut x0 := e.tvs.present.map(r.beta * y[it])
 	x0 << r.beta * r.phases[0].state.molar_volume()
 	x0 << math.log(r.t)
-	system := fn [e] (x []f64, mut f []f64, mut jac []f64) ! {
-		e.eval(x, mut f, mut jac)!
-	}
-	sol := numeric.newton(system, x0, ftol: e.tvs.params.tol, max_iter: e.tvs.params.max_steps)!
+	// eval makes EnergyFlash a numeric.System.
+	sol := numeric.newton(e, x0, ftol: e.tvs.params.tol, max_iter: e.tvs.params.max_steps)!
 	return math.exp(sol.x[x0.len - 1]), sol.iterations
 }
 

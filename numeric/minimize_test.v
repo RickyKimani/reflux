@@ -3,6 +3,20 @@ module numeric
 import math
 import time
 
+// A closure wrapped here is never freed, which a test can afford (see
+// functions.v).
+// ObjectiveFn is an objective as a function value, and Obj wraps one as an
+// Objective.
+type ObjectiveFn = fn (x []f64, mut g []f64, mut h []f64) !f64
+
+struct Obj {
+	f ObjectiveFn @[required]
+}
+
+fn (w Obj) eval(x []f64, mut g []f64, mut h []f64) !f64 {
+	return w.f(x, mut g, mut h)
+}
+
 fn rosenbrock(x []f64, mut g []f64, mut h []f64) !f64 {
 	a, b := x[0], x[1]
 	g[0] = -400.0 * a * (b - a * a) - 2.0 * (1.0 - a)
@@ -93,20 +107,20 @@ fn test_the_test_functions_derivatives() {
 }
 
 fn test_minimize_finds_the_standard_minima() {
-	r := minimize(rosenbrock, [-1.2, 1.0])!
+	r := minimize(Obj{rosenbrock}, [-1.2, 1.0])!
 	assert math.abs(r.x[0] - 1.0) <= 1e-8 && math.abs(r.x[1] - 1.0) <= 1e-8 && r.minimum
 	// From (0, 1) the Hessian is indefinite, so the first step needs a shift.
-	r2 := minimize(rosenbrock, [0.0, 1.0])!
+	r2 := minimize(Obj{rosenbrock}, [0.0, 1.0])!
 	assert math.abs(r2.x[0] - 1.0) <= 1e-8 && r2.minimum
 	// Wood's function, past its saddle, to the true minimum.
-	w := minimize(wood, [-3.0, -1.0, -3.0, -1.0])!
+	w := minimize(Obj{wood}, [-3.0, -1.0, -3.0, -1.0])!
 	for v in w.x {
 		assert math.abs(v - 1.0) <= 1e-8, '${w.x}'
 	}
 	assert w.minimum && w.f <= 1e-16
 	// The degenerate minimum: Newton slows to linear convergence there, but
 	// gets to it, and the Hessian at the end is singular.
-	p := minimize(powell_singular, [3.0, -1.0, 0.0, 1.0])!
+	p := minimize(Obj{powell_singular}, [3.0, -1.0, 0.0, 1.0])!
 	assert p.f <= 1e-12 && max_abs(p.g) <= 1e-10
 	assert max_abs(p.x) <= 1e-2
 }
@@ -130,7 +144,7 @@ fn test_minimize_takes_a_quadratic_in_one_step() {
 		}
 		return v
 	}
-	s := minimize(f, []f64{len: n})!
+	s := minimize(Obj{f}, []f64{len: n})!
 	assert s.iterations == 1 && max_abs(s.g) <= 1e-12 && s.minimum
 }
 
@@ -151,7 +165,7 @@ fn test_minimize_finishes_on_the_gradient_where_f_is_rounding() {
 		}
 		return (1e6 + q) - 1e6
 	}
-	s := minimize(f, [3.0, -2.0, 0.5], gtol: 1e-14, fscale: 1e6)!
+	s := minimize(Obj{f}, [3.0, -2.0, 0.5], gtol: 1e-14, fscale: 1e6)!
 	assert max_abs(s.g) <= 1e-14
 	for v in s.x {
 		assert math.abs(v - 1.0) <= 1e-14
@@ -168,7 +182,7 @@ fn test_minimize_rejects_a_step_that_makes_f_worse() {
 		h[0] = 1.0 / (r * r * r)
 		return r
 	}
-	s := minimize(f, [2.0])!
+	s := minimize(Obj{f}, [2.0])!
 	assert math.abs(s.x[0]) <= 1e-9 && s.minimum
 }
 
@@ -184,7 +198,7 @@ fn test_minimize_stops_honestly_when_the_gradient_is_noise() {
 		h[0] = 2.0
 		return (1e6 + d * d) - 1e6
 	}
-	s := minimize(f, [3.0], gtol: 1e-14, fscale: 1e6)!
+	s := minimize(Obj{f}, [3.0], gtol: 1e-14, fscale: 1e6)!
 	assert math.abs(s.x[0] - 1.0) <= 1e-9 && max_abs(s.g) <= 1e-9
 }
 
@@ -201,7 +215,7 @@ fn test_minimize_never_claims_a_minimum_against_a_wall() {
 		h[0] = 2.0
 		return (x[0] - 10.0) * (x[0] - 10.0)
 	}
-	if s := minimize(f, [-1.0]) {
+	if s := minimize(Obj{f}, [-1.0]) {
 		assert false, 'claimed a minimum at ${s.x} with g = ${s.g}'
 	} else {
 		assert err is NewtonError
@@ -219,7 +233,7 @@ fn test_minimize_steps_back_into_the_domain() {
 		h[0] = 1.0 / (x[0] * x[0])
 		return x[0] - math.log(x[0])
 	}
-	s := minimize(f, [5.0])!
+	s := minimize(Obj{f}, [5.0])!
 	assert math.abs(s.x[0] - 1.0) <= 1e-9
 }
 
@@ -234,11 +248,11 @@ fn test_minimize_reports_a_saddle_for_what_it_is() {
 		h[3] = -2.0 + 12.0 * x[1] * x[1]
 		return x[0] * x[0] - x[1] * x[1] + x[1] * x[1] * x[1] * x[1]
 	}
-	s := minimize(f, [1.0, 0.0])!
+	s := minimize(Obj{f}, [1.0, 0.0])!
 	assert max_abs(s.x) <= 1e-9 && !s.minimum
 	// Off the axis the shift steers away from the saddle, to a minimum at
 	// y = ±1/√2.
-	t := minimize(f, [1.0, 0.1])!
+	t := minimize(Obj{f}, [1.0, 0.1])!
 	assert math.abs(math.abs(t.x[1]) - math.sqrt(0.5)) <= 1e-9 && t.minimum
 }
 
@@ -249,18 +263,18 @@ fn test_minimize_fails_honestly() {
 		h[0] = -2.0
 		return -x[0] * x[0]
 	}
-	if s := minimize(unbounded, [1.0]) {
+	if s := minimize(Obj{unbounded}, [1.0]) {
 		assert false, 'claimed a minimum of −x² at ${s.x}'
 	} else {
 		assert err is NewtonError
 	}
-	if _ := minimize(rosenbrock, []f64{}) {
+	if _ := minimize(Obj{rosenbrock}, []f64{}) {
 		assert false
 	}
-	if _ := minimize(rosenbrock, [math.nan(), 1.0]) {
+	if _ := minimize(Obj{rosenbrock}, [math.nan(), 1.0]) {
 		assert false
 	}
-	if _ := minimize(rosenbrock, [-1.2, 1.0], max_iter: 2) {
+	if _ := minimize(Obj{rosenbrock}, [-1.2, 1.0], max_iter: 2) {
 		assert false, 'Rosenbrock in two steps'
 	} else {
 		assert (err as NewtonError).reason == 'no convergence in 2 steps'
@@ -289,7 +303,7 @@ fn test_minimize_gives_up_on_a_huge_hessian() {
 	// stalling it. It takes about a millisecond.
 	ch := chan string{cap: 1}
 	spawn fn [ch, trace] () {
-		ch <- if s := minimize(trace, [1e-305, 0.0]) {
+		ch <- if s := minimize(Obj{trace}, [1e-305, 0.0]) {
 			'claimed a minimum at ${s.x}'
 		} else {
 			err.msg()

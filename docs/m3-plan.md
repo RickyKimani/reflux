@@ -185,7 +185,7 @@ which are tools whose committed output tests check.
 | D7 | The result | `FlashResult`: T, P, β, the phases (each a label, a `thermo.State` and its fraction), iterations, and which path converged. It allows N phases for M6. Failure is a typed `FlashError` (no convergence, bad specification, …), never a panic. | M10a wraps this for Python next: no panics across the C boundary, and failures carry a reason. |
 | D8 | The robustness sweep | Seeded. Components drawn from the database among those with Tc, Pc, ω, M and an ideal-gas Cp. T and P log-uniform over wide ranges; z random. **Unexplained:** no convergence, a broken invariant (criterion 3), or a contradiction such as a single-phase answer that stability calls unstable. **Explained, and counted separately:** a specification outside the model's range, or a point within 1e-6 of a critical point, where the two phases can't be told apart. **Amended in step 9:** also a third phase. That's when every two-phase split the flash finds, from every start, has a phase that stability proves unstable (`more_phases`). M3 handles two phases, and VLLE is M6. | "Zero failures" needs a definition, or it means nothing. A refusal backed by a negative tm is a proof, not a failure. |
 | D9 | References | `thermo` 0.6.1 fixtures with the same PR, constants and kᵢⱼ, and a shared polynomial Cp, to 1e-8. DWSIM 9.0.5 through `pythonnet` and `DWSIM.Automation`, run by hand like the CoolProp fixtures, with DWSIM's own constants and kᵢⱼ recorded and used. **Fallback** if automation fails: capture by hand in the DWSIM GUI, following a written procedure. | `thermo` checks the implementation; DWSIM checks what M4 will be compared with. |
-| D10 | Benchmarks | A `benchmark` module (roadmap A5), built with gcc `-prod`. Results, with machine and compiler, in `docs/benchmarks.md`. DWSIM's timings come from the same automation script. | Speed claims have to be real, and kept so that regressions show. |
+| D10 | Benchmarks | A `benchmark` module (roadmap A5), built with gcc `-prod`. Results, with machine and compiler, in `docs/benchmarks.md`. DWSIM's timings come from the same automation script. **Amended in step 10:** the module is `benchmarks`, since V's standard library has a `benchmark` that V's test runner imports; and the DWSIM script is a separate one, `tools/gen_m3_bench.py`, on the same automation route. | Speed claims have to be real, and kept so that regressions show. |
 | D11 | The Soave α guard | Compute Soave's α through its square root, s = 1 + m(1 − √Tr), so the zero at Tr = (1 + 1/m)² is harmless instead of a division by zero. Past it, keep the published form, which rises again, document that, and recommend Twu for supercritical components such as H₂. | The fix is exact and changes nothing below the zero, so M1's fixtures hold. |
 | D12 | Who writes what | As before, I write it all unless you claim a step. | |
 
@@ -958,11 +958,135 @@ flowchart LR
     any K beyond a double fails Rachford–Rice and isn't taken, so DEM
     stops working for exactly the mixtures with heavy traces.
 
-### 10. Benchmarks and a performance pass
-- The `benchmark` module and `docs/benchmarks.md` (D10), with reflux,
-  `thermo` and DWSIM on the same flashes.
-- Then the carried items, measured before anything is changed:
-  allocation in hot paths, and the cost of `Correlated` in PH and PS.
+### 10. Benchmarks and a performance pass — done
+- **[benchmarks/](../benchmarks/)** times reflux on the same flashes as
+  `thermo` and DWSIM. D10 named it `benchmark`. **Amended in step 10:** it's
+  `benchmarks`, because V's standard library has a `benchmark` module that
+  V's own test runner imports, and an external test of a module with that
+  name fails with "redefinition" errors.
+  - **The flashes:** PT with two phases and with one, PH, and the bubble
+    point at a given P, for a 2-, a 5- and a 10-component mixture
+    (methane/n-butane, a natural gas, and a gas condensate from N₂ and CO₂
+    to n-decane). That covers criterion 8, plus a one-phase PT flash,
+    which is what most of a flowsheet's streams are.
+  - **The same model** in all three programs: Peng–Robinson with DWSIM's
+    constants and kᵢⱼ, read back from DWSIM, and DWSIM's ideal-gas Cp for
+    reflux's PH.
+  - **40 nearby states per case,** so that nothing is merely repeated. PH
+    runs by state: each program computes its own H at the PT state,
+    untimed, and its PH flash from that H is timed.
+  - **Each flash timed on its own** after a warm pass, for at least 1 s and
+    200 flashes. The median is the headline, the minimum beside it.
+- **[tools/gen_m3_bench.py](../tools/gen_m3_bench.py)** writes
+  [m3_bench.json](../testdata/m3_bench.json). For each case it times
+  reflux (through [tools/bench_case.v](../tools/bench_case.v), built with
+  gcc `-prod`), `thermo`'s FlashVL, and DWSIM's property package at its
+  default tolerances and at 1e-8, through pythonnet, one straight after
+  the other. **[tools/benchmarks.vsh](../tools/benchmarks.vsh)** writes
+  [benchmarks.md](benchmarks.md) from that. With `--time` it also times
+  reflux alone, to spot a regression without DWSIM.
+- **Timings move with the machine's state,** so the programs time each
+  case within seconds of each other. On this laptop the same flash's
+  median varied by up to 3× between sessions: DWSIM's 10-component PT
+  split took 3.09 ms in one and 1.18 ms in another. Timed minutes apart,
+  as at first, DWSIM ÷ reflux for the 5-component split came out 1.2× in
+  one run and 2.5× in the next. Even case by case a median can double
+  while the CPU throttles. The minimum is steadier, so the report gives
+  ratios for both.
+
+- **The result** (the fastest flash of each case, reflux's against the
+  others'; [benchmarks.md](benchmarks.md) has the medians and everything
+  else):
+
+  | DWSIM ÷ reflux | 2 components | 5 | 10 |
+  |---|---|---|---|
+  | PT, two phases | 3.5× | 1.9× | 1.4× |
+  | PT, one phase | 5.6× | 2.5× | 3.7× |
+  | PH | 1.0× | 0.50× | 0.25× |
+  | bubble point at P | 6.7× | 10× | 3.9× |
+
+  reflux is faster than DWSIM on every PT flash and bubble point, and as
+  fast on the binary's PH. On PH for 5 and 10 components it takes two and
+  four times as long. It's faster than `thermo` on all twelve, by 1.8× (PH,
+  10 components) to 110×.
+
+- **What the profile found, and what changed.** V's profiler (`-profile`,
+  under tcc: the gcc `-prod` build crashed) on the first measurements:
+  - **The volume roots took 88% of a PT flash.** Every Newton step on V
+    called `Model.volume_derivs(t, v, n)`, which for a cubic recomputed
+    every αᵢ(T) and A = ΣΣ nᵢnⱼ(1 − kᵢⱼ)√(aᵢaⱼ): about 2,200 times in a
+    binary flash. **M1's D2 is amended:** the volume solver's tier is now
+    `volume_function(t, n)`, F at fixed T and n as a function of V, so A
+    and B are computed once per root. Its `residual(v)` gives the state at
+    the root from the same A, which `solve_tp` had computed a second time.
+    Timed back to back against the step-9 code, on the same flashes,
+    every flash is 2.3–5.7 times faster (medians: the binary's PT split
+    from 1.24 ms to 270 µs, the 10-component PH from 85 ms to 27 ms).
+  - **`Correlated` is 0.6% of a PH flash** (its quadrature, 180 ms of
+    29 s), so it stays as it is.
+  - **A PH flash is about 12 PT flashes,** each with a stability test and,
+    for a split, each phase re-tested. That's where its time goes, and
+    what's left between reflux and DWSIM on PH for 5 and 10 components.
+    Verification is what makes an answer proven (D7), so it stays.
+  - **Allocation** is no longer near the top of the profile.
+- **Bug found: the flashes leaked memory.** V 0.5.2 never frees a closure:
+  a probe made 2 million and the heap grew by 660 MiB, while the same
+  values as an interface were reclaimed. `numeric`'s solvers took function
+  values, so every call made closures. A binary PH flash leaked 18 KB and a
+  bubble point 3 KB, which a sensitivity study of a million flashes would
+  turn into gigabytes. The solvers now take interfaces (`Function`,
+  `FallibleFunction`, `System`, `Objective`, in
+  [numeric/functions.v](../numeric/functions.v)). Each of the 22 closures
+  in their callers is now a small struct with one method, or a struct that
+  already had one. Over thousands of flashes the heap now stays at 1 MiB.
+- **Nothing else changed:** the 10,000-point sweep rewrote
+  [flash-robustness.md](flash-robustness.md) byte for byte the same, in
+  128 s instead of 157–193.
+- **Tests:**
+  - **[benchmarks/benchmarks_test.v](../benchmarks/benchmarks_test.v):**
+    - the same flashes: reflux's answers against `thermo`'s (β to 1e-7, T
+      to 1e-7 K) and DWSIM's (criterion 6's targets, β to 1e-4 and T to
+      0.01 K). DWSIM's rounded constants put its bubble points 2–3 mK low;
+    - reflux's H at each PH state against DWSIM's, from the same constants
+      and Cp: 0.7–1.7 J/mol apart, 9e-5 of H, within 2e-4;
+    - every one of the 480 states runs the flash it says, at its T and P.
+  - **[benchmarks_internal_test.v](../benchmarks/benchmarks_internal_test.v):**
+    the median and minimum, the number formats, the report's failures and
+    ratios, and that the committed report has a row for every case in each
+    table, timed with gcc `-prod`.
+  - **numeric:** each solver through its interface, with the tests' own
+    adapters wrapping function values (a closure leaked once in a test
+    costs nothing).
+  - **flash:** the one-phase UV Newton's Jacobian against central
+    differences, and the ideal-gas start of PH and PS against
+    `Fluid.props`, which computes the ideal gas on its own. They agree to
+    5e-13. Both came from planted mistakes, below.
+  - Every test of the flash, thermo, tdep and numeric passes unchanged.
+    The tcc check takes 249 s instead of 409, and the sweep test
+    51 s instead of 170.
+- **Planted mistakes:** 31, and 25 caught at first. Of the other six:
+  - two now have tests:
+    - the one-phase UV Jacobian without its −r_U term. Newton converges
+      without it, only more slowly. Step 8 tested the split's Jacobian
+      but not this one;
+    - a wrong sign on the ideal mixing entropy in PS's ideal-gas start.
+      Only the start depends on it, and the bracket finds the answer from
+      anywhere.
+  - four are explained:
+    - skipping the warm pass, or not reporting `-prod`, changes only
+      timings and their labels, which no test can assert (and tests
+      never run as `-prod` builds). The committed report is checked for
+      gcc `-prod`;
+    - Brent's method doesn't care which way its residual is signed, so
+      negating PH's energy balance there changes nothing;
+    - unscaled, a pure component's one-phase PH or PS residual is in
+      J/mol, not RT: a stricter stop at these temperatures, which every
+      answer still meets. The scaling is what etol means, as for
+      mixtures.
+- **Also found:** `ideal_t` bisects over 10–10,000 K, and a polynomial Cp
+  that turns negative before 10,000 K (the textbook one in the tests)
+  leaves it no change of sign, so it falls back to 300 K. The bracket
+  still finds the answer; only the start is worse.
 
 ### 11. Docs and exit review
 - README, roadmap, design notes on the flash, the V notes, and a

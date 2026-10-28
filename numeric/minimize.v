@@ -2,12 +2,6 @@ module numeric
 
 import math
 
-// ObjectiveFn evaluates a smooth function at x. It returns f(x) and writes
-// the gradient into g and the Hessian into h, n×n row-major. It returns an
-// error when x is outside the function's domain; minimize then takes a
-// shorter step.
-pub type ObjectiveFn = fn (x []f64, mut g []f64, mut h []f64) !f64
-
 // MinimizeParams are minimize's options.
 @[params]
 pub struct MinimizeParams {
@@ -58,7 +52,7 @@ pub:
 // shorter than xtol, or when the model predicts a fall in f smaller than f's
 // own rounding (see fscale), so that no step could be seen to help.
 // Anything else is a NewtonError, whose residual is then max |gᵢ|.
-pub fn minimize(objective ObjectiveFn, x0 []f64, params MinimizeParams) !MinimizeSolution {
+pub fn minimize(objective Objective, x0 []f64, params MinimizeParams) !MinimizeSolution {
 	n := x0.len
 	if n == 0 {
 		return error('minimize: x0 is empty')
@@ -171,7 +165,7 @@ pub fn minimize(objective ObjectiveFn, x0 []f64, params MinimizeParams) !Minimiz
 
 // Minimizer is one minimisation in progress.
 struct Minimizer {
-	objective ObjectiveFn @[required]
+	objective Objective @[required]
 	n         int
 	params    MinimizeParams
 mut:
@@ -187,7 +181,7 @@ mut:
 // or gave anything that isn't finite.
 fn (mut s Minimizer) evaluate(x []f64, mut g []f64, mut h []f64) ?f64 {
 	s.evaluations++
-	v := s.objective(x, mut g, mut h) or { return none }
+	v := s.objective.eval(x, mut g, mut h) or { return none }
 	if !math.is_finite(v) {
 		return none
 	}

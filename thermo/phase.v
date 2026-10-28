@@ -41,6 +41,6 @@ pub fn phase_label(m Model, st State) PhaseLabel {
 
 // dp_dv_at is (∂P/∂V) at (T, V, n), from the volume solver's cheap derivatives.
 fn dp_dv_at(m Model, t f64, v f64, n []f64) f64 {
-	d := m.volume_derivs(t, v, n)
+	d := volume_derivs(m, t, v, n)
 	return -r_gas * t * (d.f_vv + numeric.sum(n) / (v * v))
 }

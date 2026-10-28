@@ -164,22 +164,40 @@ fn (s StateFlash) ideal_t() f64 {
 	if s.params.estimate > 0.0 {
 		return s.params.estimate
 	}
-	g := fn [s] (t f64) f64 {
-		mut x := 0.0
-		for i in s.present {
-			ig := s.fl.ideal[i]
-			x += s.z[i] * match s.spec {
-				.h {
-					(ig.dhf or { 0.0 }) + ig.cp.int_cp(thermo.t_ref, t)
-				}
-				.s {
-					(ig.s0 or { 0.0 }) + ig.cp.int_cp_over_t(thermo.t_ref, t) - thermo.r_gas * math.log(s.p / thermo.p_ref) - thermo.r_gas * math.log(s.z[i])
-				}
+	return numeric.bisect(IdealGap{s}, state_t_min, state_t_max) or { 300.0 }
+}
+
+// IdealGap is the feed's H or S as an ideal gas at T, minus the
+// specification, for ideal_t. The solvers take structs, not closures: see
+// numeric/functions.v.
+struct IdealGap {
+	s StateFlash
+}
+
+fn (g IdealGap) at(t f64) f64 {
+	s := g.s
+	mut x := 0.0
+	for i in s.present {
+		ig := s.fl.ideal[i]
+		x += s.z[i] * match s.spec {
+			.h {
+				(ig.dhf or { 0.0 }) + ig.cp.int_cp(thermo.t_ref, t)
+			}
+			.s {
+				(ig.s0 or { 0.0 }) + ig.cp.int_cp_over_t(thermo.t_ref, t) - thermo.r_gas * math.log(s.p / thermo.p_ref) - thermo.r_gas * math.log(s.z[i])
 			}
 		}
-		return x - s.value
 	}
-	return numeric.bisect(g, state_t_min, state_t_max) or { 300.0 }
+	return x - s.value
+}
+
+// EnergyGap is the energy balance of the PT flash at T, for Brent.
+struct EnergyGap {
+	s StateFlash
+}
+
+fn (g EnergyGap) at(t f64) !f64 {
+	return g.s.residual(g.s.flash_at(t)!)
 }
 
 // bracket steps T out from t0 by 50% at a time until the residual changes
@@ -206,9 +224,7 @@ fn (s StateFlash) bracket(t0 f64) !(f64, f64, int) {
 
 fn (s StateFlash) mixture() !FlashResult {
 	lo, hi, mut steps := s.bracket(s.ideal_t())!
-	f := fn [s] (t f64) !f64 {
-		return s.residual(s.flash_at(t)!)
-	}
+	f := EnergyGap{s}
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3 * lo, max_iter: s.params.max_steps)!
 	steps += coarse.evaluations
 	mut r := s.flash_at(coarse.x)!
@@ -257,10 +273,8 @@ fn (s StateFlash) newton(r FlashResult) !(f64, int) {
 	y := r.phases[0].state.n
 	mut v0 := s.present.map(r.beta * y[it])
 	v0 << math.log(r.t)
-	system := fn [s] (x []f64, mut f []f64, mut jac []f64) ! {
-		s.eval(x, mut f, mut jac)!
-	}
-	sol := numeric.newton(system, v0, ftol: s.params.tol, max_iter: s.params.max_steps)!
+	// eval makes StateFlash a numeric.System.
+	sol := numeric.newton(s, v0, ftol: s.params.tol, max_iter: s.params.max_steps)!
 	return math.exp(sol.x[s.present.len]), sol.iterations
 }
 
@@ -356,27 +370,37 @@ fn (s StateFlash) pure() !FlashResult {
 	return s.single(.stable, s.ideal_t())!
 }
 
+// SingleGap is the energy balance of a pure component's single phase on one
+// root at T, scaled, for Brent.
+struct SingleGap {
+	s    StateFlash
+	root thermo.Root
+}
+
+fn (g SingleGap) at(t f64) !f64 {
+	s := g.s
+	if !(t >= state_t_min && t <= state_t_max) {
+		return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
+	}
+	st := thermo.solve_tp(s.fl.model, t, s.p, s.z, g.root)!
+	return (s.of(st) - s.value) / s.scale(t)
+}
+
 // single is a pure component's single phase on one root, by Brent's method
 // in T. A single phase's H and S rise with T, so the search for a change of
 // sign goes up from t0 where they're too low, and down where too high.
 fn (s StateFlash) single(root thermo.Root, t0 f64) !FlashResult {
 	m := s.fl.model
-	f := fn [s, m, root] (t f64) !f64 {
-		if !(t >= state_t_min && t <= state_t_max) {
-			return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
-		}
-		st := thermo.solve_tp(m, t, s.p, s.z, root)!
-		return (s.of(st) - s.value) / s.scale(t)
-	}
+	f := SingleGap{s, root}
 	mut a, mut b := t0, t0
-	fa := f(a)!
+	fa := f.at(a)!
 	mut found := fa == 0.0
 	for _ in 0 .. 60 {
 		if found {
 			break
 		}
 		b = if fa < 0.0 { b * 1.5 } else { b / 1.5 }
-		fb := f(b)!
+		fb := f.at(b)!
 		found = fb == 0.0 || (fb > 0.0) != (fa > 0.0)
 	}
 	if !found {

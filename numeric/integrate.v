@@ -38,7 +38,7 @@ struct Panel {
 // Floating-point roundoff limits the accuracy to about 1e-14 relative to
 // ∫ |f|; a smaller rtol gets that instead. integrate fails, with an error,
 // if f isn't finite somewhere, or if max_panels aren't enough.
-pub fn integrate(f fn (f64) f64, a f64, b f64, rtol f64) !f64 {
+pub fn integrate(f Function, a f64, b f64, rtol f64) !f64 {
 	if a == b {
 		return 0.0
 	}
@@ -83,19 +83,19 @@ pub fn integrate(f fn (f64) f64, a f64, b f64, rtol f64) !f64 {
 // difference between the rules, scaled down because the Kronrod estimate
 // is far more accurate than the Gauss one it's compared with, and never
 // below what roundoff allows.
-fn gk15(f fn (f64) f64, a f64, b f64) Panel {
+fn gk15(f Function, a f64, b f64) Panel {
 	c := 0.5 * (a + b)
 	h := 0.5 * (b - a)
 	mut fv1 := [7]f64{}
 	mut fv2 := [7]f64{}
-	fc := f(c)
+	fc := f.at(c)
 	mut kronrod := fc * wgk[7]
 	mut gauss := fc * wg[3]
 	mut resabs := math.abs(kronrod)
 	for j in 0 .. 7 {
 		dx := h * xgk[j]
-		fv1[j] = f(c - dx)
-		fv2[j] = f(c + dx)
+		fv1[j] = f.at(c - dx)
+		fv2[j] = f.at(c + dx)
 		kronrod += wgk[j] * (fv1[j] + fv2[j])
 		resabs += wgk[j] * (math.abs(fv1[j]) + math.abs(fv2[j]))
 		if j % 2 == 1 {

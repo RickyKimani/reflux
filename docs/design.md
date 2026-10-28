@@ -28,17 +28,32 @@ The `Model` interface is in [thermo/model.v](../thermo/model.v):
 ```v
 pub interface Model {
 	components() []Component
-	min_volume(n []f64) f64                            // packing limit, e.g. Σnᵢbᵢ
-	volume_derivs(t f64, v f64, n []f64) VolumeDerivs  // F, F_V, F_VV (cheap)
-	residual(t f64, v f64, n []f64) Residual           // F, F_V, F_VV, F_T, F_n
-	residual2(t f64, v f64, n []f64) Residual2         // all of the above + every second derivative
+	min_volume(n []f64) f64                                 // packing limit, e.g. Σnᵢbᵢ
+	volume_function(t f64, n []f64) VolumeFunction          // F at fixed T and n, as a function of V
+	residual(t f64, v f64, n []f64) Residual                // F, F_V, F_VV, F_T, F_n
+	residual2(t f64, v f64, n []f64) Residual2              // all of the above + every second derivative
+}
+
+pub interface VolumeFunction {
+	at(v f64) VolumeDerivs  // F, F_V, F_VV: what the volume solver needs
+	residual(v f64) Residual // the state at the root it found
 }
 ```
 
 There are three tiers so that each caller pays only for what it uses. The
-volume solver calls the cheapest one on every iteration. The composition
-Hessian in `residual2` costs O(nc²) and is needed only by Cp, Newton flash
-and Jacobians.
+composition Hessian in `residual2` costs O(nc²) and is needed only by Cp,
+Newton flash and Jacobians.
+
+**The volume solver's tier fixes T and n.** A volume root is found at fixed
+T and n by iterating on V alone, ten or twenty steps. So `volume_function`
+computes the parts that depend only on T and n once, and each step costs
+only the terms in V: a cubic's A(T, n) = ΣΣ nᵢnⱼ(1 − kᵢⱼ)√(aᵢaⱼ) and
+B(n) = Σ nᵢbᵢ, CPA's association strengths, SAFT's segment diameters. Its
+`residual` then gives the state at the root without computing them again.
+Until M3 step 10 this tier was `volume_derivs(t, v, n)`, which recomputed
+every αᵢ(T) and the double sum on every step; the step-10 benchmarks found
+the volume roots taking 88% of a PT flash. (That amends M1's D2.)
+`thermo.volume_derivs(m, t, v, n)` remains, for one volume.
 
 ### Properties from F
 
@@ -789,9 +804,29 @@ These notes respond to the slow solves and slow sensitivity runs in DWSIM.
 
 - Analytic derivatives are fast, and they give Newton methods their
   Jacobians for free.
-- Right now each residual call allocates a few small arrays. That's fine
-  until a profile says otherwise. The fix then is to cache the
-  temperature-dependent parts (αᵢ, √aᵢ) and pass in scratch buffers.
+- **What M3 step 10 measured** (`docs/benchmarks.md`, with a profile of the
+  same flashes):
+  - The volume roots took 88% of a PT flash, because every Newton step on
+    V recomputed A(T, n). Fixing T and n first (`volume_function`, above)
+    and sharing A with the residual made every flash 2.3–5.7 times faster,
+    timed back to back against the old code.
+  - Each `solve_tp` then still computed A twice, once for the root and
+    once for the state there. `VolumeFunction.residual` shares it.
+  - `Correlated`'s quadrature of the ideal-gas Cp is 0.6% of a PH flash,
+    so it stays as it is.
+  - A PH flash is about 12 PT flashes, each with its stability test and
+    each split verified. That, not H, is where its time goes, and it's
+    what is left between reflux and DWSIM on PH.
+  - Each residual call still allocates a few small arrays (√aᵢ, ∂A/∂nᵢ,
+    F_n). With the above fixed they're no longer near the top of the
+    profile.
+- **No closures in the solvers.** V 0.5.2 never frees a closure. When the
+  solvers took function values, every PH flash leaked 18 KB and every
+  bubble point 3 KB, a few closures each, which a sensitivity study would
+  have turned into gigabytes. `numeric`'s solvers take interfaces
+  (`Function`, `FallibleFunction`, `System`, `Objective`), and each caller
+  passes a small struct with one method. The heap now stays flat over
+  thousands of flashes.
 - Sensitivity analysis: warm-start each case from its neighbour's converged
   solution, run independent cases in parallel with `spawn`, and later get
   exact local sensitivities from the converged Jacobian (implicit function

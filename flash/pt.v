@@ -312,6 +312,16 @@ fn (sp Splitter) split(k0 []f64) !Split {
 	return fail(.no_convergence, 'the split did not converge in ${sp.params.max_steps} steps')
 }
 
+// Gibbs is a split's G/RT as a numeric.Objective, for newton. (A struct,
+// not a closure: see numeric/functions.v.)
+struct Gibbs {
+	sp Splitter
+}
+
+fn (o Gibbs) eval(v []f64, mut g []f64, mut h []f64) !f64 {
+	return o.sp.gibbs(v, mut g, mut h)
+}
+
 // newton minimises the Gibbs energy over the vapour mole numbers v (one mole
 // of feed; the liquid has l = z − v), from v0 over the components present.
 // With V = Σv, y = v/V, L = 1 − V and x = l/L (Michelsen & Mollerup,
@@ -324,16 +334,13 @@ fn (sp Splitter) split(k0 []f64) !Split {
 // where Φ is each phase's n·∂ln φᵢ/∂nⱼ. At a two-phase minimum H is
 // positive definite.
 fn (sp Splitter) newton(v0 []f64) !Split {
-	objective := fn [sp] (v []f64, mut g []f64, mut h []f64) !f64 {
-		return sp.gibbs(v, mut g, mut h)
-	}
 	// G is a sum of terms vᵢ ln fᵢ that don't vanish at the minimum, and its
 	// rounding is a few ε times their size.
 	mut g := []f64{len: v0.len}
 	mut h := []f64{len: v0.len * v0.len}
 	sp.gibbs(v0, mut g, mut h)!
 	scale := sp.gibbs_scale(v0)!
-	sol := numeric.minimize(objective, v0,
+	sol := numeric.minimize(Gibbs{sp}, v0,
 		gtol:     sp.params.tol
 		fscale:   scale
 		max_iter: 50

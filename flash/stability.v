@@ -366,16 +366,23 @@ struct NewtonFinish {
 // solution is a long, nearly flat valley, along which ‖g‖ has dips that
 // aren't stationary points, and a root-finder stops in them.
 fn (f Feed) newton(start Point) !NewtonFinish {
-	objective := fn [f] (a []f64, mut g []f64, mut h []f64) !f64 {
-		return f.objective(a, mut g, mut h)
-	}
 	a0 := f.present.map(2.0 * math.sqrt(start.w[it]))
 	// tm* = 1 + Σ Wᵢ(rᵢ − 1) is a small difference of terms of size about 1.
-	sol := numeric.minimize(objective, a0, gtol: stationary_tol, fscale: 2.0, max_iter: 80)!
+	sol := numeric.minimize(TmStar{f}, a0, gtol: stationary_tol, fscale: 2.0, max_iter: 80)!
 	return NewtonFinish{
 		point:      f.at(f.u_of(sol.x))!
 		iterations: sol.iterations
 	}
+}
+
+// TmStar is tm* as a numeric.Objective, for newton. (A struct, not a
+// closure: see numeric/functions.v.)
+struct TmStar {
+	f Feed
+}
+
+fn (o TmStar) eval(a []f64, mut g []f64, mut h []f64) !f64 {
+	return o.f.objective(a, mut g, mut h)
 }
 
 // objective is tm* as a function of α, over the components present, with

@@ -2,6 +2,19 @@ module numeric
 
 import math
 
+// A closure wrapped here is never freed, which a test can afford (see
+// functions.v).
+// SystemFn is a system as a function value, and Sys wraps one as a System.
+type SystemFn = fn (x []f64, mut f []f64, mut jac []f64) !
+
+struct Sys {
+	f SystemFn @[required]
+}
+
+fn (w Sys) eval(x []f64, mut f []f64, mut jac []f64) ! {
+	w.f(x, mut f, mut jac)!
+}
+
 // Problem is one test system: its size, standard starting point, and the
 // root where one is known in closed form.
 struct Problem {
@@ -339,7 +352,7 @@ fn test_newton_solves_the_mgh_problems_or_says_it_did_not() {
 			x0 := p.x0.map(if it == 0.0 && factor != 1.0 { factor } else { it * factor })
 			for method in [Globalization.line_search, .dogleg] {
 				label := '${p.name} ${factor}x0 ${method}'
-				sol := newton(p.f, x0, method: method) or {
+				sol := newton(Sys{p.f}, x0, method: method) or {
 					assert err is NewtonError, '${label}: ${err}'
 					failures << label
 					continue
@@ -364,7 +377,7 @@ fn test_a_reported_local_minimum_is_one() {
 	// local minimum of ‖F‖ that isn't a root. Check that's true: at the
 	// point it returns, the gradient JᵀF of ½‖F‖² vanishes while F doesn't.
 	p := mgh().filter(it.name == 'trigonometric')[0]
-	newton(p.f, p.x0.map(it * 10.0), method: .dogleg) or {
+	newton(Sys{p.f}, p.x0.map(it * 10.0), method: .dogleg) or {
 		assert err is NewtonError
 		e := err as NewtonError
 		assert e.reason.contains('local minimum')
@@ -391,7 +404,7 @@ fn test_freudenstein_roth_is_solved_or_refused() {
 	// (11.41, −0.8968). Whatever happens, a success must be the real root.
 	p := freudenstein_roth()
 	for method in [Globalization.line_search, .dogleg] {
-		sol := newton(p.f, p.x0, method: method) or {
+		sol := newton(Sys{p.f}, p.x0, method: method) or {
 			assert err is NewtonError, '${method}: ${err}'
 			continue
 		}
@@ -406,7 +419,7 @@ fn test_a_system_without_a_root_fails() {
 		j[0] = 2.0 * x[0]
 	}
 	for method in [Globalization.line_search, .dogleg] {
-		if sol := newton(f, [3.0], method: method) {
+		if sol := newton(Sys{f}, [3.0], method: method) {
 			assert false, '${method} claimed a root of x² + 1 at ${sol.x}'
 		} else {
 			assert err is NewtonError, '${method}: ${err}'
@@ -429,7 +442,7 @@ fn test_newton_steps_back_into_the_domain() {
 		j[0] = 1.0 / x[0]
 	}
 	for method in [Globalization.line_search, .dogleg] {
-		sol := newton(f, [10.0], method: method)!
+		sol := newton(Sys{f}, [10.0], method: method)!
 		assert math.abs(sol.x[0] - math.e) <= 1e-9, '${method}: ${sol.x}'
 		assert sol.residual <= 1e-10
 	}
@@ -446,7 +459,7 @@ fn test_newton_gets_past_a_singular_jacobian() {
 		j[2], j[3] = 1.0, -1.0
 	}
 	for method in [Globalization.line_search, .dogleg] {
-		sol := newton(f, [-0.5, 0.0], method: method)!
+		sol := newton(Sys{f}, [-0.5, 0.0], method: method)!
 		assert sol.residual <= 1e-10
 		assert math.abs(sol.x[0] - 1.0) <= 1e-9 || math.abs(sol.x[0] + 2.0) <= 1e-9, '${method}: ${sol.x}'
 	}
@@ -463,7 +476,7 @@ fn test_newton_refuses_to_start_from_a_stationary_point() {
 		j[2], j[3] = 1.0, -1.0
 	}
 	for method in [Globalization.line_search, .dogleg] {
-		if _ := newton(f, [0.0, 0.0], method: method) {
+		if _ := newton(Sys{f}, [0.0, 0.0], method: method) {
 			assert false, '${method} moved from a stationary point'
 		} else {
 			e := err as NewtonError
@@ -483,7 +496,7 @@ fn test_newton_stops_on_xtol_when_ftol_is_out_of_reach() {
 		j[0] = 2e9 * x[0]
 	}
 	for method in [Globalization.line_search, .dogleg] {
-		sol := newton(f, [1.0], method: method)!
+		sol := newton(Sys{f}, [1.0], method: method)!
 		assert math.abs(sol.x[0] - math.sqrt2) <= 4.0 * f64_epsilon, '${method}: ${sol.x}'
 		assert sol.residual > 1e-10 && sol.residual < 1e-5, '${method}: ${sol.residual}'
 	}
@@ -492,10 +505,10 @@ fn test_newton_stops_on_xtol_when_ftol_is_out_of_reach() {
 fn test_newton_counts_and_limits() {
 	p := mgh()[0] // Rosenbrock
 	// Already at the root: nothing to do, one evaluation.
-	sol := newton(p.f, [1.0, 1.0])!
+	sol := newton(Sys{p.f}, [1.0, 1.0])!
 	assert sol.iterations == 0 && sol.evaluations == 1 && sol.residual == 0.0
 	// Out of steps: an error that says so, carrying the point reached.
-	if _ := newton(mgh()[3].f, mgh()[3].x0, max_iter: 2) {
+	if _ := newton(Sys{mgh()[3].f}, mgh()[3].x0, max_iter: 2) {
 		assert false, 'Wood in two steps'
 	} else {
 		e := err as NewtonError
@@ -507,21 +520,21 @@ fn test_newton_counts_and_limits() {
 fn test_newton_refuses_bad_input() {
 	p := mgh()[0]
 	for x0 in [[]f64{}, [math.nan(), 1.0], [math.inf(1), 1.0]] {
-		if _ := newton(p.f, x0) {
+		if _ := newton(Sys{p.f}, x0) {
 			assert false, 'x0 = ${x0} should be refused'
 		}
 	}
-	if _ := newton(p.f, p.x0, ftol: 0.0) {
+	if _ := newton(Sys{p.f}, p.x0, ftol: 0.0) {
 		assert false, 'ftol = 0 should be refused'
 	}
-	if _ := newton(p.f, p.x0, max_iter: 0) {
+	if _ := newton(Sys{p.f}, p.x0, max_iter: 0) {
 		assert false, 'max_iter = 0 should be refused'
 	}
 	nan_at_start := fn (x []f64, mut f []f64, mut j []f64) ! {
 		f[0] = math.nan()
 		j[0] = 1.0
 	}
-	if _ := newton(nan_at_start, [1.0]) {
+	if _ := newton(Sys{nan_at_start}, [1.0]) {
 		assert false, 'a system that is NaN at x0 should be refused'
 	}
 }

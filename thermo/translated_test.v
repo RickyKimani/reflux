@@ -171,7 +171,7 @@ fn test_derivatives_match_finite_differences() {
 			vp, vm := m.residual(t, v + hv, c.n), m.residual(t, v - hv, c.n)
 			tp, tm := m.residual(t + ht, v, c.n), m.residual(t - ht, v, c.n)
 			// First derivatives against F itself.
-			fv := (m.volume_derivs(t, v + hv, c.n).f - m.volume_derivs(t, v - hv, c.n).f) / (2.0 * hv)
+			fv := (thermo.volume_derivs(m, t, v + hv, c.n).f - thermo.volume_derivs(m, t, v - hv, c.n).f) / (2.0 * hv)
 			assert close(r.f_v, fv, 0.0), '${at}: F_V'
 			assert close(r.f_vv, (vp.f_v - vm.f_v) / (2.0 * hv), 0.0), '${at}: F_VV'
 			assert close(r.f_tv, (tp.f_v - tm.f_v) / (2.0 * ht), 0.0), '${at}: F_TV'
@@ -184,8 +184,8 @@ fn test_derivatives_match_finite_differences() {
 				mut dn := c.n.clone()
 				up[i] += hn
 				dn[i] -= hn
-				fp := m.volume_derivs(t, v, up).f
-				fm := m.volume_derivs(t, v, dn).f
+				fp := thermo.volume_derivs(m, t, v, up).f
+				fm := thermo.volume_derivs(m, t, v, dn).f
 				assert close(r.f_n[i], (fp - fm) / (2.0 * hn), max_abs(r.f_n)), '${at}: F_n[${i}]'
 				np, nm := m.residual(t, v, up), m.residual(t, v, dn)
 				for j in 0 .. nc {

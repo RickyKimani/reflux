@@ -50,6 +50,8 @@ These goals come from what went wrong with DWSIM:
 v.mod               module manifest (Go's go.mod)
 main.v              demo CLI, on database components
 numeric/
+  functions.v       what the solvers take: interfaces, not closures (V never
+                    frees a closure)
   cubic.v           real roots of a cubic
   roots.v           bracketed root finding: bisection, Brent's method
   lu.v              dense LU with partial pivoting
@@ -74,7 +76,8 @@ components/
   quality/          the sweep behind docs/data-quality.md
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
-  model.v           the Model contract F(T, V, n); volume solver; P, Z, ln φ
+  model.v           the Model contract F(T, V, n), with F at fixed T and n for
+                    the volume solver; P, Z, ln φ
   properties.v      P derivatives, ln φ derivatives, residual H, S, G, U, A, Cv, Cp
   cubic.v           cubic EOS (vdW, RK, SRK, PR), exact Ωa and Ωb, vdW mixing with kᵢⱼ
   alpha.v           per-component α (Soave, PRSV, Twu, Mathias–Copeman)
@@ -93,12 +96,16 @@ flash/
   error.v           FlashError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
+benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
+                    the same flashes (docs/benchmarks.md)
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
-                    gen_m3_dwsim.py (DWSIM 9's, by hand on Windows),
-                    import_chemsep.vsh, data_quality.vsh and flash_sweep.vsh
-                    (generated data and reports)
+                    gen_m3_dwsim.py and gen_m3_bench.py (DWSIM 9's answers and
+                    timings, by hand on Windows), import_chemsep.vsh,
+                    data_quality.vsh, flash_sweep.vsh and benchmarks.vsh
+                    (generated data and reports), bench_case.v (reflux's side
+                    of the benchmarks)
 testdata/           reference fixtures from thermo, CoolProp, chemicals and
                     mpmath, with provenance
 data/vendor/        the ChemSep 8.50 database, verbatim, with its licence

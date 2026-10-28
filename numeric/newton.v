@@ -2,16 +2,6 @@ module numeric
 
 import math
 
-// SystemFn evaluates a square nonlinear system F(x) = 0 at x. It writes
-// F(x) into f and the Jacobian ∂Fᵢ/∂xⱼ into jac, row-major
-// (jac[i*n + j]), the layout lu_factor takes. It returns an error when x is
-// outside the system's domain, a negative mole number say. newton then
-// takes a shorter step.
-//
-// A V function type can mark parameters `mut`, as here: the solver owns f
-// and jac and lets the system write into them, with no allocation per call.
-pub type SystemFn = fn (x []f64, mut f []f64, mut jac []f64) !
-
 // Globalization is how newton keeps a step from making things worse when
 // the full Newton step is too long or points the wrong way.
 pub enum Globalization {
@@ -89,7 +79,7 @@ const min_relative_step = 3.7e-11
 // Newton step was shorter than xtol. Anything else is a NewtonError, never a
 // point that merely stopped moving: a local minimum of ‖F‖ that isn't a
 // root, a Jacobian that stays singular, or max_iter running out.
-pub fn newton(system SystemFn, x0 []f64, params NewtonParams) !NewtonSolution {
+pub fn newton(system System, x0 []f64, params NewtonParams) !NewtonSolution {
 	n := x0.len
 	if n == 0 {
 		return error('newton: x0 is empty')
@@ -126,7 +116,7 @@ pub fn newton(system SystemFn, x0 []f64, params NewtonParams) !NewtonSolution {
 // Newton is one solve in progress: the current point, F and J there, and
 // the counts.
 struct Newton {
-	system   SystemFn @[required]
+	system   System @[required]
 	n        int
 	params   NewtonParams
 	max_step f64
@@ -141,7 +131,7 @@ mut:
 // evaluate calls the system at x, and reports whether it gave finite values.
 fn (mut s Newton) evaluate(x []f64, mut f []f64, mut jac []f64) bool {
 	s.evaluations++
-	s.system(x, mut f, mut jac) or { return false }
+	s.system.eval(x, mut f, mut jac) or { return false }
 	for v in f {
 		if !math.is_finite(v) {
 			return false

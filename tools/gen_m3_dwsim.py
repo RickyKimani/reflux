@@ -183,9 +183,11 @@ def split_of(pairs, n):
 
 
 class Dwsim:
-    """One DWSIM flowsheet and property package per system."""
+    """One DWSIM flowsheet and property package per system, with its PT and PH
+    tolerances at tol, or at DWSIM's defaults for tol None (the benchmarks
+    time both)."""
 
-    def __init__(self, auto, system):
+    def __init__(self, auto, system, tol=TOL):
         from System import Array, Double
         from DWSIM.Interfaces.Enums import FlashCalculationType, FlashSetting
         from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
@@ -207,7 +209,8 @@ class Dwsim:
         self.pp.CurrentMaterialStream = stream  # the package reads its compounds from this
         for key in (FlashSetting.PTFlash_External_Loop_Tolerance, FlashSetting.PTFlash_Internal_Loop_Tolerance,
                     FlashSetting.PHFlash_External_Loop_Tolerance, FlashSetting.PHFlash_Internal_Loop_Tolerance):
-            self.pp.FlashSettings[key] = TOL
+            if tol is not None:
+                self.pp.FlashSettings[key] = tol
         self.settings = {str(k): str(self.pp.FlashSettings[k]) for k in self.pp.FlashSettings.Keys}
         n = len(system["compounds"])
         self.comps = []

@@ -113,3 +113,21 @@ fn test_the_uv_jacobian_matches_differences() {
 		e.eval(x, mut f, mut jac)!
 	}, xt, 'UV')!
 }
+
+fn test_the_one_phase_uv_jacobian_matches_differences() {
+	// The vapour's volume at 350 K and 10 bar, evaluated at 340 K against a
+	// U it doesn't have: r_U is far from 0 there, so the Jacobian's −r_U
+	// term shows. Newton converges without it, only more slowly, which is
+	// why a planted mistake there survived every other test.
+	fl := tv_fluid()!
+	r := pt(fl.model, 350.0, 10e5, [0.4, 0.6])!
+	e := EnergyFlash{
+		fl:  fl
+		u:   -15000.0
+		tvs: volume_flash(fl.model, 350.0, r.phases[0].state.molar_volume(), [0.4, 0.6],
+			VolumeParams{})!
+	}
+	differences(fn [e] (x []f64, mut f []f64, mut jac []f64) ! {
+		SingleU{e}.eval(x, mut f, mut jac)!
+	}, [math.log(340.0)], 'one-phase UV')!
+}

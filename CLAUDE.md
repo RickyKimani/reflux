@@ -28,25 +28,27 @@ Keep this section current: update it whenever a step is committed.
     D1–D12 and steps 0–11.
   - A finished step's heading says "— done", with a write-up beneath. That
     file, not this one, is the record of what each step did.
-  - Steps 0–9 are committed (0–6 pushed): the DWSIM spike, Newton and
+  - Steps 0–10 are committed and pushed: the DWSIM spike, Newton and
     Rachford–Rice, PIP and the Soave guard, stability, the PT flash
     (`flash/pt.v`), the reference fixtures (`testdata/m3_thermo.json`,
     `testdata/m3_dwsim.json`), the vapour-fraction flashes with bubble and
     dew points (`flash/vf.v`), the PH and PS flashes (`flash/ph.v`), the
-    TV and UV flashes (`flash/tv.v`), and the robustness sweep (`sweep/`,
-    `docs/flash-robustness.md`).
+    TV and UV flashes (`flash/tv.v`), the robustness sweep (`sweep/`,
+    `docs/flash-robustness.md`), and the benchmarks with a performance
+    pass (`benchmarks/`, `docs/benchmarks.md`).
   - Amended so far: D3 in step 4 (pure-component stability trials), D6 in
     step 6 (the vapour is the phase of lower mass density), criterion 6
     after step 5 (a DWSIM deviation may exceed a target only when the
     fixture reproduces it from DWSIM itself, and reflux still matches the
-    exact model to 1e-8), and D8 in step 9 (a third phase, proved by a
-    negative tangent-plane distance, is an explained failure: VLLE is M6).
-  - Next is step 10: the `benchmark` module and `docs/benchmarks.md` (D10,
-    criterion 8). PT, PH and bubble-point flashes of 2-, 5- and
-    10-component mixtures, timed with gcc `-prod` against `thermo` and
-    DWSIM on the same flashes. Then the carried items, measured before
-    anything changes: allocation in hot paths, and the cost of
-    `Correlated` in PH and PS.
+    exact model to 1e-8), D8 in step 9 (a third phase, proved by a
+    negative tangent-plane distance, is an explained failure: VLLE is M6),
+    and in step 10 D10 (the module is `benchmarks`, since vlib has a
+    `benchmark`) and M1's D2 (the volume solver's tier on `Model` is
+    `volume_function(t, n)`).
+  - Next is step 11, the last: README, roadmap, the design notes on the
+    flash and the V notes brought up to date, then a criterion-by-criterion
+    exit review of criteria 1–10, as in M1 and M2. After it, and only when
+    asked, the PR into `main`.
 
 ## How we work
 
@@ -71,8 +73,8 @@ Keep this section current: update it whenever a step is committed.
 ## Commands
 
 ```bash
-v run tools/check.vsh            # what CI runs, with tcc: about 7 min
-v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 10 min
+v run tools/check.vsh            # what CI runs, with tcc: about 4 min
+v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 8 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) and P (bar)
@@ -93,6 +95,12 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
   - `v run tools/import_chemsep.vsh` regenerates `data/components/` from the
     vendored ChemSep XML. A test fails if it's stale.
   - `v run tools/data_quality.vsh` writes `docs/data-quality.md`.
+  - `tools/gen_m3_bench.py` (by hand, with DWSIM) times reflux, thermo and
+    DWSIM case by case and writes `testdata/m3_bench.json`; `v run
+    tools/benchmarks.vsh` then writes `docs/benchmarks.md`. Rerun both
+    after a change that could make flashes faster or slower. `v -prod -cc
+    gcc run tools/benchmarks.vsh --time` times reflux alone, against the
+    fixture, without DWSIM.
   - `v -prod -cc gcc run tools/flash_sweep.vsh` writes
     `docs/flash-robustness.md`, 10,000 PT flashes (about three minutes,
     the build included; about twenty under tcc). Regenerate it after
@@ -137,6 +145,9 @@ uses both `components` and `flash`.
   - Cubics (`Cubic`, with per-component `Alpha` functions) and the Péneloux
     wrapper `Translated` implement it. CPA and SAFT will too (M12), with no
     change to the flash.
+  - The volume solver's tier is `volume_function(t, n)`: F at fixed T and n
+    as a function of V, so that the parts in T and n (a cubic's A and B) are
+    computed once per root, not on every Newton step.
   - `Fluid` adds the ideal-gas part, for total properties.
 - **`flash` works for any `thermo.Model`** (D2).
   - `stability` is Michelsen's tangent-plane test. Its trials are Wilson's
@@ -166,7 +177,9 @@ uses both `components` and `flash`.
   for systems (line search or dogleg) and `minimize` (a
   Levenberg–Marquardt-shifted Newton that knows f's rounding through
   `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
-  QAG integration and bisection.
+  QAG integration and bisection. They take what they solve as an interface
+  (`Function`, `FallibleFunction`, `System`, `Objective`), never a closure:
+  V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
@@ -236,5 +249,9 @@ or a test:
   and gcc, so round with `math.round` before formatting anything compared
   byte for byte.
 - **Shared libraries** need gcc: tcc's Windows DLLs export nothing.
+- **Closures are never freed**, so nothing that runs per flash may make one:
+  pass a struct with a method, as `numeric`'s interfaces ask.
+- **Module names:** not like a vlib module's. `benchmark` broke external
+  tests, because V's test runner imports vlib's.
 - **Leftovers:** V can leave `.*.v3cc.*/` build folders next to a binary.
   They're git-ignored; delete them.

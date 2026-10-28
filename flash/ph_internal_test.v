@@ -76,3 +76,35 @@ fn test_the_q_function_jacobian_matches_differences() {
 		}
 	}
 }
+
+fn test_the_ideal_gas_start_aims_at_the_ideal_gas() {
+	// ideal_t searches for where the feed as an ideal gas has the specified
+	// H or S. From the state's own H and S, that gap at its T is minus its
+	// residual H or S (61 J/mol and 0.10 J/(mol·K) at 1 bar and 400 K). A
+	// wrong ideal mixing term, 2R·Σz ln z = 11 J/(mol·K) here, would show
+	// at once. Only the start depends on it, which is why it needs its own
+	// test: the bracket finds the answer from anywhere.
+	fl := methane_butane_fluid()!
+	z := [0.4, 0.6]
+	r := pt(fl.model, 400.0, 1e5, z)!
+	assert r.phases.len == 1
+	st := r.phases[0].state
+	pr := fl.props(st)
+	res := thermo.residual_props(fl.model, st)
+	for spec in [Spec.h, .s] {
+		s := StateFlash{
+			fl:      fl
+			spec:    spec
+			value:   if spec == .h { pr.h } else { pr.s }
+			p:       1e5
+			z:       z
+			present: [0, 1]
+			params:  StateParams{}
+		}
+		// Fluid.props computes the ideal gas on its own, so this checks
+		// IdealGap's formula against it: measured, they agree to 5e-13.
+		gap := IdealGap{s}.at(400.0)
+		own := if spec == .h { -res.h } else { -res.s }
+		assert math.abs(gap - own) <= 1e-9 * math.max(1.0, math.abs(s.value)), '${spec}: ${gap} vs ${own}'
+	}
+}

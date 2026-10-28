@@ -312,7 +312,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A2 Units at the boundary: parse `25 degC`, `1 atm`, `kmol/h`; SI inside | M4 |
 | A3 Structured diagnostics: every solver returns *why* it stopped | M3 |
 | A4 Iteration tracing (opt-in) for convergence debugging | M3 |
-| A5 Benchmark harness (`benchmark` module) with tracked results | M3 |
+| A5 Benchmark harness (`benchmarks` module) with tracked results | M3 |
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |
 | A8 Releases: semver, changelog, golden suite gates every release | M4 |

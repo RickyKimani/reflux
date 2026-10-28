@@ -226,18 +226,30 @@ fn (s Saturation) eval(v []f64, mut f []f64, mut jac []f64) ! {
 	jac[k * n + k] = 0.0
 }
 
+// WilsonGap is Rachford–Rice's sum at β with Wilson's K-values: in ln P at
+// a given T, or in 1/T at a given P, for start's bisection. The solvers take
+// structs, not closures: see numeric/functions.v.
+struct WilsonGap {
+	s     Saturation
+	comps []thermo.Component
+	t     f64 // the given T, or 0 to search in 1/T at p
+	p     f64
+}
+
+fn (g WilsonGap) at(x f64) f64 {
+	t, p := if g.t > 0.0 { g.t, math.exp(x) } else { 1.0 / x, g.p }
+	k := wilson_k(g.comps, t, p)
+	mut sum := 0.0
+	for i in g.s.present {
+		sum += g.s.z[i] * (k[i] - 1.0) / (1.0 + g.s.beta * (k[i] - 1.0))
+	}
+	return sum
+}
+
 // start is Wilson's K-values at the T or P where they satisfy
 // Rachford–Rice at β, or at params.estimate.
 fn (s Saturation) start() ![]f64 {
 	comps := s.m.components()
-	h := fn [s, comps] (t f64, p f64) f64 {
-		k := wilson_k(comps, t, p)
-		mut sum := 0.0
-		for i in s.present {
-			sum += s.z[i] * (k[i] - 1.0) / (1.0 + s.beta * (k[i] - 1.0))
-		}
-		return sum
-	}
 	mut t, mut p := 0.0, 0.0
 	if s.params.estimate > 0.0 {
 		t, p = if s.given == .t { s.value, s.params.estimate } else { s.params.estimate, s.value }
@@ -261,15 +273,19 @@ fn (s Saturation) start() ![]f64 {
 			amax = math.max(amax, a[i])
 		}
 		lo, hi := math.log(amin / 2.0), math.log(amax * 2.0)
-		lnp := numeric.bisect(fn [h, t] (x f64) f64 {
-			return h(t, math.exp(x))
+		lnp := numeric.bisect(WilsonGap{
+			s:     s
+			comps: comps
+			t:     t
 		}, lo, hi) or { return fail(.bad_input, 'Wilson finds no pressure at ${t} K: ${err}') }
 		p = math.exp(lnp)
 	} else {
 		// Every ln Kᵢ is linear in 1/T and rises with T: bisect in 1/T.
 		p = s.value
-		inv := numeric.bisect(fn [h, p] (u f64) f64 {
-			return h(1.0 / u, p)
+		inv := numeric.bisect(WilsonGap{
+			s:     s
+			comps: comps
+			p:     p
 		}, 1e-5, 1.0) or { return fail(.bad_input, 'Wilson finds no temperature at ${p} Pa: ${err}') }
 		t = 1.0 / inv
 	}
@@ -343,10 +359,8 @@ fn (s Saturation) mixture() !FlashResult {
 // attempt is Newton from v0, and every check on where it ends.
 fn (s Saturation) attempt(v0 []f64) !FlashResult {
 	k := s.present.len
-	system := fn [s] (x []f64, mut f []f64, mut jac []f64) ! {
-		s.eval(x, mut f, mut jac)!
-	}
-	sol := numeric.newton(system, v0, ftol: s.params.tol, max_iter: s.params.max_steps) or {
+	// eval makes Saturation a numeric.System.
+	sol := numeric.newton(s, v0, ftol: s.params.tol, max_iter: s.params.max_steps) or {
 		return fail(.no_convergence, '${s.what()}: ${err.msg()}')
 	}
 	v := sol.x
@@ -405,6 +419,37 @@ fn (s Saturation) what() string {
 // and vapour roots, by Newton in τ. It first moves τ until both roots
 // exist: with the vapour root alone P is too low (or T too high), with the
 // liquid root alone the reverse.
+// roots is the pure component's liquid and vapour roots at τ = ln P or ln T.
+fn (s Saturation) roots(tau f64) !(thermo.State, thermo.State) {
+	t, p := s.tp(tau)!
+	liq := thermo.solve_tp(s.m, t, p, s.z, .liquid)!
+	vap := thermo.solve_tp(s.m, t, p, s.z, .vapor)!
+	return liq, vap
+}
+
+// PureSat is ln φᵢᴸ = ln φᵢⱽ in τ, for component i alone, as a
+// numeric.System.
+struct PureSat {
+	s Saturation
+	i int
+}
+
+fn (q PureSat) eval(x []f64, mut f []f64, mut jac []f64) ! {
+	s, i := q.s, q.i
+	liq, vap := s.roots(x[0])!
+	if !(vap.v - liq.v > 1e-9 * vap.v) {
+		return error('only one volume root')
+	}
+	dl := thermo.ln_phi_derivs(s.m, liq)
+	dv := thermo.ln_phi_derivs(s.m, vap)
+	f[0] = liq.ln_phi[i] - vap.ln_phi[i]
+	jac[0] = if s.given == .t {
+		liq.p * (dl.dp[i] - dv.dp[i])
+	} else {
+		liq.t * (dl.dt[i] - dv.dt[i])
+	}
+}
+
 fn (s Saturation) pure() !FlashResult {
 	i := s.present[0]
 	comps := s.m.components()
@@ -422,16 +467,10 @@ fn (s Saturation) pure() !FlashResult {
 		}
 		tau = math.log(1.0 / u)
 	}
-	roots := fn [s] (tau f64) !(thermo.State, thermo.State) {
-		t, p := s.tp(tau)!
-		liq := thermo.solve_tp(s.m, t, p, s.z, .liquid)!
-		vap := thermo.solve_tp(s.m, t, p, s.z, .vapor)!
-		return liq, vap
-	}
 	mut step, mut last_dir := 0.05, 0.0
 	mut found := false
 	for _ in 0 .. 200 {
-		liq, vap := roots(tau) or { return fail(.no_volume_root, '${s.what()}: ${err}') }
+		liq, vap := s.roots(tau) or { return fail(.no_volume_root, '${s.what()}: ${err}') }
 		if vap.v - liq.v > 1e-9 * vap.v {
 			found = true
 			break
@@ -448,24 +487,10 @@ fn (s Saturation) pure() !FlashResult {
 	if !found {
 		return fail(.no_convergence, '${s.what()}: found no state with both a liquid and a vapour root; past the critical point?')
 	}
-	system := fn [s, i, roots] (x []f64, mut f []f64, mut jac []f64) ! {
-		liq, vap := roots(x[0])!
-		if !(vap.v - liq.v > 1e-9 * vap.v) {
-			return error('only one volume root')
-		}
-		dl := thermo.ln_phi_derivs(s.m, liq)
-		dv := thermo.ln_phi_derivs(s.m, vap)
-		f[0] = liq.ln_phi[i] - vap.ln_phi[i]
-		jac[0] = if s.given == .t {
-			liq.p * (dl.dp[i] - dv.dp[i])
-		} else {
-			liq.t * (dl.dt[i] - dv.dt[i])
-		}
-	}
-	sol := numeric.newton(system, [tau], ftol: s.params.tol, max_iter: s.params.max_steps) or {
+	sol := numeric.newton(PureSat{s, i}, [tau], ftol: s.params.tol, max_iter: s.params.max_steps) or {
 		return fail(.no_convergence, '${s.what()}: ${err.msg()}')
 	}
-	liq, vap := roots(sol.x[0]) or { return fail(.no_volume_root, '${s.what()}: ${err}') }
+	liq, vap := s.roots(sol.x[0]) or { return fail(.no_volume_root, '${s.what()}: ${err}') }
 	stab := stability(s.m, liq.t, liq.p, s.z)!
 	return FlashResult{
 		t:          liq.t

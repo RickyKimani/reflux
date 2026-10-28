@@ -93,14 +93,10 @@ fn test_closed_forms_agree_with_quadrature() {
 	]
 	for c in cases {
 		a, b := c.tmin, c.tmax
-		want := numeric.integrate(fn [c] (t f64) f64 {
-			return c.eval(t)
-		}, a, b, 1e-14)!
+		want := numeric.integrate(c, a, b, 1e-14)!
 		assert math.tolerance(c.integral(a, b)!, want, 1e-12), 'eq ${c.eq}: ${c.integral(a, b)!} vs ${want}'
 		if c.eq !in [114, 116] {
-			want_t := numeric.integrate(fn [c] (t f64) f64 {
-				return c.eval(t) / t
-			}, a, b, 1e-14)!
+			want_t := numeric.integrate(OverT{c}, a, b, 1e-14)!
 			assert math.tolerance(c.integral_over_t(a, b)!, want_t, 1e-12), 'eq ${c.eq}: ${c.integral_over_t(a, b)!} vs ${want_t}'
 		}
 	}

@@ -8,13 +8,10 @@ import math
 // (one bit per step) but it can't fail once the bracket is valid, which
 // makes it the right tool for one-off constants. Iterative solvers inside
 // flash and flowsheet loops will use Newton or Brent instead.
-//
-// `f fn (f64) f64` is a function type, as in Go. Callers usually pass a
-// closure, and V closures must list what they capture: fn [a, b] (x f64) f64.
-pub fn bisect(f fn (f64) f64, lo f64, hi f64) !f64 {
+pub fn bisect(f Function, lo f64, hi f64) !f64 {
 	mut a, mut b := lo, hi
-	mut fa := f(a)
-	fb := f(b)
+	mut fa := f.at(a)
+	fb := f.at(b)
 	if fa == 0.0 {
 		return a
 	}
@@ -29,7 +26,7 @@ pub fn bisect(f fn (f64) f64, lo f64, hi f64) !f64 {
 		if mid <= a || mid >= b {
 			break // a and b are adjacent floats
 		}
-		fm := f(mid)
+		fm := f.at(mid)
 		if fm == 0.0 {
 			return mid
 		}
@@ -41,9 +38,6 @@ pub fn bisect(f fn (f64) f64, lo f64, hi f64) !f64 {
 	}
 	return 0.5 * (a + b)
 }
-
-// ScalarFn is a function of one variable that can fail, as a flash can.
-pub type ScalarFn = fn (x f64) !f64
 
 // BrentParams are brent's options.
 @[params]
@@ -77,13 +71,13 @@ pub:
 // 4ε|x|, plus xtol/2, so a root at x = 0 needs an xtol. It's slow on a
 // multiple root, as Brent's method is (x³ = 0 takes more than 100 steps
 // to 1e-12), which a flash's residual never has.
-pub fn brent(f ScalarFn, a0 f64, b0 f64, params BrentParams) !BrentResult {
+pub fn brent(f FallibleFunction, a0 f64, b0 f64, params BrentParams) !BrentResult {
 	if !(params.xtol >= 0.0) || !(params.ftol >= 0.0) || params.max_iter < 1 {
 		return error('brent: xtol and ftol must be non-negative and max_iter positive')
 	}
 	mut a, mut b := a0, b0
-	mut fa := f(a)!
-	mut fb := f(b)!
+	mut fa := f.at(a)!
+	mut fb := f.at(b)!
 	mut evaluations := 2
 	if fa == 0.0 || math.abs(fa) <= params.ftol {
 		return BrentResult{a, fa, a, b, evaluations}
@@ -150,7 +144,7 @@ pub fn brent(f ScalarFn, a0 f64, b0 f64, params BrentParams) !BrentResult {
 		} else {
 			-tol
 		}
-		fb = f(b)!
+		fb = f.at(b)!
 		evaluations++
 	}
 	return error('brent: no convergence in ${params.max_iter} steps (bracket ${math.min(b, c)} to ${math.max(b, c)})')
