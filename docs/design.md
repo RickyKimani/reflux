@@ -781,6 +781,56 @@ the flash returns the first split it found, which is the one the verified
 flash found first and refused. One of its phases must have a tpd below
 −1e-8.
 
+## Units of measure
+
+`quantity` is where numbers with units come in (M4's D10). Each unit is a
+row of one table, and
+
+    SI = (x + pre)·scale + post,        x = (SI − post)/scale − pre
+
+A scaled unit has pre = post = 0. Celsius and Fahrenheit shift before they
+scale, and gauge pressures add a standard atmosphere after:
+
+    T/K  = t/°C + 273.15
+    T/K  = (t/°F + 459.67)·5/9
+    T/K  = (T/°R)·5/9
+    P/Pa = (P/barg)·10⁵ + 101325
+    P/Pa = (P/psig)·6894.757… + 101325
+
+A temperature or pressure *difference* uses the same scales with no
+offset: 9 degF of ΔT is 5 K, and there are no gauge differences.
+
+The scales that aren't SI prefixes, minutes or hours are built from the
+exact definitions in NIST SP 811 (2008), appendix B. None is a rounded
+number typed in:
+
+| Unit | Definition |
+|---|---|
+| pound | 0.45359237 kg |
+| inch | 0.0254 m, so the foot is 0.3048 m |
+| standard gravity g₀ | 9.80665 m/s² |
+| psi | lbf/in², with lbf = pound·g₀: 6894.757293… Pa |
+| atm | 101325 Pa; the torr is 1/760 of it, 133.322368… Pa |
+| conventional mmHg | 13.5951 g/cm³ · g₀ · 1 mm = 133.322387415 Pa, 1.4e-7 above the torr |
+| IT Btu | 1055.05585262 J, so Btu/lb is exactly 2326 J/kg |
+| IT kilocalorie | 4186.8 J |
+| US gallon | 231 in³ |
+| horsepower | 550 ft·lbf/s = 745.699871… W |
+| pound-mole | 453.59237 mol: a pound's worth of moles |
+
+SP 811 prints seven of the factors built from them (psi, mmHg, torr, lb/h,
+gal/min, Btu/h, hp) to 7 figures, and reflux's values round to them.
+
+Reading is strict:
+- the text is a number, whitespace and one unit;
+- the number is what `strconv.atof64` reads, and must be finite;
+- only a fraction may be a bare number;
+- an absolute T or P must be above zero.
+
+A unit that isn't the dimension's gets the closest of its units: those
+within two edits (Levenshtein, ignoring case), nearest first, at most
+three. A unit of another dimension is named as one.
+
 ## How CPA will fit
 
 ```v

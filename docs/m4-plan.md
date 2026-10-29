@@ -188,7 +188,7 @@ output the tests check.
 | D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
 | D8 | Results and failures | `solve` returns a `Solution` only when every component converged and every balance has been checked. Each stream's state, each unit's duty and work, the tears chosen and the convergence history come with it. A failure is a typed `FlowsheetError` (a bad file, a bad specification, a unit that failed with its `FlashError`, no convergence with the history), never a panic. | The flash's rule, D7 of M3, carried up: nothing that hasn't been shown right is returned. M10b exposes this to Python. |
 | D9 | File format | TOML, `format = 1`. Components by name or CAS from the database, plus your own data directories; the model and kᵢⱼ options; then streams and units, each unit with its ports and specifications. Every number with a unit, as a string ("230 K", "30 bar", "100 kmol/h"). A feed's composition is given as mole fractions, mass fractions, or each component's molar or mass flow, as in DWSIM, and converted to molar flows with the components' molar masses when the file loads. The results report flows and fractions on both bases. Unknown keys are errors. | Consistent with M2's data files, readable, and diffable. Units on every number remove the commonest input error. A version from the first file makes migration possible later (A6). |
-| D10 | Units of measure | `quantity` parses "value unit" for a stated dimension: temperature (K, degC, degF, R), pressure (Pa, kPa, MPa, bar, barg, atm, psi, psig, mmHg), molar and mass flow, energy rate and power, molar and specific enthalpy, volume flow. Gauge pressure takes 1 atm of ambient. An unknown unit gets suggestions. | A2 asks for the boundary; a fixed table is easy to check against NIST SP 811 and has nothing hidden. |
+| D10 | Units of measure | `quantity` parses "value unit" for a stated dimension: temperature (K, degC, degF, R), pressure (Pa, kPa, MPa, bar, barg, atm, psi, psig, mmHg), molar and mass flow, energy rate and power, molar and specific enthalpy, volume flow. Gauge pressure takes 1 atm of ambient. An unknown unit gets suggestions. **Amended in step 1:** also temperature and pressure differences (the same scales with no offset, and no gauge units), fractions (a bare number or a percentage), °C and °F beside degC and degF, mbar, torr, psia and lbmol/h. An absolute T or P must be above zero. | A2 asks for the boundary; a fixed table is easy to check against NIST SP 811 and has nothing hidden. |
 | D11 | CLI and reports | `main.v` becomes `reflux solve plant.toml [--json out.json] [--csv streams.csv] [--trace]`, with the current demo as `reflux demo`. The JSON has a `format` version, every stream, every unit, the balances and the convergence history. A stream table goes to stdout. `--trace` prints every iteration. | F2 and F6. JSON is what Python and pandas read, and the version lets M10 depend on it. |
 | D12 | DWSIM references | A by-hand tool, `tools/gen_m4_dwsim.py`, builds each reference flowsheet in DWSIM 9 from the same definition and records DWSIM's constants, kᵢⱼ and results in `testdata/`. It checks every unit's `ErrorMessage` and every stream, and tightens the recycle to its limit. reflux runs the same flowsheet on DWSIM's constants. Unit-by-unit cases go through the same route. **Fallback** if a recycle won't converge tightly in DWSIM: compare with the loop opened, giving DWSIM reflux's converged tear stream, which it must hand back unchanged within its tolerance. | M3's route, which works. The open loop tests the same claim without DWSIM's recycle. |
 | D13 | Golden flowsheets | `testdata/flowsheets/`: the reference flowsheet and a few others (no recycle, two interlocking loops, and a loop carrying a saturated pure component, which D6's H is for), each with its expected results, compared to 1e-9. They're regenerated only on purpose, with the change explained. | The roadmap's golden-flowsheet layer: whole-plant results that can't drift unnoticed. |
@@ -247,8 +247,80 @@ flowchart LR
 - No V code changed, so no planted mistakes: the spike's checks are its
   own, each a quantity DWSIM must reproduce from its own flashes.
 
-### 1. Units of measure
-- The `quantity` module (D10), tested against NIST SP 811's factors.
+### 1. Units of measure — done
+- **[quantity/quantity.v](../quantity/quantity.v):** `parse(text,
+  dimension) !f64` reads "value unit" into SI, `to_unit(si, unit,
+  dimension)` converts back for reports, and `units(dimension)` lists what a
+  dimension accepts.
+  - **One table of 75 units** in 11 dimensions, each row SI = (x + pre)·scale
+    + post. Celsius and Fahrenheit shift before they scale, and `barg` and
+    `psig` add a standard atmosphere after.
+  - **Every scale is built from SP 811's exact definitions**: the pound, the
+    inch, standard gravity, the standard atmosphere, the IT Btu and
+    kilocalorie, the conventional millimetre of mercury, the US gallon and
+    the 550 ft·lbf/s horsepower. No rounded factor is typed in.
+  - **D10 amended.** It now also has ΔT and ΔP, which the heater, valve,
+    pump and compressor specifications need (D3), and fractions, for
+    vapour fractions, split fractions and efficiencies. Its new units are
+    °C, °F, mbar, torr, psia and lbmol/h.
+- **Every refusal is a `QuantityError`** with the text, the dimension, a
+  reason and any suggestions, so the file loader (step 6) can add the line.
+  The reasons:
+  - empty, or more than a number and one unit;
+  - not a number, or not finite (`inf`, `nan`);
+  - a number and its unit run together, with the fix: `"30 bar"`;
+  - no unit, with examples (only a fraction may be bare);
+  - a unit of another dimension, named as one: "K is a unit of
+    temperature, not pressure";
+  - a near miss, with up to three suggestions within two edits, ignoring
+    case, nearest first. With nothing near, the dimension's units are
+    listed;
+  - an absolute temperature or pressure at or below zero.
+- **Tests in [quantity/quantity_test.v](../quantity/quantity_test.v)**,
+  against [testdata/m4_units.json](../testdata/m4_units.json), written by
+  hand from SP 811's appendix B:
+  - **The 67 factors:** the 56 exact ones to 4 ulps. The other 11 (7
+    distinct factors: psi, mmHg, torr, lb/h, gal/min, Btu/h, hp) round to
+    SP 811's 7 printed figures. The closest is gal/min, 0.72 of half a unit
+    in the last figure.
+  - **The 13 affine conversions** (Celsius, Fahrenheit, Rankine, barg,
+    psig) to 1e-12.
+  - **No unit escapes:** each of the 75 is in the fixture's factors or
+    points.
+  - **The round trip:** `to_unit` inverts `parse` to 1e-12 for every unit,
+    at values of both signs where the dimension allows them.
+  - **25 refusals,** each for its own reason. These include the
+    suggestions for `Bar`, `bars`, `kmole/h`, `degc`, `KPA` and `ºC` (the
+    masculine ordinal, a common slip for °), and exactly three for `ps`.
+  - **Differences and fractions** take either sign, a bare fraction or a
+    percentage.
+  - **20,000 seeded random strings,** each read as all 11 dimensions:
+    pieces of numbers and units, stray characters and Unicode, and the
+    valid points with a character deleted, inserted or changed. None
+    panics, every accepted answer is finite, and every absolute T and P is
+    above zero.
+- **Found along the way:**
+  - V's `strconv.atof64` reads what Go's `ParseFloat` reads, `inf`, `nan`
+    and `1_000` included. So `quantity` checks finiteness itself.
+  - Both read `1e-400` as 0 with no error. That 0 then meets the same
+    "above zero" check as a typed 0.
+  - `strings.levenshtein_distance` counts bytes, so `°` costs two edits.
+- **Planted mistakes:** 26, all caught in the end. The mistakes:
+  - seven definitions (psi, mmHg, torr, Btu, kilocalorie, gallon,
+    horsepower), the Fahrenheit offset and the Rankine scale;
+  - three units' scales: lbmol/h as a pound, Btu/lb as per pound-mole,
+    psig as bar;
+  - barg without its atmosphere, and a ΔT given an offset;
+  - the two above-zero checks and the finiteness check;
+  - three refusals: the run-together fix without its space, another
+    dimension's unit not named, and three parts allowed;
+  - the suggestions made case-sensitive;
+  - `to_unit`'s sign;
+  - a bare fraction refused.
+
+  One survived at first: capping the suggestions at one instead of three.
+  It led to the test of `ps`'s three, and planting five, or one edit
+  instead of two, is now caught as well.
 
 ### 2. Streams and the first units
 - Material and energy streams (D2), the unit interface and ports.

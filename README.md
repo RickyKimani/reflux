@@ -101,6 +101,8 @@ flash/
   tv.v              TV and UV flashes, in the model's own variables (T, V, n)
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
+quantity/           numbers with units ("30 bar", "100 kmol/h") read into SI,
+                    by NIST SP 811's definitions
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on

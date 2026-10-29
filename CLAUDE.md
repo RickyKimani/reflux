@@ -38,8 +38,12 @@ Keep this section current: update it whenever a step is committed.
     its stream back within 8e-14. Its pump uses a non-PR liquid density,
     and its two-inlet drum is wrong. The spike doc lists what step 8 must
     do.
-  - Next is step 1: units of measure, the `quantity` module (D10), tested
-    against NIST SP 811's factors.
+  - Step 1 is committed, not pushed: units of measure, the `quantity`
+    module (D10), against a table hand-written from NIST SP 811
+    (`testdata/m4_units.json`). D10 was amended there: ΔT, ΔP and
+    fractions too, and a few more units.
+  - Next is step 2: material and energy streams (D2), the unit interface
+    and ports, and the first units.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
     with M4; the owner chose to plan M4 first.
 
@@ -133,8 +137,9 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
 
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
-`components`. `sweep`, the flash robustness sweep, is the one module that
-uses both `components` and `flash`.
+`components`. `quantity`, units of measure (M4), depends on nothing.
+`sweep`, the flash robustness sweep, is the one module that uses both
+`components` and `flash`.
 
 - **`thermo` is built on one contract.** `Model` (thermo/model.v) supplies
   the reduced residual Helmholtz energy F(T, V, n) = Aʳ/RT and its

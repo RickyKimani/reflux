@@ -570,6 +570,24 @@ array (`last_step = step.clone()` in
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 
+**`strconv.atof64` reads what Go's `ParseFloat` reads.** Probed side by
+side with Go 1.27, both:
+- accept `inf`, `Infinity` and `NaN` in any case, and underscores between
+  digits (`1_000`);
+- refuse surrounding spaces and `0x10`;
+- read `1e-400` as 0, with no error.
+
+The one difference is overflow. Go returns ±Inf *and* `ErrRange`, but V's
+`!f64` is a value or an error, never both, so `1e400` is just an error.
+[quantity/quantity.v](../quantity/quantity.v) checks `math.is_finite`
+itself. An underflow's 0 then meets the same "above zero" check as a typed
+0.
+
+**`strings.levenshtein_distance(a, b)`** is in V's standard library, while
+Go's has no edit distance. It counts bytes, not runes, so dropping the
+two-byte `°` from `°C` is two edits. `quantity` and `components` use it
+for their suggestions.
+
 **Gotcha: `toml.Any` converts without complaint.** `doc.value('name').f64()`
 on a string returns `0.0`, and a missing key gives a `Null` that also
 converts to zero. Check the type first (`if v is f64 || v is i64`), or use
