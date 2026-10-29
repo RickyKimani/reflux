@@ -31,14 +31,15 @@ Keep this section current: update it whenever a step is committed.
 - **M4 (the first flowsheet) is in progress** on branch `m4-flowsheet`,
   which is pushed and has no PR yet. Its plan, `docs/m4-plan.md`, is
   approved: exit criteria 1–10, decisions D1–D16 and steps 0–11.
-  - No step is done yet. Next is step 0, the DWSIM flowsheet spike: build
-    the reference flowsheet headless, tighten DWSIM's recycle to its limit,
-    confirm its pump and compressor models, and try the open-loop
-    fallback (D12).
-  - The research is in the plan: DWSIM 9's units and recycle block, probed
-    headless; a recycle flowsheet solves there in 5 iterations, but its
-    failures are silent (check every unit's `ErrorMessage`) and its
-    default recycle tolerance left the mass balance 0.17% off.
+  - Step 0 is committed and pushed: the DWSIM flowsheet spike
+    (`spike/dwsim_flowsheet/run.py`, `docs/spike-dwsim-flowsheet.md`), a
+    go with conditions. DWSIM's recycle, scaled by 1e-8, closes its
+    balances to 9e-8 (components) and 6e-7 (energy); the open loop hands
+    its stream back within 8e-14. Its pump uses a non-PR liquid density,
+    and its two-inlet drum is wrong. The spike doc lists what step 8 must
+    do.
+  - Next is step 1: units of measure, the `quantity` module (D10), tested
+    against NIST SP 811's factors.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
     with M4; the owner chose to plan M4 first.
 
@@ -116,11 +117,17 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
   stops at Python 3.13, so pass the same interpreter as above.
   - `tools/gen_m3_dwsim.py` writes `testdata/m3_dwsim.json`. It imports
     `gen_m3_fixtures.py` for its `thermo` helpers.
-  - `spike/dwsim/run.py` is step 0's spike.
+  - `spike/dwsim/run.py` is M3 step 0's spike, and
+    `spike/dwsim_flowsheet/run.py` M4 step 0's: DWSIM's flowsheets and
+    recycle (`docs/spike-dwsim-flowsheet.md`).
   - DWSIM's PR uses rounded constants, saturates pure components on
     ChemSep's vapour-pressure correlation, and has a wrong ideal mixing
     entropy. "What step 5 found" in `docs/spike-dwsim.md` has the details.
     Compare with it by state, and explain each difference.
+  - In DWSIM's flowsheets, a failed unit is silent: check every unit's
+    `Calculated` and `ErrorMessage`. Its recycle needs its tolerances scaled
+    by 1e-8 to close the balances, its pump uses a liquid density that
+    isn't PR's, and its flash drum is wrong with two inlets.
 
 ## Architecture
 

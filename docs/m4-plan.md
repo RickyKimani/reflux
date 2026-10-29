@@ -214,15 +214,38 @@ flowchart LR
   S10 --> S11[11 Docs and exit review]
 ```
 
-### 0. DWSIM flowsheet spike
-- Build the reference flowsheet in DWSIM 9 headless, from the probe above:
-  feed, mixer, cooler, flash drum, splitter, pump and recycle, valve,
-  second drum.
-- Find how tight DWSIM's recycle will converge, and what its balances then
-  close to.
-- Confirm DWSIM's unit models: the pump's ΔH, the compressor's efficiency,
-  the mixer's pressure, the drum's modes.
-- Go or no-go for D12, with the open-loop fallback tried either way.
+### 0. DWSIM flowsheet spike — done: go, with conditions
+- [spike/dwsim_flowsheet/run.py](../spike/dwsim_flowsheet/run.py) builds
+  the reference flowsheet in DWSIM 9.0.5 headless and answers this step's
+  questions. [spike-dwsim-flowsheet.md](spike-dwsim-flowsheet.md) has every
+  number and the conditions for step 8.
+- **The recycle converges as tightly as the comparison needs.** At DWSIM's
+  default tolerances it takes 5 iterations and leaves the overall balances
+  open by 0.2% in total flow and 1.4% in energy. Scaled by 1e-8, it takes
+  32 iterations and closes the total flow to 1.3e-11. Each component stops
+  at 9.3e-8 and the energy at 5.6e-7, DWSIM's floor, far below criterion
+  2's targets.
+- **The open-loop fallback works, and sharply.** The loop cut and fed
+  DWSIM's converged recycle stream hands it back within 8e-14 in flows.
+- **DWSIM's unit models:**
+  - the pump is v·ΔP/η, as D4 has it, but with v from DWSIM's reported
+    liquid density, 48.6 cm³/mol, where PR's own Z gives 73.6. So its
+    work is a third below reflux's, and the fixture explains that from
+    DWSIM's own density. D4 is unchanged;
+  - the compressor and expander use the isentropic efficiency, exactly as
+    D4 has them;
+  - the valve is isenthalpic, the cooler's duty is ΔH, and the mixer takes
+    the lowest inlet pressure and balances energy exactly;
+  - **the flash drum is wrong with two inlets** in both modes tried (one
+    flashes at the mean inlet temperature, the other created 62.7 kW), so
+    the reference puts a mixer before any drum. reflux's drum keeps D4's
+    energy balance.
+- **Also found:** DWSIM reports no error when a unit fails (the message is
+  only in that unit), its splitter needs a ratio for each of its three
+  ports, and its Wegstein and dominant-eigenvalue acceleration change
+  nothing through automation, while Broyden fails without iterating.
+- No V code changed, so no planted mistakes: the spike's checks are its
+  own, each a quantity DWSIM must reproduce from its own flashes.
 
 ### 1. Units of measure
 - The `quantity` module (D10), tested against NIST SP 811's factors.
@@ -257,7 +280,8 @@ flowchart LR
 
 ### 8. DWSIM references and golden flowsheets
 - `tools/gen_m4_dwsim.py` and its fixtures: unit by unit, and the
-  reference flowsheet (D12).
+  reference flowsheet (D12), on the conditions step 0 found ("What step 8
+  must do" in [spike-dwsim-flowsheet.md](spike-dwsim-flowsheet.md)).
 - The golden flowsheets (D13).
 
 ### 9. Speed
