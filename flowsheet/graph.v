@@ -48,6 +48,22 @@ fn (g Graph) is_net(group []int) bool {
 	return group.len > 1 || g.out[group[0]].any(g.edges[it].to == group[0])
 }
 
+// entries marks the streams that enter a unit where the group takes something
+// from outside: a recycle, as it were, coming back to its mixer.
+fn (g Graph) entries(group []int) []bool {
+	inside := g.mask(group)
+	mut open := []bool{len: g.n}
+	for u in group {
+		open[u] = g.fed[u]
+	}
+	for e in g.edges {
+		if inside[e.to] && !inside[e.from] {
+			open[e.to] = true
+		}
+	}
+	return g.edges.map(inside[it.from] && inside[it.to] && open[it.to])
+}
+
 // has_input is whether anything comes into a group from outside it.
 fn (g Graph) has_input(group []int, inside []bool) bool {
 	return group.any(g.fed[it]) || g.edges.any(inside[it.to] && !inside[it.from])

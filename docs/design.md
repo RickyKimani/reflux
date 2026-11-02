@@ -934,6 +934,11 @@ b_c = |T ∩ c| the times c is torn, the choice is the best T by, in turn:
    acid plant's 5 tears can't do better than 36;
 3. earliest streams, by the unit they leave, so a plan is reproducible.
 
+Among streams in exactly the same cycles, which all do equally well, it takes
+one coming back to where material enters the block: the recycle, in other
+words. A tear there can start empty, so the first pass is once-through with
+real material, and no guess reaches a pump as a gas.
+
 This order is the reverse of FOQUS's and Pyomo's, which keep each cycle's
 breaks down first and count tears second. Every tear here costs a block of
 iteration variables, so reflux takes the fewest.
@@ -955,6 +960,62 @@ tearing the stream in the most cycles until none is left.
 
 **Order.** Within a block, with its tears cut, the units go in topological
 order, the earliest in the flowsheet first.
+
+## Converging the tears
+
+Each tear has the variables x = (n₁ … n_c, P, h), with h molar (M4's D6). A
+pass runs a block's units once from x, and gives g(x), the tears' new values.
+The solution is a fixed point, g(x) = x. A tear is rebuilt from x by a PH
+flash, starting from its last T, unless x is the pass's own answer, which
+needs no flash.
+
+**Convergence** (D7). Every variable must move by at most tol = 1e-9 of its
+scale in a pass:
+
+    |g_i − x_i| ≤ tol · { F for a flow, P for P, RT for h }
+
+with F the tear's total flow, or for an empty tear, what enters the block. h
+is against RT because h itself can be near zero. Each pass's largest moves,
+tear by tear, are the history.
+
+**The first values.** A tear starts from its estimate. Without one, what
+enters the block is mixed as a mixer would, and a tear whose unit has another
+inlet starts empty, in that mixture's state, so the first pass is once-through.
+Any other starts as the mixture itself.
+
+**Direct substitution:** x ← g(x). On a loop of gain λ the error falls by λ a
+pass, so it takes about ln(tol)/ln(λ) passes.
+
+**Bounded Wegstein.** Variable by variable, from the last two passes,
+
+    s = (g(x) − g(x₀)) / (x − x₀),    q = s / (s − 1),    x ← q·x + (1 − q)·g(x)
+
+with q held to [−5, 0], so that it only ever accelerates. For a linear loop of
+gain s that's exact. Held at q = −5, it leaves −5 + 6s of the error. It's
+applied every other pass, from the third: the first pass starts from a guess,
+so a slope through it says nothing about the loop, and taking one nearly
+doubled the passes on a nonlinear loop.
+
+**Broyden.** One pass, for the same reason, and then Broyden's "good" method
+on all a block's tear variables together, in unknowns scaled by the flow into
+the block, P and RT, with residuals (g − x) over the scales above. With
+J₀ = −I its first step is a direct one. With s the step and y the change in
+the residual, the inverse Jacobian updates as
+
+    H ← H + (s − H y) (sᵀ H) / (sᵀ H y)
+
+**A loop that's kinder than it looks.** Where a recycle is a drum's liquid
+brought back to the drum's own T and P, as in the reference flowsheet, adding
+it changes nothing about the equilibrium. The liquid just grows, the loop is
+affine with a gain of the split fraction, and Wegstein's one secant lands on the
+answer in 4 passes. Put the cooler on a duty, so that T moves with the recycle,
+and it takes 14.
+
+**Balances** (D8). A unit must close to 1e-10 of its flow and of F·RT on the
+inlets it was calculated from. The whole can't close better than the tears
+allow, and it must close to exactly that: the gap between the last pass's start
+and end, in each tear's flows and enthalpy flow, plus rounding. A solution that
+doesn't is an error, never a result.
 
 ## How CPA will fit
 

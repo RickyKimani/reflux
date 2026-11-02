@@ -15,7 +15,9 @@ struct TearChoice {
 // fewest streams that break every cycle, and among those the set that tears
 // the fewest cycles twice (Upadhye and Grens's nonredundant sets), and then
 // the earliest streams in the flowsheet. Every M4 stream has the same tear
-// variables, so D5's fewest torn variables never decides.
+// variables, so D5's fewest torn variables never decides. Among streams in
+// exactly the same cycles, which all do as well, it prefers one coming back
+// to where outside material enters: the recycle, which can start empty.
 fn (g Graph) tear_set(group []int, named []int, work i64) TearChoice {
 	listed := g.cycles(group, []bool{len: g.edges.len}, cycle_limit)
 	mut tears := named.clone()
@@ -24,7 +26,7 @@ fn (g Graph) tear_set(group []int, named []int, work i64) TearChoice {
 		tears = g.tear_greedy(group, named)
 		notes << 'block of ${group.len} units has ${cycle_limit} or more cycles, too many to list, so its ${tears.len} tears came from a greedy cover and may not be the fewest'
 	} else {
-		mut search := new_tear_search(listed.filter(!it.any(it in named)), work)
+		mut search := new_tear_search(listed.filter(!it.any(it in named)), g.entries(group), work)
 		search.search()
 		tears << search.best
 		if search.stopped {
@@ -74,11 +76,12 @@ fn (g Graph) tear_greedy(group []int, named []int) []int {
 // and bound. It's a minimum hitting set, NP-hard in general, but flowsheets'
 // are small. Streams in exactly the same cycles, as those in series are, make
 // one class, since the choice among them changes nothing here: Upadhye and
-// Grens's families.
+// Grens's families. A class is represented by its earliest preferred stream,
+// or its earliest if none is preferred.
 struct TearSearch {
 	cycles       [][]int // each cycle's classes, shortest first
 	class_cycles [][]int // each class's cycles
-	class_stream []int   // each class's earliest stream
+	class_stream []int   // the stream that stands for each class
 	limit        i64
 mut:
 	hits       []int  // times each cycle is torn so far
@@ -94,7 +97,7 @@ mut:
 	stopped    bool
 }
 
-fn new_tear_search(cycles [][]int, limit i64) TearSearch {
+fn new_tear_search(cycles [][]int, preferred []bool, limit i64) TearSearch {
 	// Classes by the cycles each stream is in. Earlier streams come first.
 	mut memberships := map[int][]int{}
 	mut streams := []int{}
@@ -117,6 +120,8 @@ fn new_tear_search(cycles [][]int, limit i64) TearSearch {
 			class_of[key] = class_cycles.len
 			class_cycles << memberships[e]
 			class_stream << e
+		} else if preferred[e] && !preferred[class_stream[class_of[key]]] {
+			class_stream[class_of[key]] = e
 		}
 		stream_class[e] = class_of[key]
 	}

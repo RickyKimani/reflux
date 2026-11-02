@@ -57,9 +57,14 @@ Keep this section current: update it whenever a step is committed.
     Gundersen and Hertzberg (1983) (`tools/gen_m4_graphs.py`). D5 was
     amended there: exact within a work budget, not up to 12 cycles. FOQUS
     and Pyomo rank tears the other way round, which step 5 can measure.
-  - Next is step 5: ordering, tear convergence by direct substitution,
-    Wegstein and Broyden (D7), balances, the convergence history, `Solution`
-    and `FlowsheetError` (D8).
+  - Step 5 is committed and pushed: `Flowsheet.solve` and `numeric.broyden`.
+    The reference flowsheet solves by direct substitution (29 passes),
+    Wegstein (4) and Broyden (9).
+    D5 and D7 were amended there: acceleration waits for a second real pass,
+    and tears prefer the recycle. D5's tear ranking was measured against
+    FOQUS's and stays.
+  - Next is step 6: the TOML file format, load, validate and write (D9), with
+    fuzz tests, and `docs/flowsheet-format.md`.
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -198,12 +203,12 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
   - Results are `FlashResult`; failures are `FlashError` with a
     `Failure` kind.
 - **`numeric`** holds the solvers the flash rests on: LU, Cholesky, `newton`
-  for systems (line search or dogleg) and `minimize` (a
-  Levenberg–Marquardt-shifted Newton that knows f's rounding through
-  `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
+  for systems (line search or dogleg), `broyden` for systems with no Jacobian,
+  and `minimize` (a Levenberg–Marquardt-shifted Newton that knows f's rounding
+  through `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
   QAG integration and bisection. They take what they solve as an interface
-  (`Function`, `FallibleFunction`, `System`, `Objective`), never a closure:
-  V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
+  (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
+  a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
@@ -217,6 +222,10 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     checks it and returns blocks to solve in order. Tarjan gives the blocks
     and Johnson the cycles, and `tear.v` picks the fewest tears exactly, by
     branch and bound, then the fewest second breaks.
+  - `solve` iterates each block's tears, whose variables are flows, P and
+    molar H, by direct substitution, Wegstein or Broyden. A `Solution` is only
+    returned with every balance checked: each unit to 1e-10 on the inlets it
+    used, and the whole to the gap the tears left.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

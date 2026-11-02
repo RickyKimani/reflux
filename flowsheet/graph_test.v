@@ -488,14 +488,13 @@ fn test_a_product_is_a_stream_with_no_inlet_after_it() {
 	assert names[0].len == 5
 	assert p.blocks[0].cycles == 1 && p.blocks[0].tears.len == 1
 	assert p.blocks[1].cycles == 0 && p.blocks[1].tears.len == 0
-	// Any stream of a single loop would do, so the choice falls to the earliest:
-	// liquid leaves the second unit added, and no stream of the loop leaves the
-	// first.
-	assert p.blocks[0].tears == ['liquid']
-	assert names[0] == ['split', 'pump', 'mixer', 'cooler', 'drum']
-	// Naming the recycle puts the mixer first, as a user would expect.
-	q := f.plan(tears: ['recycle'])!
-	assert q.blocks[0].tears == ['recycle']
-	assert q.blocks[0].units.map(f.units[it].unit.name) == ['mixer', 'cooler', 'drum', 'split',
-		'pump']
+	// Any stream of a single loop would do, so the choice falls to the one
+	// coming back to where the feed enters, though it's far from the earliest.
+	assert p.blocks[0].tears == ['recycle']
+	assert names[0] == ['mixer', 'cooler', 'drum', 'split', 'pump']
+	// A named tear still wins.
+	q := f.plan(tears: ['liquid'])!
+	assert q.blocks[0].tears == ['liquid']
+	assert q.blocks[0].units.map(f.units[it].unit.name) == ['split', 'pump', 'mixer', 'cooler',
+		'drum']
 }

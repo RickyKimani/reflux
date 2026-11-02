@@ -66,6 +66,7 @@ numeric/
   vec.v             small vector helpers
   integrate.v       adaptive Gauss–Kronrod quadrature
   newton.v          Newton for nonlinear systems: line search or dogleg
+  broyden.v         Broyden's quasi-Newton method, with no Jacobian
   minimize.v        Newton minimisation with a Levenberg–Marquardt shift
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
 tdep/
@@ -118,6 +119,7 @@ flowsheet/
   sheet.v           Flowsheet: units joined by named streams, and its plan
   graph.v           strongly connected components, elementary cycles, order
   tear.v            tear selection: fewest streams, fewest second breaks
+  solve.v           Solution: tears converged, every balance checked
   error.v           FlowsheetError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified

@@ -7,6 +7,8 @@ pub enum Failure {
 	bad_specification // a value it can't use: a negative flow, a split of 1.2, …
 	bad_flowsheet     // units and streams that don't join up: an open port, say
 	flash_failed      // the flash it needed failed, for the reason in cause
+	no_convergence    // a block's tears were still moving when the passes ran out
+	unbalanced        // a balance didn't close: a bug, or a unit that's wrong
 }
 
 // FlowsheetError is every failure in this module, never a panic (D8). Test
@@ -20,6 +22,8 @@ pub:
 	reason string
 	// cause is the flash's own failure, such as .more_phases, for .flash_failed.
 	cause ?flash.Failure
+	// history is how the tears had converged, if it happened during a solve.
+	history []TearHistory
 }
 
 // msg is the reason, marked as the flowsheet's and with the unit at fault.

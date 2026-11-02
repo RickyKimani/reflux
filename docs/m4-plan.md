@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 4 are done, and step 5 is next.
+the owner's question. Steps 0 to 5 are done, and step 6 is next.
 
 ## Goal
 
@@ -186,9 +186,9 @@ output the tests check.
 | D2 | Streams | A material stream holds component molar flows (mol/s), and its state: T, P and the `FlashResult` that produced it, so H, S, V and the phases are always at hand. An energy stream holds a rate in W. A feed is specified by (T, P), (P, H), or (P or T, vapour fraction). | Every unit needs the inlet's state, and a stream that's always flashed can't be half-specified. |
 | D3 | Units | All of G1: mixer, splitter, valve, heater and cooler (one unit, with the duty's sign), pump, compressor and expander, flash drum, component separator. Specifications as DWSIM's main modes: outlet T, duty, outlet vapour fraction or ΔT for a heater; outlet P or ΔP for a valve, pump, compressor and expander; split fractions; and so on. Exactly one specification of each kind, checked when the file loads. | G1 lists them all for M4, and each is a few flashes once the interface exists. The roadmap's M4 list left out the compressor, expander and component separator; G1 has them. |
 | D4 | Unit models | Mixer: Σn, ΣH, P the lowest inlet's unless given, then a PH flash. **Amended in step 2:** a given P can't be above the lowest inlet's, a valve can't raise P, and an empty inlet doesn't set the mixer's P. So DWSIM's "inlet average" and "inlet maximum" mixer modes are refused. **Amended in step 3:** a flash drum follows the mixer: its P is the lowest inlet's unless given, and no higher. Its adiabatic mode is a duty of 0. A compressor and an expander take a wet inlet, since PS and PH handle it, and a component separator's outlet P may be above its inlet's, since it's a black box. Splitter: the inlet's intensive state, unflashed. Valve: isenthalpic, PH at the outlet P. Heater: PT, PH or a vapour-fraction flash by its specification. Pump: ΔH = v·ΔP/η with the inlet's liquid volume, refused for a vapour inlet. Compressor and expander: isentropic outlet by PS, then ΔH_s/η (or η·ΔH_s), then PH. Flash drum: the inlets mixed, then PT, PH (adiabatic) or with a duty, vapour and liquid out. Component separator: fractions of each component to the first outlet, outlet T and P given, its duty from the balance. | The standard models, and the pump as DWSIM's, so the comparison compares solvers rather than models. Step 0 confirms DWSIM's pump and compressor; if they differ, reflux follows the textbook and the fixture explains the gap. |
-| D5 | Graph | Ports by name on each unit; a stream joins one outlet to one inlet. Tarjan's strongly connected components, solved in topological order. Within each, enumerate its cycles (Johnson), then choose the fewest tear streams that break them all, preferring a nonredundant set (Upadhye–Grens) and then the fewest torn variables. Exhaustive for up to 12 cycles; beyond that, a greedy cover, and a note in the report. A tear named in the file wins. **Amended in step 4:** the search is exact within a fixed work budget, whatever the number of cycles, and the greedy cover is only for a net of 50,000 cycles or more. Seven of the nine classical graphs have over 12 cycles, and step 4 found that a greedy method misses their minimum. Past the fewest tears and the fewest second breaks, ties go to the earliest stream: every stream has the same tear variables (D6), so the fewest torn variables never decides. A net with nothing coming into it is refused. | Exact on the flowsheets M4 will see, explainable, and close to what textbooks recommend. Naming a tear keeps the user in charge, as DWSIM's recycle block does. |
+| D5 | Graph | Ports by name on each unit; a stream joins one outlet to one inlet. Tarjan's strongly connected components, solved in topological order. Within each, enumerate its cycles (Johnson), then choose the fewest tear streams that break them all, preferring a nonredundant set (Upadhye–Grens) and then the fewest torn variables. Exhaustive for up to 12 cycles; beyond that, a greedy cover, and a note in the report. A tear named in the file wins. **Amended in step 4:** the search is exact within a fixed work budget, whatever the number of cycles, and the greedy cover is only for a net of 50,000 cycles or more. Seven of the nine classical graphs have over 12 cycles, and step 4 found that a greedy method misses their minimum. Past the fewest tears and the fewest second breaks, ties go to the earliest stream: every stream has the same tear variables (D6), so the fewest torn variables never decides. A net with nothing coming into it is refused. **Amended in step 5:** among streams in exactly the same cycles, it takes one coming back to where material enters the block, the recycle, which can start empty. | Exact on the flowsheets M4 will see, explainable, and close to what textbooks recommend. Naming a tear keeps the user in charge, as DWSIM's recycle block does. |
 | D6 | Tear variables | Component molar flows, P and molar H. A torn stream is rebuilt by a PH flash, started from its last T. | Mixing is linear in flows and H, which helps Wegstein. H also specifies a saturated pure stream, which T and P can't, and steam in M5 will need that. |
-| D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
+| D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. **Amended in step 5:** Wegstein's steps start at the third pass, and Broyden takes one direct pass first, since the first pass starts from a guess and a secant through it says nothing about the loop. A tear starts from its estimate, or else empty where its unit has another inlet, or else as a mixture of what enters the block. An estimate tears its stream. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
 | D8 | Results and failures | `solve` returns a `Solution` only when every component converged and every balance has been checked. Each stream's state, each unit's duty and work, the tears chosen and the convergence history come with it. A failure is a typed `FlowsheetError` (a bad file, a bad specification, a unit that failed with its `FlashError`, no convergence with the history), never a panic. | The flash's rule, D7 of M3, carried up: nothing that hasn't been shown right is returned. M10b exposes this to Python. |
 | D9 | File format | TOML, `format = 1`. Components by name or CAS from the database, plus your own data directories; the model and kᵢⱼ options; then streams and units, each unit with its ports and specifications. Every number with a unit, as a string ("230 K", "30 bar", "100 kmol/h"). A feed's composition is given as mole fractions, mass fractions, or each component's molar or mass flow, as in DWSIM, and converted to molar flows with the components' molar masses when the file loads. The results report flows and fractions on both bases. Unknown keys are errors. | Consistent with M2's data files, readable, and diffable. Units on every number remove the commonest input error. A version from the first file makes migration possible later (A6). |
 | D10 | Units of measure | `quantity` parses "value unit" for a stated dimension: temperature (K, degC, degF, R), pressure (Pa, kPa, MPa, bar, barg, atm, psi, psig, mmHg), molar and mass flow, energy rate and power, molar and specific enthalpy, volume flow. Gauge pressure takes 1 atm of ambient. An unknown unit gets suggestions. **Amended in step 1:** also temperature and pressure differences (the same scales with no offset, and no gauge units), fractions (a bare number or a percentage), °C and °F beside degC and degF, mbar, torr, psia and lbmol/h. An absolute T or P must be above zero. | A2 asks for the boundary; a fixed table is easy to check against NIST SP 811 and has nothing hidden. |
@@ -558,10 +558,104 @@ flowchart LR
     reach. The sixth sorts a set before comparing, and only matters to ties
     whose members arrive out of order.
 
-### 5. The solver
-- Ordering, tear convergence by direct substitution, Wegstein and Broyden
-  (D7), balances, the convergence history, `Solution` and
-  `FlowsheetError` (D8).
+### 5. The solver — done
+- **[numeric/broyden.v](../numeric/broyden.v):** `numeric.broyden`, Broyden's
+  good method, for any `Equations`: a system with no Jacobian. Its `eval` has
+  a `mut` receiver, since a flowsheet's evaluation leaves streams behind. A
+  step that can't be evaluated is halved.
+- **[flowsheet/solve.v](../flowsheet/solve.v):** `Flowsheet.solve(fluid,
+  params)` runs the plan's blocks in order, and iterates each with tears.
+  - **Tear variables** as D6: flows, P and molar H. A direct step needs no
+    flash, since the pass has left the answer in place. An accelerated one is
+    rebuilt by a PH flash from its last T, with a flow past zero held at 0.
+  - **`Solution`** has every stream, every unit as it was last calculated
+    (`UnitResult`: its inlets, outlets and energy), the products, the plan,
+    the history, and the balances.
+  - **`FlowsheetError`** gains `.no_convergence` and `.unbalanced`, and
+    carries the history in every failure during a solve.
+  - **The balances (D8).** A unit must close to 1e-10 on the inlets it used.
+    The whole must close to the gap the last pass actually left in its tears,
+    plus rounding. Otherwise it's `.unbalanced`, never a result.
+- **D5 and D7 amended:** see their rows. Three things came from measuring:
+  - **Wegstein's first slope went through the guess.** On a nonlinear loop that
+    took 26 passes, about what direct substitution takes (29). Starting at the
+    third pass takes 14, for one pass more on a linear loop. D7's period stays:
+    every 3 passes, 4 and 5 were no better anywhere and worse at high gain (88,
+    115, 138 and 156 at a gain of 0.95).
+  - **Broyden's first secant did the same to its Jacobian.** One real pass
+    first takes it from 22 to 16.
+  - **A first guess can reach a pump as a gas.** With the first value a mixture
+    of the feed, a tear on a liquid line fails on the first pass. So among
+    equivalent streams the tear goes on the recycle, which starts empty. A tear
+    named on a liquid line needs an estimate, and is refused clearly without
+    one.
+- **The reference flowsheet is kinder than it looks.** Its recycle is the
+  drum's liquid at the drum's own T and P, so adding it back leaves the
+  equilibrium unchanged. The loop is affine, with a gain of exactly 0.5, which
+  is why Wegstein takes 4 passes. The tests add the same flowsheet with the
+  cooler on a duty, which is truly nonlinear.
+- **Tests in [flowsheet/solve_test.v](../flowsheet/solve_test.v),** 17
+  functions. Every solved flowsheet goes through `check`, from scratch: each
+  unit's component, carbon, hydrogen and energy balances, with H recomputed,
+  and the whole to the tear tolerance.
+  - **Exact answers worked by hand:** a recycle of gain 0.6 (25 mol/s round the
+    loop for 10 in), interlocking loops (28.57 mol/s), and loops in series, by
+    all three methods, with one and two tears.
+  - **The rates theory gives:** direct substitution's residuals fall by the
+    gain, 0.6 a pass, and Wegstein held at q = −5 by (−5 + 6·0.95)·0.95 = 0.665
+    every two passes.
+  - **The iterations, which can't grow:**
+
+    | Loop | Direct | Wegstein | Broyden |
+    |---|---|---|---|
+    | reference flowsheet | 29 | 4 | 9 |
+    | cooler on a duty | 29 | 14 | 16 |
+
+  - **One answer:** all three methods agree to 1e-7 on every stream, and so
+    does every choice of tear in the loop, with an estimate where it needs one.
+  - **The reference flowsheet's balances:** 9.5e-14 of the flow and 3.3e-12 of
+    F·RT overall, and the worst unit 7.0e-17 and 1.6e-13.
+  - **Failures, each typed with its history:** a loop with no steady state, by
+    every method; running out of passes; a flash failing in a loop, with its
+    cause; a unit that loses mass (`.unbalanced`); a unit with the wrong
+    outlets; bad parameters. Also an empty recycle, a flowsheet with no loop,
+    and a Wegstein step past zero, held there.
+- **Tests in [numeric/broyden_test.v](../numeric/broyden_test.v):** it's the
+  secant method step for step in one dimension. It finishes within Gay's 2n
+  steps, plus one to show it, on linear systems up to 13 unknowns. It reaches
+  Newton's root on Broyden's own tridiagonal test.
+- **The tear ranking, measured.** Step 4 left open whether D5's order or FOQUS's
+  converges better. On all nine classical graphs they need the same number of
+  tears, so the order never costs a tear.
+  - The most times any cycle is torn is the same on seven, and FOQUS's is lower
+    on Problems 8 and 9 (2 against 3).
+  - D5's total of second breaks is the same or lower on all nine, and much lower
+    on two: 1 against 18 on Problem 7, and 36 against 65 on Problem 8.
+  - Solved as flowsheets of mixing and splitting nodes, Problems 2 to 9, the
+    default Wegstein ties on five, with D5 better on two (27 against 31 and 12
+    against 14) and FOQUS on one (16 against 18). Direct substitution is the
+    same or better with D5's, by at most 3 passes. Broyden is better with
+    FOQUS's on seven of the eight, by up to about 20%.
+  - So D5 stays. Those networks are linear, so that's evidence and not proof.
+- **Bugs found and fixed:** the overall balance's first allowance was an
+  estimate, and it refused a correct answer at a gain of 0.95. It missed that a
+  tear's total can be off by the number of components times tol, carrying the
+  stream's whole H. It now uses the gap the last pass actually left.
+- **Planted mistakes:** 63, on the solver and on Broyden. 42 were caught at
+  once, and 15 more after the following.
+  - **New tests:** a step past zero and an empty tear, P's scale, a budget at a
+    gain of 0.95, a first pass that's already converged, each block's own
+    history, and for Broyden a plateau, a start that isn't finite, the best
+    point, and converging on the last step.
+  - **Rewritten:** three that only stopped compilation.
+  - **2 led to deleting code:** a pressure clamp, since a negative P already
+    fails cleanly in the flash, and a guard on q, which the guard on dx makes
+    unreachable.
+  - **The 4 that survive** are explained: a tear's T estimate is speed only.
+    Broyden's scale on P can't matter, since P settles in a pass in any loop
+    with a steady state. Which input seeds the first value can't change the
+    answer. The whole flowsheet's balance check is a safety net that the units'
+    own checks get to first, and two caught mistakes show it's live.
 
 ### 6. The file format
 - TOML load, validate and write (D9), with the fuzz tests, and

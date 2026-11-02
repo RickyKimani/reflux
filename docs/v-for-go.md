@@ -592,6 +592,14 @@ and there's no `Compare` to call, so `earlier` in
 are pointers, and pointer indexing is only allowed in `unsafe`, so `a[0]` is
 an error for `a &[]int`. Write `(*a)[0]`.
 
+**An interface method can take a `mut` receiver.** Go's method sets decide
+this quietly: only a pointer has the pointer methods. V says it in the
+interface, under `mut:`, and in the signature that takes it:
+`numeric.Equations` has `mut: eval(x []f64, mut f []f64) !`, and `broyden`
+takes `mut system Equations`. The call site says `mut` too:
+`numeric.broyden(mut s, y)`. A struct can be its own solver's system that way,
+as `flowsheet.Solver` is.
+
 **An unused parameter is a notice, and `_` is the name that silences it.** A
 test's stub for an interface doesn't need its arguments:
 `fn (s Stub) calculate(_ thermo.Fluid, _ []Stream) !Outcome`. It still

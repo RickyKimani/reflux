@@ -31,6 +31,15 @@ pub interface System {
 	eval(x []f64, mut f []f64, mut jac []f64) !
 }
 
+// Equations is a square nonlinear system F(x) = 0 with no Jacobian, for
+// broyden. eval writes F(x) into f, and returns an error when x is outside
+// the system's domain. Unlike System's, this eval takes a `mut` receiver: a
+// flowsheet's evaluation runs its units, which leaves their streams behind.
+pub interface Equations {
+mut:
+	eval(x []f64, mut f []f64) !
+}
+
 // Objective is a smooth function to minimise, for minimize. eval returns
 // f(x) and writes the gradient into g and the Hessian into h, n×n
 // row-major. It returns an error when x is outside the function's domain;
