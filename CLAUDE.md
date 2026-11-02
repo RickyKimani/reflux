@@ -44,12 +44,19 @@ Keep this section current: update it whenever a step is committed.
     fractions too, and a few more units.
   - Step 2 is committed and pushed: streams, the `Unit` interface, the
     mixer, splitter, valve and heater (`flowsheet/`). D4 was amended
-    there: nothing but a pump or compressor raises P. It fixed a PH flash that failed on ordinary
-    two-phase states when its ideal-gas start fell near 0 K. It found that
-    `flash.uv` fails on cold liquids at or below 100 K, carried to the exit
-    review.
-  - Next is step 3: pump, compressor and expander, flash drum, and
-    component separator, tested the same way.
+    there: a mixer and a valve can't raise P. It fixed a PH flash that
+    failed on ordinary two-phase states when its ideal-gas start fell near
+    0 K. It found that `flash.uv` fails on cold liquids at or below 100 K,
+    carried to the exit review.
+  - Step 3 is committed and pushed: the pump, compressor, expander, flash
+    drum and component separator, with `pressure.v` shared by whatever
+    changes pressure. D4 was amended there: a drum's P follows the mixer's,
+    a compressor takes a wet inlet, and a component separator can raise P.
+  - Next is step 4: ports and connections, validation of a malformed
+    flowsheet, strongly connected components, cycles and tear selection
+    (D5), and criterion 1's graph set.
+  - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
+    reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
     with M4; the owner chose to plan M4 first.
 

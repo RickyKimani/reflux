@@ -235,16 +235,30 @@ fn test_units_have_ports_and_hold_no_state() {
 	units := [
 		Unit(flowsheet.new_mixer('M', 3)!),
 		flowsheet.new_splitter('S', [0.5, 0.25, 0.25])!,
-		flowsheet.new_valve('V', mode: .pressure_drop, value: 1e5)!,
+		flowsheet.new_valve('V', mode: .delta_p, value: 1e5)!,
 		flowsheet.new_heater('H', mode: .delta_t, value: 5.0)!,
+		flowsheet.new_compressor('C', mode: .delta_p, value: 1e5, efficiency: 0.8)!,
+		flowsheet.new_expander('E', mode: .delta_p, value: 1e5, efficiency: 0.8)!,
+		flowsheet.new_flash_drum('D', mode: .duty, value: 0.0)!,
+		flowsheet.new_component_separator('X',
+			fractions: [1.0, 0.5, 0.5, 0.5, 0.0]
+			t:         300.0
+			p:         20e5
+		)!,
 	]
-	assert units.map(it.name) == ['M', 'S', 'V', 'H']
+	assert units.map(it.name) == ['M', 'S', 'V', 'H', 'C', 'E', 'D', 'X']
 	assert units[0].inlet_ports() == ['in1', 'in2', 'in3']
 	assert units[0].outlet_ports() == ['out']
 	assert units[1].inlet_ports() == ['in']
 	assert units[1].outlet_ports() == ['out1', 'out2', 'out3']
 	assert units[2].inlet_ports() == ['in'] && units[2].outlet_ports() == ['out']
 	assert units[3].inlet_ports() == ['in'] && units[3].outlet_ports() == ['out']
+	assert units[4].inlet_ports() == ['in'] && units[4].outlet_ports() == ['out']
+	assert units[5].inlet_ports() == ['in'] && units[5].outlet_ports() == ['out']
+	assert units[6].inlet_ports() == ['in1'] && units[6].outlet_ports() == ['vapour', 'liquid']
+	assert units[7].inlet_ports() == ['in'] && units[7].outlet_ports() == ['out1', 'out2']
+	three := flowsheet.new_flash_drum('D', inlets: 3, mode: .duty, value: 0.0)!
+	assert three.inlet_ports() == ['in1', 'in2', 'in3']
 	for u in units {
 		inlets := if u.inlet_ports().len == 3 { [a, b, a] } else { [a] }
 		first := run(fl, u, inlets)!
@@ -400,7 +414,7 @@ fn test_a_valve_is_joule_thomson() {
 	inlet := flowsheet.feed_tp(fl, flows(10.0), 400.0, 30e5)!
 	assert inlet.beta == 1.0
 	drop := 0.2e5
-	s := run(fl, flowsheet.new_valve('V', mode: .pressure_drop, value: drop)!, [inlet])!.outlets[0]
+	s := run(fl, flowsheet.new_valve('V', mode: .delta_p, value: drop)!, [inlet])!.outlets[0]
 	mid := flowsheet.feed_tp(fl, flows(10.0), 0.5 * (inlet.t + s.t), inlet.p - 0.5 * drop)!
 	mu := fl.props(mid.result.phases[0].state).mu_jt
 	assert mu > 0.0
@@ -424,10 +438,10 @@ fn test_a_valve_keeps_h_and_raises_s() {
 	assert s.s > inlet.s
 	assert math.abs(from_scratch(fl, s)!.h - from_scratch(fl, inlet)!.h) <= 1e-10 * thermo.r_gas * s.t
 	// The same drop stated the other way.
-	same := run(fl, flowsheet.new_valve('V', mode: .pressure_drop, value: 25e5)!, [inlet])!.outlets[0]
+	same := run(fl, flowsheet.new_valve('V', mode: .delta_p, value: 25e5)!, [inlet])!.outlets[0]
 	assert same.p == s.p && same.t == s.t && same.beta == s.beta
 	// No drop is no change.
-	none_ := run(fl, flowsheet.new_valve('V', mode: .pressure_drop, value: 0.0)!, [inlet])!.outlets[0]
+	none_ := run(fl, flowsheet.new_valve('V', mode: .delta_p, value: 0.0)!, [inlet])!.outlets[0]
 	assert math.abs(none_.t - inlet.t) <= 1e-8
 	assert math.abs(none_.beta - inlet.beta) <= 1e-8
 }
@@ -453,11 +467,11 @@ fn test_a_valve_is_refused_for_its_reason() {
 		_ := flowsheet.new_valve('V', mode: .outlet_p, value: 0.0)!
 	}, .bad_specification, 'V', 'outlet_p')
 	refused(fn () ! {
-		_ := flowsheet.new_valve('V', mode: .pressure_drop, value: -1.0)!
-	}, .bad_specification, 'V', 'pressure_drop')
+		_ := flowsheet.new_valve('V', mode: .delta_p, value: -1.0)!
+	}, .bad_specification, 'V', 'delta_p')
 	refused(fn () ! {
-		_ := flowsheet.new_valve('V', mode: .pressure_drop, value: math.nan())!
-	}, .bad_specification, 'V', 'pressure_drop')
+		_ := flowsheet.new_valve('V', mode: .delta_p, value: math.nan())!
+	}, .bad_specification, 'V', 'delta_p')
 	refused(fn () ! {
 		_ := flowsheet.new_valve('V', mode: .outlet_p, value: math.inf(1))!
 	}, .bad_specification, 'V', 'outlet_p')
@@ -466,7 +480,7 @@ fn test_a_valve_is_refused_for_its_reason() {
 	refused(fn [fl, up, inlet] () ! {
 		_ := up.calculate(fl, [inlet])!
 	}, .bad_specification, 'V', "can't raise")
-	big := flowsheet.new_valve('V', mode: .pressure_drop, value: 30e5)!
+	big := flowsheet.new_valve('V', mode: .delta_p, value: 30e5)!
 	refused(fn [fl, big, inlet] () ! {
 		_ := big.calculate(fl, [inlet])!
 	}, .bad_specification, 'V', 'leaves no pressure')
@@ -637,10 +651,42 @@ fn test_a_flash_failure_names_the_unit_and_keeps_its_kind() {
 	refused(fn [fl, m, inlet, unreachable] () ! {
 		_ := m.calculate(fl, [inlet, unreachable])!
 	}, .flash_failed, 'mixer', 'flash: ')
-	v := flowsheet.new_valve('valve', mode: .pressure_drop, value: 1e5)!
+	v := flowsheet.new_valve('valve', mode: .delta_p, value: 1e5)!
 	refused(fn [fl, v, unreachable] () ! {
 		_ := v.calculate(fl, [unreachable])!
 	}, .flash_failed, 'valve', 'flash: ')
+	lost := Stream{
+		...inlet
+		s: 1e30
+	}
+	pump := flowsheet.new_pump('pump', mode: .delta_p, value: 1e5, efficiency: 0.8)!
+	liquid := flowsheet.feed_tp(fl, [5.0, 0.0, 0.0], 300.0, 5e5)!
+	refused(fn [fl, pump, liquid] () ! {
+		_ := pump.calculate(fl, [Stream{
+			...liquid
+			h: 1e30
+		}])!
+	}, .flash_failed, 'pump', 'flash: ')
+	c := flowsheet.new_compressor('compressor', mode: .delta_p, value: 1e5, efficiency: 0.8)!
+	refused(fn [fl, c, lost] () ! {
+		_ := c.calculate(fl, [lost])!
+	}, .flash_failed, 'compressor', 'flash: ')
+	ex := flowsheet.new_expander('expander', mode: .delta_p, value: 1e5, efficiency: 0.8)!
+	refused(fn [fl, ex, lost] () ! {
+		_ := ex.calculate(fl, [lost])!
+	}, .flash_failed, 'expander', 'flash: ')
+	d := flowsheet.new_flash_drum('drum', mode: .outlet_t, value: 350.0)!
+	refused(fn [fl, d, inlet] () ! {
+		_ := d.calculate(fl, [inlet])!
+	}, .flash_failed, 'drum', 'flash: ')
+	x := flowsheet.new_component_separator('separator',
+		fractions: [1.0, 1.0, 1.0]
+		t:         350.0
+		p:         5e5
+	)!
+	refused(fn [fl, x, inlet] () ! {
+		_ := x.calculate(fl, [inlet])!
+	}, .flash_failed, 'separator', 'flash: ')
 	h := flowsheet.new_heater('cooler', mode: .outlet_t, value: 350.0)!
 	if _ := h.calculate(fl, [inlet]) {
 		assert false, 'a two-phase answer for a three-phase state'
@@ -651,4 +697,439 @@ fn test_a_flash_failure_names_the_unit_and_keeps_its_kind() {
 		assert (e.cause or { flash.Failure.bad_input }) == .more_phases, err.msg()
 		assert err.msg().starts_with('flowsheet: cooler: flash: '), err.msg()
 	}
+}
+
+fn test_a_pump_is_v_dp_over_eta() {
+	// D4's model, then the thermodynamics under it. Ideally dH = v dP at
+	// constant S. D4 takes v at the inlet, so with η = 1 what's left over is
+	// T·ΔS = v_in·ΔP − ∫v dP, or ½(v_in − v_out)·ΔP to third order. That
+	// compares S from the Fluid with v from the volume root. The third-order
+	// term is 3.2e-3 of it at this ΔP.
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(50.0), 150.0, 30e5)!
+	assert inlet.beta == 0.0
+	dp := 10e5
+	o := run(fl, flowsheet.new_pump('P', mode: .delta_p, value: dp, efficiency: 0.75)!, [inlet])!
+	s := o.outlets[0]
+	assert o.energy[0].name == 'work'
+	want := 50.0 * inlet.v * dp / 0.75
+	assert math.abs(o.energy[0].rate - want) <= 1e-10 * 50.0 * thermo.r_gas * 150.0
+	assert s.p == 40e5
+	assert s.t > inlet.t, 'a pump warms what it pumps'
+	assert s.s > inlet.s
+
+	// η = 1.
+	i := run(fl, flowsheet.new_pump('P', mode: .delta_p, value: dp, efficiency: 1.0)!, [inlet])!.outlets[0]
+	lost := 0.5 * (i.t + inlet.t) * (i.s - inlet.s)
+	left := 0.5 * (inlet.v - i.v) * dp
+	assert left > 0.0
+	assert math.abs(lost - left) <= 5e-3 * left, '${lost} vs ${left}'
+
+	// The same pressure stated the other way.
+	same := run(fl, flowsheet.new_pump('P', mode: .outlet_p, value: 40e5, efficiency: 0.75)!, [inlet])!
+	assert same.outlets[0].t == s.t && same.energy[0].rate == o.energy[0].rate
+	// No rise is no work.
+	none_ := run(fl, flowsheet.new_pump('P', mode: .delta_p, value: 0.0, efficiency: 0.75)!, [inlet])!
+	assert math.abs(none_.energy[0].rate) <= 1e-10 * 50.0 * thermo.r_gas * 150.0
+}
+
+fn test_a_pump_takes_liquid_only() {
+	fl := fluid()!
+	p := flowsheet.new_pump('P', mode: .delta_p, value: 1e5, efficiency: 0.8)!
+	assert Unit(p).name == 'P'
+	assert p.inlet_ports() == ['in'] && p.outlet_ports() == ['out']
+	gas := flowsheet.feed_tp(fl, flows(1.0), 400.0, 30e5)!
+	refused(fn [fl, p, gas] () ! {
+		_ := p.calculate(fl, [gas])!
+	}, .bad_specification, 'P', 'takes liquid')
+	wet := flowsheet.feed_tp(fl, flows(1.0), 230.0, 30e5)!
+	refused(fn [fl, p, wet] () ! {
+		_ := p.calculate(fl, [wet])!
+	}, .bad_specification, 'P', 'takes liquid')
+	// A bubble-point liquid is liquid, and so is what a drum sends out.
+	bubble := flowsheet.feed_pvf(fl, flows(10.0), 30e5, 0.0)!
+	assert run(fl, p, [bubble])!.outlets[0].p == 31e5
+	drum := flowsheet.new_flash_drum('D', mode: .duty, value: 0.0)!
+	liquid := run(fl, drum, [wet])!.outlets[1]
+	assert run(fl, p, [liquid])!.outlets[0].p == 31e5
+	// An empty inlet holds nothing to refuse, whatever its state, and takes no
+	// work.
+	empty := run(fl, flowsheet.new_splitter('S', [0.0, 1.0])!, [gas])!.outlets[0]
+	assert run(fl, p, [empty])!.energy[0].rate == 0.0
+	refused(fn [fl, p, bubble] () ! {
+		_ := p.calculate(fl, [bubble, bubble])!
+	}, .bad_specification, 'P', 'got 2 inlets')
+	// A pump doesn't lower pressure.
+	low := flowsheet.new_pump('P', mode: .outlet_p, value: 1e5, efficiency: 0.8)!
+	refused(fn [fl, low, bubble] () ! {
+		_ := low.calculate(fl, [bubble])!
+	}, .bad_specification, 'P', "can't lower")
+}
+
+fn test_a_compressor_is_isentropic_over_eta() {
+	// Criterion 2: at η = 1 the outlet has the inlet's S. Below that, ΔH is
+	// ΔH_s/η, and the outlet is hotter than the isentropic one. PS holds S to
+	// 1e-10·R and PH holds H to 1e-10·RT.
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(10.0), 350.0, 5e5)!
+	assert inlet.beta == 1.0
+	best := run(fl, flowsheet.new_compressor('C', mode: .outlet_p, value: 20e5, efficiency: 1.0)!,
+		[inlet])!
+	s := best.outlets[0]
+	assert s.p == 20e5
+	assert best.energy[0].name == 'work' && best.energy[0].rate > 0.0
+	assert math.abs(from_scratch(fl, s)!.s - from_scratch(fl, inlet)!.s) <= 1e-9 * thermo.r_gas
+	real := run(fl, flowsheet.new_compressor('C', mode: .delta_p, value: 15e5, efficiency: 0.7)!,
+		[inlet])!
+	r := real.outlets[0]
+	assert r.p == 20e5
+	assert math.abs(real.energy[0].rate - best.energy[0].rate / 0.7) <= 1e-9 * 10.0 * thermo.r_gas * r.t
+	assert r.t > s.t && r.s > inlet.s
+}
+
+fn test_isentropic_work_is_the_integral_of_v_dp() {
+	// dH = v dP at constant S, so ΔH_s = ∫v dP along the isentrope. H comes
+	// from the ideal gas and F's T-derivative, and v from the volume root, so
+	// this checks one against the other. Simpson in ln P over 8 panels, each
+	// point an isentropic compression from the inlet.
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(10.0), 350.0, 5e5)!
+	n := 8
+	h := math.log(4.0) / n
+	mut sum := 0.0
+	mut work := 0.0
+	for k in 0 .. n + 1 {
+		p := 5e5 * math.exp(k * h)
+		o := run(fl, flowsheet.new_compressor('C', mode: .outlet_p, value: p, efficiency: 1.0)!,
+			[inlet])!
+		weight := if k == 0 || k == n {
+			1.0
+		} else if k % 2 == 1 {
+			4.0
+		} else {
+			2.0
+		}
+		sum += weight * o.outlets[0].v * p
+		work = o.energy[0].rate / 10.0
+	}
+	integral := sum * h / 3.0
+	assert math.abs(integral - work) <= 1e-6 * work, '${integral} vs ${work}'
+}
+
+fn test_an_expander_gives_up_eta_of_the_isentropic_drop() {
+	// η·ΔH_s, so it takes less work than the isentropic expansion and leaves
+	// warmer. This one's outlet is two-phase, as a turboexpander's can be.
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(10.0), 340.0, 60e5)!
+	assert inlet.beta == 1.0, '${inlet.beta}'
+	best := run(fl, flowsheet.new_expander('E', mode: .outlet_p, value: 10e5, efficiency: 1.0)!,
+		[inlet])!
+	s := best.outlets[0]
+	assert s.p == 10e5
+	assert s.beta > 0.05 && s.beta < 0.99, '${s.beta}'
+	assert best.energy[0].name == 'work' && best.energy[0].rate < 0.0
+	assert math.abs(from_scratch(fl, s)!.s - from_scratch(fl, inlet)!.s) <= 1e-9 * thermo.r_gas
+	real := run(fl, flowsheet.new_expander('E', mode: .delta_p, value: 50e5, efficiency: 0.8)!,
+		[inlet])!
+	r := real.outlets[0]
+	assert r.p == 10e5
+	assert math.abs(real.energy[0].rate - 0.8 * best.energy[0].rate) <= 1e-9 * 10.0 * thermo.r_gas * r.t
+	assert r.t > s.t && r.s > inlet.s
+	// An expander drops more than a valve: it takes the work out.
+	v := run(fl, flowsheet.new_valve('V', mode: .outlet_p, value: 10e5)!, [inlet])!.outlets[0]
+	assert v.t > r.t
+}
+
+fn test_compressing_and_expanding_isentropically_is_reversible() {
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(10.0), 350.0, 5e5)!
+	up := run(fl, flowsheet.new_compressor('C', mode: .delta_p, value: 15e5, efficiency: 1.0)!,
+		[inlet])!
+	down := run(fl, flowsheet.new_expander('E', mode: .delta_p, value: 15e5, efficiency: 1.0)!,
+		up.outlets)!
+	assert math.abs(down.outlets[0].t - inlet.t) <= 1e-7, '${down.outlets[0].t}'
+	assert math.abs(up.energy[0].rate + down.energy[0].rate) <= 1e-9 * 10.0 * thermo.r_gas * 350.0
+	// An empty stream passes through both, keeping its composition, and takes
+	// no work.
+	empty := run(fl, flowsheet.new_splitter('S', [0.0, 1.0])!, [inlet])!.outlets[0]
+	c := run(fl, flowsheet.new_compressor('C', mode: .delta_p, value: 15e5, efficiency: 0.8)!,
+		[empty])!
+	assert c.outlets[0].total() == 0.0 && c.outlets[0].p == 20e5 && c.energy[0].rate == 0.0
+	e := run(fl, flowsheet.new_expander('E', mode: .delta_p, value: 1e5, efficiency: 0.8)!, [
+		empty,
+	])!
+	assert e.outlets[0].total() == 0.0 && e.outlets[0].p == 4e5 && e.energy[0].rate == 0.0
+}
+
+fn test_a_machine_is_refused_for_its_reason() {
+	fl := fluid()!
+	bad := [
+		flowsheet.MachineParams{
+			mode:       .outlet_p
+			value:      0.0
+			efficiency: 0.8
+		},
+		flowsheet.MachineParams{
+			mode:       .delta_p
+			value:      -1.0
+			efficiency: 0.8
+		},
+		flowsheet.MachineParams{
+			mode:       .delta_p
+			value:      math.nan()
+			efficiency: 0.8
+		},
+		flowsheet.MachineParams{
+			mode:       .outlet_p
+			value:      math.inf(1)
+			efficiency: 0.8
+		},
+		flowsheet.MachineParams{
+			mode:       .delta_p
+			value:      1e5
+			efficiency: 0.0
+		},
+		flowsheet.MachineParams{
+			mode:       .delta_p
+			value:      1e5
+			efficiency: 1.5
+		},
+		flowsheet.MachineParams{
+			mode:       .delta_p
+			value:      1e5
+			efficiency: math.nan()
+		},
+	]
+	wants := ['outlet_p', 'delta_p', 'delta_p', 'outlet_p', 'an efficiency of', 'an efficiency of',
+		'an efficiency of']
+	for i, spec in bad {
+		refused(fn [spec] () ! {
+			_ := flowsheet.new_pump('M', spec)!
+		}, .bad_specification, 'M', wants[i])
+		refused(fn [spec] () ! {
+			_ := flowsheet.new_compressor('M', spec)!
+		}, .bad_specification, 'M', wants[i])
+		refused(fn [spec] () ! {
+			_ := flowsheet.new_expander('M', spec)!
+		}, .bad_specification, 'M', wants[i])
+	}
+	inlet := flowsheet.feed_tp(fl, flows(1.0), 350.0, 5e5)!
+	down := flowsheet.new_compressor('C', mode: .outlet_p, value: 1e5, efficiency: 0.8)!
+	refused(fn [fl, down, inlet] () ! {
+		_ := down.calculate(fl, [inlet])!
+	}, .bad_specification, 'C', "can't lower")
+	up := flowsheet.new_expander('E', mode: .outlet_p, value: 10e5, efficiency: 0.8)!
+	refused(fn [fl, up, inlet] () ! {
+		_ := up.calculate(fl, [inlet])!
+	}, .bad_specification, 'E', "can't raise")
+	big := flowsheet.new_expander('E', mode: .delta_p, value: 5e5, efficiency: 0.8)!
+	refused(fn [fl, big, inlet] () ! {
+		_ := big.calculate(fl, [inlet])!
+	}, .bad_specification, 'E', 'leaves no pressure')
+}
+
+fn test_a_drum_sends_each_phase_out_saturated() {
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(100.0), 230.0, 30e5)!
+	o := run(fl, flowsheet.new_flash_drum('D', mode: .outlet_t, value: 230.0)!, [inlet])!
+	v, l := o.outlets[0], o.outlets[1]
+	assert v.t == 230.0 && l.t == 230.0 && v.p == 30e5 && l.p == 30e5
+	assert v.beta == 1.0 && l.beta == 0.0
+	assert math.abs(v.total() - 100.0 * inlet.beta) <= 1e-9
+	// Each outlet is the split: the same flash, so no heat.
+	assert math.abs(o.energy[0].rate) <= 1e-10 * 100.0 * thermo.r_gas * 230.0
+	assert o.energy[0].name == 'duty'
+	// Each is on its phase boundary, shown by flashes that know nothing of the
+	// drum: the liquid's bubble point and the vapour's dew point at 230 K are
+	// the drum's pressure.
+	bubble := flowsheet.feed_tvf(fl, l.flows, 230.0, 0.0)!
+	dew := flowsheet.feed_tvf(fl, v.flows, 230.0, 1.0)!
+	assert math.abs(bubble.p - 30e5) <= 1e-8 * 30e5, '${bubble.p}'
+	assert math.abs(dew.p - 30e5) <= 1e-8 * 30e5, '${dew.p}'
+}
+
+fn test_a_drum_with_two_inlets_balances() {
+	// DWSIM's vessel gets this wrong, flashing at the mean T or creating 62.7
+	// kW (docs/spike-dwsim-flowsheet.md). Here the drum is the mixer it
+	// contains: the same state as a mixer and then a one-inlet drum.
+	fl := fluid()!
+	gas := flowsheet.feed_tp(fl, [60.0, 5.0, 1.0, 0.5, 0.1], 320.0, 40e5)!
+	liquid := flowsheet.feed_tp(fl, [1.0, 1.0, 5.0, 10.0, 25.0], 300.0, 35e5)!
+	o := run(fl, flowsheet.new_flash_drum('D', inlets: 2, mode: .duty, value: 0.0)!, [
+		gas,
+		liquid,
+	])!
+	v := o.outlets[0]
+	assert v.p == 35e5
+	assert math.abs(o.energy[0].rate) <= 1e-10 * 108.6 * thermo.r_gas * 320.0
+	m := run(fl, flowsheet.new_mixer('M', 2)!, [gas, liquid])!.outlets[0]
+	assert math.abs(v.t - m.t) <= 1e-8, '${v.t} vs ${m.t}'
+	assert math.abs(v.total() - m.beta * m.total()) <= 1e-7
+	d := run(fl, flowsheet.new_flash_drum('D', mode: .duty, value: 0.0)!, [m])!
+	assert math.abs(d.outlets[0].t - v.t) <= 1e-8
+	// A drum with a duty is a heater and then a drum.
+	q := -40e3
+	hot := run(fl, flowsheet.new_flash_drum('D', inlets: 2, mode: .duty, value: q)!, [
+		gas,
+		liquid,
+	])!
+	assert math.abs(hot.energy[0].rate - q) <= 1e-10 * 108.6 * thermo.r_gas * 320.0
+	cooled := run(fl, flowsheet.new_heater('H', mode: .duty, value: q)!, [m])!.outlets[0]
+	assert math.abs(hot.outlets[0].t - cooled.t) <= 1e-8
+	assert math.abs(hot.outlets[0].total() - cooled.beta * cooled.total()) <= 1e-7
+	// At a given pressure, below all the inlets.
+	low := run(fl, flowsheet.new_flash_drum('D',
+		inlets:   2
+		mode:     .outlet_t
+		value:    280.0
+		outlet_p: 20e5
+	)!, [gas, liquid])!
+	assert low.outlets[0].p == 20e5 && low.outlets[1].p == 20e5
+	// With a duty there, it's a heater with that pressure drop.
+	lowq := run(fl, flowsheet.new_flash_drum('D',
+		inlets:   2
+		mode:     .duty
+		value:    q
+		outlet_p: 20e5
+	)!, [gas, liquid])!
+	assert lowq.outlets[0].p == 20e5
+	dropped := run(fl, flowsheet.new_heater('H', mode: .duty, value: q, pressure_drop: 15e5)!,
+		[m])!.outlets[0]
+	assert math.abs(lowq.outlets[0].t - dropped.t) <= 1e-8
+	// An empty inlet is left out, as in a mixer.
+	far := flowsheet.feed_tp(fl, flows(1.0), 300.0, 2e5)!
+	empty := run(fl, flowsheet.new_splitter('S', [1.0, 0.0])!, [far])!.outlets[1]
+	e := run(fl, flowsheet.new_flash_drum('D', inlets: 2, mode: .outlet_t, value: 280.0)!, [
+		gas,
+		empty,
+	])!
+	assert e.outlets[0].p == 40e5
+}
+
+fn test_a_drum_with_one_phase_has_an_empty_outlet() {
+	fl := fluid()!
+	gas := flowsheet.feed_tp(fl, flows(10.0), 400.0, 30e5)!
+	drum := flowsheet.new_flash_drum('D', mode: .duty, value: 0.0)!
+	a := run(fl, drum, [gas])!
+	assert a.outlets[0].total() > 9.999 && a.outlets[1].total() == 0.0
+	cold := flowsheet.feed_tp(fl, flows(10.0), 150.0, 30e5)!
+	b := run(fl, drum, [cold])!
+	assert b.outlets[0].total() == 0.0 && b.outlets[1].total() > 9.999
+	// The empty outlet keeps a state, so it can go on through the flowsheet.
+	v := flowsheet.new_valve('V', mode: .delta_p, value: 1e5)!
+	assert run(fl, v, [a.outlets[1]])!.outlets[0].p == 29e5
+}
+
+fn test_a_drum_boils_a_pure_component() {
+	// Propane at 20 bar, half boiled: β from the energy balance at Tsat. The
+	// vapour and the liquid are pure, and differ only in their root.
+	fl := db.fluid(.pr, ['propane'])!
+	liquid := flowsheet.feed_pvf(fl, [10.0], 20e5, 0.0)!
+	vapour := flowsheet.feed_pvf(fl, [10.0], 20e5, 1.0)!
+	q := 10.0 * (vapour.h - liquid.h) / 2.0
+	o := run(fl, flowsheet.new_flash_drum('D', mode: .duty, value: q)!, [liquid])!
+	assert math.abs(o.outlets[0].total() - 5.0) <= 1e-8, '${o.outlets[0].total()}'
+	assert math.abs(o.outlets[1].total() - 5.0) <= 1e-8
+	assert math.abs(o.outlets[0].h - vapour.h) <= 1e-8 * thermo.r_gas * liquid.t
+	assert math.abs(o.outlets[1].h - liquid.h) <= 1e-8 * thermo.r_gas * liquid.t
+}
+
+fn test_a_drum_is_refused_for_its_reason() {
+	fl := fluid()!
+	refused(fn () ! {
+		_ := flowsheet.new_flash_drum('D', inlets: 0, mode: .duty, value: 0.0)!
+	}, .bad_specification, 'D', 'needs an inlet')
+	refused(fn () ! {
+		_ := flowsheet.new_flash_drum('D', mode: .outlet_t, value: 0.0)!
+	}, .bad_specification, 'D', 'outlet_t')
+	refused(fn () ! {
+		_ := flowsheet.new_flash_drum('D', mode: .duty, value: math.nan())!
+	}, .bad_specification, 'D', 'duty')
+	refused(fn () ! {
+		_ := flowsheet.new_flash_drum('D', mode: .duty, value: 0.0, outlet_p: -1.0)!
+	}, .bad_specification, 'D', 'outlet pressure')
+	refused(fn () ! {
+		_ := flowsheet.new_flash_drum('D', mode: .duty, value: 0.0, outlet_p: math.inf(1))!
+	}, .bad_specification, 'D', 'outlet pressure')
+	inlet := flowsheet.feed_tp(fl, flows(1.0), 300.0, 30e5)!
+	high := flowsheet.new_flash_drum('D', mode: .duty, value: 0.0, outlet_p: 31e5)!
+	refused(fn [fl, high, inlet] () ! {
+		_ := high.calculate(fl, [inlet])!
+	}, .bad_specification, 'D', 'above the lowest inlet')
+	empty := run(fl, flowsheet.new_splitter('S', [1.0, 0.0])!, [inlet])!.outlets[1]
+	drum := flowsheet.new_flash_drum('D', mode: .duty, value: 0.0)!
+	refused(fn [fl, drum, empty] () ! {
+		_ := drum.calculate(fl, [empty])!
+	}, .bad_specification, 'D', 'no inlet has any flow')
+}
+
+fn test_a_component_separator_splits_by_component() {
+	fl := fluid()!
+	inlet := flowsheet.feed_tp(fl, flows(100.0), 300.0, 30e5)!
+	fractions := [1.0, 0.9, 0.5, 0.1, 0.0]
+	o := run(fl, flowsheet.new_component_separator('X',
+		fractions: fractions
+		t:         250.0
+		p:         10e5
+	)!, [inlet])!
+	a, b := o.outlets[0], o.outlets[1]
+	for i, f in fractions {
+		assert math.abs(a.flows[i] - f * inlet.flows[i]) <= 1e-13 * inlet.flows[i]
+	}
+	assert a.t == 250.0 && b.t == 250.0 && a.p == 10e5 && b.p == 10e5
+	assert o.energy[0].name == 'duty'
+	// The duty is the balance's, here worked out by hand.
+	want := a.total() * a.h + b.total() * b.h - inlet.total() * inlet.h
+	assert o.energy[0].rate == want
+
+	// A component held back entirely leaves an outlet empty, with the inlet's
+	// composition, so it has a state.
+	all := run(fl, flowsheet.new_component_separator('X',
+		fractions: [1.0, 1.0, 1.0, 1.0, 1.0]
+		t:         300.0
+		p:         10e5
+	)!, [inlet])!
+	assert all.outlets[1].total() == 0.0 && all.outlets[1].t == 300.0
+	assert all.outlets[0].flows == inlet.flows
+
+	// It keeps its own fractions: changing the array afterwards changes nothing.
+	mut given := [1.0, 1.0, 1.0, 1.0, 1.0]
+	kept := flowsheet.new_component_separator('X', fractions: given, t: 300.0, p: 10e5)!
+	given[0] = 0.0
+	assert kept.fractions[0] == 1.0
+
+	// It's a black box, so its outlets can be above the inlet's pressure.
+	up := run(fl, flowsheet.new_component_separator('X',
+		fractions: fractions
+		t:         300.0
+		p:         40e5
+	)!, [inlet])!
+	assert up.outlets[0].p == 40e5
+}
+
+fn test_a_component_separator_is_refused_for_its_reason() {
+	fl := fluid()!
+	refused(fn () ! {
+		_ := flowsheet.new_component_separator('X', fractions: [1.5, 0.0], t: 300.0, p: 1e5)!
+	}, .bad_specification, 'X', 'a fraction of 1.5')
+	refused(fn () ! {
+		_ := flowsheet.new_component_separator('X', fractions: [-0.5, 0.0], t: 300.0, p: 1e5)!
+	}, .bad_specification, 'X', 'a fraction of -0.5')
+	refused(fn () ! {
+		_ := flowsheet.new_component_separator('X', fractions: [math.nan()], t: 300.0, p: 1e5)!
+	}, .bad_specification, 'X', 'a fraction of nan')
+	refused(fn () ! {
+		_ := flowsheet.new_component_separator('X', fractions: [0.5], t: 0.0, p: 1e5)!
+	}, .bad_specification, 'X', 'an outlet at')
+	refused(fn () ! {
+		_ := flowsheet.new_component_separator('X', fractions: [0.5], t: 300.0, p: -1.0)!
+	}, .bad_specification, 'X', 'an outlet at')
+	refused(fn () ! {
+		_ := flowsheet.new_component_separator('X', fractions: [0.5], t: math.inf(1), p: 1e5)!
+	}, .bad_specification, 'X', 'an outlet at')
+	short := flowsheet.new_component_separator('X', fractions: [0.5, 0.5], t: 300.0, p: 1e5)!
+	inlet := flowsheet.feed_tp(fl, flows(1.0), 300.0, 30e5)!
+	refused(fn [fl, short, inlet] () ! {
+		_ := short.calculate(fl, [inlet])!
+	}, .bad_specification, 'X', 'got 2 fractions for 5 components')
 }

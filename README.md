@@ -108,8 +108,13 @@ flowsheet/
   unit.v            the Unit interface, and energy streams
   mixer.v           mixer: flows and enthalpy add, then a PH flash
   splitter.v        splitter: fractions of the flow, the inlet's state
+  pressure.v        outlet P or ΔP, for whatever changes pressure
   valve.v           valve: isenthalpic, by a PH flash
   heater.v          heater and cooler: outlet T, ΔT, β or duty
+  pump.v            pump: v·ΔP/η, liquid only
+  compressor.v      compressor and expander: isentropic by PS, then η
+  drum.v            flash drum: mixed inlets, saturated vapour and liquid out
+  separator.v       component separator: a fraction of each component
   error.v           FlowsheetError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified

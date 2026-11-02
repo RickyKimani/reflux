@@ -876,6 +876,38 @@ each unit balances as
 
   The duty it reports is always Q = F (h_out − h_in). With a duty given,
   that's the one the flash reached, within its energy tolerance.
+- **Pump.** With v the inlet's molar volume,
+
+      h_out = h_in + v (P_out − P_in) / η,    W = F (h_out − h_in)
+
+  then a PH flash. At η = 1 this holds v at the inlet's, where dh = v dP at
+  constant s has v follow the liquid, so it leaves
+  T Δs ≈ ½ (v_in − v_out) ΔP. A pump takes no vapour. An empty inlet has
+  none to refuse.
+- **Compressor and expander.** A PS flash finds the isentropic outlet,
+  h_s at (P_out, s_in). Then
+
+      compressor:  h_out = h_in + (h_s − h_in) / η
+      expander:    h_out = h_in + η (h_s − h_in)
+
+  and a PH flash finds the outlet, which can be two-phase, from T_s. The work
+  W = F (h_out − h_in) is below 0 for an expander.
+- **Flash drum.** The inlets blend as in a mixer, then a flash at the drum's
+  pressure: PT at a given T, or PH at h = (Σⱼ Fⱼ hⱼ + Q) / F. A duty of 0 is
+  adiabatic. Each phase k leaves by its own outlet, with flows
+
+      nᵢₖ = F βₖ xᵢₖ
+
+  saturated at the flash's T and P. That needs no second flash: its result is
+  the first's, with the phase's composition as z and the other phase at no
+  moles, the form a bubble or dew point's answer has. A single phase leaves by
+  its own outlet, and the other outlet is empty. In a split, the "vapour" is
+  the less dense phase by mass (M3's D6), so a liquid–liquid split goes out
+  the same way.
+- **Component separator.** A fraction fᵢ of each component goes to the first
+  outlet and the rest to the second, each flashed at the given T and P. It's
+  a black box, so Q is whatever closes the balance, and its pressure can rise.
+  An empty outlet takes the inlet's composition, so it has a state.
 
 ## How CPA will fit
 

@@ -208,6 +208,13 @@ on a reference column. Robustness is reported across a set of specs.
 **Exit:** the same sensitivity analysis runs faster than DWSIM 9 on the same
 machine, measured with `-prod` builds.
 
+**A reference case,** once M9's PFR exists: the owner's methane steam
+reforming exercise, one isothermal packed-bed PFR with three LHHW reactions
+and five components, on Peng–Robinson, with no recycle. DWSIM 9's sensitivity
+study of 50 feed temperatures took 30 minutes in the app, about 36 s a point.
+One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
+of that is in one reactor.
+
 ### M9 — Reactors, kinetics and heat exchangers
 - **Kinetics as structured data** (Track L, design in
   [kinetics.md](kinetics.md)). This responds to DWSIM's text-box LHHW input.

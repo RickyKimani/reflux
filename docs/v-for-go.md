@@ -419,6 +419,12 @@ element, and the rest convert to it. Casting a later one instead,
 `[mixer, Unit(valve)]`, is a compile error, since the array is then a
 `[]Mixer`.
 
+**An `if` expression can yield several values,** where Go has no `if`
+expression at all. `return if r.beta == 1.0 { full, empty } else { empty, full }`
+in [flowsheet/drum.v](../flowsheet/drum.v) returns a `(Stream, Stream)`. As
+in Go, there's no tuple to hold them: `t := pick()` is a compile error for a
+function returning two values.
+
 **An interface can hold an interface.** `Translated` in
 [thermo/translated.v](../thermo/translated.v) has a field `inner Model` and
 implements `Model` itself, by evaluating `inner` at a shifted volume. So

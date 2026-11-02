@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 2 are done, and step 3 is next.
+the owner's question. Steps 0 to 3 are done, and step 4 is next.
 
 ## Goal
 
@@ -182,7 +182,7 @@ output the tests check.
 | D1 | Where it lives | A new module `flowsheet`: streams, ports, the unit interface, M4's unit operations, the graph, the solver and the file format. It imports `components`, `thermo`, `flash` and `numeric`. Unit families of later milestones (columns, reactors) go in their own modules and implement the same interface; the file loader takes a table of unit constructors, so they plug in without `flowsheet` importing them. A small module `quantity` holds units of measure. | One module keeps M4 simple with no import cycles, and the constructor table is the seam for M7 and M9. |
 | D2 | Streams | A material stream holds component molar flows (mol/s), and its state: T, P and the `FlashResult` that produced it, so H, S, V and the phases are always at hand. An energy stream holds a rate in W. A feed is specified by (T, P), (P, H), or (P or T, vapour fraction). | Every unit needs the inlet's state, and a stream that's always flashed can't be half-specified. |
 | D3 | Units | All of G1: mixer, splitter, valve, heater and cooler (one unit, with the duty's sign), pump, compressor and expander, flash drum, component separator. Specifications as DWSIM's main modes: outlet T, duty, outlet vapour fraction or ΔT for a heater; outlet P or ΔP for a valve, pump, compressor and expander; split fractions; and so on. Exactly one specification of each kind, checked when the file loads. | G1 lists them all for M4, and each is a few flashes once the interface exists. The roadmap's M4 list left out the compressor, expander and component separator; G1 has them. |
-| D4 | Unit models | Mixer: Σn, ΣH, P the lowest inlet's unless given, then a PH flash. **Amended in step 2:** a given P can't be above the lowest inlet's, a valve can't raise P, and an empty inlet doesn't set the mixer's P. So DWSIM's "inlet average" and "inlet maximum" mixer modes are refused. Splitter: the inlet's intensive state, unflashed. Valve: isenthalpic, PH at the outlet P. Heater: PT, PH or a vapour-fraction flash by its specification. Pump: ΔH = v·ΔP/η with the inlet's liquid volume, refused for a vapour inlet. Compressor and expander: isentropic outlet by PS, then ΔH_s/η (or η·ΔH_s), then PH. Flash drum: the inlets mixed, then PT, PH (adiabatic) or with a duty, vapour and liquid out. Component separator: fractions of each component to the first outlet, outlet T and P given, its duty from the balance. | The standard models, and the pump as DWSIM's, so the comparison compares solvers rather than models. Step 0 confirms DWSIM's pump and compressor; if they differ, reflux follows the textbook and the fixture explains the gap. |
+| D4 | Unit models | Mixer: Σn, ΣH, P the lowest inlet's unless given, then a PH flash. **Amended in step 2:** a given P can't be above the lowest inlet's, a valve can't raise P, and an empty inlet doesn't set the mixer's P. So DWSIM's "inlet average" and "inlet maximum" mixer modes are refused. **Amended in step 3:** a flash drum follows the mixer: its P is the lowest inlet's unless given, and no higher. Its adiabatic mode is a duty of 0. A compressor and an expander take a wet inlet, since PS and PH handle it, and a component separator's outlet P may be above its inlet's, since it's a black box. Splitter: the inlet's intensive state, unflashed. Valve: isenthalpic, PH at the outlet P. Heater: PT, PH or a vapour-fraction flash by its specification. Pump: ΔH = v·ΔP/η with the inlet's liquid volume, refused for a vapour inlet. Compressor and expander: isentropic outlet by PS, then ΔH_s/η (or η·ΔH_s), then PH. Flash drum: the inlets mixed, then PT, PH (adiabatic) or with a duty, vapour and liquid out. Component separator: fractions of each component to the first outlet, outlet T and P given, its duty from the balance. | The standard models, and the pump as DWSIM's, so the comparison compares solvers rather than models. Step 0 confirms DWSIM's pump and compressor; if they differ, reflux follows the textbook and the fixture explains the gap. |
 | D5 | Graph | Ports by name on each unit; a stream joins one outlet to one inlet. Tarjan's strongly connected components, solved in topological order. Within each, enumerate its cycles (Johnson), then choose the fewest tear streams that break them all, preferring a nonredundant set (Upadhye–Grens) and then the fewest torn variables. Exhaustive for up to 12 cycles; beyond that, a greedy cover, and a note in the report. A tear named in the file wins. | Exact on the flowsheets M4 will see, explainable, and close to what textbooks recommend. Naming a tear keeps the user in charge, as DWSIM's recycle block does. |
 | D6 | Tear variables | Component molar flows, P and molar H. A torn stream is rebuilt by a PH flash, started from its last T. | Mixing is linear in flows and H, which helps Wegstein. H also specifies a saturated pure stream, which T and P can't, and steam in M5 will need that. |
 | D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
@@ -414,9 +414,68 @@ flowchart LR
     heater's PH flash. That changes speed only: 12 → 12, 18 → 17 and
     13 → 11 steps. They stay, as D14 asks.
 
-### 3. The remaining units
-- Pump, compressor and expander, flash drum, component separator, tested
-  the same way.
+### 3. The remaining units — done
+- **[flowsheet/pressure.v](../flowsheet/pressure.v):** `PressureMode`,
+  outlet P or ΔP, now shared by everything that changes pressure, with the
+  direction checked in one place. The valve's `.pressure_drop` became
+  `.delta_p`. `MachineParams` adds an efficiency, which must be given.
+- **The units:**
+  - [pump.v](../flowsheet/pump.v): `new_pump`, D4's v·ΔP/η, refusing any
+    vapour in its inlet;
+  - [compressor.v](../flowsheet/compressor.v): `new_compressor` and
+    `new_expander`, isentropic by a PS flash, then η, then a PH flash;
+  - [drum.v](../flowsheet/drum.v): `new_flash_drum`, at a given T or duty,
+    with any number of inlets, and the vapour and liquid leaving by their own
+    ports;
+  - [separator.v](../flowsheet/separator.v): `new_component_separator`, a
+    fraction of each component to the first outlet, both at a given T and P.
+- **A drum's outlets aren't flashed again.** A second flash at an exact
+  bubble point could land on either side of it. So each outlet takes the
+  first flash's result, with the phase's composition as z and the other
+  phase at no moles: the form a bubble or dew point's answer already has.
+- **[mixer.v](../flowsheet/mixer.v):** `blend` factored out of the mixer,
+  since the drum starts the same way.
+- **D4 amended:** see its row. These are for your review: the drum's pressure
+  follows the mixer's, a compressor takes a wet inlet, and a component
+  separator can raise P.
+- **Tests in [flowsheet/units_test.v](../flowsheet/units_test.v),** by the
+  same `check_unit`. It's 36 tests now.
+  - **The balances (criterion 2), over 84 unit runs:** components to
+    1.95e-16 of the flow, and energy to 1.55e-11 of F·RT, against 1e-10.
+  - **Checks that don't go through the code under test:**
+    - isentropic work against ∫v dP along the isentrope, by Simpson over 8
+      panels, to 5.5e-8. H comes from the ideal gas and F, and v from the
+      volume root, so each checks the other;
+    - a pump at η = 1 against T·Δs = ½(v_in − v_out)·ΔP, to 3.2e-3, the
+      third-order term;
+    - a drum's liquid has its bubble point, and its vapour its dew point, at
+      the drum's pressure, to 3e-13, by flashes that know nothing of the
+      drum;
+    - compressing and expanding at η = 1 returns to the inlet's T to
+      1.7e-12 K, and the two works cancel to 3.5e-14 of F·RT.
+  - **Against each other:**
+    - a two-inlet drum is a mixer and then a one-inlet drum, exactly. This is
+      the case DWSIM's drum gets wrong (step 0);
+    - with a duty, it's a heater and then a drum, and at a lower pressure, a
+      heater with that drop;
+    - an expander leaves colder than a valve between the same pressures;
+    - a compressor's and an expander's work follow η, and both raise S.
+  - **Also:** an expander's two-phase outlet, half boiling a pure component
+    in a drum, a drum with one phase, empty streams through every new unit,
+    and every refusal for its own reason.
+- **No bugs found** in the units.
+- **Planted mistakes:** 131, step 2's again, as the refactor moved them, and
+  step 3's. 124 were caught. The other 7 are explained.
+  - **The two survivors that led to tests:** an empty stream through a
+    compressor or expander, and a drum's duty at a given pressure.
+  - **Three that only broke compilation,** by leaving a variable or an
+    import unused under `-W`, were rewritten and caught.
+  - **The floor in PH's start,** made unweighted, isn't seen here. It's a
+    start, so it only costs steps, and `flash/ph_test.v`'s budget catches it.
+  - **The 7 that survive** drop or worsen a T estimate for a PH or PS flash:
+    the mixer's, valve's, heater's, a machine's, the isentropic PS, the
+    compressor's PH and the drum's. They change speed only, and stay as D14
+    asks.
 
 ### 4. The graph and tears
 - Ports and connections, validation of a malformed flowsheet,

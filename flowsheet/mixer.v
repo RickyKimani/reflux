@@ -48,10 +48,19 @@ pub fn (m Mixer) outlet_ports() []string {
 	return ['out']
 }
 
-// calculate mixes the inlets. An empty inlet adds nothing, and doesn't set
-// the pressure.
-pub fn (m Mixer) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
-	check_inlets(m.name, fl, inlets, m.inlets)!
+// Blend is inlets added together, before any flash.
+struct Blend {
+	flows    []f64 // mol/s
+	enthalpy f64   // W
+	total    f64   // mol/s
+	t        f64   // K, the flow-weighted mean: a start for the flash
+	p        f64   // Pa, the lowest inlet's
+}
+
+// blend adds up a unit's inlets. An empty inlet adds nothing, and doesn't
+// set the pressure.
+fn blend(unit string, fl thermo.Fluid, inlets []Stream, want int) !Blend {
+	check_inlets(unit, fl, inlets, want)!
 	mut flows := []f64{len: fl.model.components().len}
 	mut enthalpy := 0.0 // W
 	mut t_flow := 0.0 // K·mol/s
@@ -71,16 +80,34 @@ pub fn (m Mixer) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
 		lowest = math.min(lowest, s.p)
 	}
 	if total == 0.0 {
-		return bad_spec(m.name, 'no inlet has any flow')
+		return bad_spec(unit, 'no inlet has any flow')
 	}
-	p := if m.outlet_p > 0.0 { m.outlet_p } else { lowest }
-	if p > lowest {
-		return bad_spec(m.name, 'an outlet at ${p} Pa is above the lowest inlet, ${lowest} Pa')
+	return Blend{
+		flows:    flows
+		enthalpy: enthalpy
+		total:    total
+		t:        t_flow / total
+		p:        lowest
 	}
-	r := flash.ph(fl, p, enthalpy / total, flows, estimate: t_flow / total) or {
+}
+
+// outlet_pressure is a given outlet pressure, or 0 for the lowest inlet's.
+fn (b Blend) outlet_pressure(unit string, given f64) !f64 {
+	p := if given > 0.0 { given } else { b.p }
+	if p > b.p {
+		return bad_spec(unit, 'an outlet at ${p} Pa is above the lowest inlet, ${b.p} Pa')
+	}
+	return p
+}
+
+// calculate mixes the inlets, by a PH flash from their mean T.
+pub fn (m Mixer) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
+	b := blend(m.name, fl, inlets, m.inlets)!
+	p := b.outlet_pressure(m.name, m.outlet_p)!
+	r := flash.ph(fl, p, b.enthalpy / b.total, b.flows, estimate: b.t) or {
 		return flash_failed(m.name, err)
 	}
 	return Outcome{
-		outlets: [of_flash(fl, flows, r)]
+		outlets: [of_flash(fl, b.flows, r)]
 	}
 }
