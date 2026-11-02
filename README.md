@@ -31,6 +31,8 @@ v -W test .           # all tests, warnings treated as errors
   LHHW and friends as checkable data, not text.
 - [docs/spike-python-ffi.md](docs/spike-python-ffi.md) is what we learned
   calling reflux from Python and NumPy, and the rules M10a follows.
+- [docs/flowsheet-format.md](docs/flowsheet-format.md) is the flowsheet file
+  format.
 - [docs/spike-dwsim.md](docs/spike-dwsim.md) is what we learned driving
   DWSIM 9 from Python, and how M3 compares reflux with it.
   [docs/spike-dwsim-flowsheet.md](docs/spike-dwsim-flowsheet.md) does the
@@ -120,6 +122,9 @@ flowsheet/
   graph.v           strongly connected components, elementary cycles, order
   tear.v            tear selection: fewest streams, fewest second breaks
   solve.v           Solution: tears converged, every balance checked
+  file.v, section.v the TOML file format: load, with every field checked
+  makers.v          a unit type's table in a file, to the unit
+  write.v           a file back, in a fixed order
   error.v           FlowsheetError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified

@@ -63,8 +63,15 @@ Keep this section current: update it whenever a step is committed.
     D5 and D7 were amended there: acceleration waits for a second real pass,
     and tears prefer the recycle. D5's tear ranking was measured against
     FOQUS's and stays.
-  - Next is step 6: the TOML file format, load, validate and write (D9), with
-    fuzz tests, and `docs/flowsheet-format.md`.
+  - Step 6 is committed and pushed: the TOML file format. `flowsheet.load`
+    checks a whole file, with lines and suggestions, and `Loaded.write` gives
+    it back
+    (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
+    V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
+    first: a report to make upstream.
+  - Next is step 7: `reflux solve`, `reflux demo`, the JSON and CSV reports and
+    the stream table (D11). `tools/check.vsh` runs the demo now; it'll run
+    `reflux demo` and solve the reference flowsheet instead.
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -222,6 +229,9 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     checks it and returns blocks to solve in order. Tarjan gives the blocks
     and Johnson the cycles, and `tear.v` picks the fewest tears exactly, by
     branch and bound, then the fewest second breaks.
+  - A file is read by `load` through a `Section` per table, and a `Maker` per
+    unit type. Later unit families add makers, so `flowsheet` needn't import
+    them (D1).
   - `solve` iterates each block's tears, whose variables are flows, P and
     molar H, by direct substitution, Wegstein or Broyden. A `Solution` is only
     returned with every balance checked: each unit to 1e-10 on the inlets it
@@ -294,6 +304,8 @@ or a test:
 - **Shared libraries** need gcc: tcc's Windows DLLs export nothing.
 - **Closures are never freed**, so nothing that runs per flash may make one:
   pass a struct with a method, as `numeric`'s interfaces ask.
+- **A panic can't be caught.** There's no `recover`, so what a library might
+  panic on must be kept from it: `toml.parse_text` on a `\u` escape, for one.
 - **Module names:** not like a vlib module's. `benchmark` broke external
   tests, because V's test runner imports vlib's.
 - **Leftovers:** V can leave `.*.v3cc.*/` build folders next to a binary.

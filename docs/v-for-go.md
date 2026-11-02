@@ -650,6 +650,18 @@ component reader in M2 checks every value's type.
 struct instead of `[2, 3]`. Assign it to a variable first and interpolate
 that. Found in the M2 data-format spike, with V `eab77e7`.
 
+**A panic can't be caught.** Go has `recover`, so a library's panic can be
+stopped at a boundary. V has nothing like it: a panic ends the program, whoever
+it came from. So anything a library might panic on has to be kept from reaching
+it. V 0.5.2's `toml` can panic on a `\u` escape, in a slice that's off by one,
+and [flowsheet/file.v](../flowsheet/file.v) scans a file for those first. Fuzz a
+library you hand user input to.
+
+**A library's TOML tree has line numbers.** `toml.parse_text(text)!.ast.table` is
+a tree of `ast.Value`, and its leaves keep `pos.line_nr`, where `doc.value(...)`
+keeps nothing. Strings in it are decoded, so writing one back means escaping it
+again. Quoted keys can't hold an escaped quote.
+
 **Gotcha: `int` is 64-bit, but C's `int` is 32-bit.** Like Go's `int`, V's
 `int` is 64-bit on 64-bit platforms (`sizeof(int)` is 8 in this V). In any
 function that C, or Python's `ctypes`, calls, use explicit widths: `i32`

@@ -9,6 +9,7 @@ pub enum Failure {
 	flash_failed      // the flash it needed failed, for the reason in cause
 	no_convergence    // a block's tears were still moving when the passes ran out
 	unbalanced        // a balance didn't close: a bug, or a unit that's wrong
+	bad_file          // a flowsheet file that can't be read: see line and key
 }
 
 // FlowsheetError is every failure in this module, never a panic (D8). Test
@@ -24,11 +25,26 @@ pub:
 	cause ?flash.Failure
 	// history is how the tears had converged, if it happened during a solve.
 	history []TearHistory
+	// line and key are where in a file it went wrong, if it was in one.
+	line        int
+	key         string
+	suggestions []string // what a misspelt name may have meant
 }
 
-// msg is the reason, marked as the flowsheet's and with the unit at fault.
+// msg is the reason, marked as the flowsheet's, with where it went wrong and
+// what a misspelt name may have meant.
 pub fn (e FlowsheetError) msg() string {
-	return if e.unit == '' { 'flowsheet: ${e.reason}' } else { 'flowsheet: ${e.unit}: ${e.reason}' }
+	mut place := ''
+	if e.line > 0 {
+		place += 'line ${e.line}: '
+	}
+	if e.key != '' {
+		place += '${e.key}: '
+	} else if e.unit != '' {
+		place += '${e.unit}: '
+	}
+	hint := if e.suggestions.len > 0 { ' (did you mean ${e.suggestions.join(', ')}?)' } else { '' }
+	return 'flowsheet: ${place}${e.reason}${hint}'
 }
 
 fn bad_spec(unit string, reason string) IError {
@@ -44,6 +60,16 @@ fn bad_sheet(unit string, reason string) IError {
 		kind:   .bad_flowsheet
 		unit:   unit
 		reason: reason
+	}
+}
+
+fn file_error(line int, key string, reason string, suggestions []string) IError {
+	return FlowsheetError{
+		kind:        .bad_file
+		reason:      reason
+		line:        line
+		key:         key
+		suggestions: suggestions
 	}
 }
 

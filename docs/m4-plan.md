@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 5 are done, and step 6 is next.
+the owner's question. Steps 0 to 6 are done, and step 7 is next.
 
 ## Goal
 
@@ -190,7 +190,7 @@ output the tests check.
 | D6 | Tear variables | Component molar flows, P and molar H. A torn stream is rebuilt by a PH flash, started from its last T. | Mixing is linear in flows and H, which helps Wegstein. H also specifies a saturated pure stream, which T and P can't, and steam in M5 will need that. |
 | D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. **Amended in step 5:** Wegstein's steps start at the third pass, and Broyden takes one direct pass first, since the first pass starts from a guess and a secant through it says nothing about the loop. A tear starts from its estimate, or else empty where its unit has another inlet, or else as a mixture of what enters the block. An estimate tears its stream. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
 | D8 | Results and failures | `solve` returns a `Solution` only when every component converged and every balance has been checked. Each stream's state, each unit's duty and work, the tears chosen and the convergence history come with it. A failure is a typed `FlowsheetError` (a bad file, a bad specification, a unit that failed with its `FlashError`, no convergence with the history), never a panic. | The flash's rule, D7 of M3, carried up: nothing that hasn't been shown right is returned. M10b exposes this to Python. |
-| D9 | File format | TOML, `format = 1`. Components by name or CAS from the database, plus your own data directories; the model and kᵢⱼ options; then streams and units, each unit with its ports and specifications. Every number with a unit, as a string ("230 K", "30 bar", "100 kmol/h"). A feed's composition is given as mole fractions, mass fractions, or each component's molar or mass flow, as in DWSIM, and converted to molar flows with the components' molar masses when the file loads. The results report flows and fractions on both bases. Unknown keys are errors. | Consistent with M2's data files, readable, and diffable. Units on every number remove the commonest input error. A version from the first file makes migration possible later (A6). |
+| D9 | File format | TOML, `format = 1`. Components by name or CAS from the database, plus your own data directories; the model and kᵢⱼ options; then streams and units, each unit with its ports and specifications. Every number with a unit, as a string ("230 K", "30 bar", "100 kmol/h"). A feed's composition is given as mole fractions, mass fractions, or each component's molar or mass flow, as in DWSIM, and converted to molar flows with the components' molar masses when the file loads. The results report flows and fractions on both bases. Unknown keys are errors. **Amended in step 6:** only feeds are declared, as `[feed.NAME]`, since every other stream is named by the ports at its two ends. `[estimate.NAME]` gives a tear a first value, with the same keys. A `\u` escape is refused, because it can crash V's parser. | Consistent with M2's data files, readable, and diffable. Units on every number remove the commonest input error. A version from the first file makes migration possible later (A6). |
 | D10 | Units of measure | `quantity` parses "value unit" for a stated dimension: temperature (K, degC, degF, R), pressure (Pa, kPa, MPa, bar, barg, atm, psi, psig, mmHg), molar and mass flow, energy rate and power, molar and specific enthalpy, volume flow. Gauge pressure takes 1 atm of ambient. An unknown unit gets suggestions. **Amended in step 1:** also temperature and pressure differences (the same scales with no offset, and no gauge units), fractions (a bare number or a percentage), °C and °F beside degC and degF, mbar, torr, psia and lbmol/h. An absolute T or P must be above zero. | A2 asks for the boundary; a fixed table is easy to check against NIST SP 811 and has nothing hidden. |
 | D11 | CLI and reports | `main.v` becomes `reflux solve plant.toml [--json out.json] [--csv streams.csv] [--trace]`, with the current demo as `reflux demo`. The JSON has a `format` version, every stream, every unit, the balances and the convergence history. A stream table goes to stdout. `--trace` prints every iteration. | F2 and F6. JSON is what Python and pandas read, and the version lets M10 depend on it. |
 | D12 | DWSIM references | A by-hand tool, `tools/gen_m4_dwsim.py`, builds each reference flowsheet in DWSIM 9 from the same definition and records DWSIM's constants, kᵢⱼ and results in `testdata/`. It checks every unit's `ErrorMessage` and every stream, and tightens the recycle to its limit. reflux runs the same flowsheet on DWSIM's constants. Unit-by-unit cases go through the same route. **Fallback** if a recycle won't converge tightly in DWSIM: compare with the loop opened, giving DWSIM reflux's converged tear stream, which it must hand back unchanged within its tolerance. | M3's route, which works. The open loop tests the same claim without DWSIM's recycle. |
@@ -657,9 +657,61 @@ flowchart LR
     answer. The whole flowsheet's balance check is a safety net that the units'
     own checks get to first, and two caught mistakes show it's live.
 
-### 6. The file format
-- TOML load, validate and write (D9), with the fuzz tests, and
-  `docs/flowsheet-format.md`.
+### 6. The file format — done
+- **[flowsheet/file.v](../flowsheet/file.v):** `load(path)` and
+  `load_text(text)` read a file, check all of it, and return a `Loaded`: the
+  fluid, the flowsheet and the solver's settings. A file that loads can only
+  fail in solving. [docs/flowsheet-format.md](flowsheet-format.md) is the
+  format.
+- **[flowsheet/section.v](../flowsheet/section.v):** a `Section` reads one table.
+  Reading a key marks it used, `finish` refuses any left over, and every failure
+  carries its line, key and reason. Lines come from `doc.ast`, whose leaves keep
+  their positions, so the plan's fear about line numbers didn't come true.
+- **[flowsheet/makers.v](../flowsheet/makers.v):** a table of `Maker`s, one for each
+  unit type. `LoadParams.makers` adds others, which is D1's seam: a test plugs in a
+  unit from outside the module.
+- **[flowsheet/write.v](../flowsheet/write.v):** `Loaded.write` writes the file back
+  in a fixed order, with numbers and units as they were given. It works from the
+  parsed tree, so a plugged-in unit's keys need no code. Comments are lost.
+- **D9 amended:** see its row.
+- **V's TOML parser can panic, and nothing can catch that.** The plan's other risk
+  did come true.
+  - 30,000 mutated documents found it: a `\u` escape within a certain distance
+    of its string's end. In V 0.5.2's `toml.checker`, `remaining() >= 10` guards a
+    slice of 11. It's an off-by-one, so valid TOML can hit it too.
+  - `check_text` scans the file first, aware of comments and strings, and refuses
+    any `\u`. A Windows path in a literal string is left alone.
+  - It also refuses nesting past 32 levels, which would overflow the stack. A
+    planted mistake showed that it does: the test program crashed.
+- **Tests in [flowsheet/file_test.v](../flowsheet/file_test.v),** 15 functions, on
+  [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) and a
+  flowsheet with every unit type.
+  - **A file builds what code builds:** the same flowsheet in V, with its fluid
+    built independently, gives every stream the same to the last bit.
+  - **Load, write, load:** the same to the last bit, and the writing is a fixed
+    point, with names holding spaces, backslashes, tabs and quotes.
+  - **Each composition basis,** six ways of stating one mixture, to 1e-12.
+  - **Each state** a feed can be given by.
+  - **About 60 wrong fields,** each with its exact line, key and reason, and its
+    suggestion for a misspelt name. That finishes criterion 1: a specification
+    missing or given twice, and a stream that doesn't join up, named by its unit.
+  - **4,000 seeded fuzzed files** in every test run. Once, 40,000 more with another
+    seed. None panicked, and all 1,690 of those that loaded wrote back and
+    loaded again.
+- **Bugs found and fixed:**
+  - the writer put decoded strings back unescaped, so `c:\temp` came back with a
+    tab in it;
+  - a top-level error reported an arbitrary line, and a misspelt compound the
+    `[components]` header rather than the `names` line.
+- **Planted mistakes:** 61. 59 were caught, 41 at once, and 2 went with code they
+  showed could do nothing, `finish` on tables whose every key is read. None
+  survive. Getting there showed three of my own tests to be weak:
+  - **File and code shared a fluid.** The test built its V flowsheet on the file's
+    own fluid, so it couldn't see kᵢⱼ going wrong. It builds its own now.
+  - **A check with no failure path.** `load(text) or { … }` with nothing after it
+    passes when the file loads. It now fails.
+  - **A name with no backslash in it.** A layer of escaping turned `\\t` into a
+    tab, so the writer's backslash escape was never used.
 
 ### 7. The CLI and reports
 - `reflux solve`, `reflux demo`, the JSON and CSV reports and the stream
@@ -693,7 +745,7 @@ flowchart LR
 | DWSIM's unit models differ from the textbook ones (pump, compressor efficiency) | deviations in duty or T | follow the textbook in reflux, reproduce DWSIM's number in the fixture from its own model, and record it, as M3's criterion 6 allows |
 | PH's cost makes the flowsheet slow | a slow first flowsheet | measure (D14); warm starts inside PH first, then across solves (F5) if needed |
 | Tear selection by enumeration blows up on many loops | slow or no tear set | the cycle bound and greedy cover (D5); M4's flowsheets are small |
-| V's `toml` module can't report the line of a bad value, or rejects valid TOML | poor error messages | validate after parsing with the keys' paths; M2 already parses TOML with it |
+| V's `toml` module can't report the line of a bad value, or rejects valid TOML | poor error messages | validate after parsing with the keys' paths; M2 already parses TOML with it. **Step 6:** it reports lines, but it can panic on a `\u` escape, so the loader scans for those first. |
 | A unit meets three phases in a loop | no convergence | the flash already refuses with `more_phases`; the unit passes it on, and the flowsheet fails with its reason |
 
 ## Not in M4

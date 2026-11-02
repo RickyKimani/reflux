@@ -279,7 +279,7 @@ fn unknown(text string, d Dimension, name string) IError {
 
 // closest is the accepted units within two edits of name, ignoring case:
 // nearest first, and at most three.
-fn closest(name string, accepted []string) []string {
+pub fn closest(name string, accepted []string) []string {
 	mut scored := []string{}
 	for dist in 0 .. 3 {
 		for a in accepted {
