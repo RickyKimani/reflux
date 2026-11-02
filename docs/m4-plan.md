@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 3 are done, and step 4 is next.
+the owner's question. Steps 0 to 4 are done, and step 5 is next.
 
 ## Goal
 
@@ -99,6 +99,9 @@ M7 and M9; design specifications and warm starts across solves are M8.
   simulation* (AIChE J. 21): tear sets fall into families with the same
   direct-substitution behaviour, and a nonredundant set, which tears no
   cycle twice, converges best;
+- Gundersen & Hertzberg 1983, *Partitioning and tearing of networks, applied
+  to process flowsheeting* (Modeling, Identification and Control 4), found in
+  step 4: ten test graphs with their cycles and minimum tears;
 - Wegstein 1958 (Commun. ACM 1) and Broyden 1965 (Math. Comp. 19) for the
   acceleration;
 - NIST SP 811 for the unit conversion factors.
@@ -183,7 +186,7 @@ output the tests check.
 | D2 | Streams | A material stream holds component molar flows (mol/s), and its state: T, P and the `FlashResult` that produced it, so H, S, V and the phases are always at hand. An energy stream holds a rate in W. A feed is specified by (T, P), (P, H), or (P or T, vapour fraction). | Every unit needs the inlet's state, and a stream that's always flashed can't be half-specified. |
 | D3 | Units | All of G1: mixer, splitter, valve, heater and cooler (one unit, with the duty's sign), pump, compressor and expander, flash drum, component separator. Specifications as DWSIM's main modes: outlet T, duty, outlet vapour fraction or ΔT for a heater; outlet P or ΔP for a valve, pump, compressor and expander; split fractions; and so on. Exactly one specification of each kind, checked when the file loads. | G1 lists them all for M4, and each is a few flashes once the interface exists. The roadmap's M4 list left out the compressor, expander and component separator; G1 has them. |
 | D4 | Unit models | Mixer: Σn, ΣH, P the lowest inlet's unless given, then a PH flash. **Amended in step 2:** a given P can't be above the lowest inlet's, a valve can't raise P, and an empty inlet doesn't set the mixer's P. So DWSIM's "inlet average" and "inlet maximum" mixer modes are refused. **Amended in step 3:** a flash drum follows the mixer: its P is the lowest inlet's unless given, and no higher. Its adiabatic mode is a duty of 0. A compressor and an expander take a wet inlet, since PS and PH handle it, and a component separator's outlet P may be above its inlet's, since it's a black box. Splitter: the inlet's intensive state, unflashed. Valve: isenthalpic, PH at the outlet P. Heater: PT, PH or a vapour-fraction flash by its specification. Pump: ΔH = v·ΔP/η with the inlet's liquid volume, refused for a vapour inlet. Compressor and expander: isentropic outlet by PS, then ΔH_s/η (or η·ΔH_s), then PH. Flash drum: the inlets mixed, then PT, PH (adiabatic) or with a duty, vapour and liquid out. Component separator: fractions of each component to the first outlet, outlet T and P given, its duty from the balance. | The standard models, and the pump as DWSIM's, so the comparison compares solvers rather than models. Step 0 confirms DWSIM's pump and compressor; if they differ, reflux follows the textbook and the fixture explains the gap. |
-| D5 | Graph | Ports by name on each unit; a stream joins one outlet to one inlet. Tarjan's strongly connected components, solved in topological order. Within each, enumerate its cycles (Johnson), then choose the fewest tear streams that break them all, preferring a nonredundant set (Upadhye–Grens) and then the fewest torn variables. Exhaustive for up to 12 cycles; beyond that, a greedy cover, and a note in the report. A tear named in the file wins. | Exact on the flowsheets M4 will see, explainable, and close to what textbooks recommend. Naming a tear keeps the user in charge, as DWSIM's recycle block does. |
+| D5 | Graph | Ports by name on each unit; a stream joins one outlet to one inlet. Tarjan's strongly connected components, solved in topological order. Within each, enumerate its cycles (Johnson), then choose the fewest tear streams that break them all, preferring a nonredundant set (Upadhye–Grens) and then the fewest torn variables. Exhaustive for up to 12 cycles; beyond that, a greedy cover, and a note in the report. A tear named in the file wins. **Amended in step 4:** the search is exact within a fixed work budget, whatever the number of cycles, and the greedy cover is only for a net of 50,000 cycles or more. Seven of the nine classical graphs have over 12 cycles, and step 4 found that a greedy method misses their minimum. Past the fewest tears and the fewest second breaks, ties go to the earliest stream: every stream has the same tear variables (D6), so the fewest torn variables never decides. A net with nothing coming into it is refused. | Exact on the flowsheets M4 will see, explainable, and close to what textbooks recommend. Naming a tear keeps the user in charge, as DWSIM's recycle block does. |
 | D6 | Tear variables | Component molar flows, P and molar H. A torn stream is rebuilt by a PH flash, started from its last T. | Mixing is linear in flows and H, which helps Wegstein. H also specifies a saturated pure stream, which T and P can't, and steam in M5 will need that. |
 | D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
 | D8 | Results and failures | `solve` returns a `Solution` only when every component converged and every balance has been checked. Each stream's state, each unit's duty and work, the tears chosen and the convergence history come with it. A failure is a typed `FlowsheetError` (a bad file, a bad specification, a unit that failed with its `FlashError`, no convergence with the history), never a panic. | The flash's rule, D7 of M3, carried up: nothing that hasn't been shown right is returned. M10b exposes this to Python. |
@@ -477,10 +480,83 @@ flowchart LR
     compressor's PH and the drum's. They change speed only, and stay as D14
     asks.
 
-### 4. The graph and tears
-- Ports and connections, validation of a malformed flowsheet,
-  strongly connected components, cycles and tear selection (D5).
-- Criterion 1's graph set.
+### 4. The graph and tears — done
+- **[flowsheet/sheet.v](../flowsheet/sheet.v):** a `Flowsheet` is units with
+  a stream named on each port, and feeds. A stream joins one outlet to one
+  inlet, and one with no inlet after it is a product.
+  - `add_unit` refuses an open port or one the unit doesn't have, which is
+    what the wrong number of ports for a mixer comes to.
+  - `plan` checks the whole, so that units can be added in any order.
+- **`Flowsheet.plan`** returns `Block`s in order, each with its units in
+  calculation order, its tears and its cycle count, and notes for the report.
+  A named tear is honoured, and more are chosen if the loops need them.
+- **[flowsheet/graph.v](../flowsheet/graph.v):** Tarjan's components, Johnson's
+  cycles by edges, so that parallel streams are separate cycles, and the
+  order within a block.
+- **[flowsheet/tear.v](../flowsheet/tear.v):** the exact search, by branch and
+  bound on classes of streams in the same cycles, with a greedy cover past
+  50,000 cycles.
+- **D5 amended:** see its row. The search is exact within a work budget, not
+  up to 12 cycles.
+- **For your review:** FOQUS and Pyomo rank tear sets the other way round,
+  keeping each cycle's breaks down first and counting tears second. D5 takes
+  the fewest tears first, and that's kept. Step 5 can measure the difference.
+- **The references,**
+  [tools/gen_m4_graphs.py](../tools/gen_m4_graphs.py), which writes
+  [testdata/m4_graphs.json](../testdata/m4_graphs.json):
+  - **The literature:** problems 1 to 9 of Gundersen and Hertzberg (1983),
+    the classical graphs of the field (Pho and Lapidus, Barkley and Motard,
+    Sargent and Westerberg, Christensen and Rudd, Jain and Eakman, Shannon).
+    I read them off the paper's figures by hand. The generator stops unless
+    each reproduces the paper's tables exactly: units, streams, nets, cycles
+    and minimum tears. That caught one misread edge in Problem 8. Problem 10,
+    the heavy water plant, is too dense a figure to read reliably.
+  - **Pyomo's** `simple_recycle_model`, whose test states that any of its
+    three streams is a tear, is among the 10 graphs worked by hand.
+  - **40 seeded graphs,** with self-loops and parallel streams.
+  - **The answers** come from networkx and an exact integer program (scipy's
+    HiGHS), independent of reflux.
+- **Tests in [flowsheet/graph_test.v](../flowsheet/graph_test.v),** 8 functions
+  on the 59 graphs. For every graph:
+  - the nets, the cycle count, the minimum tears and the fewest second breaks
+    exactly, down to 21 tears for the complete graph's 415 cycles, and 5
+    tears with 36 second breaks for the sulfuric acid plant's 103;
+  - from scratch, every stream that isn't torn is calculated before it's used,
+    and no tear can be left out;
+  - the same plan with the ports listed in reverse.
+- **Also tested:**
+  - a named tear honoured for each stream of Problem 5, and refused for a
+    stream in no loop;
+  - the greedy cover on the complete graph of 9 nodes: 125,673 cycles, cut
+    off at 50,000, and a note in the plan;
+  - a search out of work, which still gives a valid plan and says so;
+  - ties going to the earliest streams;
+  - each malformed flowsheet for its own reason: an open port, the wrong
+    ports, two sources, two destinations, a stream from nowhere, a feed to
+    nowhere, a loop nothing feeds, and a bad tear. The rest of criterion 1, a
+    specification missing or given twice, is the file's (step 6).
+  - the reference flowsheet's real units, added out of order.
+- **Bugs:** every graph matched at the first run, so what the planted mistakes
+  found was code that did nothing. One deletion went too far: with its second
+  check gone, the cycle listing overshot its limit by a cycle per start. The
+  assertion on `Block.cycles` showed it, and the one check moved to the head
+  of the loop, which is exact.
+- **Planted mistakes:** 63. 42 were caught at once, 2 of them by timing out.
+  Of the other 21:
+  - **7 led to deleting code:** `components`' group and cut, which are never
+    used. Johnson's stay-in-the-group check, since a stream leaving a strong
+    component can't come back. A second limit check, a guard for single
+    units, the greedy cover's give-back step and a duplicate check.
+  - **7 led to tests:** a loop fed by a unit, a unit with no inlets, the order
+    of the tears, their ties, a named tear under the greedy cover, and
+    `Block.cycles` stopping at its limit.
+  - **1 was caught,** with no test named, by a panic.
+  - **The 6 that survive** are explained. Five are speed only, on all 59
+    graphs at 625 ms: the second-break prune (781 ms without it), classes
+    (812), sorting the cycles (1328), and the two halves of the exclusions
+    (671). Those stay for the worst cases, which these small graphs don't
+    reach. The sixth sorts a set before comparing, and only matters to ties
+    whose members arrive out of order.
 
 ### 5. The solver
 - Ordering, tear convergence by direct substitution, Wegstein and Broyden

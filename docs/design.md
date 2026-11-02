@@ -909,6 +909,53 @@ each unit balances as
   a black box, so Q is whatever closes the balance, and its pressure can rise.
   An empty outlet takes the inlet's composition, so it has a state.
 
+## The flowsheet graph
+
+A flowsheet's units are nodes, and the streams between them are edges (M4's
+D5). Two units can be joined by parallel edges, and a stream can leave and
+enter one unit. `Flowsheet.plan` turns that into blocks to solve in order.
+
+**Partition.** Tarjan's algorithm (1972) finds the strongly connected
+components, each after the ones it needs. A component with a cycle in it is
+a *net*: its units have to be solved together. Everything else is solved
+once, in order. A net with nothing coming into it, from a feed or another
+unit, has no material in it at all, and is refused.
+
+**Cycles.** Johnson's algorithm (1975) lists a net's elementary cycles, as
+lists of edges, so that parallel streams are separate cycles.
+
+**Tears.** Tearing a set of streams T breaks a cycle c if T meets it. With
+b_c = |T ∩ c| the times c is torn, the choice is the best T by, in turn:
+
+1. fewest tears, |T|, with every b_c ≥ 1: a minimum hitting set;
+2. fewest second breaks, Σ_c (b_c − 1). A set with none is what Upadhye and
+   Grens (1975) call nonredundant, and it's what converges best by direct
+   substitution. It isn't always there at the minimum size: the sulfuric
+   acid plant's 5 tears can't do better than 36;
+3. earliest streams, by the unit they leave, so a plan is reproducible.
+
+This order is the reverse of FOQUS's and Pyomo's, which keep each cycle's
+breaks down first and count tears second. Every tear here costs a block of
+iteration variables, so reflux takes the fewest.
+
+The search is branch and bound, which is exact when it finishes:
+- Streams in exactly the same cycles, as those in series are, form a class,
+  and only one class member can be chosen. These are Upadhye and Grens's
+  families, whose members behave alike under direct substitution.
+- It branches on the shortest cycle not yet torn, one branch per class. A
+  class tried in one branch is excluded from its siblings, so that no set is
+  reached twice.
+- Cycles that are untouched and share no class need a tear each, which
+  bounds what's left.
+
+Its budget is a count of cycles looked at, not a time, so plans are
+reproducible. If it runs out, or a net has too many cycles to list (50,000),
+the plan says so in its notes. In the second case a greedy cover takes over,
+tearing the stream in the most cycles until none is left.
+
+**Order.** Within a block, with its tears cut, the units go in topological
+order, the earliest in the flowsheet first.
+
 ## How CPA will fit
 
 ```v

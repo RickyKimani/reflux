@@ -52,9 +52,14 @@ Keep this section current: update it whenever a step is committed.
     drum and component separator, with `pressure.v` shared by whatever
     changes pressure. D4 was amended there: a drum's P follows the mixer's,
     a compressor takes a wet inlet, and a component separator can raise P.
-  - Next is step 4: ports and connections, validation of a malformed
-    flowsheet, strongly connected components, cycles and tear selection
-    (D5), and criterion 1's graph set.
+  - Step 4 is committed and pushed: `Flowsheet` and `plan`, with Tarjan,
+    Johnson and an exact tear search, on the nine classical graphs of
+    Gundersen and Hertzberg (1983) (`tools/gen_m4_graphs.py`). D5 was
+    amended there: exact within a work budget, not up to 12 cycles. FOQUS
+    and Pyomo rank tears the other way round, which step 5 can measure.
+  - Next is step 5: ordering, tear convergence by direct substitution,
+    Wegstein and Broyden (D7), balances, the convergence history, `Solution`
+    and `FlowsheetError` (D8).
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -117,7 +122,8 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
     changing the flash or the sweep's checks.
 - **Reference fixtures** come from uv scripts whose headers pin their
   dependencies: `thermo` 0.6.1, `chemicals` 1.5.2, `mpmath` 1.3.0,
-  `CoolProp` 8.0.0.
+  `CoolProp` 8.0.0, and for `tools/gen_m4_graphs.py`, `networkx` 3.4.2 and
+  `scipy` 1.14.1.
   - On this machine uv's managed-Python link fails in the sandbox, so pass
     the interpreter explicitly, and set `PYTHONIOENCODING=utf-8` (the
     console is cp1252):
@@ -207,6 +213,10 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     it's never half specified. Its H, S and V are its phases'.
   - A `Unit` is `calculate(fluid, inlets) !Outcome` and holds nothing about
     a solve. An energy rate above zero goes into the unit's material.
+  - A `Flowsheet` is units with a stream named on each port, and `plan`
+    checks it and returns blocks to solve in order. Tarjan gives the blocks
+    and Johnson the cycles, and `tear.v` picks the fewest tears exactly, by
+    branch and bound, then the fewest second breaks.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

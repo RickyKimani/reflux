@@ -115,6 +115,9 @@ flowsheet/
   compressor.v      compressor and expander: isentropic by PS, then η
   drum.v            flash drum: mixed inlets, saturated vapour and liquid out
   separator.v       component separator: a fraction of each component
+  sheet.v           Flowsheet: units joined by named streams, and its plan
+  graph.v           strongly connected components, elementary cycles, order
+  tear.v            tear selection: fewest streams, fewest second breaks
   error.v           FlowsheetError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified

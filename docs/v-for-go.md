@@ -582,6 +582,21 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 
 `it` is the implicit element name inside `filter`, `map`, `any` and `all`.
 
+**Arrays have `==` but no `<`.** Go's slices have neither, and you reach
+for `slices.Equal` and `slices.Compare`. V's `==` compares element by element,
+but `a < b` is a compile error ("only `==` and `!=` are defined on arrays"),
+and there's no `Compare` to call, so `earlier` in
+[flowsheet/tear.v](../flowsheet/tear.v) is a short loop.
+
+**Inside a sort's comparison, an array needs a dereference.** The arguments
+are pointers, and pointer indexing is only allowed in `unsafe`, so `a[0]` is
+an error for `a &[]int`. Write `(*a)[0]`.
+
+**An unused parameter is a notice, and `_` is the name that silences it.** A
+test's stub for an interface doesn't need its arguments:
+`fn (s Stub) calculate(_ thermo.Fluid, _ []Stream) !Outcome`. It still
+satisfies the interface, as in Go.
+
 **Gotcha:** arrays are **shared** when assigned, like Go slices. Use
 `.clone()` when you keep a copy of an argument. `new_cubic` and `State`
 clone the arrays they store, so the caller can reuse theirs.

@@ -5,6 +5,7 @@ import flash
 // Failure says why a stream or unit failed.
 pub enum Failure {
 	bad_specification // a value it can't use: a negative flow, a split of 1.2, …
+	bad_flowsheet     // units and streams that don't join up: an open port, say
 	flash_failed      // the flash it needed failed, for the reason in cause
 }
 
@@ -29,6 +30,14 @@ pub fn (e FlowsheetError) msg() string {
 fn bad_spec(unit string, reason string) IError {
 	return FlowsheetError{
 		kind:   .bad_specification
+		unit:   unit
+		reason: reason
+	}
+}
+
+fn bad_sheet(unit string, reason string) IError {
+	return FlowsheetError{
+		kind:   .bad_flowsheet
 		unit:   unit
 		reason: reason
 	}
