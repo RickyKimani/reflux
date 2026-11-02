@@ -622,7 +622,10 @@ answer, however steep or broken H(T) is.
 
 **The steps.**
 - **Start:** the temperature at which the feed as an ideal gas has
-  H_spec (or S_spec), by bisection, or the caller's `estimate`.
+  H_spec (or S_spec), by bisection, but no lower than half the feed's mean
+  Tc, or the caller's `estimate`. A liquid's H is far below the ideal
+  gas's, so that temperature can be near absolute zero, where PR's liquids
+  split in ways no answer needs and the PT flash refuses.
 - **Bracket:** T is stepped out by 50% at a time, with a PT flash at
   each step, until the residual changes sign. (Steps of 1.5× and 2× take
   the fewest flashes on the reference set, and 1.25× takes 3% more.)
@@ -830,6 +833,49 @@ Reading is strict:
 A unit that isn't the dimension's gets the closest of its units: those
 within two edits (Levenshtein, ignoring case), nearest first, at most
 three. A unit of another dimension is named as one.
+
+## Streams and units
+
+A material stream holds its component molar flows nᵢ (mol/s) and the flash
+that gave its state (M4's D2), so it's always fully specified. Its molar
+properties are its phases', weighted by their shares of its moles:
+
+    h = Σₖ βₖ hₖ,    s = Σₖ βₖ sₖ,    v = Σₖ βₖ vₖ
+
+A feed is given by (T, P), (P, h), (T, β) or (P, β), each by its own flash.
+An empty stream, which a split fraction of 0 makes, has no flows but keeps
+its composition in its flash, so it has a state and passes through a valve
+or heater.
+
+A unit takes its inlets and gives its outlets and any energy streams. A
+rate Q above zero goes into the unit's material, so with F the total flow,
+each unit balances as
+
+    Σ_in nᵢ = Σ_out nᵢ,    Σ_in F h + ΣQ = Σ_out F h
+
+- **Mixer.** The flows and enthalpy flows add, then a PH flash at the outlet
+  pressure:
+
+      nᵢ = Σⱼ nᵢⱼ,    h = Σⱼ Fⱼ hⱼ / F,    P = minⱼ Pⱼ
+
+  P may be given, but not above the lowest inlet's. An empty inlet adds
+  nothing and doesn't set P. The flash starts from the flow-weighted mean T.
+- **Splitter.** Each outlet k has the inlet's state and a fraction of its
+  flows, nᵢₖ = fₖ nᵢ with Σₖ fₖ = 1. Nothing is flashed.
+- **Valve.** Isenthalpic: a PH flash at h_out = h_in and the outlet pressure,
+  from the inlet's T. It can't raise the pressure. Throttling is
+  irreversible, so s can only rise.
+- **Heater.** With P_out = P_in − ΔP, the specification picks the flash:
+
+  | Specification | Outlet |
+  |---|---|
+  | outlet T | PT at (T, P_out) |
+  | ΔT | PT at (T_in + ΔT, P_out) |
+  | outlet β | the vapour-fraction flash at (P_out, β) |
+  | duty Q | PH at (P_out, h_in + Q/F), from the inlet's T |
+
+  The duty it reports is always Q = F (h_out − h_in). With a duty given,
+  that's the one the flash reached, within its energy tolerance.
 
 ## How CPA will fit
 

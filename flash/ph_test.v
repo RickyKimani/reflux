@@ -147,7 +147,8 @@ fn test_round_trips_from_pt_states() {
 	// Exit criterion 4: from each of the 83 PT states' H and S, the PH and
 	// PS flashes come back to T and the split, to 1e-8 (measured 2.2e-11 in
 	// T and 2.6e-11 in the split), in at most 1990 PT flashes and Newton
-	// steps in all (1949 measured; 2018 without the Q-function Newton).
+	// steps in all (1941 measured; about 70 more without the Q-function
+	// Newton).
 	// Each split is an equilibrium by criterion 3, checked from scratch.
 	// Among them are n-butane with isobutane
 	// at 5 bar, whose two-phase range is under 4 K wide (under 0.4 K at 5%

@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Step 0 is next.
+the owner's question. Steps 0 to 2 are done, and step 3 is next.
 
 ## Goal
 
@@ -182,7 +182,7 @@ output the tests check.
 | D1 | Where it lives | A new module `flowsheet`: streams, ports, the unit interface, M4's unit operations, the graph, the solver and the file format. It imports `components`, `thermo`, `flash` and `numeric`. Unit families of later milestones (columns, reactors) go in their own modules and implement the same interface; the file loader takes a table of unit constructors, so they plug in without `flowsheet` importing them. A small module `quantity` holds units of measure. | One module keeps M4 simple with no import cycles, and the constructor table is the seam for M7 and M9. |
 | D2 | Streams | A material stream holds component molar flows (mol/s), and its state: T, P and the `FlashResult` that produced it, so H, S, V and the phases are always at hand. An energy stream holds a rate in W. A feed is specified by (T, P), (P, H), or (P or T, vapour fraction). | Every unit needs the inlet's state, and a stream that's always flashed can't be half-specified. |
 | D3 | Units | All of G1: mixer, splitter, valve, heater and cooler (one unit, with the duty's sign), pump, compressor and expander, flash drum, component separator. Specifications as DWSIM's main modes: outlet T, duty, outlet vapour fraction or ΔT for a heater; outlet P or ΔP for a valve, pump, compressor and expander; split fractions; and so on. Exactly one specification of each kind, checked when the file loads. | G1 lists them all for M4, and each is a few flashes once the interface exists. The roadmap's M4 list left out the compressor, expander and component separator; G1 has them. |
-| D4 | Unit models | Mixer: Σn, ΣH, P the lowest inlet's unless given, then a PH flash. Splitter: the inlet's intensive state, unflashed. Valve: isenthalpic, PH at the outlet P. Heater: PT, PH or a vapour-fraction flash by its specification. Pump: ΔH = v·ΔP/η with the inlet's liquid volume, refused for a vapour inlet. Compressor and expander: isentropic outlet by PS, then ΔH_s/η (or η·ΔH_s), then PH. Flash drum: the inlets mixed, then PT, PH (adiabatic) or with a duty, vapour and liquid out. Component separator: fractions of each component to the first outlet, outlet T and P given, its duty from the balance. | The standard models, and the pump as DWSIM's, so the comparison compares solvers rather than models. Step 0 confirms DWSIM's pump and compressor; if they differ, reflux follows the textbook and the fixture explains the gap. |
+| D4 | Unit models | Mixer: Σn, ΣH, P the lowest inlet's unless given, then a PH flash. **Amended in step 2:** a given P can't be above the lowest inlet's, a valve can't raise P, and an empty inlet doesn't set the mixer's P. So DWSIM's "inlet average" and "inlet maximum" mixer modes are refused. Splitter: the inlet's intensive state, unflashed. Valve: isenthalpic, PH at the outlet P. Heater: PT, PH or a vapour-fraction flash by its specification. Pump: ΔH = v·ΔP/η with the inlet's liquid volume, refused for a vapour inlet. Compressor and expander: isentropic outlet by PS, then ΔH_s/η (or η·ΔH_s), then PH. Flash drum: the inlets mixed, then PT, PH (adiabatic) or with a duty, vapour and liquid out. Component separator: fractions of each component to the first outlet, outlet T and P given, its duty from the balance. | The standard models, and the pump as DWSIM's, so the comparison compares solvers rather than models. Step 0 confirms DWSIM's pump and compressor; if they differ, reflux follows the textbook and the fixture explains the gap. |
 | D5 | Graph | Ports by name on each unit; a stream joins one outlet to one inlet. Tarjan's strongly connected components, solved in topological order. Within each, enumerate its cycles (Johnson), then choose the fewest tear streams that break them all, preferring a nonredundant set (Upadhye–Grens) and then the fewest torn variables. Exhaustive for up to 12 cycles; beyond that, a greedy cover, and a note in the report. A tear named in the file wins. | Exact on the flowsheets M4 will see, explainable, and close to what textbooks recommend. Naming a tear keeps the user in charge, as DWSIM's recycle block does. |
 | D6 | Tear variables | Component molar flows, P and molar H. A torn stream is rebuilt by a PH flash, started from its last T. | Mixing is linear in flows and H, which helps Wegstein. H also specifies a saturated pure stream, which T and P can't, and steam in M5 will need that. |
 | D7 | Convergence | Direct substitution, bounded Wegstein (q in [−5, 0], applied every other iteration) as the default, and Broyden on all of a component's tear variables together, added to `numeric` as a general quasi-Newton solver. Converged when every tear variable changes by at most 1e-9 of its scale: a component flow against the stream's total flow, P against itself, and H against RT, since H can be near zero. At most 100 iterations. Each iteration's residuals are kept. | The three the roadmap names. Tight tolerances, because the overall balance closes to exactly that, and flashes converge to 1e-12. |
@@ -322,10 +322,97 @@ flowchart LR
   It led to the test of `ps`'s three, and planting five, or one edit
   instead of two, is now caught as well.
 
-### 2. Streams and the first units
-- Material and energy streams (D2), the unit interface and ports.
-- The mixer, splitter, valve and heater, each tested alone (criterion 2,
-  the checks from scratch).
+### 2. Streams and the first units — done
+- **[flowsheet/stream.v](../flowsheet/stream.v):** a `Stream` holds its
+  molar flows and the `FlashResult` that gave its state, with T, P, β and
+  its molar H, S and V (D2). `feed_tp`, `feed_ph`, `feed_tvf` and `feed_pvf`
+  are D2's four ways of giving a feed.
+  - An *empty* stream, from a split fraction of 0, keeps its composition in
+    its flash, so it still has a state and passes through a valve or
+    heater. A feed must have flow.
+- **[flowsheet/unit.v](../flowsheet/unit.v):** the `Unit` interface: `name`,
+  `inlet_ports()`, `outlet_ports()` and `calculate(fluid, inlets)
+  !Outcome`.
+  - A unit holds its specification and nothing about a solve, so the same
+    inlets always give the same answer.
+  - An `EnergyStream` is reported by the unit that takes it, with a rate
+    above zero going into the material. In M4 energy streams don't connect
+    to other units, so they aren't ports.
+- **The units,** each with a constructor that refuses a bad specification:
+  - [mixer.v](../flowsheet/mixer.v): `new_mixer(name, inlets, outlet_p:)`;
+  - [splitter.v](../flowsheet/splitter.v): `new_splitter(name, fractions)`,
+    which must sum to 1 within 1e-9;
+  - [valve.v](../flowsheet/valve.v): outlet P or pressure drop;
+  - [heater.v](../flowsheet/heater.v): outlet T, ΔT, outlet β or duty, with
+    a pressure drop in any mode.
+- **[flowsheet/error.v](../flowsheet/error.v):** `FlowsheetError`, part of
+  D8. So far it has `.bad_specification` and `.flash_failed`, which names
+  the unit and keeps the flash's own kind, such as `.more_phases`. Step 5
+  adds the solver's failures.
+- **D4 amended:** a mixer's given P can't be above its lowest inlet's, a
+  valve can't raise P, and an empty inlet doesn't set the mixer's P.
+- **Tests in [flowsheet/units_test.v](../flowsheet/units_test.v),** on the
+  reference flowsheet's five components. Every unit run goes through
+  `check_unit`, which recomputes H, S and V from T, P and each phase's
+  composition, and holds each outlet to M3's criterion 3.
+  - **The balances (criterion 2), over 37 unit runs:** components close
+    exactly, and the worst energy balance is 1.55e-11 of F·RT, a valve,
+    against the target of 1e-10.
+  - **Checks that don't go through the flash:**
+    - a valve's small drop is μ_JT·ΔP to 9.5e-8, with μ_JT from `Fluid.props`
+      at the midpoint;
+    - a heater's 1 K rise is F·Cp·ΔT to 2.0e-7, with Cp likewise;
+    - propane's duty from saturated liquid to saturated vapour at 20 bar
+      matches Clapeyron's T·Δv·dP/dT from the saturation curve alone, to
+      2.1e-7: 11,691 J/mol;
+    - throttling raises S.
+  - **Round trips and state functions:**
+    - mixing two parts of one state keeps it (T to 5.7e-14);
+    - splitting and mixing back gives the inlet;
+    - mixing then heating equals heating then mixing (T to 6.2e-12);
+    - a heater's outlet T, ΔT, duty and β each reach the same state (the
+      duty's T to 3.3e-12);
+    - half a pure component's boiling duty gives β = 0.5 at Tsat.
+  - **Every feed specification** comes back to the same state.
+  - **Refusals:** each unit's and feed's, each for its own reason. A
+    three-phase state in a heater reports `.more_phases`, by the unit's
+    name.
+- **Bug found and fixed: the PH flash could fail on an ordinary state.**
+  - The mixture at 30 bar with H from −96,750 to −95,750 J/mol is two-phase
+    at about 215 K. As an ideal gas it would be at 11 to 38 K, where the
+    search started, and the PT flash refused there on PR's liquid–liquid
+    splits (`.more_phases`). So `feed_ph` failed, though the units, which
+    pass an estimate, didn't.
+  - `ideal_t` in [flash/ph.v](../flash/ph.v) now starts no lower than half
+    the feed's mean Tc. A scan from 70 to 500 K at five pressures from 1 to
+    100 bar, 865 states, finds no PH or PS failure.
+  - On M3's reference set PH and PS take fewer steps, 1941 against 1949.
+    The budget stays at 1990, and a floor made too high is caught by it
+    (2109 steps).
+  - `tools/benchmarks.vsh --time` shows no slowdown, though raw times can't
+    say so: PT, which didn't change, ran at 0.5 to 1.9 times the fixture's
+    that day. A PH flash as a multiple of a two-phase PT flash went from
+    11.7 to 12.1, 10.7 to 8.1 and 18.7 to 7.6 for the three mixtures. So
+    `m3_bench.json`, which needs DWSIM by hand, isn't regenerated.
+- **Found, not fixed:** the same scan fails `flash.uv` on 8 or 9 of 173
+  states at each pressure, all cold liquids at or below 100 K. The failure
+  is in its TV flash at about 59 to 89 K, so it isn't the bug above. No M4
+  unit uses UV, so it's carried to the exit review.
+- **Smart App Control** was on for most of this step. It refused V's cached
+  `vfmt.exe` and `vvet.exe`, so `v fmt` and `v vet` couldn't run, and now
+  and then a freshly built test program, so anything that loops over test
+  runs must tell that from a failed test ([V notes](v-for-go.md), §1). The
+  owner's machine had it off for the final checks, which ran in full.
+- **Planted mistakes:** 69. 66 were caught, and the other 3 are explained.
+  - **What the review before them led to:** tests for an inlet order with
+    the lowest pressure first, and for a total flow that overflows.
+    Deleting two pieces of code no answer needed: a splitter's upper bound
+    on a fraction, and a skip of phases with no moles.
+  - **The one survivor that led to a test:** an infinite heater pressure
+    drop, which got past the constructor.
+  - **The 3 that survive** drop the T estimate from the mixer's, valve's and
+    heater's PH flash. That changes speed only: 12 → 12, 18 → 17 and
+    13 → 11 steps. They stay, as D14 asks.
 
 ### 3. The remaining units
 - Pump, compressor and expander, flash drum, component separator, tested

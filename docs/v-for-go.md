@@ -109,6 +109,17 @@ with long names next to the output. In a deeply nested folder it fails with
 `could not write … .o: No such file or directory`, then tries to fall back to
 gcc, which you don't have. A path like `C:\Users\Ricky\dev\reflux` is fine.
 
+**Windows gotcha: Smart App Control can refuse V's programs.** It judges
+each unsigned program as it starts, and V reports a refusal as
+`failed CreateProcess ...: The operation completed successfully`, which
+reads like a bug in V. PowerShell gives the real reason: "An Application
+Control policy has blocked this file". To see what was refused, read the
+`Microsoft-Windows-CodeIntegrity/Operational` event log, events 3033 and
+3077. On 2026-11-02, V's cached `vfmt.exe`, `vvet.exe` and `vtimeout.exe`
+were refused, so `v fmt` and `v vet` couldn't run, and now and then so was
+a test program just built, though the next build of it ran. Anything that
+runs tests in a loop has to tell that refusal from a failed test.
+
 ---
 
 ## 2. Modules and visibility
@@ -396,6 +407,17 @@ pub fn solve_tp(m Model, t f64, p f64, n []f64, root Root) !State
 `Cubic` never says `implements Model`. Passing a `Cubic` to `solve_tp`
 compiles because it has the five methods. Inside a function, `if m is Cubic`
 checks the concrete type and smart-casts `m`, like a Go type assertion.
+
+**An interface can ask for fields, not only methods**, which Go's can't.
+`Unit` in [flowsheet/unit.v](../flowsheet/unit.v) has `name string`, so
+every unit needs that field, and `u.name` works on the interface value with
+no getter.
+
+**In an array literal, the first element sets the type.** Go says
+`[]Unit{mixer, valve}`. V says `[Unit(mixer), valve]`: cast the first
+element, and the rest convert to it. Casting a later one instead,
+`[mixer, Unit(valve)]`, is a compile error, since the array is then a
+`[]Mixer`.
 
 **An interface can hold an interface.** `Translated` in
 [thermo/translated.v](../thermo/translated.v) has a field `inner Model` and

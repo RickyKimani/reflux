@@ -42,9 +42,9 @@ enum Spec {
 // dQ*/dT = −(H(T) − H_spec)/RT² with H(T) the equilibrium enthalpy, which
 // never falls as T rises. So:
 //
-// - from the ideal gas's T for H_spec (or params.estimate), T is stepped out
-//   by 50% at a time until H(T) − H_spec changes sign, with a PT flash at
-//   each T;
+// - from the ideal gas's T for H_spec, no lower than half the mean Tc (or
+//   from params.estimate), T is stepped out by 50% at a time until
+//   H(T) − H_spec changes sign, with a PT flash at each T;
 // - Brent's method narrows that bracket to 1e-3 in T;
 // - if the PT flash there splits, Newton on Q's stationary conditions in
 //   (v, ln T) together, equal fugacities and H = H_spec, with Q's Hessian,
@@ -159,12 +159,21 @@ fn (s StateFlash) flash_at(t f64) !FlashResult {
 }
 
 // ideal_t is the temperature at which the feed as an ideal gas has the
-// specified H or S: where the search starts.
+// specified H or S: where the search starts. A liquid's H is far below the
+// ideal gas's, which can put that temperature near absolute zero, where
+// PR's liquids split in ways no answer needs and the PT flash refuses. So
+// the search starts no lower than half the feed's mean Tc.
 fn (s StateFlash) ideal_t() f64 {
 	if s.params.estimate > 0.0 {
 		return s.params.estimate
 	}
-	return numeric.bisect(IdealGap{s}, state_t_min, state_t_max) or { 300.0 }
+	comps := s.fl.model.components()
+	mut tc := 0.0
+	for i in s.present {
+		tc += s.z[i] * comps[i].tc
+	}
+	t := numeric.bisect(IdealGap{s}, state_t_min, state_t_max) or { 300.0 }
+	return math.max(t, 0.5 * tc)
 }
 
 // IdealGap is the feed's H or S as an ideal gas at T, minus the

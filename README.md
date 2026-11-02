@@ -103,6 +103,14 @@ flash/
   error.v           FlashError: every failure, typed, never a panic
 quantity/           numbers with units ("30 bar", "100 kmol/h") read into SI,
                     by NIST SP 811's definitions
+flowsheet/
+  stream.v          material streams, each with the flash that gave its state
+  unit.v            the Unit interface, and energy streams
+  mixer.v           mixer: flows and enthalpy add, then a PH flash
+  splitter.v        splitter: fractions of the flow, the inlet's state
+  valve.v           valve: isenthalpic, by a PH flash
+  heater.v          heater and cooler: outlet T, ΔT, β or duty
+  error.v           FlowsheetError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on

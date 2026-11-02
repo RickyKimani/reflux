@@ -38,12 +38,18 @@ Keep this section current: update it whenever a step is committed.
     its stream back within 8e-14. Its pump uses a non-PR liquid density,
     and its two-inlet drum is wrong. The spike doc lists what step 8 must
     do.
-  - Step 1 is committed, not pushed: units of measure, the `quantity`
+  - Step 1 is committed and pushed: units of measure, the `quantity`
     module (D10), against a table hand-written from NIST SP 811
     (`testdata/m4_units.json`). D10 was amended there: ΔT, ΔP and
     fractions too, and a few more units.
-  - Next is step 2: material and energy streams (D2), the unit interface
-    and ports, and the first units.
+  - Step 2 is committed and pushed: streams, the `Unit` interface, the
+    mixer, splitter, valve and heater (`flowsheet/`). D4 was amended
+    there: nothing but a pump or compressor raises P. It fixed a PH flash that failed on ordinary
+    two-phase states when its ideal-gas start fell near 0 K. It found that
+    `flash.uv` fails on cold liquids at or below 100 K, carried to the exit
+    review.
+  - Next is step 3: pump, compressor and expander, flash drum, and
+    component separator, tested the same way.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
     with M4; the owner chose to plan M4 first.
 
@@ -139,7 +145,8 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
 `components`. `quantity`, units of measure (M4), depends on nothing.
 `sweep`, the flash robustness sweep, is the one module that uses both
-`components` and `flash`.
+`components` and `flash`. `flowsheet` (M4) uses `flash`, `thermo` and
+`numeric`, and its tests use `components`.
 
 - **`thermo` is built on one contract.** `Model` (thermo/model.v) supplies
   the reduced residual Helmholtz energy F(T, V, n) = Aʳ/RT and its
@@ -188,11 +195,17 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
   vendored `pr.ipd`/`srk.ipd`, taking the first entry listed for a pair.
+- **`flowsheet`** is M4's, in progress.
+  - A `Stream` is its molar flows plus the flash that gave its state, so
+    it's never half specified. Its H, S and V are its phases'.
+  - A `Unit` is `calculate(fluid, inlets) !Outcome` and holds nothing about
+    a solve. An energy rate above zero goes into the unit's material.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
-  (`FlashError`, `NewtonError`, `InputError`, `LookupError`), because the
-  Python API (M10a) can't catch panics.
+  (`FlashError`, `NewtonError`, `InputError`, `LookupError`,
+  `QuantityError`, `FlowsheetError`), because the Python API (M10a) can't
+  catch panics.
 - **A solver returns a result only when it has shown the result to be
   right**, meaning its tolerance is met and the split verified. Anything
   else is an error, never a plausible-looking answer.
@@ -259,3 +272,11 @@ or a test:
   tests, because V's test runner imports vlib's.
 - **Leftovers:** V can leave `.*.v3cc.*/` build folders next to a binary.
   They're git-ignored; delete them.
+- **Smart App Control** can refuse V's programs, and V reports it as `failed
+  CreateProcess ...: The operation completed successfully`. A refused run
+  proves nothing, so a mutation loop must retry it, not count it as caught.
+  It's the owner's security setting: don't work around it. See
+  `docs/v-for-go.md`, §1.
+- **A `!` in a test function that doesn't return a Result** can turn a typed
+  error into a `V panic` with no FAIL line, so a panic in a test's output
+  isn't always a panic in the code.
