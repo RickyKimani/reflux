@@ -139,13 +139,15 @@ flowsheet/
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
-                    the same flashes (docs/benchmarks.md)
+                    the same flashes, and reflux and DWSIM on the reference
+                    flowsheet (docs/benchmarks.md)
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
-                    gen_m3_dwsim.py, gen_m4_dwsim.py and gen_m3_bench.py
-                    (DWSIM 9's answers and timings, by hand on Windows),
-                    golden.vsh (the golden flowsheets' results), import_chemsep.vsh,
+                    gen_m3_dwsim.py, gen_m4_dwsim.py, gen_m3_bench.py and
+                    gen_m4_bench.py (DWSIM 9's answers and timings, by hand on
+                    Windows), golden.vsh (the golden flowsheets' results),
+                    import_chemsep.vsh,
                     data_quality.vsh, flash_sweep.vsh and benchmarks.vsh
                     (generated data and reports), bench_case.v (reflux's side
                     of the benchmarks)
@@ -237,7 +239,9 @@ And from M3, for any `thermo.Model`:
 - [x] Timed against `thermo` and DWSIM 9
       ([docs/benchmarks.md](docs/benchmarks.md)): faster than DWSIM on PT
       flashes (1.4–5.6×) and bubble points (3.9–10×), as fast on a binary's
-      PH, and 2–4× slower on PH for 5 and 10 components.
+      PH, and 2–4× slower on PH for 5 and 10 components. M4 step 9 made PH
+      2–4 times faster: twice as fast as DWSIM's for the binary, a little
+      faster for 5 components and a little slower for 10.
 - [x] Every failure a typed error, never a panic and never an unproven
       answer.
 

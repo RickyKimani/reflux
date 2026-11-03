@@ -1,6 +1,6 @@
 {
  "source": {
-  "generated": "2026-10-28",
+  "generated": "2026-11-03",
   "generator": "tools/gen_m3_bench.py",
   "python": "3.13.17",
   "thermo": "0.6.1",
@@ -783,9 +783,9 @@
     3000000.0
    ],
    "reflux": {
-    "median_us": 252.6,
-    "min_us": 177.2,
-    "calls": 2714,
+    "median_us": 241,
+    "min_us": 178.9,
+    "calls": 3046,
     "answer": {
      "beta": 0.23922974632517396,
      "t": 0,
@@ -794,24 +794,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 1550.65,
-    "min_us": 941.3,
+    "median_us": 1117.9,
+    "min_us": 902.5,
     "calls": 200,
     "answer": {
      "beta": 0.23922971890909758
     }
    },
    "dwsim_default": {
-    "median_us": 935.7,
-    "min_us": 627.5,
+    "median_us": 593.4,
+    "min_us": 413.2,
     "calls": 200,
     "answer": {
      "beta": 0.23926872489889447
     }
    },
    "dwsim_tight": {
-    "median_us": 891.5,
-    "min_us": 651.8,
+    "median_us": 753.15,
+    "min_us": 576.3,
     "calls": 200,
     "answer": {
      "beta": 0.23923063660410754
@@ -906,9 +906,9 @@
     1000000.0
    ],
    "reflux": {
-    "median_us": 90.3,
-    "min_us": 53.8,
-    "calls": 7209,
+    "median_us": 85.1,
+    "min_us": 64.1,
+    "calls": 8919,
     "answer": {
      "beta": 1,
      "t": 0,
@@ -917,24 +917,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 1724.35,
-    "min_us": 1325.8,
+    "median_us": 2427.55,
+    "min_us": 1557.0,
     "calls": 200,
     "answer": {
      "beta": 1.0
     }
    },
    "dwsim_default": {
-    "median_us": 475.85,
-    "min_us": 300.9,
+    "median_us": 370.7,
+    "min_us": 289.4,
     "calls": 200,
     "answer": {
      "beta": 1.0
     }
    },
    "dwsim_tight": {
-    "median_us": 463.25,
-    "min_us": 294.1,
+    "median_us": 383.65,
+    "min_us": 288.7,
     "calls": 200,
     "answer": {
      "beta": 1.0
@@ -1029,19 +1029,19 @@
     3000000.0
    ],
    "reflux": {
-    "median_us": 2966.7,
-    "min_us": 2040,
-    "calls": 281,
+    "median_us": 1608.8,
+    "min_us": 896,
+    "calls": 608,
     "answer": {
      "beta": 0,
-     "t": 249.9999999999999,
+     "t": 250.0000000000001,
      "h": 0
     },
     "error": ""
    },
    "thermo": {
-    "median_us": 6694.45,
-    "min_us": 5597.5,
+    "median_us": 10541.9,
+    "min_us": 6991.9,
     "calls": 200,
     "answer": {
      "t": 250.00000000000009,
@@ -1049,8 +1049,8 @@
     }
    },
    "dwsim_default": {
-    "median_us": 3162.8,
-    "min_us": 2089.1,
+    "median_us": 3514.4,
+    "min_us": 2365.9,
     "calls": 200,
     "answer": {
      "t": 250.0000000029463,
@@ -1058,8 +1058,8 @@
     }
    },
    "dwsim_tight": {
-    "median_us": 3760.05,
-    "min_us": 2565.7,
+    "median_us": 4580.8,
+    "min_us": 3315.0,
     "calls": 200,
     "answer": {
      "t": 250.0000000029642,
@@ -1114,9 +1114,9 @@
     3117000.0
    ],
    "reflux": {
-    "median_us": 169.9,
-    "min_us": 109.9,
-    "calls": 3575,
+    "median_us": 168.6,
+    "min_us": 132.8,
+    "calls": 4455,
     "answer": {
      "beta": 0,
      "t": 205.4730236981191,
@@ -1125,24 +1125,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 3418.0,
-    "min_us": 2211.6,
+    "median_us": 4081.45,
+    "min_us": 2672.6,
     "calls": 200,
     "answer": {
      "t": 205.47302370069582
     }
    },
    "dwsim_default": {
-    "median_us": 1058.65,
-    "min_us": 739.7,
+    "median_us": 1062.3,
+    "min_us": 835.6,
     "calls": 200,
     "answer": {
      "t": 205.47110226339157
     }
    },
    "dwsim_tight": {
-    "median_us": 935.15,
-    "min_us": 718.3,
+    "median_us": 1089.4,
+    "min_us": 818.3,
     "calls": 200,
     "answer": {
      "t": 205.47110226339157
@@ -1237,35 +1237,35 @@
     4000000.0
    ],
    "reflux": {
-    "median_us": 1287.35,
-    "min_us": 414.9,
-    "calls": 702,
+    "median_us": 582.35,
+    "min_us": 378.3,
+    "calls": 1310,
     "answer": {
-     "beta": 0.6833333588849893,
+     "beta": 0.6833333588849899,
      "t": 0,
      "h": 0
     },
     "error": ""
    },
    "thermo": {
-    "median_us": 5194.35,
-    "min_us": 2563.2,
+    "median_us": 3055.15,
+    "min_us": 2069.7,
     "calls": 200,
     "answer": {
      "beta": 0.683333325093414
     }
    },
    "dwsim_default": {
-    "median_us": 1284.1,
-    "min_us": 801.3,
+    "median_us": 1127.8,
+    "min_us": 832.6,
     "calls": 200,
     "answer": {
      "beta": 0.6834184008959707
     }
    },
    "dwsim_tight": {
-    "median_us": 2062.1,
-    "min_us": 1170.7,
+    "median_us": 1338.6,
+    "min_us": 1026.7,
     "calls": 200,
     "answer": {
      "beta": 0.6833486530715448
@@ -1360,9 +1360,9 @@
     3000000.0
    ],
    "reflux": {
-    "median_us": 366.8,
-    "min_us": 162.9,
-    "calls": 2161,
+    "median_us": 179.5,
+    "min_us": 142.9,
+    "calls": 4022,
     "answer": {
      "beta": 1,
      "t": 0,
@@ -1371,24 +1371,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 11302.4,
-    "min_us": 6566.6,
+    "median_us": 8248.9,
+    "min_us": 6845.4,
     "calls": 200,
     "answer": {
      "beta": 1.0
     }
    },
    "dwsim_default": {
-    "median_us": 835.3,
-    "min_us": 404.6,
+    "median_us": 547.6,
+    "min_us": 363.0,
     "calls": 200,
     "answer": {
      "beta": 1.0
     }
    },
    "dwsim_tight": {
-    "median_us": 994.1,
-    "min_us": 671.2,
+    "median_us": 515.55,
+    "min_us": 357.8,
     "calls": 200,
     "answer": {
      "beta": 1.0
@@ -1483,9 +1483,9 @@
     4000000.0
    ],
    "reflux": {
-    "median_us": 13804.55,
-    "min_us": 5904.1,
-    "calls": 200,
+    "median_us": 4034.75,
+    "min_us": 2359.5,
+    "calls": 246,
     "answer": {
      "beta": 0,
      "t": 250.00000000000477,
@@ -1494,8 +1494,8 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 27337.75,
-    "min_us": 14134.4,
+    "median_us": 26155.35,
+    "min_us": 18236.6,
     "calls": 200,
     "answer": {
      "t": 250.00000000000006,
@@ -1503,8 +1503,8 @@
     }
    },
    "dwsim_default": {
-    "median_us": 4466.8,
-    "min_us": 2931.1,
+    "median_us": 4821.9,
+    "min_us": 3479.2,
     "calls": 200,
     "answer": {
      "t": 249.9999974569263,
@@ -1512,8 +1512,8 @@
     }
    },
    "dwsim_tight": {
-    "median_us": 6089.4,
-    "min_us": 4888.4,
+    "median_us": 7154.3,
+    "min_us": 5909.4,
     "calls": 200,
     "answer": {
      "t": 249.99999999997996,
@@ -1568,9 +1568,9 @@
     4155999.9999999995
    ],
    "reflux": {
-    "median_us": 405.2,
-    "min_us": 292.6,
-    "calls": 1682,
+    "median_us": 496.5,
+    "min_us": 355,
+    "calls": 1507,
     "answer": {
      "beta": 0,
      "t": 198.79909333109933,
@@ -1579,24 +1579,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 23832.6,
-    "min_us": 12648.8,
+    "median_us": 21162.8,
+    "min_us": 13415.1,
     "calls": 200,
     "answer": {
      "t": 198.7990933314189
     }
    },
    "dwsim_default": {
-    "median_us": 5696.3,
-    "min_us": 3060.5,
+    "median_us": 5653.8,
+    "min_us": 4364.4,
     "calls": 200,
     "answer": {
      "t": 198.79653802264622
     }
    },
    "dwsim_tight": {
-    "median_us": 5720.05,
-    "min_us": 4004.1,
+    "median_us": 5684.0,
+    "min_us": 4375.8,
     "calls": 200,
     "answer": {
      "t": 198.79653802264622
@@ -1691,35 +1691,35 @@
     5000000.0
    ],
    "reflux": {
-    "median_us": 1329.4,
-    "min_us": 790,
-    "calls": 572,
+    "median_us": 1175.7,
+    "min_us": 649.2,
+    "calls": 850,
     "answer": {
-     "beta": 0.6198696972019558,
+     "beta": 0.6198696972019566,
      "t": 0,
      "h": 0
     },
     "error": ""
    },
    "thermo": {
-    "median_us": 5528.75,
-    "min_us": 3746.6,
+    "median_us": 7509.95,
+    "min_us": 4741.1,
     "calls": 200,
     "answer": {
      "beta": 0.6198696679268321
     }
    },
    "dwsim_default": {
-    "median_us": 1677.05,
-    "min_us": 1096.9,
+    "median_us": 1516.3,
+    "min_us": 1222.2,
     "calls": 200,
     "answer": {
      "beta": 0.6199382628063955
     }
    },
    "dwsim_tight": {
-    "median_us": 2843.3,
-    "min_us": 1589.1,
+    "median_us": 1813.8,
+    "min_us": 1452.5,
     "calls": 200,
     "answer": {
      "beta": 0.6198788638208415
@@ -1814,9 +1814,9 @@
     2000000.0
    ],
    "reflux": {
-    "median_us": 460.4,
-    "min_us": 191.6,
-    "calls": 1783,
+    "median_us": 301.75,
+    "min_us": 215.1,
+    "calls": 2546,
     "answer": {
      "beta": 1,
      "t": 0,
@@ -1825,24 +1825,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 32593.05,
-    "min_us": 20308.5,
+    "median_us": 28472.1,
+    "min_us": 21876.0,
     "calls": 200,
     "answer": {
      "beta": 1.0
     }
    },
    "dwsim_default": {
-    "median_us": 894.25,
-    "min_us": 711.3,
+    "median_us": 1030.3,
+    "min_us": 705.9,
     "calls": 200,
     "answer": {
      "beta": 1.0000000000000002
     }
    },
    "dwsim_tight": {
-    "median_us": 866.4,
-    "min_us": 703.9,
+    "median_us": 1160.55,
+    "min_us": 726.1,
     "calls": 200,
     "answer": {
      "beta": 1.0000000000000002
@@ -1937,8 +1937,8 @@
     5000000.0
    ],
    "reflux": {
-    "median_us": 24815.25,
-    "min_us": 15772,
+    "median_us": 5933.9,
+    "min_us": 4018.8,
     "calls": 200,
     "answer": {
      "beta": 0,
@@ -1948,8 +1948,8 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 49424.75,
-    "min_us": 27848.8,
+    "median_us": 48542.05,
+    "min_us": 32588.7,
     "calls": 200,
     "answer": {
      "t": 280.0,
@@ -1957,8 +1957,8 @@
     }
    },
    "dwsim_default": {
-    "median_us": 5586.5,
-    "min_us": 3984.4,
+    "median_us": 5184.8,
+    "min_us": 3781.5,
     "calls": 200,
     "answer": {
      "t": 280.00000148181584,
@@ -1966,8 +1966,8 @@
     }
    },
    "dwsim_tight": {
-    "median_us": 8181.35,
-    "min_us": 6390.7,
+    "median_us": 8148.85,
+    "min_us": 6711.2,
     "calls": 200,
     "answer": {
      "t": 280.00000000001074,
@@ -2022,9 +2022,9 @@
     3117000.0
    ],
    "reflux": {
-    "median_us": 1303.05,
-    "min_us": 592.7,
-    "calls": 632,
+    "median_us": 1533.55,
+    "min_us": 724.4,
+    "calls": 666,
     "answer": {
      "beta": 0,
      "t": 183.78289060594042,
@@ -2033,24 +2033,24 @@
     "error": ""
    },
    "thermo": {
-    "median_us": 108136.1,
-    "min_us": 62464.9,
+    "median_us": 102474.6,
+    "min_us": 68571.8,
     "calls": 200,
     "answer": {
      "t": 183.78289060723
     }
    },
    "dwsim_default": {
-    "median_us": 3103.15,
-    "min_us": 2326.4,
+    "median_us": 2216.55,
+    "min_us": 1772.0,
     "calls": 200,
     "answer": {
      "t": 183.78031425361502
     }
    },
    "dwsim_tight": {
-    "median_us": 3052.55,
-    "min_us": 2092.2,
+    "median_us": 2252.05,
+    "min_us": 1890.1,
     "calls": 200,
     "answer": {
      "t": 183.78031425361502

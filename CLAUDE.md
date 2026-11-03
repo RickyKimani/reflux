@@ -24,10 +24,9 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M3, the flash,** carried forward (in its review): PH for 5 and 10
-  components takes 2–4× as long as DWSIM's, about 12 verified PT flashes
-  per answer; VLLE is M6; reports to make upstream to V, `thermo` and
-  DWSIM.
+- **M3, the flash,** carried forward (in its review): VLLE is M6; reports
+  to make upstream to V, `thermo` and DWSIM. Its PH speed, 2–4× DWSIM's
+  time for 5 and 10 components, was M4 step 9's to fix.
 - **M4 (the first flowsheet) is in progress** on branch `m4-flowsheet`,
   which is pushed and has no PR yet. Its plan, `docs/m4-plan.md`, is
   approved: exit criteria 1–10, decisions D1–D16 and steps 0–11.
@@ -69,7 +68,7 @@ Keep this section current: update it whenever a step is committed.
     (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
     V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
     first: a report to make upstream.
-  - Steps 7 and 8 are committed, not pushed.
+  - Steps 7 to 9 are committed, not pushed.
   - Step 7: the CLI, `reflux solve` and `reflux demo`, and the reports
     (`flowsheet/report.v`, `table.v`, `docs/report-format.md`). D11 was
     amended there: `--trace` prints when the solve ends, and a failure
@@ -82,8 +81,14 @@ Keep this section current: update it whenever a step is committed.
     criterion 2's targets are each reproduced from DWSIM: its pump's
     density, its mixing entropy in a two-phase expander, its rounded
     constants.
-  - Next is step 9: the flowsheet benchmark against DWSIM (D14), then PH's
-    speed for 5 and 10 components, carried from M3.
+  - Step 9: the flowsheet benchmark
+    (`tools/gen_m4_bench.py`, `testdata/m4_bench.json`, in
+    `docs/benchmarks.md`), and PH 2–4× faster. Only a PH or PS flash's
+    answer is verified, and a split's stability test stops at Wilson's two
+    trials when they prove instability (`first_proof`): M3's D3 and D5
+    amended. The reference flowsheet solves in 26 ms, DWSIM's in 0.56 s.
+  - Next is step 10: release v0.1.0, with a CHANGELOG and the golden suite
+    as the gate (D15).
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -139,10 +144,12 @@ v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) a
   - `v run tools/data_quality.vsh` writes `docs/data-quality.md`.
   - `tools/gen_m3_bench.py` (by hand, with DWSIM) times reflux, thermo and
     DWSIM case by case and writes `testdata/m3_bench.json`; `v run
-    tools/benchmarks.vsh` then writes `docs/benchmarks.md`. Rerun both
-    after a change that could make flashes faster or slower. `v -prod -cc
-    gcc run tools/benchmarks.vsh --time` times reflux alone, against the
-    fixture, without DWSIM.
+    tools/benchmarks.vsh` then writes `docs/benchmarks.md`.
+    `tools/gen_m4_bench.py` does the same for the reference flowsheet,
+    into `testdata/m4_bench.json`. Rerun them after a change that could
+    make flashes faster or slower. `v -prod -cc gcc run
+    tools/benchmarks.vsh --time` times reflux alone, against the fixtures,
+    without DWSIM.
   - `v -prod -cc gcc run tools/flash_sweep.vsh` writes
     `docs/flash-robustness.md`, 10,000 PT flashes (about three minutes,
     the build included; about twenty under tcc). Regenerate it after
@@ -219,7 +226,9 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     Substitution with DEM is followed by a second-order finish in α = 2√W.
   - `pt` tests stability, then splits: substitution with Rachford–Rice and
     DEM, then Newton on G through `numeric.minimize`, then each phase
-    re-verified.
+    re-verified. Its feed's test stops at the first proof of instability
+    once Wilson's two trials have run, and runs the rest only if no split
+    from those stands.
   - `tvf` and `pvf` (`vf.v`) find P or T for a given β; bubble and dew
     points are β = 0 and 1. Newton runs on ln K and ln P (or ln T)
     from Wilson's start, with a PT-split start as fallback. Two answers
@@ -227,8 +236,8 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
   - `ph` and `ps` (`ph.v`) take a `thermo.Fluid` and find T from a molar H
     or S, by Michelsen's Q-function. T is bracketed by PT flashes on the
     sign of H(T) − H_spec, narrowed by Brent, and finished by Newton in
-    (v, ln T). A pure component inside its jump at Tsat gets β from the
-    energy balance.
+    (v, ln T). Only the answer's PT flash is verified. A pure component
+    inside its jump at Tsat gets β from the energy balance.
   - `tv` and `uv` (`tv.v`) find P (and T) from a molar V (and U). The finish
     minimises A over the vapour's mole numbers and volume, in F(T, V, n)
     alone, with no volume roots (D5); UV adds ln T and the energy balance to

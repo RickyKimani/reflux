@@ -37,6 +37,9 @@ pub struct Stability {
 pub:
 	stable bool
 	trials []Trial
+	// stopped is true when first_proof left trials unrun after the first that
+	// proved instability.
+	stopped bool
 }
 
 // incipient returns the non-trivial trial with the lowest tm: for an
@@ -75,6 +78,14 @@ pub:
 	// unstable if its tm is below −tol. Otherwise stability returns a
 	// FlashError rather than call the feed stable.
 	max_steps int = 500
+	// first_proof stops at the first trial that proves the feed unstable, once
+	// Wilson's two have both run, rather than run them all to find the lowest
+	// tm. One proof is all a split needs to start from, and a feed that splits
+	// usually has one from Wilson's trials, so the nearly pure ones are skipped.
+	// Running both of Wilson's keeps the better start, and with it the split's
+	// steps: stopping at the first proof alone cost 7% more (M4 step 9). A
+	// stable feed runs them all.
+	first_proof bool
 }
 
 // Successive substitution steps before the Newton finish takes over.
@@ -180,7 +191,8 @@ pub fn stability(m thermo.Model, t f64, p f64, z []f64, params StabilityParams) 
 	mut trials := []Trial{}
 	mut stable := true
 	mut unconverged := 0
-	for s in starts {
+	mut stopped := false
+	for j, s in starts {
 		tr := f.trial(s, params.max_steps)!
 		if !tr.trivial && tr.tm < -params.tol {
 			stable = false
@@ -189,13 +201,18 @@ pub fn stability(m thermo.Model, t f64, p f64, z []f64, params StabilityParams) 
 			unconverged++
 		}
 		trials << tr
+		if params.first_proof && !stable && j >= 1 {
+			stopped = j < starts.len - 1
+			break
+		}
 	}
 	if stable && unconverged > 0 {
 		return fail(.no_convergence, 'stability at ${t} K and ${p} Pa: ${unconverged} trial(s) did not converge, and none showed instability')
 	}
 	return Stability{
-		stable: stable
-		trials: trials
+		stable:  stable
+		trials:  trials
+		stopped: stopped
 	}
 }
 

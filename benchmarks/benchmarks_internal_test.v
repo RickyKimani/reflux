@@ -1,5 +1,6 @@
 module benchmarks
 
+import flowsheet
 import os
 
 // The harness's own arithmetic and formatting.
@@ -85,4 +86,45 @@ fn test_the_committed_report_covers_every_case() {
 		row := '| ${label(c.kind)} | ${mixture(fx.systems[c.system])} | '
 		assert text.count(row) == 3, 'case ${c.kind} of ${fx.systems[c.system].name}'
 	}
+}
+
+fn test_the_flowsheet_section_prints_its_timings() {
+	// Seconds from a second up, an even number of solves' median the mean of
+	// the middle two, and the products to 6 decimals.
+	ff := FlowsheetFixture{
+		flowsheet: 'f.toml'
+		timings:   [
+			FlowsheetTiming{
+				label:       'slow'
+				cold_ms:     [3876.4, 3000.0, 4000.0]
+				warm_ms:     [87.0, 90.0, 80.0, 100.0]
+				load_ms:     [389.0]
+				passes:      32
+				warm_passes: 1
+				products:    {
+					'gas': 24.8957419
+				}
+			},
+			FlowsheetTiming{
+				label: 'broken'
+				error: 'no convergence'
+			},
+		]
+	}
+	text := flowsheet_section(ff)
+	assert text.contains('| slow | 32 | 3.88 s | 88.5 ms | 80.0 ms | 1 | 389 ms |'), text
+	assert text.contains('| broken | failed: no convergence |')
+	assert text.contains('| slow | 24.895742 |') && text.contains('| broken | — |')
+}
+
+fn test_passes_are_every_loops() {
+	// Two loops, of 2 passes and 1: 3 in all.
+	sol := flowsheet.Solution{
+		history: [flowsheet.TearHistory{
+			residuals: [[1.0], [1e-10]]
+		}, flowsheet.TearHistory{
+			residuals: [[1e-10]]
+		}]
+	}
+	assert passes(sol) == 3
 }

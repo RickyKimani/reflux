@@ -175,6 +175,65 @@ fn test_the_split_budget() {
 	assert newton <= 46, '${newton} Newton finishes'
 }
 
+fn test_a_split_starts_from_wilsons_trials() {
+	// A feed that splits is proved unstable by Wilson's two trials nearly every
+	// time, and then its stability test stops there (M4 step 9): the nearly
+	// pure trials, 2 to 10 more, are what made a split's test slow. All 166 of
+	// the fixture's splits start from Wilson's trials alone.
+	f := read_fixture()!
+	mut quick, mut splits := 0, 0
+	for c in f.cases.filter(!it.stable) {
+		r := flash.pt(model_for(f, c)!, c.t, c.p, c.z)!
+		splits++
+		if r.stability.stopped && r.stability.trials.len == 2 {
+			quick++
+		}
+	}
+	assert splits == 166 && quick == 166, '${quick} of ${splits}'
+}
+
+fn test_a_split_wilson_cannot_start_comes_from_the_other_trials() {
+	// Hydrogen iodide with a little n-decane and water, at 224 K and 53 bar:
+	// the robustness sweep's point 4000, with ChemSep's constants and no kᵢⱼ.
+	// Wilson's liquid-like trial proves the feed unstable, so the quick test
+	// stops after Wilson's two (M4 step 9), but the split it starts doesn't
+	// stand. The nearly pure water trial, at tm = −1.75, finds the water-rich
+	// liquid, and the split from it does. 11 of the sweep's 10,000 points need
+	// that second look.
+	cs := [
+		Component{
+			name:  'hydrogen iodide'
+			tc:    423.85
+			pc:    8.31e6
+			omega: 0.0380703
+			mw:    0.127912
+		},
+		Component{
+			name:  'n-decane'
+			tc:    617.7
+			pc:    2.11e6
+			omega: 0.491
+			mw:    0.142282
+		},
+		Component{
+			name:  'water'
+			tc:    647.14
+			pc:    2.2064e7
+			omega: 0.344
+			mw:    0.0180153
+		},
+	]
+	m := thermo.new_cubic(.pr, cs)!
+	z := [0.9104788721112472, 0.005351791480631326, 0.08416933640812153]
+	t, p := 224.0717225900757, 5.300771495603128e6
+	quick := flash.stability(m, t, p, z, first_proof: true)!
+	assert !quick.stable && quick.stopped && quick.trials.len == 2
+	r := flash.pt(m, t, p, z)!
+	check_equilibrium(m, r, 'hydrogen iodide, n-decane and water')!
+	assert r.stability.trials.len == 5 && !r.stability.stopped
+	assert math.abs(r.beta - 0.0750223285695649) <= 1e-8, '${r.beta}'
+}
+
 fn test_a_single_phase_is_labelled_by_its_pip() {
 	f := read_fixture()!
 	for c in f.cases {

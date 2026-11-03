@@ -1088,6 +1088,13 @@ function type must be `@[required]` or given a default: V flags one that
 would otherwise start as a nil function ("uninitialized `fn` struct fields
 are not allowed").
 
+**A smart-cast interface's field inside `${}` doesn't compile.** After
+`if m is thermo.Cubic { … }`, `m.kij[i]` works, but `println('${m.kij}')`
+makes C that casts through `_object` twice, and both tcc and gcc refuse it
+("has no member named `_object`"). V 0.5.2 then retries with its fallback
+compiler, which fails on something else. Take the field into a local first,
+`kij := m.kij`, and interpolate that. A report to make upstream.
+
 **On Windows, `import runtime` breaks the default build.** Even a
 three-line program that prints `runtime.nr_cpus()` fails: tcc can't parse
 the `psapi.h` that `runtime` includes, and V's gcc retry fails in its

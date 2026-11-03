@@ -151,11 +151,16 @@ fn (s StateFlash) scale(t f64) f64 {
 	}
 }
 
-fn (s StateFlash) flash_at(t f64) !FlashResult {
+// flash_at is the PT flash at T. One that only steers the search for T, in the
+// bracket or Brent's steps, isn't verified: a split's phases cost two more
+// stability tests, and a split that isn't the equilibrium can only move the
+// search, since the answer is a verified flash at the T it ends at. That's
+// about half of what a PH flash spends (M4 step 9).
+fn (s StateFlash) flash_at(t f64, answer bool) !FlashResult {
 	if !(t >= state_t_min && t <= state_t_max) {
 		return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
 	}
-	return pt(s.fl.model, t, s.p, s.z, tol: s.params.tol, verify: s.params.verify)
+	return pt(s.fl.model, t, s.p, s.z, tol: s.params.tol, verify: answer && s.params.verify)
 }
 
 // ideal_t is the temperature at which the feed as an ideal gas has the
@@ -206,14 +211,14 @@ struct EnergyGap {
 }
 
 fn (g EnergyGap) at(t f64) !f64 {
-	return g.s.residual(g.s.flash_at(t)!)
+	return g.s.residual(g.s.flash_at(t, false)!)
 }
 
 // bracket steps T out from t0 by 50% at a time until the residual changes
 // sign, and returns the two temperatures either side.
 fn (s StateFlash) bracket(t0 f64) !(f64, f64, int) {
 	mut t := t0
-	f0 := s.residual(s.flash_at(t)!)
+	f0 := s.residual(s.flash_at(t, false)!)
 	if f0 == 0.0 {
 		return t, t, 1
 	}
@@ -222,7 +227,7 @@ fn (s StateFlash) bracket(t0 f64) !(f64, f64, int) {
 		// 1.5 and 2 take the fewest steps on the reference set; 1.25 takes 3%
 		// more.
 		next := if up { t * 1.5 } else { t / 1.5 }
-		fn_ := s.residual(s.flash_at(next)!)
+		fn_ := s.residual(s.flash_at(next, false)!)
 		if fn_ == 0.0 || (fn_ > 0.0) != (f0 > 0.0) {
 			return if up { t, next, k + 2 } else { next, t, k + 2 }
 		}
@@ -236,13 +241,16 @@ fn (s StateFlash) mixture() !FlashResult {
 	f := EnergyGap{s}
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3 * lo, max_iter: s.params.max_steps)!
 	steps += coarse.evaluations
-	mut r := s.flash_at(coarse.x)!
+	mut r := s.flash_at(coarse.x, false)!
 	steps++
+	// One phase has nothing to verify: verification tests a split's phases.
+	mut verified := r.phases.len == 1
 	if r.phases.len == 2 {
 		if t, n := s.newton(r) {
 			steps += n
-			if q := s.flash_at(t) {
+			if q := s.flash_at(t, true) {
 				r = q
+				verified = true
 				steps++
 			}
 		}
@@ -253,7 +261,12 @@ fn (s StateFlash) mixture() !FlashResult {
 			max_iter: s.params.max_steps
 		)!
 		steps += fine.evaluations
-		r = s.flash_at(fine.x)!
+		r = s.flash_at(fine.x, true)!
+		verified = true
+		steps++
+	}
+	if !verified {
+		r = s.flash_at(r.t, true)!
 		steps++
 	}
 	res := s.residual(r)

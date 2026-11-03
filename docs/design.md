@@ -510,6 +510,16 @@ that another start avoids. If none does better, the answer is
 `more_phases`, with that split's proof, rather than a later start's
 failure to converge.
 
+**The feed's test stops early** (M4 step 9). It stops at the first proof of
+instability once Wilson's two trials have run (`first_proof`): one proof is
+all a split needs, and the nearly pure trials, nc more, were most of a split
+flash's stability work. Both of Wilson's run, because the better of the two is
+the better start: stopping at the first proof alone took 7% more split steps
+on the reference set. If no split from those trials stands, the test runs all
+of them and the starts are tried as above. All 166 of the reference set's splits
+start from Wilson's trials alone; 11 of the robustness sweep's 10,000 points
+need the rest.
+
 **Verified** (`verify`, on by default): each phase is re-tested for
 stability, with the other phase as a trial. An unstable phase means a third
 phase or a better split. That's a FlashError (`more_phases`) rather than an
@@ -636,6 +646,11 @@ answer, however steep or broken H(T) is.
 - **Fallback:** otherwise, or if Newton fails, Brent goes on.
 - **The answer** is a verified PT flash at the final T, with
   |H − H_spec| ≤ etol·RT or |S − S_spec| ≤ etol·R (etol 1e-10).
+- **Only the answer is verified** (M4 step 9). The PT flashes of the bracket
+  and Brent's steps only steer T, and verifying a split's phases costs two
+  more stability tests each. A split there that isn't the equilibrium can
+  move the search but not the answer, which is verified wherever it ends.
+  One phase has nothing to verify, so a single-phase answer is taken as it is.
 
 **Q's Hessian**, Newton's Jacobian. With gᵢ = ln fᵢⱽ − ln fᵢᴸ,
 r_E = (H − H_spec)/RT (or (S − S_spec)/R) and
@@ -1092,6 +1107,17 @@ These notes respond to the slow solves and slow sensitivity runs in DWSIM.
   - Each residual call still allocates a few small arrays (√aᵢ, ∂A/∂nᵢ,
     F_n). With the above fixed they're no longer near the top of the
     profile.
+- **What M4 step 9 measured** (`docs/benchmarks.md`, and a profile of the
+  reference flowsheet):
+  - PH flashes were 95% of a flowsheet's solve, and stability tests 84%: 16
+    PH flashes a solve, each about 8 PT flashes, each about 2.2 stability
+    tests of about 7.5 trials.
+  - So only a PH or PS flash's answer is verified, and a split's feed test
+    stops at Wilson's two trials when they prove it unstable (above). Timed
+    back to back against the old code, PH's median is 2.2, 2.3 and 3.7 times
+    faster for 2, 5 and 10 components, and the reference flowsheet's solve 2.5
+    times. In the benchmark, beside DWSIM: PH in 1.6, 4.0 and 5.9 ms against
+    DWSIM's 3.5, 4.8 and 5.2, and the flowsheet in 26 ms against 559.
 - **No closures in the solvers.** V 0.5.2 never frees a closure. When the
   solvers took function values, every PH flash leaked 18 KB and every
   bubble point 3 KB, a few closures each, which a sensitivity study would

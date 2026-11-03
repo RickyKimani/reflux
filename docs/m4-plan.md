@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 8 are done, and step 9 is next.
+the owner's question. Steps 0 to 9 are done, and step 10 is next.
 
 ## Goal
 
@@ -891,11 +891,80 @@ flowchart LR
   answer, and Wegstein's bound and the hold at zero flow, which no golden loop
   reaches and `solve_test.v` checks.
 
-### 9. Speed
-- The flowsheet benchmark against DWSIM (D14). Then, measured before
-  anything is changed, the carried item from M3: PH for 5 and 10
-  components takes 2–4 times as long as DWSIM's, and a flowsheet calls it
-  in every loop.
+### 9. Speed — done
+- **The flowsheet benchmark (D14):**
+  [tools/gen_m4_bench.py](../tools/gen_m4_bench.py), by hand with DWSIM 9,
+  times the reference flowsheet on DWSIM's constants in DWSIM and then in reflux,
+  within a minute. reflux's side is `benchmarks.time_flowsheet`
+  ([benchmarks/flowsheet.v](../benchmarks/flowsheet.v)), run through
+  `tools/bench_case.v --flowsheet` built with gcc `-prod`.
+  [docs/benchmarks.md](benchmarks.md) has the results, from
+  [testdata/m4_bench.json](../testdata/m4_bench.json).
+  - **A first solve** is of a flowsheet just loaded or built, after an untimed
+    one, so that .NET has compiled DWSIM's code. **A solve again** follows the
+    feed 0.01 K warmer. DWSIM starts it from its last answer; reflux, with no
+    warm start until M8, from scratch.
+  - **Measured first,** before anything changed: reflux by Wegstein solved it in
+    71 ms (4 passes), and by direct substitution in 389 ms (29). DWSIM took 553 ms
+    at its default tolerances (5 passes, its flash gas 0.5% short) and 3.88 s at
+    them scaled by 1e-8 (32), and 87 and 115 ms to solve again from its last
+    answer, in one pass.
+- **Where reflux's time went,** by a profile of 10 solves:
+  - PH flashes were 95% of it, and stability tests 84%.
+  - There were 16 PH flashes a solve. Each made about 8 PT flashes, each PT
+    flash about 2.2 stability tests, and each test 7.5 trials, all of them run.
+  - Every PT flash inside a PH flash verified its split's phases, though most
+    of them only steer the search for T.
+- **Two changes to M3's flash,** each amending an M3 decision:
+  - **Only a PH or PS flash's answer is verified** (D5 amended). The bracket's
+    and Brent's PT flashes aren't, and the coarse one is verified only if it's
+    the answer. One phase has nothing to verify.
+  - **A split's stability test stops at the first proof of instability once
+    Wilson's two trials have run** (D3 amended). If no split from those stands,
+    it runs all its trials and the starts go on as before. Stopping at the very
+    first proof took 7% more split steps, past M3's budget, so both of Wilson's
+    run.
+  - **Timed back to back against the old code,** PH's median is 2.2, 2.3 and
+    3.7 times faster for 2, 5 and 10 components, and the reference flowsheet's
+    solve 2.5 times.
+  - **In the re-timed benchmarks, beside DWSIM:**
+    - PH takes 1.6, 4.0 and 5.9 ms, where M3 had 3.0, 13.8 and 24.8. DWSIM's
+      takes 2.2 and 1.2 times as long for the binary and 5 components, and
+      0.87 times as long for 10, where it's still a little faster.
+    - The flowsheet solves in 26 ms, against DWSIM's 559 ms, and 3.0 s at
+      tight tolerances.
+    - reflux's whole solve, 23 ms, is now quicker than DWSIM's solve again from
+      its last answer, 92 ms, so M8's warm starts aren't needed now (D14).
+- **What the changes kept:**
+  - All 57 test files pass unchanged, M3's references and iteration budgets
+    included.
+  - The golden flowsheets solve to the same answers to 1e-9.
+  - The DWSIM bounds hold.
+  - The robustness sweep still has zero unexplained failures in 10,000. Its
+    counts are the same, and 102 of its three-phase points now cite a
+    different refused split as their proof.
+  - In the sweep, 11 points need the fallback, and it stands every time.
+- **Tests:**
+  - [flash/pt_test.v](../flash/pt_test.v): all 166 of the reference set's
+    splits start from Wilson's trials alone. One of the sweep's 11 fallback
+    points, hydrogen iodide with n-decane and water, splits only from the
+    nearly pure water trial.
+  - [benchmarks/flowsheet_test.v](../benchmarks/flowsheet_test.v): each program
+    solved the same flowsheet. DWSIM at 1e-8 is within 1e-4 of reflux's
+    products, and the committed report shows every timing.
+  - [benchmarks/benchmarks_internal_test.v](../benchmarks/benchmarks_internal_test.v):
+    the report's formatting.
+- **Planted mistakes:** 25. 15 were caught at once, and 4 more after the report's
+  test gained an even number of solves, a time under a second, a sixth decimal
+  and two loops.
+  - **Five of the 6 that survive only add work:** verifying the PH flashes that
+    steer T (4 of them), and marking a stability test cut short when it ran
+    every trial, which runs them again. The benchmarks and the profile see those.
+  - **The sixth takes a coarse PH flash as verified.** That's reached only when
+    Newton fails and the coarse flash already meets the energy balance to 1e-10,
+    while Brent stops it at 1e-3 of T.
+- **Found:** a smart-cast interface's field inside `${}` doesn't compile in V
+  0.5.2 (docs/v-for-go.md, §14).
 
 ### 10. Release v0.1.0
 - CHANGELOG, the version, and the golden suite as the release gate (D15).
