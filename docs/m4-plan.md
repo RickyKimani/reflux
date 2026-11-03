@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 9 are done, and step 10 is next.
+the owner's question. Steps 0 to 10 are done, and step 11 is next.
 
 ## Goal
 
@@ -966,8 +966,70 @@ flowchart LR
 - **Found:** a smart-cast interface's field inside `${}` doesn't compile in V
   0.5.2 (docs/v-for-go.md, §14).
 
-### 10. Release v0.1.0
-- CHANGELOG, the version, and the golden suite as the release gate (D15).
+### 10. Release v0.1.0 — done
+- **The version:** `v.mod` says 0.1.0, which `reflux version` prints and each
+  report carries.
+- **[CHANGELOG.md](../CHANGELOG.md)** has the 0.1.0 entry, what M0 to M4 added
+  and what they leave out, with the golden results named. It's dated when it's
+  tagged. Above it, what a version promises from 0.1.0 on:
+  - the flowsheet file and the report change only as a new `format`;
+  - the command line changes only in a minor release before 1.0, and a major one
+    after;
+  - the V modules' API may change in a minor release before 1.0, never in a
+    patch;
+  - a golden result changes only with an entry that names it and says why.
+- **The gate,** [tools/release.vsh](../tools/release.vsh), reads git and the
+  files and asks the `release` module ([release/release.v](../release/release.v)),
+  where the logic is kept apart from git so that it's tested. It refuses, with
+  every reason at once, unless:
+  - the tree is clean and the branch is `main`;
+  - v.mod's version is the CHANGELOG's newest entry, and that entry is dated;
+  - the version isn't tagged, and comes after the latest `vX.Y.Z` tag;
+  - every golden report changed since that tag is named in the entry.
+  - Then it runs `tools/check.vsh`, the golden flowsheets among it, and prints
+    the tag commands. It tags and pushes nothing.
+  - Run on this branch, it refused for the three reasons it should: the tree
+    had changes, the branch isn't `main`, and the entry says "unreleased".
+- **What D15 leaves to the owner, who chose:**
+  - a source tag only, with no binaries, since a binary would need a build per
+    system and its component data beside it;
+  - the tag on `main` after step 11 and M4's merge, so that v0.1.0 is the
+    reviewed commit;
+  - a release script as the gate, rather than a CI job on tags.
+- **The golden reports were written again** (`tools/golden.vsh`), because each
+  carries the version. Step 9's round-off came with it: at most 3.8e-14 of RT in
+  H, 4.6e-15 in β, 3.5e-15 of T and 7.3e-16 in flows, with the same passes.
+  That's far inside the golden test's 1e-9, which is why step 9 left them.
+- **Tests:** [release/release_test.v](../release/release_test.v), 6 of them.
+  - The CHANGELOG's entries, newest first, each with its own text, and a
+    heading with no date still an entry.
+  - A ready release passes, and so does a first one, with no tags.
+  - Each of the nine reasons, given alone when only its fact is wrong, in 12
+    cases.
+  - Versions are x.y.z with no sign, space, leading zero or v; a release's
+    tag is v and x.y.z; and the order is semver's.
+  - Dates, by their length, dashes, digits, month and day.
+  - The committed CHANGELOG's newest entry is v.mod's version.
+- **Found while planting mistakes,** and fixed:
+  - `parse_version` stripped every leading v, so it took `vv0.1.0`, and a v.mod
+    saying `v0.2.0`. Now only `latest` drops a tag's one v.
+  - A heading with no date wasn't an entry, so its text was lost and the gate
+    blamed the wrong entry. Now it's an entry dated '', and the gate says it has
+    no date.
+- **Planted mistakes:** 35. 28 were caught at once.
+  - Two of the 7 survivors were code that did nothing, and was deleted: a guard
+    on the preamble's lines, which the first heading drops anyway, and a check
+    for an empty part, which `atoi` refuses.
+  - One was equivalent once versions were strict, and became the simpler form:
+    comparing the entry with v.mod's text, not the parsed version.
+  - Three got tests: a tag with another letter before x.y.z, a date too long,
+    and a date with one slash for a dash.
+  - The last is equivalent: "not after the latest" and "before the latest"
+    differ only for the same version, which the gate calls tagged already.
+  - Planted again in the revised code, 32 of 33 were caught, all but that one.
+- **Found:** V's `all_after` gives the whole string when the separator isn't
+  there, and `trim_left` takes a set of characters, not a prefix
+  (docs/v-for-go.md, §8).
 
 ### 11. Docs and exit review
 - README, roadmap, design notes, the V notes, and a criterion-by-criterion

@@ -664,6 +664,17 @@ The one difference is overflow. Go returns ±Inf *and* `ErrRange`, but V's
 itself. An underflow's 0 then meets the same "above zero" check as a typed
 0.
 
+**Cutting strings: `all_after` and `trim_string_left`.** Go's
+`strings.Cut(s, "=")` returns `found`, and `TrimPrefix` and `TrimLeft` say
+which they are by name. In V:
+- `'ab'.all_after('=')` is `'ab'`, the whole string, when the separator isn't
+  there, and so is `all_before`. Check `contains` first when that matters.
+- `trim_left('v')` takes a set of characters, as Go's `TrimLeft` does, so
+  `'vv1.0'` loses both v's. `trim_string_left('v')` is Go's `TrimPrefix`.
+- `strconv.atoi` takes a sign, `+1` or `-1`, as Go's `Atoi` does, and refuses
+  `''`. [release/release.v](../release/release.v) checks that a version's parts
+  are digits itself.
+
 **`strings.levenshtein_distance(a, b)`** is in V's standard library, while
 Go's has no edit distance. It counts bytes, not runes, so dropping the
 two-byte `°` from `°C` is two edits. `quantity` and `components` use it

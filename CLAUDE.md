@@ -68,7 +68,7 @@ Keep this section current: update it whenever a step is committed.
     (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
     V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
     first: a report to make upstream.
-  - Steps 7 to 9 are committed, not pushed.
+  - Steps 7 to 10 are committed, not pushed.
   - Step 7: the CLI, `reflux solve` and `reflux demo`, and the reports
     (`flowsheet/report.v`, `table.v`, `docs/report-format.md`). D11 was
     amended there: `--trace` prints when the solve ends, and a failure
@@ -87,8 +87,14 @@ Keep this section current: update it whenever a step is committed.
     answer is verified, and a split's stability test stops at Wilson's two
     trials when they prove instability (`first_proof`): M3's D3 and D5
     amended. The reference flowsheet solves in 26 ms, DWSIM's in 0.56 s.
-  - Next is step 10: release v0.1.0, with a CHANGELOG and the golden suite
-    as the gate (D15).
+  - Step 10: v.mod's version is 0.1.0, with `CHANGELOG.md` (what a version
+    promises, and the 0.1.0 entry, undated) and the release gate,
+    `tools/release.vsh` over the `release` module. The owner chose a source
+    tag only, on `main` after step 11 and M4's merge. The golden reports were
+    written again for the version.
+  - Next is step 11: the docs and M4's exit review. Then, when asked, the PR;
+    after its merge, date the CHANGELOG entry, run `tools/release.vsh` on
+    `main`, and tag v0.1.0 and push the tag only when the owner says.
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -103,6 +109,9 @@ Keep this section current: update it whenever a step is committed.
   - Commit only when asked, and push only when asked.
   - Open the PR into `main` only after the milestone's docs and exit review,
     and only when asked.
+  - Tag a release only when asked, on `main`, once `v run tools/release.vsh`
+    passes ("Making a release" in `CHANGELOG.md`). A change to a golden
+    report goes in the CHANGELOG's next entry, by name.
   - Commit subjects look like `M3 step 4: PT flash`, with a body below.
 - **Finishing a step** means all of:
   - marking it "— done" in the plan, with what was built, the tests,
@@ -123,6 +132,7 @@ v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
+v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 ```
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,
@@ -203,7 +213,8 @@ v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) a
 
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
-`components`. `quantity`, units of measure (M4), depends on nothing.
+`components`. `quantity`, units of measure (M4), depends on nothing, and
+so does `release`, the release gate's logic.
 `sweep`, the flash robustness sweep, is the one module that uses both
 `components` and `flash`. `flowsheet` (M4) uses `flash`, `thermo` and
 `numeric`, and its tests use `components`.

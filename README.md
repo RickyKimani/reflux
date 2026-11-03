@@ -61,7 +61,8 @@ These goals come from what went wrong with DWSIM:
 ## Layout
 
 ```
-v.mod               module manifest (Go's go.mod)
+v.mod               module manifest (Go's go.mod), with reflux's version
+CHANGELOG.md        every release, what a version promises, how to make one
 main.v              the command line: reflux solve, demo, version, help
 demo.v              reflux demo, on database components
 main_test.v         the command line, run in the test's own process
@@ -141,13 +142,15 @@ sweep/              the flash robustness sweep: seeded database mixtures,
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
                     flowsheet (docs/benchmarks.md)
+release/            what must hold before a version is tagged, for
+                    tools/release.vsh
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m3_dwsim.py, gen_m4_dwsim.py, gen_m3_bench.py and
                     gen_m4_bench.py (DWSIM 9's answers and timings, by hand on
                     Windows), golden.vsh (the golden flowsheets' results),
-                    import_chemsep.vsh,
+                    release.vsh (the release gate), import_chemsep.vsh,
                     data_quality.vsh, flash_sweep.vsh and benchmarks.vsh
                     (generated data and reports), bench_case.v (reflux's side
                     of the benchmarks)
@@ -273,6 +276,12 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same
 script on Windows and Linux, with tcc and with gcc. It uses the V commit
 pinned in [.v-version](.v-version). After `v up`, put the new commit there
 so CI and your machine stay on the same V.
+
+Releases are tags on `main`, `vX.Y.Z`, as source: build one with
+`v -prod -cc gcc -o reflux .`. [CHANGELOG.md](CHANGELOG.md) has each release,
+what the version numbers promise, and how a release is made:
+`v run tools/release.vsh` refuses until everything holds, then prints the tag
+commands.
 
 ## Property data
 
