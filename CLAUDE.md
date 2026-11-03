@@ -20,93 +20,33 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
-- **M0 to M3 are done** and merged into `main` (PRs #1 to #3).
+- **M0 to M4 are done** and merged into `main` (PRs #1 to #4).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
-  to make upstream to V, `thermo` and DWSIM. Its PH speed, 2–4× DWSIM's
-  time for 5 and 10 components, was M4 step 9's to fix.
-- **M4 (the first flowsheet) is done** on branch `m4-flowsheet`, with a PR
-  into `main`. Its plan, `docs/m4-plan.md`, has exit criteria 1–10,
-  decisions D1–D16 and steps 0–11, and ends with its exit review: every
-  criterion met, with CI green on the tip.
-  - Step 0 is committed and pushed: the DWSIM flowsheet spike
-    (`spike/dwsim_flowsheet/run.py`, `docs/spike-dwsim-flowsheet.md`), a
-    go with conditions. DWSIM's recycle, scaled by 1e-8, closes its
-    balances to 9e-8 (components) and 6e-7 (energy); the open loop hands
-    its stream back within 8e-14. Its pump uses a non-PR liquid density,
-    and its two-inlet drum is wrong. The spike doc lists what step 8 must
-    do.
-  - Step 1 is committed and pushed: units of measure, the `quantity`
-    module (D10), against a table hand-written from NIST SP 811
-    (`testdata/m4_units.json`). D10 was amended there: ΔT, ΔP and
-    fractions too, and a few more units.
-  - Step 2 is committed and pushed: streams, the `Unit` interface, the
-    mixer, splitter, valve and heater (`flowsheet/`). D4 was amended
-    there: a mixer and a valve can't raise P. It fixed a PH flash that
-    failed on ordinary two-phase states when its ideal-gas start fell near
-    0 K. It found that `flash.uv` fails on cold liquids at or below 100 K,
-    carried to the exit review.
-  - Step 3 is committed and pushed: the pump, compressor, expander, flash
-    drum and component separator, with `pressure.v` shared by whatever
-    changes pressure. D4 was amended there: a drum's P follows the mixer's,
-    a compressor takes a wet inlet, and a component separator can raise P.
-  - Step 4 is committed and pushed: `Flowsheet` and `plan`, with Tarjan,
-    Johnson and an exact tear search, on the nine classical graphs of
-    Gundersen and Hertzberg (1983) (`tools/gen_m4_graphs.py`). D5 was
-    amended there: exact within a work budget, not up to 12 cycles. FOQUS
-    and Pyomo rank tears the other way round, which step 5 can measure.
-  - Step 5 is committed and pushed: `Flowsheet.solve` and `numeric.broyden`.
-    The reference flowsheet solves by direct substitution (29 passes),
-    Wegstein (4) and Broyden (9).
-    D5 and D7 were amended there: acceleration waits for a second real pass,
-    and tears prefer the recycle. D5's tear ranking was measured against
-    FOQUS's and stays.
-  - Step 6 is committed and pushed: the TOML file format. `flowsheet.load`
-    checks a whole file, with lines and suggestions, and `Loaded.write` gives
-    it back
-    (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
-    V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
-    first: a report to make upstream.
-  - Steps 7 to 11 are committed and pushed.
-  - Step 7: the CLI, `reflux solve` and `reflux demo`, and the reports
-    (`flowsheet/report.v`, `table.v`, `docs/report-format.md`). D11 was
-    amended there: `--trace` prints when the solve ends, and a failure
-    writes its JSON too. `solve` now keeps the history on a failure outside
-    a loop.
-  - Step 8: `tools/gen_m4_dwsim.py`, DWSIM's units and reference flowsheet
-    (`testdata/m4_dwsim.json`), compared in `flowsheet/dwsim_test.v`; and
-    the golden flowsheets
-    (`tools/golden.vsh`, `flowsheet/golden_test.v`). Five deviations over
-    criterion 2's targets are each reproduced from DWSIM: its pump's
-    density, its mixing entropy in a two-phase expander, its rounded
-    constants.
-  - Step 9: the flowsheet benchmark
-    (`tools/gen_m4_bench.py`, `testdata/m4_bench.json`, in
-    `docs/benchmarks.md`), and PH 2–4× faster. Only a PH or PS flash's
-    answer is verified, and a split's stability test stops at Wilson's two
-    trials when they prove instability (`first_proof`): M3's D3 and D5
-    amended. The reference flowsheet solves in 26 ms, DWSIM's in 0.56 s.
-  - Step 10: v.mod's version is 0.1.0, with `CHANGELOG.md` (what a version
-    promises, and the 0.1.0 entry, undated) and the release gate,
-    `tools/release.vsh` over the `release` module. The owner chose a source
-    tag only, on `main` after step 11 and M4's merge. The golden reports were
-    written again for the version.
-  - Step 11: the docs and the exit review. The review added a balance
-    check from scratch for the golden flowsheets (`golden_test.v`), and
-    held the three methods' answers to the tear tolerance. It settled the
-    roadmap's C9 (M4, M5, M11) and J1 (designed in `docs/design.md`).
-    Carried forward: `flash.uv` on cold liquids, upstream reports, and
-    v0.1.0's tag.
-  - CI passed on step 11's commit (run 41656509290), which is in the
-    review. Next: the PR's merge, when the owner says. After it, date the
-    CHANGELOG entry, run `tools/release.vsh` on `main`, and tag v0.1.0 and
-    push the tag only when the owner says.
-  - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
-    reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
-  - The roadmap puts M10a (thermo and the flash from Python) in parallel
-    with M4; the owner chose to plan M4 first.
+  to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
+  which made it 2–4× faster.
+- **M4, the first flowsheet,** carried forward (in its review):
+  - `flash.uv` fails on cold liquids at or below 100 K, in its TV flash. No
+    unit uses UV yet; fix it before one does.
+  - PH for 10 components is still a little slower than DWSIM's (5.9 ms
+    against 5.2).
+  - Warm starts across solves (F5), and a solver callback for `--trace` as
+    it happens: M8, if its PFR needs them.
+  - Reports to make upstream: to V, the TOML parser's panic on a `\u`
+    escape and a smart-cast interface's field inside `${}`; to `thermo`, its
+    flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
+    unit failures.
+- **v0.1.0** is M0 to M4, a source release. Its CHANGELOG entry is dated
+  2026-11-03 on `main`. Next: the tag, when the owner says, once
+  `v run tools/release.vsh` passes on `main` (`git tag -a v0.1.0 -m "reflux
+  0.1.0"`, then `git push origin v0.1.0`).
+- **The next milestone** is the owner's to choose. By the roadmap, M10a
+  (thermo and the flash from Python), then M10b (flowsheets from Python);
+  M5 to M9 build on M4.
+- **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
+  reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
 
 ## How we work
 

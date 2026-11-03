@@ -28,7 +28,7 @@ From 0.1.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-11-03
 
 The first release: the roadmap's M0 to M4. A steady-state flowsheet with a
 recycle, solved from a file, on cubic equations of state and ChemSep's data,
