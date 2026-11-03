@@ -23,12 +23,16 @@ v -W test .           # all tests, warnings treated as errors
 - [docs/roadmap.md](docs/roadmap.md) is what gets built, in what order, and
   how each piece is tested. [docs/m1-plan.md](docs/m1-plan.md) is M1's
   plan, step by step, with its exit review at the end. The same goes for
-  [docs/m2-plan.md](docs/m2-plan.md), component data, and
-  [docs/m3-plan.md](docs/m3-plan.md), the flash.
+  [docs/m2-plan.md](docs/m2-plan.md), component data,
+  [docs/m3-plan.md](docs/m3-plan.md), the flash, and
+  [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
   10,000 random mixtures from the database, every answer checked, and
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
-  `thermo` and DWSIM 9 on the same flashes.
+  `thermo` and DWSIM 9 on the same flashes, and against DWSIM on the
+  reference flowsheet.
+- [CHANGELOG.md](CHANGELOG.md) is every release, and what a version
+  promises.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
   and why, with every formula the code uses.
 - [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:
@@ -172,10 +176,11 @@ at the edges, i.e. input files and printed output.
 
 ## Status
 
-**M0 (foundations), M1 (thermo core), M2 (component data) and M3 (flash)
-are done.** The exit reviews are at the ends of
-[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md) and
-[docs/m3-plan.md](docs/m3-plan.md). What exists now:
+**M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash) and
+M4 (the first flowsheet) are done.** The exit reviews are at the ends of
+[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
+[docs/m3-plan.md](docs/m3-plan.md) and [docs/m4-plan.md](docs/m4-plan.md).
+What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
       first and second derivatives
@@ -248,8 +253,37 @@ And from M3, for any `thermo.Model`:
 - [x] Every failure a typed error, never a panic and never an unproven
       answer.
 
-Next is M10a: thermo and the flash callable from Python, with NumPy arrays,
-then M4, the first flowsheet.
+And from M4, the first flowsheet:
+
+- [x] `reflux solve plant.toml --json results.json --csv streams.csv`: a
+      flowsheet from a TOML file with a unit on every number, every field
+      checked, and a wrong one refused with its line and a suggestion
+      ([docs/flowsheet-format.md](docs/flowsheet-format.md)). A stream table
+      on the screen, and every stream, unit, balance and pass as JSON and CSV
+      ([docs/report-format.md](docs/report-format.md)).
+- [x] Units of measure read into SI by SP 811's exact definitions: 75 units,
+      with Celsius, Fahrenheit and gauge pressure only ever explicit.
+- [x] The mixer, splitter, valve, heater and cooler, pump, compressor,
+      expander, flash drum and component separator, each closing its
+      balances to 1e-10 and checked against physics that doesn't go through
+      the flash: μ_JT, Cp, Clapeyron, ∫v dP.
+- [x] A sequential-modular solver: Tarjan's blocks, Johnson's cycles, and the
+      fewest tears found exactly (Gundersen and Hertzberg's nine graphs), then
+      direct substitution, Wegstein or Broyden. No answer is returned until
+      every unit and the whole flowsheet balance.
+- [x] The reference flowsheet, a recycle with two drums, matches DWSIM 9 on
+      DWSIM's constants, and every difference over the targets is reproduced
+      from something in DWSIM: its pump's liquid density, its mixing entropy,
+      its rounded constants.
+- [x] It solves in 26 ms, against DWSIM's 0.56 s
+      ([docs/benchmarks.md](docs/benchmarks.md)), and five golden flowsheets
+      are solved again in every check.
+- [x] A first release, v0.1.0, with a release gate
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10a: thermo and the flash callable from Python,
+with NumPy arrays, then M10b, flowsheets from Python. M5 to M9 build on M4:
+steam, activity models, columns, specifications and reactors.
 
 ## Roadmap
 
@@ -258,9 +292,9 @@ milestones with exit criteria, headless testing, C numeric backends and
 how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
-(ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9.
-Now that M3 has landed, **M10a** makes thermo and flash callable from Python
-with NumPy arrays.
+(ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
+✓. Next, **M10a** makes thermo and flash callable from Python with NumPy
+arrays, and **M10b** the flowsheets.
 
 ## Development
 

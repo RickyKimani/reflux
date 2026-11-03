@@ -4,7 +4,7 @@
 // of each value's scale: T and P of themselves, a flow of the feed, H of RT and
 // S of R, a duty of F·RT, and the same passes. They're regenerated only on
 // purpose, with the change explained.
-import flowsheet { Report }
+import flowsheet { Report, Stream }
 import json2
 import math
 import os
@@ -75,4 +75,89 @@ fn same(got Report, want Report, at string) {
 		// The same passes, none more.
 		assert g.residuals.len == w.residuals.len, '${at}: ${g.residuals.len} passes, not ${w.residuals.len}'
 	}
+}
+
+fn test_every_golden_flowsheet_balances_from_scratch() {
+	// Exit criterion 3, which solve checks for itself: here each unit's
+	// component and energy balances are worked out again on the inlets it used,
+	// with H from T, P and each phase's composition, to 1e-10 of its flow and of
+	// F·RT; and the whole, feeds against products, to what the tears leave open.
+	// solve_test.v does the same for its flowsheets and report_test.v from a
+	// report's numbers, but no_recycle and saturated_loop are checked only here.
+	for f in os.ls(golden_dir)!.filter(it.ends_with('.json')) {
+		l := flowsheet.load(os.join_path(@VMODROOT, 'testdata', 'flowsheets', f.replace('.json',
+			'.toml')))!
+		sol := l.solve()!
+		n := l.names.len
+		for r in sol.units {
+			mut c := []f64{len: n}
+			mut q, mut flow, mut hot := 0.0, 0.0, 0.0
+			for s in r.inlets {
+				q += tally(mut c, l.fluid, s, 1.0)!
+				flow += s.total()
+				hot = math.max(hot, s.t)
+			}
+			for s in r.outlets {
+				q += tally(mut c, l.fluid, s, -1.0)!
+			}
+			for e in r.energy {
+				q += e.rate
+			}
+			if flow == 0.0 {
+				continue
+			}
+			for i, x in c {
+				assert math.abs(x) <= 1e-10 * flow, '${f} ${r.name}: component ${i} is off by ${x}'
+			}
+			assert math.abs(q) <= 1e-10 * flow * thermo.r_gas * hot, '${f} ${r.name}: energy is off by ${q}'
+		}
+		mut c := []f64{len: n}
+		mut q, mut feed, mut feed_t := 0.0, 0.0, 0.0
+		for x in l.sheet.feeds {
+			q += tally(mut c, l.fluid, x.stream, 1.0)!
+			feed += x.stream.total()
+			feed_t = math.max(feed_t, x.stream.t)
+		}
+		for name in sol.products {
+			q += tally(mut c, l.fluid, sol.streams[name], -1.0)!
+		}
+		for r in sol.units {
+			for e in r.energy {
+				q += e.rate
+			}
+		}
+		// What the last pass can leave open in a tear: tol of its flow in each
+		// component, which carries the stream's H, and tol of RT in its H.
+		mut open_flow, mut open_energy := 0.0, 0.0
+		for b in sol.plan.blocks {
+			for name in b.tears {
+				s := sol.streams[name]
+				open_flow += l.params.tol * s.total()
+				open_energy += l.params.tol * s.total() * (f64(n) * math.abs(s.h) +
+					thermo.r_gas * s.t)
+			}
+		}
+		for i, x in c {
+			assert math.abs(x) <= open_flow + 1e-12 * feed, '${f}: component ${i} overall is off by ${x}'
+		}
+		assert math.abs(q) <= open_energy + 1e-10 * feed * thermo.r_gas * feed_t, '${f}: energy overall is off by ${q}'
+	}
+}
+
+// tally adds a stream's flows to c with its sign, and returns its enthalpy
+// flow, F·H, with H from scratch: each phase's volume root solved again at the
+// stream's T and P.
+fn tally(mut c []f64, fl thermo.Fluid, s Stream, sign f64) !f64 {
+	for i, x in s.flows {
+		c[i] += sign * x
+	}
+	mut h := 0.0
+	for phase in s.result.phases {
+		if phase.fraction == 0.0 {
+			continue
+		}
+		root := if phase.label == .vapor { thermo.Root.vapor } else { thermo.Root.liquid }
+		h += phase.fraction * fl.props(thermo.solve_tp(fl.model, s.t, s.p, phase.state.n, root)!).h
+	}
+	return sign * s.total() * h
 }

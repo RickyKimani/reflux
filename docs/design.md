@@ -1066,6 +1066,30 @@ multiply by 10^(n−1−e), which isn't: 846064.9999999999 × 0.1 rounds to the
 tie 84606.5, and up, where the quotient by 10 is below it. A log₁₀ that rounds
 up just short of a power of ten needs nothing: m rounds up to 10ⁿ⁻¹ with it.
 
+## How equation-oriented solving will fit
+
+M13 solves a whole flowsheet's equations at once, by sparse Newton (roadmap
+J1 and J2), where M4 calculates unit by unit. Each unit then needs its model as
+residuals, r(x_in, x_out) = 0, in the variables the tears already use: each
+stream's x = (n₁ … n_c, P, h) (D6). A converged sequential-modular solution
+satisfies them, so it's the equation-oriented solve's first point.
+
+- **Balances,** for every unit: Σ_in nᵢ − Σ_out nᵢ, and
+  Σ_in F h + Σ q − Σ_out F h. `UnitResult.balance` evaluates both already. A
+  splitter's outlets are fractions of its inlet, and a separator's of each
+  component.
+- **Specifications:** the outlet's P or ΔP; then its T, β or a duty for a heater
+  or a drum; h_out = h_in for a valve; s(T_s, P_out, n) = s_in at a machine's
+  isentropic point, with h_out from η; h_out − h_in = v·ΔP/η for a pump.
+- **Equilibrium** for a two-phase outlet: ln Kᵢ + ln φᵢⱽ − ln φᵢᴸ = 0 and
+  Rachford–Rice, whose derivatives in T, P and n `thermo` already gives. A
+  phase that appears or vanishes changes the equations themselves, which
+  Newton can't see. So an equation-oriented solve keeps each outlet's number of
+  phases, and tests stability at the end, as `flash.pt` verifies its split.
+
+`Unit` would gain a `residuals` method beside `calculate`, with its Jacobian
+blocks, and the sequential-modular solve stays the way in.
+
 ## How CPA will fit
 
 ```v

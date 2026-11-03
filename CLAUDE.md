@@ -27,9 +27,10 @@ Keep this section current: update it whenever a step is committed.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed, 2–4× DWSIM's
   time for 5 and 10 components, was M4 step 9's to fix.
-- **M4 (the first flowsheet) is in progress** on branch `m4-flowsheet`,
-  which is pushed and has no PR yet. Its plan, `docs/m4-plan.md`, is
-  approved: exit criteria 1–10, decisions D1–D16 and steps 0–11.
+- **M4 (the first flowsheet) is done** on branch `m4-flowsheet`, which is
+  pushed and has no PR yet. Its plan, `docs/m4-plan.md`, has exit criteria
+  1–10, decisions D1–D16 and steps 0–11, and ends with its exit review:
+  every criterion met, once CI passes on the tip.
   - Step 0 is committed and pushed: the DWSIM flowsheet spike
     (`spike/dwsim_flowsheet/run.py`, `docs/spike-dwsim-flowsheet.md`), a
     go with conditions. DWSIM's recycle, scaled by 1e-8, closes its
@@ -68,7 +69,7 @@ Keep this section current: update it whenever a step is committed.
     (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
     V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
     first: a report to make upstream.
-  - Steps 7 to 10 are committed, not pushed.
+  - Steps 7 to 11 are committed and pushed.
   - Step 7: the CLI, `reflux solve` and `reflux demo`, and the reports
     (`flowsheet/report.v`, `table.v`, `docs/report-format.md`). D11 was
     amended there: `--trace` prints when the solve ends, and a failure
@@ -92,9 +93,16 @@ Keep this section current: update it whenever a step is committed.
     `tools/release.vsh` over the `release` module. The owner chose a source
     tag only, on `main` after step 11 and M4's merge. The golden reports were
     written again for the version.
-  - Next is step 11: the docs and M4's exit review. Then, when asked, the PR;
-    after its merge, date the CHANGELOG entry, run `tools/release.vsh` on
-    `main`, and tag v0.1.0 and push the tag only when the owner says.
+  - Step 11: the docs and the exit review. The review added a balance
+    check from scratch for the golden flowsheets (`golden_test.v`), and
+    held the three methods' answers to the tear tolerance. It settled the
+    roadmap's C9 (M4, M5, M11) and J1 (designed in `docs/design.md`).
+    Carried forward: `flash.uv` on cold liquids, upstream reports, and
+    v0.1.0's tag.
+  - Next: CI on the tip, whose run goes in the review. Then, when asked,
+    the PR into `main`; after its merge, date the CHANGELOG entry, run
+    `tools/release.vsh` on `main`, and tag v0.1.0 and push the tag only
+    when the owner says.
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -268,7 +276,8 @@ so does `release`, the release gate's logic.
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
   vendored `pr.ipd`/`srk.ipd`, taking the first entry listed for a pair.
-- **`flowsheet`** is M4's, in progress.
+- **`flowsheet`** is M4's: streams, units, the graph, the solver, the file
+  and the reports.
   - A `Stream` is its molar flows plus the flash that gave its state, so
     it's never half specified. Its H, S and V are its phases'.
   - A `Unit` is `calculate(fluid, inlets) !Outcome` and holds nothing about

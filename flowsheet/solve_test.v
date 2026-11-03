@@ -275,8 +275,13 @@ fn test_every_method_gets_the_reference_flowsheet_to_one_answer() {
 	println('reference flowsheet: direct ${passes(d)}, Wegstein ${passes(w)}, Broyden ${passes(b)}; balance ${w.balance.component} ${w.balance.energy}, worst unit ${w.worst.component} ${w.worst.energy}')
 	assert passes(d) <= 29 && passes(w) <= 4 && passes(b) <= 9, '${passes(d)} ${passes(w)} ${passes(b)}'
 	assert w.plan.blocks.map(it.tears) == [['recycle'], [], []]
-	same(d, w, 1e-7, 'direct and Wegstein')
-	same(d, b, 1e-7, 'direct and Broyden')
+	// Within the tear tolerance. Direct substitution stops with up to g/(1 − g)
+	// of its last move still to go, which at this loop's gain of 0.5 is tol of
+	// the tear's flow, and more of a smaller stream's: 1.6e-9 measured. Wegstein
+	// and Broyden land closer, and agree within tol: 6.3e-12 measured.
+	same(d, w, 1e-8, 'direct and Wegstein')
+	same(d, b, 1e-8, 'direct and Broyden')
+	same(w, b, 1e-9, 'Wegstein and Broyden')
 	// Every residual history ends within tol, and no sooner.
 	for s in [d, w, b] {
 		rows := s.history[0].residuals
@@ -308,8 +313,11 @@ fn test_a_loop_that_is_truly_nonlinear_gets_one_answer_too() {
 	println('with the duty fixed: direct ${passes(d)}, Wegstein ${passes(w)}, Broyden ${passes(b)}')
 	assert passes(w) <= 14 && passes(b) <= 16, '${passes(w)} ${passes(b)}'
 	assert passes(w) < passes(d) && passes(b) < passes(d)
-	same(d, w, 1e-7, 'direct and Wegstein')
-	same(d, b, 1e-7, 'direct and Broyden')
+	// As for the reference flowsheet, whose gain this loop's 29 direct passes
+	// share: 1.5e-9 and 5.3e-11 measured.
+	same(d, w, 1e-8, 'direct and Wegstein')
+	same(d, b, 1e-8, 'direct and Broyden')
+	same(w, b, 1e-9, 'Wegstein and Broyden')
 }
 
 // replace_cooler is the cooler on a duty, on the same ports.

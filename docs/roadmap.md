@@ -159,6 +159,21 @@ plan went further than the exit below:
 converged split.
 
 ### M4 — First flowsheet (vertical slice)
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m4-plan.md](m4-plan.md). The plan went further than the
+exit below:
+- every G1 unit, the compressor, expander and component separator among them,
+  each checked against physics that doesn't go through the flash, and each
+  against DWSIM 9 alone, from the same inlet;
+- the fewest tears found exactly, on the field's classical graphs, and every
+  balance checked before a solution is returned, by each unit and the whole;
+- units of measure on every number in the file (A2), and the CLI's JSON and
+  CSV reports and stream table, with the convergence history (A4, F6);
+- five golden flowsheets solved again in every check, and the first release,
+  v0.1.0, with a release gate (A8);
+- the reference flowsheet timed against DWSIM's, which led to PH flashes 2–4
+  times faster.
+
 - Streams, ports, the unit-operation interface and the flowsheet graph (F1).
 - TOML flowsheet files with a format version (F2).
 - Sequential-modular solver: strongly connected components, tear streams,
@@ -359,7 +374,9 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**
 - C8 Electrolytes (eNRTL, e-CPA). **after M12**
 - C9 Property packages: phase models + transport + data, chosen per
-  flowsheet. This is what CAPE-OPEN exposes. **M4**
+  flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and
+  data (a flowsheet file names its model, compounds and kᵢⱼ), M5 for
+  transport, and M11 for a package CAPE-OPEN can see.
 
 ### D — Component data
 - D1 Component records with identifiers and per-value provenance. **M2**
@@ -427,7 +444,9 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - I7 OPC UA for plant connectivity and digital twins. **later**
 
 ### J — Equation-oriented solving and dynamics
-- J1 Residual form for every unit operation. **designed in M4, used in M13**
+- J1 Residual form for every unit operation. **designed in M4** ("How
+  equation-oriented solving will fit" in [design.md](design.md)), **used in
+  M13**
 - J2 Equation-oriented solve with sparse Newton. **M13**
 - J3 Dynamics: DAEs, IDA, index reduction, controllers. **M13**
 - J4 FMI model-exchange export. **M13**

@@ -9,7 +9,8 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 10 are done, and step 11 is next.
+the owner's question. Steps 0 to 11 are done, and the exit review is at
+the end.
 
 ## Goal
 
@@ -1031,20 +1032,139 @@ flowchart LR
   there, and `trim_left` takes a set of characters, not a prefix
   (docs/v-for-go.md, §8).
 
-### 11. Docs and exit review
-- README, roadmap, design notes, the V notes, and a criterion-by-criterion
-  review, as in M1 to M3.
+### 11. Docs and exit review — done
+- **README:** M4 marked done, with what it brought in the status list, its
+  plan and the CHANGELOG in the list of docs, and the benchmarks' flowsheet.
+- **Roadmap:** M4 marked done, with what the plan went beyond its exit. Two
+  of its track items were M4's on paper and weren't in this plan, so the
+  review settles them:
+  - **C9,** property packages: M4 has the phase model and data, since a file
+    names its model, compounds and kᵢⱼ. Transport is M5's, and a package that
+    CAPE-OPEN can see is M11's.
+  - **J1,** a residual form for every unit, "designed in M4": the design is
+    now in design.md, "How equation-oriented solving will fit", for M13.
+- **Design notes:** that section. Steps 1 to 10 had written the rest as they
+  went.
+- **V notes:** the test count, 58 files against M3's 45.
+- **What the review added:**
+  - **Criterion 3 asks for every solved flowsheet in every test to check its
+    balances.** `solve` checks its own, and solve_test.v and report_test.v
+    check theirs from scratch, but the golden flowsheets were only compared
+    with their reports, and two of them, `no_recycle` and `saturated_loop`,
+    are in no other test. [golden_test.v](../flowsheet/golden_test.v) now
+    works out every golden flowsheet's balances again, with H from T, P and
+    each phase's composition. Over 31 unit runs the worst closes to 1.8e-16
+    of its flow in components and 4.0e-13 of F·RT in energy, against 1e-10.
+    Each whole closes within a tenth of what its tears leave open.
+    Two mistakes planted in the check, a duty with the wrong sign and a
+    vapour phase's H left out, each fail it.
+  - **Criterion 4 asks for the three methods to agree within the tear
+    tolerance,** and solve_test.v held them to 1e-7. Measured, Wegstein and
+    Broyden agree to 6.3e-12 of a stream's flow on the reference flowsheet,
+    and to 5.3e-11 with the cooler on a duty. Direct substitution is 1.6e-9
+    from them. It stops with up to g/(1 − g) of its last move still to go,
+    which at a gain of 0.5 is tol of the tear's flow, and more of a smaller
+    stream's. The test now holds them to 1e-9 and 1e-8. The full checks ran
+    before that change, and solve_test.v alone after it, under tcc and gcc.
 
 ## Risks
 
 | Risk | Effect | Fallback |
 |---|---|---|
-| DWSIM's recycle won't converge tightly, or its flowsheet automation fails silently in ways the script misses | no trustworthy flowsheet reference | check every unit and stream (the probe already had to); compare with the loop opened (D12) |
-| DWSIM's unit models differ from the textbook ones (pump, compressor efficiency) | deviations in duty or T | follow the textbook in reflux, reproduce DWSIM's number in the fixture from its own model, and record it, as M3's criterion 6 allows |
-| PH's cost makes the flowsheet slow | a slow first flowsheet | measure (D14); warm starts inside PH first, then across solves (F5) if needed |
-| Tear selection by enumeration blows up on many loops | slow or no tear set | the cycle bound and greedy cover (D5); M4's flowsheets are small |
+| DWSIM's recycle won't converge tightly, or its flowsheet automation fails silently in ways the script misses | no trustworthy flowsheet reference | check every unit and stream (the probe already had to); compare with the loop opened (D12). **Half happened:** the recycle converges, scaled by 1e-8, to 9.3e-8 in components (step 0). A failed unit is silent, so every unit's `Calculated` and `ErrorMessage` is checked (steps 0 and 8). The open loop is compared too, though the closed loop made it unnecessary. |
+| DWSIM's unit models differ from the textbook ones (pump, compressor efficiency) | deviations in duty or T | follow the textbook in reflux, reproduce DWSIM's number in the fixture from its own model, and record it, as M3's criterion 6 allows. **Happened, and handled:** its pump uses a liquid density that isn't PR's, its expander's two-phase outlet carries its wrong mixing entropy, and its two-inlet drum is wrong. The first two are reproduced from DWSIM's own model (step 8), and the reference puts a mixer before each drum (step 0). Its compressor's efficiency is the textbook's. |
+| PH's cost makes the flowsheet slow | a slow first flowsheet | measure (D14); warm starts inside PH first, then across solves (F5) if needed. **Happened, and handled:** PH was 95% of a solve. Verifying only its answer and stopping the feed's stability test at the first proof made it 2.2–3.7 times faster, and the reference flowsheet solves in 26 ms against DWSIM's 559 (step 9). Warm starts across solves weren't needed. |
+| Tear selection by enumeration blows up on many loops | slow or no tear set | the cycle bound and greedy cover (D5); M4's flowsheets are small. **Didn't happen:** the exact search, within a work budget, finds the minimum on all nine classical graphs, and only the complete graph of 9 nodes, 125,673 cycles, needs the greedy cover (step 4). |
 | V's `toml` module can't report the line of a bad value, or rejects valid TOML | poor error messages | validate after parsing with the keys' paths; M2 already parses TOML with it. **Step 6:** it reports lines, but it can panic on a `\u` escape, so the loader scans for those first. |
-| A unit meets three phases in a loop | no convergence | the flash already refuses with `more_phases`; the unit passes it on, and the flowsheet fails with its reason |
+| A unit meets three phases in a loop | no convergence | the flash already refuses with `more_phases`; the unit passes it on, and the flowsheet fails with its reason. **As planned:** a heater given a three-phase state fails with `more_phases` by its name (step 2), and a flash that fails in a loop fails the solve with its cause and the passes so far (step 5). |
+
+## Exit review
+
+Checked on 2026-11-03 at the tip of `m4-flowsheet`. All 58 test files pass
+locally under `v run tools/check.vsh` with tcc (297 s) and gcc (629 s, with
+the `-prod` build), on Windows, and so does each check's run of `reflux demo`,
+`reflux solve` on the reference flowsheet with both reports, and a missing
+file's exit 1. CI last ran on step 6's commit (`ca4c1da`, run 41527794932),
+and passed on Windows and Linux with tcc and gcc. Steps 7 to 11 aren't pushed
+yet, so CI on the tip comes with the push.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | The graph is right | **met** | `graph_test.v`, on 59 graphs: problems 1 to 9 of Gundersen and Hertzberg (1983), read off the paper and checked against its own tables; 10 worked by hand, Pyomo's among them; and 40 seeded, with self-loops and parallel streams. Their nets, cycles, minimum tears and fewest second breaks match networkx and an exact integer program, down to 21 tears for the complete graph's 415 cycles. Every plan is checked from scratch to break every cycle. A named tear is honoured. Each malformed flowsheet is refused for its own reason, and `file_test.v` adds a specification missing or given twice. |
+| 2 | Each unit is right | **met, as M3's criterion 6 was amended** | `units_test.v`, 84 unit runs: components to 1.95e-16 of the flow and energy to 1.55e-11 of F·RT, against 1e-10, and every outlet an equilibrium by M3's criterion 3. Checked against what doesn't go through the flash: μ_JT·ΔP, F·Cp·ΔT, Clapeyron's T·Δv·dP/dT, ∫v dP along the isentrope, and a drum's outlets at their own bubble and dew points. `dwsim_test.v`, 13 units alone from the same inlet: 10 within the targets of DWSIM 9. The other 3, the pump (42%), the expander (0.42 K) and the heater to a vapour fraction (duty 1.3e-4), are each reproduced from DWSIM's own model, and reflux is the exact PR's in each. |
+| 3 | Every flowsheet balances | **met** | `solve` returns no solution unless each unit closes to 1e-10 on the inlets it used and the whole to the gap its tears left (D8). From scratch, with H recomputed: `solve_test.v`'s every solution, carbon and hydrogen included (the reference: 9.5e-14 of the flow and 3.3e-12 of F·RT overall); `report_test.v`'s five flowsheets on the report's own numbers; and `golden_test.v`'s five golden flowsheets, added by this review (worst unit 1.8e-16 and 4.0e-13). |
+| 4 | The solver converges, and says how | **met** | `solve_test.v`: the reference flowsheet by direct substitution in 29 passes, Wegstein in 4 and Broyden in 9, and with the cooler on a duty, truly nonlinear, in 29, 14 and 16: numbers that can't grow. Wegstein and Broyden agree on every stream within the tear tolerance, to 6.3e-12 and 5.3e-11 of its flow, and direct substitution is within what its last pass leaves, 1.6e-9: held to 1e-9 and 1e-8 since this review. Each history ends within the tolerance and no sooner, and is in the `Solution` and the report. Running out of passes is `.no_convergence` with the history, by every method. |
+| 5 | The reference flowsheet matches DWSIM 9 | **met, as M3's criterion 6 was amended** | `dwsim_test.v`, on `reference_dwsim.toml` with DWSIM's constants and kᵢⱼ, DWSIM's recycle at its tolerances scaled by 1e-8: every stream's T within 0.01 K but the recycle's (0.029 K), and every flow, β and composition within 5e-5. The cooler's duty is 1.7e-4 off, and the pump's power 42%. Both, and the recycle's T, are DWSIM's pump: with its liquid volume in a pump of the test's own, every stream is within the targets, the recycle to 1.7e-6 K, and the cooler to 3.3e-5. The bounds can't grow, and the open loop gives the same differences. |
+| 6 | The file format holds | **met** | `file_test.v`: a file builds what code builds, to the last bit; load, write and load again is the same to the last bit, and the writing a fixed point; six composition bases to 1e-12; about 60 wrong fields, each with its line, key and reason, and a suggestion for a misspelt name; 4,000 fuzzed files in every run and 40,000 more once, with no panic. The `\u` escape that panics V's parser is refused first. |
+| 7 | Units of measure are exact | **met** | `quantity_test.v`, against a table written by hand from NIST SP 811: 56 exact factors to 4 ulps, 11 others to SP 811's 7 figures, 13 affine conversions to 1e-12, all 75 units covered, and the round trip to 1e-12. Gauge pressure is only `barg` and `psig`. 20,000 seeded strings never panic. |
+| 8 | The CLI works end to end | **met; CI with the push** | `main_test.v`, 11 functions in process, and `check.vsh` on every compiler's build: `reflux solve` writes the JSON and CSV and prints the table, and a failure exits 1 with its report. `report_test.v` checks the JSON against [report-format.md](report-format.md), key by key, and reads it back to the last bit. |
+| 9 | Speed is measured | **met** | [benchmarks.md](benchmarks.md), with gcc `-prod`: the reference flowsheet solves in 26 ms first and 23 ms again, against DWSIM's 559 ms (3.0 s at tight tolerances) and 92 ms from its last answer. `benchmarks/flowsheet_test.v` checks that each program solved the same flowsheet. |
+| 10 | CI green; docs updated | **met locally; CI with the push** | The docs: README, roadmap, design notes, V notes, [flowsheet-format.md](flowsheet-format.md) and [report-format.md](report-format.md) (step 11 above). |
+
+**Planted mistakes.** 659 were planted across steps 1 to 10, one change at a
+time, in scratch copies, with step 3 running step 2's 69 again on its
+refactored code. Every survivor got a new test, had its code deleted as
+unneeded, or is explained in its step. Those explained are mostly a T
+estimate for a flash, which changes only the speed. The rest are prunes that
+matter only to worst cases, equivalent changes, and extra work that changes no
+answer. Survivors also led to deleting code that did nothing in most steps,
+and to tests of code that had none: an empty stream through a machine, a
+drum's duty at a given pressure, a Wegstein step past zero, and a unit that
+breaks one balance and keeps the other.
+
+**Bugs found along the way,** each fixed in its step:
+- the PH flash failed on ordinary two-phase states where its ideal-gas start
+  fell near 0 K (step 2, by the unit tests);
+- the solver's first allowance for the whole flowsheet's balance refused a
+  correct answer at a gain of 0.95 (step 5);
+- the file writer put strings back unescaped, and a misspelt compound's line
+  was the table's (step 6);
+- a failure after a loop lost the loop's history, and the unit table didn't
+  widen for gcc's −9.3e-13 kW (step 7, by the gcc check);
+- the release gate took `vv0.1.0`, and lost an entry with no date (step 10);
+- in V 0.5.2: its TOML parser panics on a `\u` escape near a string's end, an
+  off-by-one in `toml.checker` (step 6, by fuzzing), and a smart-cast
+  interface's field inside `${}` doesn't compile (step 9);
+- in `thermo` 0.6.1: its flash at a vapour fraction strictly between 0 and 1
+  fails on a mixture, with `dew` used before it's set (step 8);
+- in DWSIM 9: its flash drum is wrong with two inlets, a unit that fails says
+  nothing, and through automation its Wegstein and dominant-eigenvalue
+  acceleration change nothing while its Broyden fails without iterating
+  (step 0).
+
+**Changed from the plan along the way:**
+- **Decisions amended:** D10 (step 1), D4 (steps 2 and 3), D5 (steps 4 and
+  5), D7 (step 5), D9 (step 6), D11 (step 7), and M3's D3 and D5 (step 9).
+  Each is marked in its table.
+- **The flash:** PH's start no lower than half the mean Tc (step 2); only a PH
+  or PS flash's answer verified, and a split's feed test stopped at the first
+  proof after Wilson's two trials (step 9).
+- **`numeric` grew** `broyden`, for systems with no Jacobian.
+- **The release** is tagged on `main` after the merge, not at the end of the
+  branch (step 10, the owner's choice), so D15's tag follows this review.
+- **The roadmap's C9 and J1,** settled by this review (step 11).
+
+**Carried forward, not done in M4:**
+- **`flash.uv` fails on cold liquids** at or below 100 K: 8 or 9 of 173 states
+  at each pressure, in its TV flash at about 59 to 89 K (step 2). No M4 unit
+  uses UV. It needs fixing before one does, by M13's dynamics at the latest.
+- **PH for 10 components** is still a little slower than DWSIM's: 5.9 ms
+  against 5.2.
+- **Warm starts across solves** (F5) and a solver callback for `--trace` as it
+  happens: M8, if its PFR needs them.
+- **Format migrations** (A6): there's only format 1 to migrate from so far.
+- **v0.1.0's tag,** after the merge: date its CHANGELOG entry, run
+  `tools/release.vsh` on `main`, then tag and push.
+- **Upstream reports:** to V, the TOML panic and the interpolation bug (and
+  from M3, closures never freed and `-profile` crashing); to `thermo`, the
+  vapour-fraction flash (and from M3, FlashVL's failures); to DWSIM, the
+  two-inlet drum and the silent failures (and from M3, the mixing entropy).
+  The ChemSep data defects from M2 are still open too.
+- **From M1 to M3:** concurrent Python calls (M10a), ChemSep's eq. 200 and
+  DIPPR 124, `ideal_t`'s 300 K fallback, and a few small arrays allocated per
+  residual call.
+
+**Verdict: M4 is done,** once CI passes on the tip.
 
 ## Not in M4
 
