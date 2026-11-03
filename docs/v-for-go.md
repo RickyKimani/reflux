@@ -77,8 +77,8 @@ resolves the bare name, so the module is now `benchmarks`.
 
 **`v test` is slower than `go test`, and two settings matter.** Go compiles
 each package once and links its tests. V compiles every `_test.v` file into
-a program of its own, with all of `vlib` it uses: 45 C compilations for
-reflux's 45 test files at the end of M3.
+a program of its own, with all of `vlib` it uses: 58 C compilations for
+reflux's 58 test files at the end of M4, against 45 at the end of M3.
 - **Jobs:** the runner allows one job per 8 GiB of RAM, at most 4, so a
   14 GiB machine runs them one at a time. A build peaks near 1 GB, so
   `VJOBS=4` is safe there, and [tools/check.vsh](../tools/check.vsh) sets it.
@@ -109,6 +109,17 @@ with long names next to the output. In a deeply nested folder it fails with
 `could not write … .o: No such file or directory`, then tries to fall back to
 gcc, which you don't have. A path like `C:\Users\Ricky\dev\reflux` is fine.
 
+**Windows gotcha: Smart App Control can refuse V's programs.** It judges
+each unsigned program as it starts, and V reports a refusal as
+`failed CreateProcess ...: The operation completed successfully`, which
+reads like a bug in V. PowerShell gives the real reason: "An Application
+Control policy has blocked this file". To see what was refused, read the
+`Microsoft-Windows-CodeIntegrity/Operational` event log, events 3033 and
+3077. On 2026-11-02, V's cached `vfmt.exe`, `vvet.exe` and `vtimeout.exe`
+were refused, so `v fmt` and `v vet` couldn't run, and now and then so was
+a test program just built, though the next build of it ran. Anything that
+runs tests in a loop has to tell that refusal from a failed test.
+
 ---
 
 ## 2. Modules and visibility
@@ -133,7 +144,12 @@ fn check_tpn() {}     // private
 - Naming is **enforced**: functions and variables are `snake_case`, types are
   `PascalCase`. A function called `Solve` is a compile error.
 - **Selective import:** `import thermo { Component, CubicKind }` lets you
-  write `Component{…}` instead of `thermo.Component{…}`. See [main.v](../main.v).
+  write `Component{…}` instead of `thermo.Component{…}`. See [demo.v](../demo.v).
+- **The version, from `v.mod`:** `@VMOD_FILE` is the text of the nearest
+  `v.mod`, filled in when the module compiles, and `v.vmod`'s `decode` reads
+  it. So `flowsheet.version()` ([flowsheet/report.v](../flowsheet/report.v))
+  keeps no second copy of the number. Go would take it from `-ldflags -X` or
+  `debug.ReadBuildInfo`.
 - Struct fields have visibility sections instead of per-field capitals:
 
 ```v
@@ -187,6 +203,12 @@ Two relatives of that rule:
 - A local named like a module-level const is a warning, and so an error
   under `-W`. A test const `db` clashed with the `db` inside
   `components.load` this way.
+- A loop's variable counts as well: `for c in comp` inside
+  `for name, c in cases` is "redefinition of value iteration variable `c`".
+  Go would quietly shadow the outer `c`.
+- A parameter can't take an imported module's name either:
+  `fn csv_names(components []string)` in a file that imports `components` is
+  "duplicate of an import symbol".
 
 **Closures capture explicitly, and by value.** A Go closure silently
 captures variables by reference, so a loop variable or a later assignment
@@ -364,11 +386,11 @@ rec := db.find('watr') or {
 ```
 
 - **Wrapping** (Go's `fmt.Errorf("…: %w", err)`):
-  `f() or { return error('loading ${path}: ${err}') }`. See `arg_or` in
-  [main.v](../main.v). V doesn't keep an error chain the way `%w` does.
+  `f() or { return error('loading ${path}: ${err}') }`. See `number` in
+  [demo.v](../demo.v). V doesn't keep an error chain the way `%w` does.
   You get the message, not something you can unwrap.
 - `or {}` blocks that have to produce a value can end in `exit()`,
-  `panic()` or any function marked `@[noreturn]` (see `die` in main.v).
+  `panic()` or any function marked `@[noreturn]`.
 
 ---
 
@@ -396,6 +418,23 @@ pub fn solve_tp(m Model, t f64, p f64, n []f64, root Root) !State
 `Cubic` never says `implements Model`. Passing a `Cubic` to `solve_tp`
 compiles because it has the five methods. Inside a function, `if m is Cubic`
 checks the concrete type and smart-casts `m`, like a Go type assertion.
+
+**An interface can ask for fields, not only methods**, which Go's can't.
+`Unit` in [flowsheet/unit.v](../flowsheet/unit.v) has `name string`, so
+every unit needs that field, and `u.name` works on the interface value with
+no getter.
+
+**In an array literal, the first element sets the type.** Go says
+`[]Unit{mixer, valve}`. V says `[Unit(mixer), valve]`: cast the first
+element, and the rest convert to it. Casting a later one instead,
+`[mixer, Unit(valve)]`, is a compile error, since the array is then a
+`[]Mixer`.
+
+**An `if` expression can yield several values,** where Go has no `if`
+expression at all. `return if r.beta == 1.0 { full, empty } else { empty, full }`
+in [flowsheet/drum.v](../flowsheet/drum.v) returns a `(Stream, Stream)`. As
+in Go, there's no tuple to hold them: `t := pick()` is a compile error for a
+function returning two values.
 
 **An interface can hold an interface.** `Translated` in
 [thermo/translated.v](../thermo/translated.v) has a field `inner Model` and
@@ -554,6 +593,48 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 
 `it` is the implicit element name inside `filter`, `map`, `any` and `all`.
 
+**An index can say what to do when there's nothing there.** In Go, `s[i]`
+past the end panics, and a map gives the zero value for a missing key, so you
+check `len(s)` first or write `v, ok := m[k]`. In V both take an `or` block,
+and a map lookup can propagate with `!`:
+
+```v
+command := args[0] or { '' }   // no arguments: '' rather than a panic (main.v)
+j['format']!.int()              // a missing key is an error, "map key does not exist"
+```
+
+A plain `m[k]` still gives the zero value, as Go's does.
+[flowsheet/report_test.v](../flowsheet/report_test.v) reads its JSON with `!`,
+so that a key the report left out fails the test instead of reading as 0.
+
+**`encoding.csv`** quotes a field that needs it, with a comma, a quote, a line
+break or a leading space, as Go's `encoding/csv` does. Its reader's `read()`
+returns an error at the end, where Go's returns `io.EOF`, so the loop is
+`rows << reader.read() or { break }`.
+
+**Arrays have `==` but no `<`.** Go's slices have neither, and you reach
+for `slices.Equal` and `slices.Compare`. V's `==` compares element by element,
+but `a < b` is a compile error ("only `==` and `!=` are defined on arrays"),
+and there's no `Compare` to call, so `earlier` in
+[flowsheet/tear.v](../flowsheet/tear.v) is a short loop.
+
+**Inside a sort's comparison, an array needs a dereference.** The arguments
+are pointers, and pointer indexing is only allowed in `unsafe`, so `a[0]` is
+an error for `a &[]int`. Write `(*a)[0]`.
+
+**An interface method can take a `mut` receiver.** Go's method sets decide
+this quietly: only a pointer has the pointer methods. V says it in the
+interface, under `mut:`, and in the signature that takes it:
+`numeric.Equations` has `mut: eval(x []f64, mut f []f64) !`, and `broyden`
+takes `mut system Equations`. The call site says `mut` too:
+`numeric.broyden(mut s, y)`. A struct can be its own solver's system that way,
+as `flowsheet.Solver` is.
+
+**An unused parameter is a notice, and `_` is the name that silences it.** A
+test's stub for an interface doesn't need its arguments:
+`fn (s Stub) calculate(_ thermo.Fluid, _ []Stream) !Outcome`. It still
+satisfies the interface, as in Go.
+
 **Gotcha:** arrays are **shared** when assigned, like Go slices. Use
 `.clone()` when you keep a copy of an argument. `new_cubic` and `State`
 clone the arrays they store, so the caller can reuse theirs.
@@ -570,6 +651,35 @@ array (`last_step = step.clone()` in
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 
+**`strconv.atof64` reads what Go's `ParseFloat` reads.** Probed side by
+side with Go 1.27, both:
+- accept `inf`, `Infinity` and `NaN` in any case, and underscores between
+  digits (`1_000`);
+- refuse surrounding spaces and `0x10`;
+- read `1e-400` as 0, with no error.
+
+The one difference is overflow. Go returns ±Inf *and* `ErrRange`, but V's
+`!f64` is a value or an error, never both, so `1e400` is just an error.
+[quantity/quantity.v](../quantity/quantity.v) checks `math.is_finite`
+itself. An underflow's 0 then meets the same "above zero" check as a typed
+0.
+
+**Cutting strings: `all_after` and `trim_string_left`.** Go's
+`strings.Cut(s, "=")` returns `found`, and `TrimPrefix` and `TrimLeft` say
+which they are by name. In V:
+- `'ab'.all_after('=')` is `'ab'`, the whole string, when the separator isn't
+  there, and so is `all_before`. Check `contains` first when that matters.
+- `trim_left('v')` takes a set of characters, as Go's `TrimLeft` does, so
+  `'vv1.0'` loses both v's. `trim_string_left('v')` is Go's `TrimPrefix`.
+- `strconv.atoi` takes a sign, `+1` or `-1`, as Go's `Atoi` does, and refuses
+  `''`. [release/release.v](../release/release.v) checks that a version's parts
+  are digits itself.
+
+**`strings.levenshtein_distance(a, b)`** is in V's standard library, while
+Go's has no edit distance. It counts bytes, not runes, so dropping the
+two-byte `°` from `°C` is two edits. `quantity` and `components` use it
+for their suggestions.
+
 **Gotcha: `toml.Any` converts without complaint.** `doc.value('name').f64()`
 on a string returns `0.0`, and a missing key gives a `Null` that also
 converts to zero. Check the type first (`if v is f64 || v is i64`), or use
@@ -580,6 +690,18 @@ component reader in M2 checks every value's type.
 `println('${m.values().map(it.int())}')` prints the array's internal
 struct instead of `[2, 3]`. Assign it to a variable first and interpolate
 that. Found in the M2 data-format spike, with V `eab77e7`.
+
+**A panic can't be caught.** Go has `recover`, so a library's panic can be
+stopped at a boundary. V has nothing like it: a panic ends the program, whoever
+it came from. So anything a library might panic on has to be kept from reaching
+it. V 0.5.2's `toml` can panic on a `\u` escape, in a slice that's off by one,
+and [flowsheet/file.v](../flowsheet/file.v) scans a file for those first. Fuzz a
+library you hand user input to.
+
+**A library's TOML tree has line numbers.** `toml.parse_text(text)!.ast.table` is
+a tree of `ast.Value`, and its leaves keep `pos.line_nr`, where `doc.value(...)`
+keeps nothing. Strings in it are decoded, so writing one back means escaping it
+again. Quoted keys can't hold an escaped quote.
 
 **Gotcha: `int` is 64-bit, but C's `int` is 32-bit.** Like Go's `int`, V's
 `int` is 64-bit on 64-bit platforms (`sizeof(int)` is 8 in this V). In any
@@ -627,6 +749,16 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
 ```v
 const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 ```
+- **`module main` can be tested,** as Go's `package main` can.
+  [main_test.v](../main_test.v) starts with `module main`, sits beside
+  main.v, and calls the program's own `run(args, mut c)`, so the command line
+  is tested in the test's process, with no program to build and start. Its
+  output goes to a `Console` of two `strings.Builder`s, which the real program
+  marks `live` so that it prints instead. `Builder.str()` empties the builder,
+  so read it once.
+- **`fn testsuite_end()`** runs after the file's tests, like the cleanup after
+  `m.Run()` in Go's `TestMain`. main_test.v removes its scratch directory
+  there.
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
   Newton solver against the polynomial roots. Identities catch bugs that
@@ -809,6 +941,42 @@ Keys that a shape lacks are left at their zero values, and keys it doesn't
 know are ignored. Go's `encoding/json` behaves the same way, and Go 1.18+
 would write the wrapper as `type cases[T any] struct{ Cases []T }`.
 
+**Writing JSON** is `json2.encode(r)`, by field name, as decoding is.
+[flowsheet/report.v](../flowsheet/report.v) writes a flowsheet's report that
+way:
+
+```v
+pub struct StreamReport {
+	from ?string @[json_null] // the unit it leaves, or none for a feed
+	t    f64     @[json: 'T'] // K
+	// …
+}
+
+json2.encode(r, prettify: true, indent_string: '  ')
+```
+
+Where it differs from Go's `encoding/json`:
+- `@[json: 'T']` renames a key, as a Go tag does. An Option that's `none` is
+  left out unless the field has `@[json_null]`, which writes `null`. Go writes
+  a nil pointer as `null` unless the tag says `omitempty`: the defaults are the
+  other way round.
+- A double is the shortest decimal that reads back as it, as in Go, so a report
+  comes back from its JSON to the last bit. NaN and infinity become `null`,
+  where Go's encoder returns an error.
+- An enum is written as its name, `"wegstein"`, where a Go `iota` constant is
+  written as its number unless it has a `MarshalText`.
+- A map's keys come out sorted, as Go's do, though a V map keeps its order when
+  you loop over it. A list whose order matters, such as a mixture's
+  components, has to be an array.
+- `prettify: true` puts every value on a line of its own, an array's elements
+  too: long, but two reports diff line by line.
+
+To read JSON with no struct, decode into `json2.Any`, then use `.as_map()`,
+`.as_array()`, `.f64()`, `.str()` and `x is json2.Null`. In V 0.5.2 `.arr()` is
+deprecated, which `-W` makes an error. [flowsheet/report_test.v](../flowsheet/report_test.v)
+checks the report that way, so that a key on the wrong field can't hide
+behind the struct that wrote it and read it back.
+
 **Reflection happens at compile time.** Go's `reflect` inspects values at
 run time, through `interface{}`, and a mistake is a run-time panic. V's
 `$for` loops over a type's fields while compiling, and generates ordinary
@@ -931,6 +1099,13 @@ function type must be `@[required]` or given a default: V flags one that
 would otherwise start as a nil function ("uninitialized `fn` struct fields
 are not allowed").
 
+**A smart-cast interface's field inside `${}` doesn't compile.** After
+`if m is thermo.Cubic { … }`, `m.kij[i]` works, but `println('${m.kij}')`
+makes C that casts through `_object` twice, and both tcc and gcc refuse it
+("has no member named `_object`"). V 0.5.2 then retries with its fallback
+compiler, which fails on something else. Take the field into a local first,
+`kij := m.kij`, and interpolate that. A report to make upstream.
+
 **On Windows, `import runtime` breaks the default build.** Even a
 three-line program that prints `runtime.nr_cpus()` fails: tcc can't parse
 the `psapi.h` that `runtime` includes, and V's gcc retry fails in its
@@ -943,3 +1118,16 @@ to a constant instead. `v vet` wouldn't have warned about either this or
 same in V, unlike Go's `"..."` and backquoted raw strings. A script that
 builds V source as text has to use raw strings, `r'${x}'`, or it
 interpolates its own variables.
+
+**An apostrophe in a single-quoted string ends it, and the error lands far
+away.** `println('expander by DWSIM's S: …')` closes the string at `DWSIM`. In
+[flowsheet/dwsim_test.v](../flowsheet/dwsim_test.v) the parser carried on and
+reported "unexpected token `}`" 64 lines further down, at the end of a later
+function. When an error makes no sense where it points, look above it for a
+`'s`, and write such a string in double quotes, as `v fmt` prefers anyway.
+
+**Options compare with `==`.** `s.from == none` is whether there's a value,
+and two Options are equal when neither has one or both have equal ones, as a
+probe showed. Go would compare two `*string` by address, so you'd write a
+helper; [flowsheet/golden_test.v](../flowsheet/golden_test.v) just writes
+`g.from == w.from`.

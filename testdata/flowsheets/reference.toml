@@ -1,0 +1,62 @@
+# M4's reference flowsheet: a feed, a mixer, a cooler, a flash drum, a splitter
+# sending half the liquid back through a pump, and a valve to a second drum.
+format = 1
+
+[components]
+names = ["methane", "ethane", "propane", "n-butane", "n-pentane"]
+
+[model]
+equation = "PR"
+
+[solver]
+method = "wegstein"
+
+[feed.feed]
+T = "300 K"
+P = "30 bar"
+flow = "100 mol/s"
+mole_fractions = { methane = 0.7, ethane = 0.1, propane = 0.08, n-butane = 0.07, n-pentane = 0.05 }
+
+[unit.mixer]
+type = "mixer"
+in = ["feed", "recycle"]
+out = "mixed"
+
+[unit.cooler]
+type = "heater"
+in = "mixed"
+out = "cold"
+outlet_T = "230 K"
+
+[unit.drum]
+type = "flash_drum"
+in = "cold"
+vapour = "gas"
+liquid = "liquid"
+duty = "0 W"
+
+[unit.split]
+type = "splitter"
+in = "liquid"
+out = ["back", "on"]
+fractions = [0.5, 0.5]
+
+[unit.pump]
+type = "pump"
+in = "back"
+out = "recycle"
+outlet_P = "31 bar"
+efficiency = 0.75
+
+[unit.valve]
+type = "valve"
+in = "on"
+out = "let down"
+outlet_P = "5 bar"
+
+[unit.second]
+type = "flash_drum"
+in = "let down"
+vapour = "flash gas"
+liquid = "product"
+duty = "0 W"

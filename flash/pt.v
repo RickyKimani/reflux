@@ -89,9 +89,11 @@ fn k_of(lnk f64) f64 {
 // after 20 steps, as near a critical point, switches to Newton's method on
 // the Gibbs energy in the vapour mole numbers, minimising G itself.
 //
-// The first K-values come from the stability test's incipient phase, and
-// if that split fails, or a phase of it is unstable, from its other
-// unstable trials in turn.
+// The first K-values come from the stability test's unstable trial of lowest
+// tm. The test stops at the first proof of instability once Wilson's two
+// trials have run (first_proof). If no split from its trials stands, or a
+// phase of one is unstable, it runs all its trials, and the split starts from
+// each unstable one in turn, lowest tm first.
 // Each phase takes its volume root of lower Gibbs energy, and the phase of
 // lower mass density is the vapour (D6).
 //
@@ -102,7 +104,10 @@ pub fn pt(m thermo.Model, t f64, p f64, z []f64, params FlashParams) !FlashResul
 	if !(params.tol > 0.0) || params.max_steps < 1 {
 		return fail(.bad_input, 'tol and max_steps must be positive')
 	}
-	stab := stability(m, t, p, z)!
+	// One proof of instability is enough to start a split from, so the trials
+	// stop at the first after Wilson's two. A split that doesn't stand from
+	// those gets them all.
+	stab := stability(m, t, p, z, first_proof: true)!
 	feed := normalised(z)
 	if stab.stable {
 		st := thermo.solve_tp(m, t, p, feed, .stable) or {
@@ -127,6 +132,17 @@ pub fn pt(m thermo.Model, t f64, p f64, z []f64, params FlashParams) !FlashResul
 		present: []int{len: feed.len, init: index}.filter(feed[it] > 0.0)
 		params:  params
 	}
+	return sp.from_trials(stab) or {
+		if !stab.stopped {
+			return err
+		}
+		sp.from_trials(stability(m, t, p, z)!)!
+	}
+}
+
+// from_trials splits the feed from each of a stability test's unstable trials
+// in turn, lowest tm first, and returns the first split that stands.
+fn (sp Splitter) from_trials(stab Stability) !FlashResult {
 	mut last := IError(fail(.no_convergence, 'no starting K-values'))
 	mut more := ?IError(none)
 	for k0 in sp.starts(stab) {

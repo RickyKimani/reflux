@@ -1,0 +1,56 @@
+# A flowsheet with no loop, so each unit is calculated once, in order: a well
+# stream let down, chilled and separated with a little cooling, its gas
+# compressed and through a knockout drum that finds no liquid, and its
+# condensate warmed to a vapour fraction.
+format = 1
+
+[components]
+names = ["methane", "ethane", "propane", "n-butane"]
+
+[model]
+equation = "SRK"
+
+[feed.well]
+T = "320 K"
+P = "60 bar"
+flow = "50 mol/s"
+mole_fractions = { methane = 0.6, ethane = 0.15, propane = 0.15, n-butane = 0.1 }
+
+[unit.choke]
+type = "valve"
+in = "well"
+out = "choked"
+outlet_P = "20 bar"
+
+[unit.chill]
+type = "heater"
+in = "choked"
+out = "chilled"
+outlet_T = "250 K"
+
+[unit.separator]
+type = "flash_drum"
+in = "chilled"
+vapour = "gas"
+liquid = "condensate"
+duty = "-20 kW"
+
+[unit.boost]
+type = "compressor"
+in = "gas"
+out = "compressed"
+outlet_P = "40 bar"
+efficiency = 0.78
+
+[unit.knockout]
+type = "flash_drum"
+in = "compressed"
+vapour = "sales gas"
+liquid = "knocked out"
+duty = "0 W"
+
+[unit.stabilise]
+type = "heater"
+in = "condensate"
+out = "stabilised"
+outlet_vapour_fraction = 0.2

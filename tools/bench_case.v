@@ -12,6 +12,7 @@
 module main
 
 import benchmarks
+import flowsheet
 import json2
 import os
 
@@ -25,8 +26,24 @@ fn main() {
 		eprintln('build with -prod: v -prod -cc gcc -o bench_case.exe tools/bench_case.v')
 		exit(1)
 	}
+	if os.args.len == 6 && os.args[1] == '--flowsheet' {
+		// M4's: a flowsheet file, its method, and how many first solves and
+		// solves again to time.
+		method := if os.args[3] == 'direct' {
+			flowsheet.Method.direct
+		} else {
+			flowsheet.Method.wegstein
+		}
+		timing := benchmarks.time_flowsheet(os.args[2], method, os.args[4].int(), os.args[5].int()) or {
+			benchmarks.FlowsheetTiming{
+				error: err.msg()
+			}
+		}
+		println(json2.encode(timing))
+		return
+	}
 	if os.args.len != 2 {
-		eprintln('usage: bench_case case.json, or bench_case --build')
+		eprintln('usage: bench_case case.json, bench_case --build, or bench_case --flowsheet file.toml wegstein|direct cold warm')
 		exit(2)
 	}
 	if os.args[1] == '--build' {

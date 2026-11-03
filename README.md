@@ -5,11 +5,15 @@ An open-source steady-state chemical process simulator written in
 than DWSIM. The short-term goal is to learn V by building it.
 
 ```bash
-v run .               # n-butane at 350 K and 9.4573 bar, Mathias–Copeman water, a mixture, H, S, Cp, w, μ_JT, a flash
+v run . solve testdata/flowsheets/reference.toml --json results.json   # a flowsheet with a recycle: its stream table, and its results as JSON
 ```
 
 ```bash
-v run . 300 2.5       # T in K, P in bar
+v run . demo          # n-butane at 350 K and 9.4573 bar, Mathias–Copeman water, a mixture, H, S, Cp, w, μ_JT, a flash
+```
+
+```bash
+v run . demo 300 2.5  # T in K, P in bar
 ```
 
 ```bash
@@ -19,20 +23,29 @@ v -W test .           # all tests, warnings treated as errors
 - [docs/roadmap.md](docs/roadmap.md) is what gets built, in what order, and
   how each piece is tested. [docs/m1-plan.md](docs/m1-plan.md) is M1's
   plan, step by step, with its exit review at the end. The same goes for
-  [docs/m2-plan.md](docs/m2-plan.md), component data, and
-  [docs/m3-plan.md](docs/m3-plan.md), the flash.
+  [docs/m2-plan.md](docs/m2-plan.md), component data,
+  [docs/m3-plan.md](docs/m3-plan.md), the flash, and
+  [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
   10,000 random mixtures from the database, every answer checked, and
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
-  `thermo` and DWSIM 9 on the same flashes.
+  `thermo` and DWSIM 9 on the same flashes, and against DWSIM on the
+  reference flowsheet.
+- [CHANGELOG.md](CHANGELOG.md) is every release, and what a version
+  promises.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
   and why, with every formula the code uses.
 - [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:
   LHHW and friends as checkable data, not text.
 - [docs/spike-python-ffi.md](docs/spike-python-ffi.md) is what we learned
   calling reflux from Python and NumPy, and the rules M10a follows.
+- [docs/flowsheet-format.md](docs/flowsheet-format.md) is the flowsheet file
+  format, and [docs/report-format.md](docs/report-format.md) the results
+  `reflux solve` writes: JSON and CSV.
 - [docs/spike-dwsim.md](docs/spike-dwsim.md) is what we learned driving
   DWSIM 9 from Python, and how M3 compares reflux with it.
+  [docs/spike-dwsim-flowsheet.md](docs/spike-dwsim-flowsheet.md) does the
+  same for its flowsheets, for M4.
 - [docs/v-for-go.md](docs/v-for-go.md) is V for Go programmers. It points
   back into this code for every feature.
 
@@ -52,8 +65,11 @@ These goals come from what went wrong with DWSIM:
 ## Layout
 
 ```
-v.mod               module manifest (Go's go.mod)
-main.v              demo CLI, on database components
+v.mod               module manifest (Go's go.mod), with reflux's version
+CHANGELOG.md        every release, what a version promises, how to make one
+main.v              the command line: reflux solve, demo, version, help
+demo.v              reflux demo, on database components
+main_test.v         the command line, run in the test's own process
 numeric/
   functions.v       what the solvers take: interfaces, not closures (V never
                     frees a closure)
@@ -64,6 +80,7 @@ numeric/
   vec.v             small vector helpers
   integrate.v       adaptive Gauss–Kronrod quadrature
   newton.v          Newton for nonlinear systems: line search or dogleg
+  broyden.v         Broyden's quasi-Newton method, with no Jacobian
   minimize.v        Newton minimisation with a Levenberg–Marquardt shift
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
 tdep/
@@ -99,26 +116,58 @@ flash/
   tv.v              TV and UV flashes, in the model's own variables (T, V, n)
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
+quantity/           numbers with units ("30 bar", "100 kmol/h") read into SI,
+                    by NIST SP 811's definitions
+flowsheet/
+  stream.v          material streams, each with the flash that gave its state
+  unit.v            the Unit interface, and energy streams
+  mixer.v           mixer: flows and enthalpy add, then a PH flash
+  splitter.v        splitter: fractions of the flow, the inlet's state
+  pressure.v        outlet P or ΔP, for whatever changes pressure
+  valve.v           valve: isenthalpic, by a PH flash
+  heater.v          heater and cooler: outlet T, ΔT, β or duty
+  pump.v            pump: v·ΔP/η, liquid only
+  compressor.v      compressor and expander: isentropic by PS, then η
+  drum.v            flash drum: mixed inlets, saturated vapour and liquid out
+  separator.v       component separator: a fraction of each component
+  sheet.v           Flowsheet: units joined by named streams, and its plan
+  graph.v           strongly connected components, elementary cycles, order
+  tear.v            tear selection: fewest streams, fewest second breaks
+  solve.v           Solution: tears converged, every balance checked
+  file.v, section.v the TOML file format: load, with every field checked
+  makers.v          a unit type's table in a file, to the unit
+  write.v           a file back, in a fixed order
+  report.v          a solve's report, or its failure's, as JSON and CSV
+                    (docs/report-format.md)
+  table.v           the stream table and the trace, for reading
+  error.v           FlowsheetError: every failure, typed, never a panic
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
-                    the same flashes (docs/benchmarks.md)
+                    the same flashes, and reflux and DWSIM on the reference
+                    flowsheet (docs/benchmarks.md)
+release/            what must hold before a version is tagged, for
+                    tools/release.vsh
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
-                    gen_m3_dwsim.py and gen_m3_bench.py (DWSIM 9's answers and
-                    timings, by hand on Windows), import_chemsep.vsh,
+                    gen_m3_dwsim.py, gen_m4_dwsim.py, gen_m3_bench.py and
+                    gen_m4_bench.py (DWSIM 9's answers and timings, by hand on
+                    Windows), golden.vsh (the golden flowsheets' results),
+                    release.vsh (the release gate), import_chemsep.vsh,
                     data_quality.vsh, flash_sweep.vsh and benchmarks.vsh
                     (generated data and reports), bench_case.v (reflux's side
                     of the benchmarks)
-testdata/           reference fixtures from thermo, CoolProp, chemicals and
-                    mpmath, with provenance
+testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath
+                    and DWSIM 9, with provenance, and flowsheets/ (TOML files,
+                    and the golden flowsheets' results)
 data/vendor/        the ChemSep 8.50 database, verbatim, with its licence
 data/components/    the same, converted: one TOML file per compound
                     (generated by tools/import_chemsep.vsh)
 spike/python_ffi/   calling reflux from Python and NumPy (M1 step 9)
 spike/data_format/  the TOML component-file trial (M2 step 1)
 spike/dwsim/        driving DWSIM 9 from Python, headless (M3 step 0)
+spike/dwsim_flowsheet/  DWSIM 9's flowsheets and recycle, headless (M4 step 0)
 .v-version          the V commit CI builds
 ```
 
@@ -127,10 +176,11 @@ at the edges, i.e. input files and printed output.
 
 ## Status
 
-**M0 (foundations), M1 (thermo core), M2 (component data) and M3 (flash)
-are done.** The exit reviews are at the ends of
-[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md) and
-[docs/m3-plan.md](docs/m3-plan.md). What exists now:
+**M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash) and
+M4 (the first flowsheet) are done.** The exit reviews are at the ends of
+[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
+[docs/m3-plan.md](docs/m3-plan.md) and [docs/m4-plan.md](docs/m4-plan.md).
+What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
       first and second derivatives
@@ -197,12 +247,43 @@ And from M3, for any `thermo.Model`:
 - [x] Timed against `thermo` and DWSIM 9
       ([docs/benchmarks.md](docs/benchmarks.md)): faster than DWSIM on PT
       flashes (1.4–5.6×) and bubble points (3.9–10×), as fast on a binary's
-      PH, and 2–4× slower on PH for 5 and 10 components.
+      PH, and 2–4× slower on PH for 5 and 10 components. M4 step 9 made PH
+      2–4 times faster: twice as fast as DWSIM's for the binary, a little
+      faster for 5 components and a little slower for 10.
 - [x] Every failure a typed error, never a panic and never an unproven
       answer.
 
-Next is M10a: thermo and the flash callable from Python, with NumPy arrays,
-then M4, the first flowsheet.
+And from M4, the first flowsheet:
+
+- [x] `reflux solve plant.toml --json results.json --csv streams.csv`: a
+      flowsheet from a TOML file with a unit on every number, every field
+      checked, and a wrong one refused with its line and a suggestion
+      ([docs/flowsheet-format.md](docs/flowsheet-format.md)). A stream table
+      on the screen, and every stream, unit, balance and pass as JSON and CSV
+      ([docs/report-format.md](docs/report-format.md)).
+- [x] Units of measure read into SI by SP 811's exact definitions: 75 units,
+      with Celsius, Fahrenheit and gauge pressure only ever explicit.
+- [x] The mixer, splitter, valve, heater and cooler, pump, compressor,
+      expander, flash drum and component separator, each closing its
+      balances to 1e-10 and checked against physics that doesn't go through
+      the flash: μ_JT, Cp, Clapeyron, ∫v dP.
+- [x] A sequential-modular solver: Tarjan's blocks, Johnson's cycles, and the
+      fewest tears found exactly (Gundersen and Hertzberg's nine graphs), then
+      direct substitution, Wegstein or Broyden. No answer is returned until
+      every unit and the whole flowsheet balance.
+- [x] The reference flowsheet, a recycle with two drums, matches DWSIM 9 on
+      DWSIM's constants, and every difference over the targets is reproduced
+      from something in DWSIM: its pump's liquid density, its mixing entropy,
+      its rounded constants.
+- [x] It solves in 26 ms, against DWSIM's 0.56 s
+      ([docs/benchmarks.md](docs/benchmarks.md)), and five golden flowsheets
+      are solved again in every check.
+- [x] A first release, v0.1.0, with a release gate
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10a: thermo and the flash callable from Python,
+with NumPy arrays, then M10b, flowsheets from Python. M5 to M9 build on M4:
+steam, activity models, columns, specifications and reactors.
 
 ## Roadmap
 
@@ -211,9 +292,9 @@ milestones with exit criteria, headless testing, C numeric backends and
 how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
-(ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9.
-Now that M3 has landed, **M10a** makes thermo and flash callable from Python
-with NumPy arrays.
+(ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
+✓. Next, **M10a** makes thermo and flash callable from Python with NumPy
+arrays, and **M10b** the flowsheets.
 
 ## Development
 
@@ -229,6 +310,12 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same
 script on Windows and Linux, with tcc and with gcc. It uses the V commit
 pinned in [.v-version](.v-version). After `v up`, put the new commit there
 so CI and your machine stay on the same V.
+
+Releases are tags on `main`, `vX.Y.Z`, as source: build one with
+`v -prod -cc gcc -o reflux .`. [CHANGELOG.md](CHANGELOG.md) has each release,
+what the version numbers promise, and how a release is made:
+`v run tools/release.vsh` refuses until everything holds, then prints the tag
+commands.
 
 ## Property data
 

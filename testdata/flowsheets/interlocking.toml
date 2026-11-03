@@ -1,0 +1,56 @@
+# The reference flowsheet's loop with a second recycle through a pump of its own:
+# two cycles in one block, torn together.
+format = 1
+
+[components]
+names = ["methane", "ethane", "propane", "n-butane", "n-pentane"]
+
+[model]
+equation = "PR"
+
+[solver]
+method = "wegstein"
+
+[feed.feed]
+T = "300 K"
+P = "30 bar"
+flow = "100 mol/s"
+mole_fractions = { methane = 0.7, ethane = 0.1, propane = 0.08, n-butane = 0.07, n-pentane = 0.05 }
+
+[unit.mixer]
+type = "mixer"
+in = ["feed", "recycle", "recycle2"]
+out = "mixed"
+
+[unit.cooler]
+type = "heater"
+in = "mixed"
+out = "cold"
+outlet_T = "230 K"
+
+[unit.drum]
+type = "flash_drum"
+in = "cold"
+vapour = "gas"
+liquid = "liquid"
+duty = "0 W"
+
+[unit.split]
+type = "splitter"
+in = "liquid"
+out = ["back", "back2", "on"]
+fractions = [0.3, 0.2, 0.5]
+
+[unit.pump]
+type = "pump"
+in = "back"
+out = "recycle"
+outlet_P = "31 bar"
+efficiency = 0.75
+
+[unit.pump2]
+type = "pump"
+in = "back2"
+out = "recycle2"
+outlet_P = "32 bar"
+efficiency = 0.75

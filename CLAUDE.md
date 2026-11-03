@@ -20,38 +20,93 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
-- **M0, M1 and M2 are done** and merged into `main` (PRs #1 and #2).
+- **M0 to M3 are done** and merged into `main` (PRs #1 to #3).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
-- **M3 (flash) is done** on branch `m3-flash`, which is pushed and has no
-  PR yet. Its exit review, at the end of `docs/m3-plan.md`, finds all ten
-  criteria met. The PR into `main` waits for CI on the last commit, and for
-  the owner to ask.
-  - The plan, `docs/m3-plan.md`, holds exit criteria 1–10, decisions
-    D1–D12 and steps 0–11, each step "— done" with its write-up: the
-    record of what each step did.
-  - What M3 built: Newton and Rachford–Rice, PIP and the Soave guard,
-    stability, the PT flash (`flash/pt.v`), the reference fixtures
-    (`testdata/m3_thermo.json`, `testdata/m3_dwsim.json`), the
-    vapour-fraction flashes with bubble and dew points (`flash/vf.v`), the
-    PH and PS flashes (`flash/ph.v`), the TV and UV flashes (`flash/tv.v`),
-    the robustness sweep (`sweep/`, `docs/flash-robustness.md`), and the
-    benchmarks with a performance pass (`benchmarks/`,
-    `docs/benchmarks.md`).
-  - Amended along the way: D3 in step 4 (pure-component stability trials),
-    D6 in step 6 (the vapour is the phase of lower mass density),
-    criterion 6 after step 5 (a DWSIM deviation may exceed a target only
-    when the fixture reproduces it from DWSIM itself, and reflux still
-    matches the exact model to 1e-8), D8 in step 9 (a third phase, proved
-    by a negative tangent-plane distance, is an explained failure: VLLE is
-    M6), and in step 10 D10 (the module is `benchmarks`, since vlib has a
-    `benchmark`) and M1's D2 (the volume solver's tier on `Model` is
-    `volume_function(t, n)`).
-  - Carried forward (the review's list): PH for 5 and 10 components takes
-    2–4× as long as DWSIM's, about 12 verified PT flashes per answer; VLLE
-    is M6; upstream reports to V, `thermo` and DWSIM.
-- **Next is M10a** (thermo and the flash from Python, with NumPy arrays),
-  then M4, the first flowsheet. Each starts with its plan,
-  `docs/mN-plan.md`, approved before any code.
+  Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
+  each finished step there has its write-up: the record of what it did.
+- **M3, the flash,** carried forward (in its review): VLLE is M6; reports
+  to make upstream to V, `thermo` and DWSIM. Its PH speed, 2–4× DWSIM's
+  time for 5 and 10 components, was M4 step 9's to fix.
+- **M4 (the first flowsheet) is done** on branch `m4-flowsheet`, with a PR
+  into `main`. Its plan, `docs/m4-plan.md`, has exit criteria 1–10,
+  decisions D1–D16 and steps 0–11, and ends with its exit review: every
+  criterion met, with CI green on the tip.
+  - Step 0 is committed and pushed: the DWSIM flowsheet spike
+    (`spike/dwsim_flowsheet/run.py`, `docs/spike-dwsim-flowsheet.md`), a
+    go with conditions. DWSIM's recycle, scaled by 1e-8, closes its
+    balances to 9e-8 (components) and 6e-7 (energy); the open loop hands
+    its stream back within 8e-14. Its pump uses a non-PR liquid density,
+    and its two-inlet drum is wrong. The spike doc lists what step 8 must
+    do.
+  - Step 1 is committed and pushed: units of measure, the `quantity`
+    module (D10), against a table hand-written from NIST SP 811
+    (`testdata/m4_units.json`). D10 was amended there: ΔT, ΔP and
+    fractions too, and a few more units.
+  - Step 2 is committed and pushed: streams, the `Unit` interface, the
+    mixer, splitter, valve and heater (`flowsheet/`). D4 was amended
+    there: a mixer and a valve can't raise P. It fixed a PH flash that
+    failed on ordinary two-phase states when its ideal-gas start fell near
+    0 K. It found that `flash.uv` fails on cold liquids at or below 100 K,
+    carried to the exit review.
+  - Step 3 is committed and pushed: the pump, compressor, expander, flash
+    drum and component separator, with `pressure.v` shared by whatever
+    changes pressure. D4 was amended there: a drum's P follows the mixer's,
+    a compressor takes a wet inlet, and a component separator can raise P.
+  - Step 4 is committed and pushed: `Flowsheet` and `plan`, with Tarjan,
+    Johnson and an exact tear search, on the nine classical graphs of
+    Gundersen and Hertzberg (1983) (`tools/gen_m4_graphs.py`). D5 was
+    amended there: exact within a work budget, not up to 12 cycles. FOQUS
+    and Pyomo rank tears the other way round, which step 5 can measure.
+  - Step 5 is committed and pushed: `Flowsheet.solve` and `numeric.broyden`.
+    The reference flowsheet solves by direct substitution (29 passes),
+    Wegstein (4) and Broyden (9).
+    D5 and D7 were amended there: acceleration waits for a second real pass,
+    and tears prefer the recycle. D5's tear ranking was measured against
+    FOQUS's and stays.
+  - Step 6 is committed and pushed: the TOML file format. `flowsheet.load`
+    checks a whole file, with lines and suggestions, and `Loaded.write` gives
+    it back
+    (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
+    V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
+    first: a report to make upstream.
+  - Steps 7 to 11 are committed and pushed.
+  - Step 7: the CLI, `reflux solve` and `reflux demo`, and the reports
+    (`flowsheet/report.v`, `table.v`, `docs/report-format.md`). D11 was
+    amended there: `--trace` prints when the solve ends, and a failure
+    writes its JSON too. `solve` now keeps the history on a failure outside
+    a loop.
+  - Step 8: `tools/gen_m4_dwsim.py`, DWSIM's units and reference flowsheet
+    (`testdata/m4_dwsim.json`), compared in `flowsheet/dwsim_test.v`; and
+    the golden flowsheets
+    (`tools/golden.vsh`, `flowsheet/golden_test.v`). Five deviations over
+    criterion 2's targets are each reproduced from DWSIM: its pump's
+    density, its mixing entropy in a two-phase expander, its rounded
+    constants.
+  - Step 9: the flowsheet benchmark
+    (`tools/gen_m4_bench.py`, `testdata/m4_bench.json`, in
+    `docs/benchmarks.md`), and PH 2–4× faster. Only a PH or PS flash's
+    answer is verified, and a split's stability test stops at Wilson's two
+    trials when they prove instability (`first_proof`): M3's D3 and D5
+    amended. The reference flowsheet solves in 26 ms, DWSIM's in 0.56 s.
+  - Step 10: v.mod's version is 0.1.0, with `CHANGELOG.md` (what a version
+    promises, and the 0.1.0 entry, undated) and the release gate,
+    `tools/release.vsh` over the `release` module. The owner chose a source
+    tag only, on `main` after step 11 and M4's merge. The golden reports were
+    written again for the version.
+  - Step 11: the docs and the exit review. The review added a balance
+    check from scratch for the golden flowsheets (`golden_test.v`), and
+    held the three methods' answers to the tear tolerance. It settled the
+    roadmap's C9 (M4, M5, M11) and J1 (designed in `docs/design.md`).
+    Carried forward: `flash.uv` on cold liquids, upstream reports, and
+    v0.1.0's tag.
+  - CI passed on step 11's commit (run 41656509290), which is in the
+    review. Next: the PR's merge, when the owner says. After it, date the
+    CHANGELOG entry, run `tools/release.vsh` on `main`, and tag v0.1.0 and
+    push the tag only when the owner says.
+  - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
+    reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
+  - The roadmap puts M10a (thermo and the flash from Python) in parallel
+    with M4; the owner chose to plan M4 first.
 
 ## How we work
 
@@ -62,6 +117,9 @@ Keep this section current: update it whenever a step is committed.
   - Commit only when asked, and push only when asked.
   - Open the PR into `main` only after the milestone's docs and exit review,
     and only when asked.
+  - Tag a release only when asked, on `main`, once `v run tools/release.vsh`
+    passes ("Making a release" in `CHANGELOG.md`). A change to a golden
+    report goes in the CHANGELOG's next entry, by name.
   - Commit subjects look like `M3 step 4: PT flash`, with a body below.
 - **Finishing a step** means all of:
   - marking it "— done" in the plan, with what was built, the tests,
@@ -80,11 +138,15 @@ v run tools/check.vsh            # what CI runs, with tcc: about 4 min
 v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 8 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
-v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) and P (bar)
+v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
+v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
+v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 ```
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,
-  then builds and runs `main.v`. With gcc it also builds and runs `-prod`.
+  then builds reflux and runs `reflux demo`, solves the reference flowsheet
+  with both reports, and checks that a missing file exits 1. With gcc it
+  does the same with a `-prod` build.
 - **Test builds are the slow part:** each `_test.v` file is compiled into a
   program of its own. `check.vsh` runs up to 4 at once (V's runner would
   allow one per 8 GiB of RAM: one here), and builds with `-nocache` under
@@ -100,17 +162,23 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
   - `v run tools/data_quality.vsh` writes `docs/data-quality.md`.
   - `tools/gen_m3_bench.py` (by hand, with DWSIM) times reflux, thermo and
     DWSIM case by case and writes `testdata/m3_bench.json`; `v run
-    tools/benchmarks.vsh` then writes `docs/benchmarks.md`. Rerun both
-    after a change that could make flashes faster or slower. `v -prod -cc
-    gcc run tools/benchmarks.vsh --time` times reflux alone, against the
-    fixture, without DWSIM.
+    tools/benchmarks.vsh` then writes `docs/benchmarks.md`.
+    `tools/gen_m4_bench.py` does the same for the reference flowsheet,
+    into `testdata/m4_bench.json`. Rerun them after a change that could
+    make flashes faster or slower. `v -prod -cc gcc run
+    tools/benchmarks.vsh --time` times reflux alone, against the fixtures,
+    without DWSIM.
   - `v -prod -cc gcc run tools/flash_sweep.vsh` writes
     `docs/flash-robustness.md`, 10,000 PT flashes (about three minutes,
     the build included; about twenty under tcc). Regenerate it after
     changing the flash or the sweep's checks.
+  - `v run tools/golden.vsh` writes the golden flowsheets' reports
+    (`testdata/flowsheets/golden/`). Run it only when a change is meant to
+    move the answers, and explain why in the commit.
 - **Reference fixtures** come from uv scripts whose headers pin their
   dependencies: `thermo` 0.6.1, `chemicals` 1.5.2, `mpmath` 1.3.0,
-  `CoolProp` 8.0.0.
+  `CoolProp` 8.0.0, and for `tools/gen_m4_graphs.py`, `networkx` 3.4.2 and
+  `scipy` 1.14.1.
   - On this machine uv's managed-Python link fails in the sandbox, so pass
     the interpreter explicitly, and set `PYTHONIOENCODING=utf-8` (the
     console is cp1252):
@@ -127,18 +195,37 @@ v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) an
   stops at Python 3.13, so pass the same interpreter as above.
   - `tools/gen_m3_dwsim.py` writes `testdata/m3_dwsim.json`. It imports
     `gen_m3_fixtures.py` for its `thermo` helpers.
-  - `spike/dwsim/run.py` is step 0's spike.
+  - `tools/gen_m4_dwsim.py` writes `testdata/m4_dwsim.json`, DWSIM's
+    constants as component files, and `reference_dwsim.toml`. It imports
+    `gen_m3_dwsim.py`, and needs V on the PATH: it solves that file with
+    reflux for the open loop. About five minutes.
+  - thermo 0.6.1's flash at a vapour fraction strictly between 0 and 1
+    fails on a mixture (`dew` unbound): bisect on its PT flash instead.
+  - `spike/dwsim/run.py` is M3 step 0's spike, and
+    `spike/dwsim_flowsheet/run.py` M4 step 0's: DWSIM's flowsheets and
+    recycle (`docs/spike-dwsim-flowsheet.md`).
   - DWSIM's PR uses rounded constants, saturates pure components on
     ChemSep's vapour-pressure correlation, and has a wrong ideal mixing
     entropy. "What step 5 found" in `docs/spike-dwsim.md` has the details.
     Compare with it by state, and explain each difference.
+  - In DWSIM's flowsheets, a failed unit is silent: check every unit's
+    `Calculated` and `ErrorMessage`. Its recycle needs its tolerances scaled
+    by 1e-8 to close the balances, its pump uses a liquid density that
+    isn't PR's, and its flash drum is wrong with two inlets.
+  - Its separator's `EnergyImb` is what goes in less what comes out, and its
+    wrong mixing entropy moves a two-phase isentropic outlet: 0.42 K in
+    step 8's expander. "What step 8 found" in
+    `docs/spike-dwsim-flowsheet.md` has the rest.
 
 ## Architecture
 
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
-`components`. `sweep`, the flash robustness sweep, is the one module that
-uses both `components` and `flash`.
+`components`. `quantity`, units of measure (M4), depends on nothing, and
+so does `release`, the release gate's logic.
+`sweep`, the flash robustness sweep, is the one module that uses both
+`components` and `flash`. `flowsheet` (M4) uses `flash`, `thermo` and
+`numeric`, and its tests use `components`.
 
 - **`thermo` is built on one contract.** `Model` (thermo/model.v) supplies
   the reduced residual Helmholtz energy F(T, V, n) = Aʳ/RT and its
@@ -158,7 +245,9 @@ uses both `components` and `flash`.
     Substitution with DEM is followed by a second-order finish in α = 2√W.
   - `pt` tests stability, then splits: substitution with Rachford–Rice and
     DEM, then Newton on G through `numeric.minimize`, then each phase
-    re-verified.
+    re-verified. Its feed's test stops at the first proof of instability
+    once Wilson's two trials have run, and runs the rest only if no split
+    from those stands.
   - `tvf` and `pvf` (`vf.v`) find P or T for a given β; bubble and dew
     points are β = 0 and 1. Newton runs on ln K and ln P (or ln T)
     from Wilson's start, with a PT-split start as fallback. Two answers
@@ -166,8 +255,8 @@ uses both `components` and `flash`.
   - `ph` and `ps` (`ph.v`) take a `thermo.Fluid` and find T from a molar H
     or S, by Michelsen's Q-function. T is bracketed by PT flashes on the
     sign of H(T) − H_spec, narrowed by Brent, and finished by Newton in
-    (v, ln T). A pure component inside its jump at Tsat gets β from the
-    energy balance.
+    (v, ln T). Only the answer's PT flash is verified. A pure component
+    inside its jump at Tsat gets β from the energy balance.
   - `tv` and `uv` (`tv.v`) find P (and T) from a molar V (and U). The finish
     minimises A over the vapour's mole numbers and volume, in F(T, V, n)
     alone, with no volume roots (D5); UV adds ln T and the energy balance to
@@ -177,21 +266,44 @@ uses both `components` and `flash`.
   - Results are `FlashResult`; failures are `FlashError` with a
     `Failure` kind.
 - **`numeric`** holds the solvers the flash rests on: LU, Cholesky, `newton`
-  for systems (line search or dogleg) and `minimize` (a
-  Levenberg–Marquardt-shifted Newton that knows f's rounding through
-  `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
+  for systems (line search or dogleg), `broyden` for systems with no Jacobian,
+  and `minimize` (a Levenberg–Marquardt-shifted Newton that knows f's rounding
+  through `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
   QAG integration and bisection. They take what they solve as an interface
-  (`Function`, `FallibleFunction`, `System`, `Objective`), never a closure:
-  V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
+  (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
+  a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
   vendored `pr.ipd`/`srk.ipd`, taking the first entry listed for a pair.
+- **`flowsheet`** is M4's: streams, units, the graph, the solver, the file
+  and the reports.
+  - A `Stream` is its molar flows plus the flash that gave its state, so
+    it's never half specified. Its H, S and V are its phases'.
+  - A `Unit` is `calculate(fluid, inlets) !Outcome` and holds nothing about
+    a solve. An energy rate above zero goes into the unit's material.
+  - A `Flowsheet` is units with a stream named on each port, and `plan`
+    checks it and returns blocks to solve in order. Tarjan gives the blocks
+    and Johnson the cycles, and `tear.v` picks the fewest tears exactly, by
+    branch and bound, then the fewest second breaks.
+  - A file is read by `load` through a `Section` per table, and a `Maker` per
+    unit type. Later unit families add makers, so `flowsheet` needn't import
+    them (D1).
+  - `solve` iterates each block's tears, whose variables are flows, P and
+    molar H, by direct substitution, Wegstein or Broyden. A `Solution` is only
+    returned with every balance checked: each unit to 1e-10 on the inlets it
+    used, and the whole to the gap the tears left.
+  - A `Report` is a solution, or a failure, in SI: `Loaded.report`,
+    `Loaded.failure` or `load_failure`. Its JSON and CSV come from that one
+    struct, and its stream table rounds by `math.round`, never printf.
+    `main.v` is the command line over it, tested in process by
+    `main_test.v`.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
-  (`FlashError`, `NewtonError`, `InputError`, `LookupError`), because the
-  Python API (M10a) can't catch panics.
+  (`FlashError`, `NewtonError`, `InputError`, `LookupError`,
+  `QuantityError`, `FlowsheetError`), because the Python API (M10a) can't
+  catch panics.
 - **A solver returns a result only when it has shown the result to be
   right**, meaning its tolerance is met and the split verified. Anything
   else is an error, never a plausible-looking answer.
@@ -254,7 +366,20 @@ or a test:
 - **Shared libraries** need gcc: tcc's Windows DLLs export nothing.
 - **Closures are never freed**, so nothing that runs per flash may make one:
   pass a struct with a method, as `numeric`'s interfaces ask.
+- **A panic can't be caught.** There's no `recover`, so what a library might
+  panic on must be kept from it: `toml.parse_text` on a `\u` escape, for one.
 - **Module names:** not like a vlib module's. `benchmark` broke external
   tests, because V's test runner imports vlib's.
 - **Leftovers:** V can leave `.*.v3cc.*/` build folders next to a binary.
   They're git-ignored; delete them.
+- **Smart App Control** can refuse V's programs, and V reports it as `failed
+  CreateProcess ...: The operation completed successfully`. A refused run
+  proves nothing, so a mutation loop must retry it, not count it as caught.
+  It's the owner's security setting: don't work around it. See
+  `docs/v-for-go.md`, §1.
+- **`json2`** leaves a `none` field out unless it has `@[json_null]`, and
+  writes a map's keys sorted, so anything ordered goes in an array. In
+  0.5.2 `Any.arr()` is deprecated, an error under `-W`: use `as_array()`.
+- **A `!` in a test function that doesn't return a Result** can turn a typed
+  error into a `V panic` with no FAIL line, so a panic in a test's output
+  isn't always a panic in the code.

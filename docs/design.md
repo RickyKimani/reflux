@@ -510,6 +510,16 @@ that another start avoids. If none does better, the answer is
 `more_phases`, with that split's proof, rather than a later start's
 failure to converge.
 
+**The feed's test stops early** (M4 step 9). It stops at the first proof of
+instability once Wilson's two trials have run (`first_proof`): one proof is
+all a split needs, and the nearly pure trials, nc more, were most of a split
+flash's stability work. Both of Wilson's run, because the better of the two is
+the better start: stopping at the first proof alone took 7% more split steps
+on the reference set. If no split from those trials stands, the test runs all
+of them and the starts are tried as above. All 166 of the reference set's splits
+start from Wilson's trials alone; 11 of the robustness sweep's 10,000 points
+need the rest.
+
 **Verified** (`verify`, on by default): each phase is re-tested for
 stability, with the other phase as a trial. An unstable phase means a third
 phase or a better split. That's a FlashError (`more_phases`) rather than an
@@ -622,7 +632,10 @@ answer, however steep or broken H(T) is.
 
 **The steps.**
 - **Start:** the temperature at which the feed as an ideal gas has
-  H_spec (or S_spec), by bisection, or the caller's `estimate`.
+  H_spec (or S_spec), by bisection, but no lower than half the feed's mean
+  Tc, or the caller's `estimate`. A liquid's H is far below the ideal
+  gas's, so that temperature can be near absolute zero, where PR's liquids
+  split in ways no answer needs and the PT flash refuses.
 - **Bracket:** T is stepped out by 50% at a time, with a PT flash at
   each step, until the residual changes sign. (Steps of 1.5× and 2× take
   the fewest flashes on the reference set, and 1.25× takes 3% more.)
@@ -633,6 +646,11 @@ answer, however steep or broken H(T) is.
 - **Fallback:** otherwise, or if Newton fails, Brent goes on.
 - **The answer** is a verified PT flash at the final T, with
   |H − H_spec| ≤ etol·RT or |S − S_spec| ≤ etol·R (etol 1e-10).
+- **Only the answer is verified** (M4 step 9). The PT flashes of the bracket
+  and Brent's steps only steer T, and verifying a split's phases costs two
+  more stability tests each. A split there that isn't the equilibrium can
+  move the search but not the answer, which is verified wherever it ends.
+  One phase has nothing to verify, so a single-phase answer is taken as it is.
 
 **Q's Hessian**, Newton's Jacobian. With gᵢ = ln fᵢⱽ − ln fᵢᴸ,
 r_E = (H − H_spec)/RT (or (S − S_spec)/R) and
@@ -781,6 +799,297 @@ the flash returns the first split it found, which is the one the verified
 flash found first and refused. One of its phases must have a tpd below
 −1e-8.
 
+## Units of measure
+
+`quantity` is where numbers with units come in (M4's D10). Each unit is a
+row of one table, and
+
+    SI = (x + pre)·scale + post,        x = (SI − post)/scale − pre
+
+A scaled unit has pre = post = 0. Celsius and Fahrenheit shift before they
+scale, and gauge pressures add a standard atmosphere after:
+
+    T/K  = t/°C + 273.15
+    T/K  = (t/°F + 459.67)·5/9
+    T/K  = (T/°R)·5/9
+    P/Pa = (P/barg)·10⁵ + 101325
+    P/Pa = (P/psig)·6894.757… + 101325
+
+A temperature or pressure *difference* uses the same scales with no
+offset: 9 degF of ΔT is 5 K, and there are no gauge differences.
+
+The scales that aren't SI prefixes, minutes or hours are built from the
+exact definitions in NIST SP 811 (2008), appendix B. None is a rounded
+number typed in:
+
+| Unit | Definition |
+|---|---|
+| pound | 0.45359237 kg |
+| inch | 0.0254 m, so the foot is 0.3048 m |
+| standard gravity g₀ | 9.80665 m/s² |
+| psi | lbf/in², with lbf = pound·g₀: 6894.757293… Pa |
+| atm | 101325 Pa; the torr is 1/760 of it, 133.322368… Pa |
+| conventional mmHg | 13.5951 g/cm³ · g₀ · 1 mm = 133.322387415 Pa, 1.4e-7 above the torr |
+| IT Btu | 1055.05585262 J, so Btu/lb is exactly 2326 J/kg |
+| IT kilocalorie | 4186.8 J |
+| US gallon | 231 in³ |
+| horsepower | 550 ft·lbf/s = 745.699871… W |
+| pound-mole | 453.59237 mol: a pound's worth of moles |
+
+SP 811 prints seven of the factors built from them (psi, mmHg, torr, lb/h,
+gal/min, Btu/h, hp) to 7 figures, and reflux's values round to them.
+
+Reading is strict:
+- the text is a number, whitespace and one unit;
+- the number is what `strconv.atof64` reads, and must be finite;
+- only a fraction may be a bare number;
+- an absolute T or P must be above zero.
+
+A unit that isn't the dimension's gets the closest of its units: those
+within two edits (Levenshtein, ignoring case), nearest first, at most
+three. A unit of another dimension is named as one.
+
+## Streams and units
+
+A material stream holds its component molar flows nᵢ (mol/s) and the flash
+that gave its state (M4's D2), so it's always fully specified. Its molar
+properties are its phases', weighted by their shares of its moles:
+
+    h = Σₖ βₖ hₖ,    s = Σₖ βₖ sₖ,    v = Σₖ βₖ vₖ
+
+A feed is given by (T, P), (P, h), (T, β) or (P, β), each by its own flash.
+An empty stream, which a split fraction of 0 makes, has no flows but keeps
+its composition in its flash, so it has a state and passes through a valve
+or heater.
+
+A unit takes its inlets and gives its outlets and any energy streams. A
+rate Q above zero goes into the unit's material, so with F the total flow,
+each unit balances as
+
+    Σ_in nᵢ = Σ_out nᵢ,    Σ_in F h + ΣQ = Σ_out F h
+
+- **Mixer.** The flows and enthalpy flows add, then a PH flash at the outlet
+  pressure:
+
+      nᵢ = Σⱼ nᵢⱼ,    h = Σⱼ Fⱼ hⱼ / F,    P = minⱼ Pⱼ
+
+  P may be given, but not above the lowest inlet's. An empty inlet adds
+  nothing and doesn't set P. The flash starts from the flow-weighted mean T.
+- **Splitter.** Each outlet k has the inlet's state and a fraction of its
+  flows, nᵢₖ = fₖ nᵢ with Σₖ fₖ = 1. Nothing is flashed.
+- **Valve.** Isenthalpic: a PH flash at h_out = h_in and the outlet pressure,
+  from the inlet's T. It can't raise the pressure. Throttling is
+  irreversible, so s can only rise.
+- **Heater.** With P_out = P_in − ΔP, the specification picks the flash:
+
+  | Specification | Outlet |
+  |---|---|
+  | outlet T | PT at (T, P_out) |
+  | ΔT | PT at (T_in + ΔT, P_out) |
+  | outlet β | the vapour-fraction flash at (P_out, β) |
+  | duty Q | PH at (P_out, h_in + Q/F), from the inlet's T |
+
+  The duty it reports is always Q = F (h_out − h_in). With a duty given,
+  that's the one the flash reached, within its energy tolerance.
+- **Pump.** With v the inlet's molar volume,
+
+      h_out = h_in + v (P_out − P_in) / η,    W = F (h_out − h_in)
+
+  then a PH flash. At η = 1 this holds v at the inlet's, where dh = v dP at
+  constant s has v follow the liquid, so it leaves
+  T Δs ≈ ½ (v_in − v_out) ΔP. A pump takes no vapour. An empty inlet has
+  none to refuse.
+- **Compressor and expander.** A PS flash finds the isentropic outlet,
+  h_s at (P_out, s_in). Then
+
+      compressor:  h_out = h_in + (h_s − h_in) / η
+      expander:    h_out = h_in + η (h_s − h_in)
+
+  and a PH flash finds the outlet, which can be two-phase, from T_s. The work
+  W = F (h_out − h_in) is below 0 for an expander.
+- **Flash drum.** The inlets blend as in a mixer, then a flash at the drum's
+  pressure: PT at a given T, or PH at h = (Σⱼ Fⱼ hⱼ + Q) / F. A duty of 0 is
+  adiabatic. Each phase k leaves by its own outlet, with flows
+
+      nᵢₖ = F βₖ xᵢₖ
+
+  saturated at the flash's T and P. That needs no second flash: its result is
+  the first's, with the phase's composition as z and the other phase at no
+  moles, the form a bubble or dew point's answer has. A single phase leaves by
+  its own outlet, and the other outlet is empty. In a split, the "vapour" is
+  the less dense phase by mass (M3's D6), so a liquid–liquid split goes out
+  the same way.
+- **Component separator.** A fraction fᵢ of each component goes to the first
+  outlet and the rest to the second, each flashed at the given T and P. It's
+  a black box, so Q is whatever closes the balance, and its pressure can rise.
+  An empty outlet takes the inlet's composition, so it has a state.
+
+## The flowsheet graph
+
+A flowsheet's units are nodes, and the streams between them are edges (M4's
+D5). Two units can be joined by parallel edges, and a stream can leave and
+enter one unit. `Flowsheet.plan` turns that into blocks to solve in order.
+
+**Partition.** Tarjan's algorithm (1972) finds the strongly connected
+components, each after the ones it needs. A component with a cycle in it is
+a *net*: its units have to be solved together. Everything else is solved
+once, in order. A net with nothing coming into it, from a feed or another
+unit, has no material in it at all, and is refused.
+
+**Cycles.** Johnson's algorithm (1975) lists a net's elementary cycles, as
+lists of edges, so that parallel streams are separate cycles.
+
+**Tears.** Tearing a set of streams T breaks a cycle c if T meets it. With
+b_c = |T ∩ c| the times c is torn, the choice is the best T by, in turn:
+
+1. fewest tears, |T|, with every b_c ≥ 1: a minimum hitting set;
+2. fewest second breaks, Σ_c (b_c − 1). A set with none is what Upadhye and
+   Grens (1975) call nonredundant, and it's what converges best by direct
+   substitution. It isn't always there at the minimum size: the sulfuric
+   acid plant's 5 tears can't do better than 36;
+3. earliest streams, by the unit they leave, so a plan is reproducible.
+
+Among streams in exactly the same cycles, which all do equally well, it takes
+one coming back to where material enters the block: the recycle, in other
+words. A tear there can start empty, so the first pass is once-through with
+real material, and no guess reaches a pump as a gas.
+
+This order is the reverse of FOQUS's and Pyomo's, which keep each cycle's
+breaks down first and count tears second. Every tear here costs a block of
+iteration variables, so reflux takes the fewest.
+
+The search is branch and bound, which is exact when it finishes:
+- Streams in exactly the same cycles, as those in series are, form a class,
+  and only one class member can be chosen. These are Upadhye and Grens's
+  families, whose members behave alike under direct substitution.
+- It branches on the shortest cycle not yet torn, one branch per class. A
+  class tried in one branch is excluded from its siblings, so that no set is
+  reached twice.
+- Cycles that are untouched and share no class need a tear each, which
+  bounds what's left.
+
+Its budget is a count of cycles looked at, not a time, so plans are
+reproducible. If it runs out, or a net has too many cycles to list (50,000),
+the plan says so in its notes. In the second case a greedy cover takes over,
+tearing the stream in the most cycles until none is left.
+
+**Order.** Within a block, with its tears cut, the units go in topological
+order, the earliest in the flowsheet first.
+
+## Converging the tears
+
+Each tear has the variables x = (n₁ … n_c, P, h), with h molar (M4's D6). A
+pass runs a block's units once from x, and gives g(x), the tears' new values.
+The solution is a fixed point, g(x) = x. A tear is rebuilt from x by a PH
+flash, starting from its last T, unless x is the pass's own answer, which
+needs no flash.
+
+**Convergence** (D7). Every variable must move by at most tol = 1e-9 of its
+scale in a pass:
+
+    |g_i − x_i| ≤ tol · { F for a flow, P for P, RT for h }
+
+with F the tear's total flow, or for an empty tear, what enters the block. h
+is against RT because h itself can be near zero. Each pass's largest moves,
+tear by tear, are the history.
+
+**The first values.** A tear starts from its estimate. Without one, what
+enters the block is mixed as a mixer would, and a tear whose unit has another
+inlet starts empty, in that mixture's state, so the first pass is once-through.
+Any other starts as the mixture itself.
+
+**Direct substitution:** x ← g(x). On a loop of gain λ the error falls by λ a
+pass, so it takes about ln(tol)/ln(λ) passes.
+
+**Bounded Wegstein.** Variable by variable, from the last two passes,
+
+    s = (g(x) − g(x₀)) / (x − x₀),    q = s / (s − 1),    x ← q·x + (1 − q)·g(x)
+
+with q held to [−5, 0], so that it only ever accelerates. For a linear loop of
+gain s that's exact. Held at q = −5, it leaves −5 + 6s of the error. It's
+applied every other pass, from the third: the first pass starts from a guess,
+so a slope through it says nothing about the loop, and taking one nearly
+doubled the passes on a nonlinear loop.
+
+**Broyden.** One pass, for the same reason, and then Broyden's "good" method
+on all a block's tear variables together, in unknowns scaled by the flow into
+the block, P and RT, with residuals (g − x) over the scales above. With
+J₀ = −I its first step is a direct one. With s the step and y the change in
+the residual, the inverse Jacobian updates as
+
+    H ← H + (s − H y) (sᵀ H) / (sᵀ H y)
+
+**A loop that's kinder than it looks.** Where a recycle is a drum's liquid
+brought back to the drum's own T and P, as in the reference flowsheet, adding
+it changes nothing about the equilibrium. The liquid just grows, the loop is
+affine with a gain of the split fraction, and Wegstein's one secant lands on the
+answer in 4 passes. Put the cooler on a duty, so that T moves with the recycle,
+and it takes 14.
+
+**Balances** (D8). A unit must close to 1e-10 of its flow and of F·RT on the
+inlets it was calculated from. The whole can't close better than the tears
+allow, and it must close to exactly that: the gap between the last pass's start
+and end, in each tear's flows and enthalpy flow, plus rounding. A solution that
+doesn't is an error, never a result.
+
+## Reports
+
+The report (M4's D11) is the solution in SI, with what a reader works out from
+it written beside it ([report-format.md](report-format.md)). For a stream with
+molar flows nᵢ, the flash's composition zᵢ (which an empty stream keeps) and
+molar masses Mᵢ:
+
+| | |
+|---|---|
+| mass flows | mᵢ = nᵢMᵢ, and ṁ = Σ mᵢ |
+| mass fractions | wᵢ = zᵢMᵢ / Σⱼ zⱼMⱼ |
+| volume flow | F·v, at the stream's T and P |
+| each phase | its own state, which is one mole of it: x, h, s and v |
+
+A unit's balance is the one `solve` checks (D8), on the inlets it was
+calculated from: its worst component against its flow F, and its energy
+against F·RT at its hottest inlet,
+
+    maxᵢ |Σ_in nᵢ − Σ_out nᵢ| / F,    |Σ_in F h + Σ q − Σ_out F h| / (F·R·T_max)
+
+and 0 for a unit with nothing coming in. The whole flowsheet's is the same
+over its feeds and products, with T the feeds' mean weighted by flow.
+
+**Numbers for reading** are rounded to n significant figures by
+`math.round`, half away from zero, and printed as integers, so tcc and gcc
+print the same. With e = ⌊log₁₀|x|⌋,
+
+    m = round(|x| · 10^(n−1−e)),    and if m = 10ⁿ, e + 1 and again
+
+For n − 1 − e below 0 it divides by 10^(e−n+1), which is exact, rather than
+multiply by 10^(n−1−e), which isn't: 846064.9999999999 × 0.1 rounds to the
+tie 84606.5, and up, where the quotient by 10 is below it. A log₁₀ that rounds
+up just short of a power of ten needs nothing: m rounds up to 10ⁿ⁻¹ with it.
+
+## How equation-oriented solving will fit
+
+M13 solves a whole flowsheet's equations at once, by sparse Newton (roadmap
+J1 and J2), where M4 calculates unit by unit. Each unit then needs its model as
+residuals, r(x_in, x_out) = 0, in the variables the tears already use: each
+stream's x = (n₁ … n_c, P, h) (D6). A converged sequential-modular solution
+satisfies them, so it's the equation-oriented solve's first point.
+
+- **Balances,** for every unit: Σ_in nᵢ − Σ_out nᵢ, and
+  Σ_in F h + Σ q − Σ_out F h. `UnitResult.balance` evaluates both already. A
+  splitter's outlets are fractions of its inlet, and a separator's of each
+  component.
+- **Specifications:** the outlet's P or ΔP; then its T, β or a duty for a heater
+  or a drum; h_out = h_in for a valve; s(T_s, P_out, n) = s_in at a machine's
+  isentropic point, with h_out from η; h_out − h_in = v·ΔP/η for a pump.
+- **Equilibrium** for a two-phase outlet: ln Kᵢ + ln φᵢⱽ − ln φᵢᴸ = 0 and
+  Rachford–Rice, whose derivatives in T, P and n `thermo` already gives. A
+  phase that appears or vanishes changes the equations themselves, which
+  Newton can't see. So an equation-oriented solve keeps each outlet's number of
+  phases, and tests stability at the end, as `flash.pt` verifies its split.
+
+`Unit` would gain a `residuals` method beside `calculate`, with its Jacobian
+blocks, and the sequential-modular solve stays the way in.
+
 ## How CPA will fit
 
 ```v
@@ -822,6 +1131,17 @@ These notes respond to the slow solves and slow sensitivity runs in DWSIM.
   - Each residual call still allocates a few small arrays (√aᵢ, ∂A/∂nᵢ,
     F_n). With the above fixed they're no longer near the top of the
     profile.
+- **What M4 step 9 measured** (`docs/benchmarks.md`, and a profile of the
+  reference flowsheet):
+  - PH flashes were 95% of a flowsheet's solve, and stability tests 84%: 16
+    PH flashes a solve, each about 8 PT flashes, each about 2.2 stability
+    tests of about 7.5 trials.
+  - So only a PH or PS flash's answer is verified, and a split's feed test
+    stops at Wilson's two trials when they prove it unstable (above). Timed
+    back to back against the old code, PH's median is 2.2, 2.3 and 3.7 times
+    faster for 2, 5 and 10 components, and the reference flowsheet's solve 2.5
+    times. In the benchmark, beside DWSIM: PH in 1.6, 4.0 and 5.9 ms against
+    DWSIM's 3.5, 4.8 and 5.2, and the flowsheet in 26 ms against 559.
 - **No closures in the solvers.** V 0.5.2 never frees a closure. When the
   solvers took function values, every PH flash leaked 18 KB and every
   bubble point 3 KB, a few closures each, which a sensitivity study would
