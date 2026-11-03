@@ -144,7 +144,12 @@ fn check_tpn() {}     // private
 - Naming is **enforced**: functions and variables are `snake_case`, types are
   `PascalCase`. A function called `Solve` is a compile error.
 - **Selective import:** `import thermo { Component, CubicKind }` lets you
-  write `Component{…}` instead of `thermo.Component{…}`. See [main.v](../main.v).
+  write `Component{…}` instead of `thermo.Component{…}`. See [demo.v](../demo.v).
+- **The version, from `v.mod`:** `@VMOD_FILE` is the text of the nearest
+  `v.mod`, filled in when the module compiles, and `v.vmod`'s `decode` reads
+  it. So `flowsheet.version()` ([flowsheet/report.v](../flowsheet/report.v))
+  keeps no second copy of the number. Go would take it from `-ldflags -X` or
+  `debug.ReadBuildInfo`.
 - Struct fields have visibility sections instead of per-field capitals:
 
 ```v
@@ -198,6 +203,12 @@ Two relatives of that rule:
 - A local named like a module-level const is a warning, and so an error
   under `-W`. A test const `db` clashed with the `db` inside
   `components.load` this way.
+- A loop's variable counts as well: `for c in comp` inside
+  `for name, c in cases` is "redefinition of value iteration variable `c`".
+  Go would quietly shadow the outer `c`.
+- A parameter can't take an imported module's name either:
+  `fn csv_names(components []string)` in a file that imports `components` is
+  "duplicate of an import symbol".
 
 **Closures capture explicitly, and by value.** A Go closure silently
 captures variables by reference, so a loop variable or a later assignment
@@ -375,11 +386,11 @@ rec := db.find('watr') or {
 ```
 
 - **Wrapping** (Go's `fmt.Errorf("…: %w", err)`):
-  `f() or { return error('loading ${path}: ${err}') }`. See `arg_or` in
-  [main.v](../main.v). V doesn't keep an error chain the way `%w` does.
+  `f() or { return error('loading ${path}: ${err}') }`. See `number` in
+  [demo.v](../demo.v). V doesn't keep an error chain the way `%w` does.
   You get the message, not something you can unwrap.
 - `or {}` blocks that have to produce a value can end in `exit()`,
-  `panic()` or any function marked `@[noreturn]` (see `die` in main.v).
+  `panic()` or any function marked `@[noreturn]`.
 
 ---
 
@@ -582,6 +593,25 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 
 `it` is the implicit element name inside `filter`, `map`, `any` and `all`.
 
+**An index can say what to do when there's nothing there.** In Go, `s[i]`
+past the end panics, and a map gives the zero value for a missing key, so you
+check `len(s)` first or write `v, ok := m[k]`. In V both take an `or` block,
+and a map lookup can propagate with `!`:
+
+```v
+command := args[0] or { '' }   // no arguments: '' rather than a panic (main.v)
+j['format']!.int()              // a missing key is an error, "map key does not exist"
+```
+
+A plain `m[k]` still gives the zero value, as Go's does.
+[flowsheet/report_test.v](../flowsheet/report_test.v) reads its JSON with `!`,
+so that a key the report left out fails the test instead of reading as 0.
+
+**`encoding.csv`** quotes a field that needs it, with a comma, a quote, a line
+break or a leading space, as Go's `encoding/csv` does. Its reader's `read()`
+returns an error at the end, where Go's returns `io.EOF`, so the loop is
+`rows << reader.read() or { break }`.
+
 **Arrays have `==` but no `<`.** Go's slices have neither, and you reach
 for `slices.Equal` and `slices.Compare`. V's `==` compares element by element,
 but `a < b` is a compile error ("only `==` and `!=` are defined on arrays"),
@@ -708,6 +738,16 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
 ```v
 const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 ```
+- **`module main` can be tested,** as Go's `package main` can.
+  [main_test.v](../main_test.v) starts with `module main`, sits beside
+  main.v, and calls the program's own `run(args, mut c)`, so the command line
+  is tested in the test's process, with no program to build and start. Its
+  output goes to a `Console` of two `strings.Builder`s, which the real program
+  marks `live` so that it prints instead. `Builder.str()` empties the builder,
+  so read it once.
+- **`fn testsuite_end()`** runs after the file's tests, like the cleanup after
+  `m.Run()` in Go's `TestMain`. main_test.v removes its scratch directory
+  there.
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
   Newton solver against the polynomial roots. Identities catch bugs that
@@ -889,6 +929,42 @@ pts := read_cases[DwCase](['pt'])!
 Keys that a shape lacks are left at their zero values, and keys it doesn't
 know are ignored. Go's `encoding/json` behaves the same way, and Go 1.18+
 would write the wrapper as `type cases[T any] struct{ Cases []T }`.
+
+**Writing JSON** is `json2.encode(r)`, by field name, as decoding is.
+[flowsheet/report.v](../flowsheet/report.v) writes a flowsheet's report that
+way:
+
+```v
+pub struct StreamReport {
+	from ?string @[json_null] // the unit it leaves, or none for a feed
+	t    f64     @[json: 'T'] // K
+	// …
+}
+
+json2.encode(r, prettify: true, indent_string: '  ')
+```
+
+Where it differs from Go's `encoding/json`:
+- `@[json: 'T']` renames a key, as a Go tag does. An Option that's `none` is
+  left out unless the field has `@[json_null]`, which writes `null`. Go writes
+  a nil pointer as `null` unless the tag says `omitempty`: the defaults are the
+  other way round.
+- A double is the shortest decimal that reads back as it, as in Go, so a report
+  comes back from its JSON to the last bit. NaN and infinity become `null`,
+  where Go's encoder returns an error.
+- An enum is written as its name, `"wegstein"`, where a Go `iota` constant is
+  written as its number unless it has a `MarshalText`.
+- A map's keys come out sorted, as Go's do, though a V map keeps its order when
+  you loop over it. A list whose order matters, such as a mixture's
+  components, has to be an array.
+- `prettify: true` puts every value on a line of its own, an array's elements
+  too: long, but two reports diff line by line.
+
+To read JSON with no struct, decode into `json2.Any`, then use `.as_map()`,
+`.as_array()`, `.f64()`, `.str()` and `x is json2.Null`. In V 0.5.2 `.arr()` is
+deprecated, which `-W` makes an error. [flowsheet/report_test.v](../flowsheet/report_test.v)
+checks the report that way, so that a key on the wrong field can't hide
+behind the struct that wrote it and read it back.
 
 **Reflection happens at compile time.** Go's `reflect` inspects values at
 run time, through `interface{}`, and a mistake is a run-time panic. V's

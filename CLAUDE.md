@@ -69,9 +69,13 @@ Keep this section current: update it whenever a step is committed.
     (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
     V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
     first: a report to make upstream.
-  - Next is step 7: `reflux solve`, `reflux demo`, the JSON and CSV reports and
-    the stream table (D11). `tools/check.vsh` runs the demo now; it'll run
-    `reflux demo` and solve the reference flowsheet instead.
+  - Step 7 is committed, not pushed: the CLI, `reflux solve` and `reflux
+    demo`, and the reports (`flowsheet/report.v`, `table.v`,
+    `docs/report-format.md`). D11 was amended there: `--trace` prints when
+    the solve ends, and a failure writes its JSON too. `solve` now keeps
+    the history on a failure outside a loop.
+  - Next is step 8: DWSIM's references, unit by unit and the reference
+    flowsheet, and the golden flowsheets (D12, D13).
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -104,11 +108,14 @@ v run tools/check.vsh            # what CI runs, with tcc: about 4 min
 v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 8 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
-v run .                          # the demo CLI; `v run . 300 2.5` sets T (K) and P (bar)
+v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
+v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 ```
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,
-  then builds and runs `main.v`. With gcc it also builds and runs `-prod`.
+  then builds reflux and runs `reflux demo`, solves the reference flowsheet
+  with both reports, and checks that a missing file exits 1. With gcc it
+  does the same with a `-prod` build.
 - **Test builds are the slow part:** each `_test.v` file is compiled into a
   program of its own. `check.vsh` runs up to 4 at once (V's runner would
   allow one per 8 GiB of RAM: one here), and builds with `-nocache` under
@@ -236,6 +243,11 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
     molar H, by direct substitution, Wegstein or Broyden. A `Solution` is only
     returned with every balance checked: each unit to 1e-10 on the inlets it
     used, and the whole to the gap the tears left.
+  - A `Report` is a solution, or a failure, in SI: `Loaded.report`,
+    `Loaded.failure` or `load_failure`. Its JSON and CSV come from that one
+    struct, and its stream table rounds by `math.round`, never printf.
+    `main.v` is the command line over it, tested in process by
+    `main_test.v`.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
@@ -315,6 +327,9 @@ or a test:
   proves nothing, so a mutation loop must retry it, not count it as caught.
   It's the owner's security setting: don't work around it. See
   `docs/v-for-go.md`, §1.
+- **`json2`** leaves a `none` field out unless it has `@[json_null]`, and
+  writes a map's keys sorted, so anything ordered goes in an array. In
+  0.5.2 `Any.arr()` is deprecated, an error under `-W`: use `as_array()`.
 - **A `!` in a test function that doesn't return a Result** can turn a typed
   error into a `V panic` with no FAIL line, so a panic in a test's output
   isn't always a panic in the code.

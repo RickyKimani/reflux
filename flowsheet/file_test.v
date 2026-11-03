@@ -10,9 +10,13 @@ import thermo
 
 const db = components.load_default() or { panic(err) }
 
-fn reference_text() string {
-	path := os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'reference.toml')
+fn read_flowsheet(name string) string {
+	path := os.join_path(@VMODROOT, 'testdata', 'flowsheets', name)
 	return os.read_file(path) or { panic(err) }
+}
+
+fn reference_text() string {
+	return read_flowsheet('reference.toml')
 }
 
 fn load(text string) !Loaded {
@@ -77,101 +81,7 @@ fn test_a_file_builds_what_code_builds() {
 
 // every_unit has one of each unit type, each specified a different way from
 // the reference flowsheet.
-const every_unit = '
-format = 1
-
-[components]
-names = ["methane", "propane", "n-pentane"]
-
-[model]
-equation = "SRK"
-kij = false
-kij_overrides = [{ a = "methane", b = "propane", k = 0.01 }]
-
-[solver]
-method = "direct"
-tol = 1e-8
-max_iterations = 200
-tears = ["back"]
-
-[feed.gas]
-P = "5 bar"
-vapour_fraction = 1.0
-molar_flows = { methane = "6 mol/s", propane = "3 mol/s", n-pentane = "1 mol/s" }
-
-[feed.oil]
-T = "27 degC"
-vapour_fraction = "0 %"
-flow = "1800 kg/h"
-mass_fractions = { propane = 0.5, n-pentane = 0.5 }
-
-[estimate.back]
-T = "300 K"
-P = "4 bar"
-molar_flows = { methane = "1 mol/s" }
-
-[unit.join]
-type = "mixer"
-in = ["gas", "back"]
-out = "joined"
-P = "4 bar"
-
-[unit.squeeze]
-type = "compressor"
-in = "joined"
-out = "squeezed"
-outlet_P = "20 bar"
-efficiency = 75.0e-2
-
-[unit.warm]
-type = "heater"
-in = "squeezed"
-out = "warmed"
-duty = "-10 kW"
-pressure_drop = "0.5 bar"
-
-[unit.turbine]
-type = "expander"
-in = "warmed"
-out = "turned"
-delta_P = "12 bar"
-efficiency = "80 %"
-
-[unit.part]
-type = "component_separator"
-in = "turned"
-out = ["rich", "lean"]
-T = "300 K"
-P = "5 bar"
-fractions = { methane = 0.9, propane = "50 %" }
-
-[unit.ease]
-type = "valve"
-in = "rich"
-out = "eased"
-delta_P = "0.5 bar"
-
-[unit.share]
-type = "splitter"
-in = "eased"
-out = ["back", "vent"]
-fractions = ["25 %", "75 %"]
-
-[unit.settle]
-type = "flash_drum"
-in = ["lean", "oil"]
-vapour = "top"
-liquid = "bottom"
-T = "290 K"
-P = "2 bar"
-
-[unit.lift]
-type = "pump"
-in = "bottom"
-out = "lifted"
-delta_P = "10 bar"
-efficiency = 0.6
-'
+const every_unit = read_flowsheet('every_unit.toml')
 
 fn test_every_unit_type_loads_and_solves() {
 	l := load(every_unit)!

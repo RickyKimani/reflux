@@ -23,6 +23,28 @@ fn run(cmd []string) {
 	}
 }
 
+// expect runs a command that must exit with `want`, such as a failure.
+fn expect(cmd []string, want int) {
+	println('\n> ${cmd.join(' ')}    (should exit ${want})')
+	code := system_args(cmd)
+	if code != want {
+		eprintln('\nFAILED (exit ${code}, not ${want}): ${cmd.join(' ')}')
+		exit(1)
+	}
+}
+
+// smoke runs a built reflux as someone would: the demo, the reference
+// flowsheet with both its reports, and a flowsheet that isn't there, which must
+// fail with exit status 1 (criterion 8).
+fn smoke(exe string, reports string) {
+	run([exe, 'demo'])
+	run([exe, 'solve', 'testdata/flowsheets/reference.toml', '--json', '${reports}.json', '--csv',
+		'${reports}.csv'])
+	expect([exe, 'solve', 'testdata/flowsheets/no such file.toml'], 1)
+	rm('${reports}.json') or {}
+	rm('${reports}.csv') or {}
+}
+
 // vcc is `v -cc <cc>` followed by args. With gcc, V 0.5.2's module cache
 // makes every build about three times slower: 40 s against 12 s for a small
 // test on Windows, most of it spent scanning cached objects' dependencies
@@ -83,11 +105,11 @@ run(['v', 'fmt', '-verify', '.'])
 run(['v', 'vet', '.'])
 run(vcc(cc, ['-W', 'test', '.']))
 run(vcc(cc, ['-W', '-o', exe, '.']))
-run([exe])
+smoke(exe, join_path(temp_dir(), 'reflux_check_${tag}'))
 if cc != 'tcc' {
 	// tcc does no optimisation, so -prod only means something with gcc or clang.
 	run(vcc(cc, ['-prod', '-o', exe_prod, '.']))
-	run([exe_prod])
+	smoke(exe_prod, join_path(temp_dir(), 'reflux_check_${tag}_prod'))
 }
 rm(exe) or {}
 rm(exe_prod) or {}

@@ -104,7 +104,7 @@ pub fn (f Flowsheet) solve(fl thermo.Fluid, params SolveParams) !Solution {
 	}
 	for b in plan.blocks {
 		if b.tears.len == 0 {
-			s.pass(b)!
+			s.pass(b) or { return s.with_history(err) }
 		} else {
 			s.converge(b)!
 		}
@@ -217,9 +217,15 @@ fn (mut s Solver) add_gap() {
 	}
 }
 
-// failed adds the history to a failure.
+// failed adds the history to a failure in a block with tears, the block's own
+// passes included.
 fn (mut s Solver) failed(err IError) IError {
 	s.keep_history()
+	return s.with_history(err)
+}
+
+// with_history adds the history so far to a failure.
+fn (s Solver) with_history(err IError) IError {
 	if err is FlowsheetError {
 		return FlowsheetError{
 			kind:    err.kind
@@ -462,29 +468,37 @@ fn added(energy []EnergyStream) f64 {
 	return q
 }
 
+// balance is how far a unit closes on the inlets it was calculated from: its
+// worst component against its flow, and its energy against F·RT at its hottest
+// inlet. With nothing coming in there's nothing to measure against, and solve's
+// check of the whole flowsheet is what would catch such a unit making material.
+pub fn (r UnitResult) balance() Balance {
+	mut flow, mut t := 0.0, 0.0
+	for x in r.inlets {
+		flow += x.total()
+		t = math.max(t, x.t)
+	}
+	if flow == 0.0 {
+		return Balance{}
+	}
+	comp, energy := imbalance(r.inlets, r.outlets, added(r.energy), r.inlets[0].flows.len)
+	return Balance{comp / flow, energy / (flow * thermo.r_gas * t)}
+}
+
 // solution checks every balance and gives the answer (D8). A unit closes to
 // 1e-10 on the inlets it was calculated from. The whole closes to what the
 // tears left open, within what rounding and the units' own tolerance allow.
 fn (s Solver) solution(plan Plan) !Solution {
 	mut worst_comp, mut worst_energy := 0.0, 0.0
 	for r in s.runs {
-		mut flow := 0.0
-		mut t := 0.0
-		for x in r.inlets {
-			flow += x.total()
-			t = math.max(t, x.t)
-		}
-		if flow == 0.0 {
-			continue
-		}
-		comp, energy := imbalance(r.inlets, r.outlets, added(r.energy), s.nc)
-		worst_comp = math.max(worst_comp, comp / flow)
-		worst_energy = math.max(worst_energy, energy / (flow * thermo.r_gas * t))
-		if comp > unit_tolerance * flow || energy > unit_tolerance * flow * thermo.r_gas * t {
+		b := r.balance()
+		worst_comp = math.max(worst_comp, b.component)
+		worst_energy = math.max(worst_energy, b.energy)
+		if b.component > unit_tolerance || b.energy > unit_tolerance {
 			return FlowsheetError{
 				kind:    .unbalanced
 				unit:    r.name
-				reason:  'it closes to ${comp} mol/s and ${energy} W'
+				reason:  'it closes to ${b.component} of its flow and ${b.energy} of F·RT'
 				history: s.history
 			}
 		}

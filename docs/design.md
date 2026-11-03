@@ -1017,6 +1017,40 @@ allow, and it must close to exactly that: the gap between the last pass's start
 and end, in each tear's flows and enthalpy flow, plus rounding. A solution that
 doesn't is an error, never a result.
 
+## Reports
+
+The report (M4's D11) is the solution in SI, with what a reader works out from
+it written beside it ([report-format.md](report-format.md)). For a stream with
+molar flows nᵢ, the flash's composition zᵢ (which an empty stream keeps) and
+molar masses Mᵢ:
+
+| | |
+|---|---|
+| mass flows | mᵢ = nᵢMᵢ, and ṁ = Σ mᵢ |
+| mass fractions | wᵢ = zᵢMᵢ / Σⱼ zⱼMⱼ |
+| volume flow | F·v, at the stream's T and P |
+| each phase | its own state, which is one mole of it: x, h, s and v |
+
+A unit's balance is the one `solve` checks (D8), on the inlets it was
+calculated from: its worst component against its flow F, and its energy
+against F·RT at its hottest inlet,
+
+    maxᵢ |Σ_in nᵢ − Σ_out nᵢ| / F,    |Σ_in F h + Σ q − Σ_out F h| / (F·R·T_max)
+
+and 0 for a unit with nothing coming in. The whole flowsheet's is the same
+over its feeds and products, with T the feeds' mean weighted by flow.
+
+**Numbers for reading** are rounded to n significant figures by
+`math.round`, half away from zero, and printed as integers, so tcc and gcc
+print the same. With e = ⌊log₁₀|x|⌋,
+
+    m = round(|x| · 10^(n−1−e)),    and if m = 10ⁿ, e + 1 and again
+
+For n − 1 − e below 0 it divides by 10^(e−n+1), which is exact, rather than
+multiply by 10^(n−1−e), which isn't: 846064.9999999999 × 0.1 rounds to the
+tie 84606.5, and up, where the quotient by 10 is below it. A log₁₀ that rounds
+up just short of a power of ten needs nothing: m rounds up to 10ⁿ⁻¹ with it.
+
 ## How CPA will fit
 
 ```v

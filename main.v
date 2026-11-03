@@ -1,159 +1,245 @@
-// A small demo of the thermo and flash layers, on component data from the
-// database.
+// reflux's command line (M4, D11):
 //
-//     v run .                 # n-butane at 350 K and 9.4573 bar (SVA Example 3.9)
-//     v run . 300 2.5         # T in K, P in bar
+//     reflux solve plant.toml [--json results.json] [--csv streams.csv] [--trace]
+//     reflux demo [T P]
+//
+// From the source, `v run . solve testdata/flowsheets/reference.toml`.
 module main
 
-import math
+import flowsheet
 import os
-import strconv
-import components
-import flash
-import thermo { CubicKind }
+import quantity
+import strings
+
+const usage = 'usage:
+  reflux solve FILE [--json OUT] [--csv OUT] [--trace]
+      Solve a flowsheet file (docs/flowsheet-format.md) and print its stream
+      table. --json writes the results (docs/report-format.md), --csv the
+      streams, and --trace prints every pass of every loop.
+  reflux demo [T P]
+      The thermodynamics and the flash, on compounds from the database:
+      n-butane at T in K and P in bar, by default 350 K and 9.4573 bar.
+  reflux version
+  reflux help
+
+The exit status is 0 when it worked, 1 when the flowsheet failed or a report
+could not be written, and 2 when the command is wrong.'
 
 fn main() {
-	t := arg_or(1, 350.0) or { die(err) }
-	p := (arg_or(2, 9.4573) or { die(err) }) * 1e5
-	// The built-in database: ChemSep 8.50, converted (data/components/).
-	db := components.load_default() or { die(err) }
-	pure_table(db, t, p) or { die(err) }
-	println('')
-	alpha_example(db) or { die(err) }
-	println('')
-	mixture_example(db) or { die(err) }
-	println('')
-	fluid_example(db) or { die(err) }
-	println('')
-	flash_example(db) or { die(err) }
-	println('')
-	lookup_example(db)
+	mut c := Console{
+		live: true
+	}
+	exit(run(os.args[1..], mut c))
 }
 
-fn pure_table(db components.Database, t f64, p f64) ! {
-	r := db.find('n-butane')!
-	butane := r.component()!
-	println('${butane.name} (${r.ids.cas}) at T = ${t} K, P = ${p / 1e5} bar, constants from ${r.source}\n')
-	println('${'EOS':-20} ${'Z liq':8} ${'Z vap':8} ${'V liq':9} ${'V vap':9} ${'Psat':8}')
-	println('${'':-20} ${'':8} ${'':8} ${'cm3/mol':9} ${'cm3/mol':9} ${'bar':8}')
-	for kind in [CubicKind.vdw, .rk, .srk, .pr] {
-		eos := thermo.new_cubic(kind, [butane])!
-		liq := thermo.solve_tp(eos, t, p, [1.0], .liquid)!
-		vap := thermo.solve_tp(eos, t, p, [1.0], .vapor)!
-		// `if` is an expression: the last line of the taken branch is its value.
-		psat := if t < butane.tc {
-			'${thermo.saturation_pressure(eos, t)! / 1e5:.4f}'
-		} else {
-			'-'
-		}
-		vl, vv := liq.molar_volume() * 1e6, vap.molar_volume() * 1e6
-		if math.abs(vl - vv) <= 1e-9 * vv {
-			println('${eos.name():-20} ${liq.z:8.5f} ${'':8} ${vl:9.1f} ${'':9} ${psat:8}  (single root)')
-		} else {
-			println('${eos.name():-20} ${liq.z:8.5f} ${vap.z:8.5f} ${vl:9.1f} ${vv:9.1f} ${psat:8}')
-		}
-	}
-	vp := r.property('vapor_pressure')!
-	v := vp.at(t)
-	println("ChemSep's own vapour-pressure correlation: ${v.value / 1e5:.4f} bar${if v.in_range {
-		''
+// Console is where a command's output goes: printed as it comes when the
+// program runs, and kept for main_test.v to read when it doesn't.
+struct Console {
+	live bool
+mut:
+	out strings.Builder = strings.new_builder(1024)
+	err strings.Builder = strings.new_builder(256)
+}
+
+fn (mut c Console) say(s string) {
+	if c.live {
+		println(s)
 	} else {
-		' (extrapolated)'
-	}}")
-}
-
-// alpha_example swaps PR's Soave α for ChemSep's Mathias–Copeman constants,
-// fitted for PR, which takes one option. Soave's α is weakest for polar
-// compounds, so water at its normal boiling point shows the difference.
-fn alpha_example(db components.Database) ! {
-	tb := 373.124 // K, water's normal boiling point (IAPWS-95)
-	soave := db.fluid(.pr, ['water'])!
-	mc := db.setup(.pr, ['water'], alpha: .mathias_copeman)!
-	println('Water at its normal boiling point, ${tb} K (measured Psat: 1.01325 bar)')
-	println('  PR, Soave α             ${thermo.saturation_pressure(soave.model, tb)! / 1e5:.4f} bar')
-	println('  PR, Mathias–Copeman α   ${thermo.saturation_pressure(mc.fluid.model, tb)! / 1e5:.4f} bar  (${mc.alphas[0]})')
-}
-
-fn mixture_example(db components.Database) ! {
-	t, p := 300.0, 10e5
-	n := [0.3, 0.7]
-	s := db.setup(.pr, ['methane', 'n-butane'])!
-	pair := s.kij.pairs[0]
-	println('30% methane + 70% n-butane, PR at ${t} K and ${p / 1e5} bar')
-	if u := pair.used {
-		println('  kij = ${pair.k}, from ${s.kij.bank} line ${u.line} (${u.comment}; ${pair.others.len} other listings)')
-	}
-	for root in [thermo.Root.liquid, .vapor] {
-		st := thermo.solve_tp(s.fluid.model, t, p, n, root)!
-		phi := st.ln_phi.map(math.exp(it))
-		println('  ${root:-7} Z = ${st.z:.5f}  phi(methane) = ${phi[0]:.4f}  phi(n-butane) = ${phi[1]:.4f}')
+		c.out.writeln(s)
 	}
 }
 
-// fluid_example gets total properties from PR plus the database's ideal gas:
-// ChemSep's Cp, and its ΔH°f and S°, so H and S are absolute, on the
-// elements at 298.15 K and 1 bar.
-fn fluid_example(db components.Database) ! {
-	fl := db.fluid(.pr, ['n-butane'])!
-	println("n-butane, PR + ChemSep's ideal-gas data, per mole")
-	println('${'':-20} ${'H':9} ${'S':8} ${'Cp':8} ${'Cv':8} ${'w':8} ${'mu_JT':8}')
-	println('${'':-20} ${'kJ/mol':9} ${'J/mol K':8} ${'J/mol K':8} ${'J/mol K':8} ${'m/s':8} ${'K/bar':8}')
-	for label, pt in {
-		'vapor  400 K  5 bar': [400.0, 5e5]
-		'liquid 300 K 30 bar': [300.0, 30e5]
-	} {
-		root := if label.starts_with('vapor') { thermo.Root.vapor } else { thermo.Root.liquid }
-		pr := fl.props(thermo.solve_tp(fl.model, pt[0], pt[1], [1.0], root)!)
-		println('${label:-20} ${pr.h / 1e3:9.3f} ${pr.s:8.2f} ${pr.cp:8.2f} ${pr.cv:8.2f} ${pr.w:8.1f} ${pr.mu_jt * 1e5:8.3f}')
+fn (mut c Console) complain(s string) {
+	if c.live {
+		eprintln(s)
+	} else {
+		c.err.writeln(s)
 	}
 }
 
-// flash_example splits a mixture into its two phases at (T, P), finds its
-// bubble point at that P, and flashes back to T from the split's H.
-fn flash_example(db components.Database) ! {
-	fl := db.fluid(.pr, ['methane', 'n-butane'])!
-	z := [0.4, 0.6]
-	t, p := 250.0, 30e5
-	println('40% methane + 60% n-butane, PR, flashed at ${t} K and ${p / 1e5} bar')
-	r := flash.pt(fl.model, t, p, z)!
-	if r.phases.len == 2 {
-		y, x := r.phases[0].state.n, r.phases[1].state.n
-		println('  PT: vapour fraction ${r.beta:.4f}, methane ${y[0]:.4f} in the vapour and ${x[0]:.4f} in the liquid')
-	}
-	bubble := flash.pvf(fl.model, p, 0.0, z)!
-	println('  bubble point at ${p / 1e5} bar: ${bubble.t:.2f} K')
-	mut h := 0.0
-	for ph in r.phases {
-		h += ph.fraction * fl.props(ph.state).h
-	}
-	back := flash.ph(fl, p, h, z)!
-	println("  PH from the split's H (${h / 1e3:.3f} kJ/mol): back to ${back.t:.6f} K")
-}
-
-// lookup_example shows what an unknown name gets: the closest matches.
-fn lookup_example(db components.Database) {
-	db.find('butan') or {
-		if err is components.LookupError {
-			println('Looking up "butan" finds nothing. Closest: ${err.suggestions[..3].join(', ')}')
+// run runs the command in args, and returns its exit status.
+fn run(args []string, mut c Console) int {
+	command := args[0] or { '' }
+	match command {
+		'solve' {
+			return solve(args[1..], mut c)
+		}
+		'demo' {
+			return demo(args[1..], mut c)
+		}
+		'version', '--version' {
+			c.say('reflux ${flowsheet.version()}')
+			return 0
+		}
+		'help', '--help', '-h' {
+			c.say(usage)
+			return 0
+		}
+		'' {
+			c.complain(usage)
+			return 2
+		}
+		else {
+			hint := did_you_mean(command, ['solve', 'demo', 'version', 'help'])
+			c.complain('reflux: no command ${command}${hint}\n\n${usage}')
+			return 2
 		}
 	}
 }
 
-// arg_or parses os.args[i] as a number, or returns `fallback` if there is
-// no such argument. Beware: os.args[i].f64() would quietly turn "abc"
-// into 0.0; strconv.atof64 returns an error instead.
-fn arg_or(i int, fallback f64) !f64 {
-	if os.args.len <= i {
-		return fallback
-	}
-	// Wrapping an error with context, like Go's fmt.Errorf("...: %w", err).
-	return strconv.atof64(os.args[i]) or { error('argument ${i} (${os.args[i]}): ${err}') }
+fn did_you_mean(name string, accepted []string) string {
+	close := quantity.closest(name, accepted)
+	return if close.len > 0 { ' (did you mean ${close.join(', ')}?)' } else { '' }
 }
 
-// @[noreturn] lets die() end an `or { }` block that must otherwise
-// produce a value, the same way exit() and panic() can.
-@[noreturn]
-fn die(err IError) {
-	eprintln('error: ${err}')
-	exit(1)
+// Options are solve's.
+struct Options {
+mut:
+	file  string
+	json  string
+	csv   string
+	trace bool
+}
+
+// options reads solve's arguments. An option's file can follow it, or an `=`.
+fn options(args []string) !Options {
+	mut o := Options{}
+	mut i := 0
+	for i < args.len {
+		arg := args[i]
+		i++
+		name := arg.all_before('=')
+		if name in ['--json', '--csv'] {
+			mut value := arg.all_after_first('=')
+			if !arg.contains('=') {
+				if i >= args.len || args[i].starts_with('-') {
+					return error('${name} needs a file name')
+				}
+				value = args[i]
+				i++
+			}
+			if value == '' {
+				return error('${name} needs a file name')
+			}
+			if (name == '--json' && o.json != '') || (name == '--csv' && o.csv != '') {
+				return error('${name} is given twice')
+			}
+			if name == '--json' {
+				o.json = value
+			} else {
+				o.csv = value
+			}
+		} else if arg == '--trace' {
+			o.trace = true
+		} else if arg.starts_with('-') {
+			return error('no option ${arg}${did_you_mean(name, ['--json', '--csv', '--trace'])}')
+		} else if o.file != '' {
+			return error('one flowsheet at a time, not ${o.file} and ${arg}')
+		} else {
+			o.file = arg
+		}
+	}
+	if o.file == '' {
+		return error('it needs a flowsheet file')
+	}
+	// A report mustn't be written over the flowsheet, or over the other report.
+	for flag, path in {
+		'--json': o.json
+		'--csv':  o.csv
+	} {
+		if path != '' && same_file(path, o.file) {
+			return error('${flag} ${path} would overwrite the flowsheet')
+		}
+	}
+	// os.real_path('') is '', so no file is the same as no --csv.
+	if o.json != '' && same_file(o.json, o.csv) {
+		return error('--json and --csv name the same file, ${o.json}')
+	}
+	return o
+}
+
+// same_file is whether two paths name one file. On Windows names differ in
+// case and still name one file.
+fn same_file(a string, b string) bool {
+	x, y := os.real_path(a), os.real_path(b)
+	return $if windows { x.to_lower() == y.to_lower() } $else { x == y }
+}
+
+// solve solves a flowsheet file and reports it (D11): a stream table on
+// stdout, and the JSON and CSV it's asked for.
+fn solve(args []string, mut c Console) int {
+	o := options(args) or {
+		c.complain('reflux solve: ${err.msg()}\n\n${usage}')
+		return 2
+	}
+	loaded := flowsheet.load(o.file) or { return failed(o, flowsheet.load_failure(err), mut c) }
+	sol := loaded.solve() or { return failed(o, loaded.failure(err), mut c) }
+	r := flowsheet.Report{
+		...loaded.report(sol)
+		file: o.file
+	}
+	c.say(r.table())
+	if o.trace {
+		c.say(r.trace())
+	}
+	if o.json != '' && !write(o.json, r.json(), mut c) {
+		return 1
+	}
+	if o.csv != '' && !write(o.csv, r.csv(), mut c) {
+		return 1
+	}
+	return 0
+}
+
+// failed reports a failure: on stderr, with the passes so far if asked for,
+// and as JSON if that was asked for. A CSV left from an earlier run is removed,
+// so that nothing on disk can be taken for this run's streams.
+fn failed(o Options, report flowsheet.Report, mut c Console) int {
+	r := flowsheet.Report{
+		...report
+		file: o.file
+	}
+	if o.trace {
+		c.say(r.trace())
+	}
+	e := r.error or { flowsheet.ErrorReport{} }
+	c.complain('reflux: ${located(o.file, e)}')
+	if !o.trace && r.blocks.any(it.residuals.len > 0) {
+		c.complain('(--trace shows every pass)')
+	}
+	if o.csv != '' && os.exists(o.csv) {
+		os.rm(o.csv) or { c.complain('reflux: ${o.csv}: ${err.msg()}') }
+	}
+	if o.json != '' {
+		write(o.json, r.json(), mut c)
+	}
+	return 1
+}
+
+// located is a failure as a compiler puts one: the file and line first, which
+// an editor can jump to, then what and why.
+fn located(file string, e flowsheet.ErrorReport) string {
+	mut place := file
+	if e.line > 0 {
+		place += ':${e.line}'
+	}
+	// A file that can't be read is its own key.
+	what := if e.key != '' && e.key != file {
+		'${e.key}: '
+	} else if e.unit != '' {
+		'${e.unit}: '
+	} else {
+		''
+	}
+	hint := if e.suggestions.len > 0 { ' (did you mean ${e.suggestions.join(', ')}?)' } else { '' }
+	return '${place}: ${what}${e.reason}${hint}'
+}
+
+// write writes a report's file, and says so if it can't.
+fn write(path string, text string, mut c Console) bool {
+	os.write_file(path, text) or {
+		c.complain('reflux: ${path}: ${err.msg()}')
+		return false
+	}
+	return true
 }

@@ -1,0 +1,95 @@
+# A flowsheet with one unit of each type, each specified a different way from
+# the reference flowsheet, on SRK with a kij set by hand.
+format = 1
+
+[components]
+names = ["methane", "propane", "n-pentane"]
+
+[model]
+equation = "SRK"
+kij = false
+kij_overrides = [{ a = "methane", b = "propane", k = 0.01 }]
+
+[solver]
+method = "direct"
+tol = 1e-8
+max_iterations = 200
+tears = ["back"]
+
+[feed.gas]
+P = "5 bar"
+vapour_fraction = 1.0
+molar_flows = { methane = "6 mol/s", propane = "3 mol/s", n-pentane = "1 mol/s" }
+
+[feed.oil]
+T = "27 degC"
+vapour_fraction = "0 %"
+flow = "1800 kg/h"
+mass_fractions = { propane = 0.5, n-pentane = 0.5 }
+
+[estimate.back]
+T = "300 K"
+P = "4 bar"
+molar_flows = { methane = "1 mol/s" }
+
+[unit.join]
+type = "mixer"
+in = ["gas", "back"]
+out = "joined"
+P = "4 bar"
+
+[unit.squeeze]
+type = "compressor"
+in = "joined"
+out = "squeezed"
+outlet_P = "20 bar"
+efficiency = 75.0e-2
+
+[unit.warm]
+type = "heater"
+in = "squeezed"
+out = "warmed"
+duty = "-10 kW"
+pressure_drop = "0.5 bar"
+
+[unit.turbine]
+type = "expander"
+in = "warmed"
+out = "turned"
+delta_P = "12 bar"
+efficiency = "80 %"
+
+[unit.part]
+type = "component_separator"
+in = "turned"
+out = ["rich", "lean"]
+T = "300 K"
+P = "5 bar"
+fractions = { methane = 0.9, propane = "50 %" }
+
+[unit.ease]
+type = "valve"
+in = "rich"
+out = "eased"
+delta_P = "0.5 bar"
+
+[unit.share]
+type = "splitter"
+in = "eased"
+out = ["back", "vent"]
+fractions = ["25 %", "75 %"]
+
+[unit.settle]
+type = "flash_drum"
+in = ["lean", "oil"]
+vapour = "top"
+liquid = "bottom"
+T = "290 K"
+P = "2 bar"
+
+[unit.lift]
+type = "pump"
+in = "bottom"
+out = "lifted"
+delta_P = "10 bar"
+efficiency = 0.6

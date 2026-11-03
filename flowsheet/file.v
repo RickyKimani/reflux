@@ -37,6 +37,11 @@ pub:
 	sheet  Flowsheet
 	params SolveParams
 	root   map[string]ast.Value // the file, for write
+	// For the report: the components as the file names them, each unit's type in
+	// the order of sheet.units, and the plan solve will follow.
+	names []string
+	types []string
+	plan  Plan
 }
 
 // solve solves the flowsheet with the file's own solver settings.
@@ -70,9 +75,9 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		table: root
 		text:  text
 	}
-	version := top.integer('format')!
-	if version != file_format {
-		return top.fail('format', 'this reflux reads format ${file_format}, not ${version}', [])
+	given := top.integer('format')!
+	if given != file_format {
+		return top.fail('format', 'this reflux reads format ${file_format}, not ${given}', [])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!
@@ -122,10 +127,11 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		makers[kind] = maker
 	}
 	mut units := top.child('unit')!
+	mut types := []string{}
 	for name in units.table.keys() {
 		mut s := units.child(name)!
 		s.components = component_names
-		read_unit(mut s, name, makers, mut sheet)!
+		types << read_unit(mut s, name, makers, mut sheet)!
 	}
 	top.finish()!
 
@@ -135,7 +141,7 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 	}
 	mut torn := solve_params.tears.clone()
 	torn << estimates.keys()
-	sheet.plan(tears: torn) or {
+	plan := sheet.plan(tears: torn) or {
 		if err is FlowsheetError && err.unit != '' {
 			mut s := units.child(err.unit)!
 			return s.located(err)
@@ -147,6 +153,9 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		sheet:  sheet
 		params: solve_params
 		root:   root
+		names:  component_names
+		types:  types
+		plan:   plan
 	}
 }
 
@@ -474,8 +483,8 @@ fn read_flows(mut s Section, fl thermo.Fluid) ![]f64 {
 	return flows
 }
 
-// read_unit builds one unit and adds it to the flowsheet.
-fn read_unit(mut s Section, name string, makers map[string]Maker, mut sheet Flowsheet) ! {
+// read_unit builds one unit and adds it to the flowsheet, and returns its type.
+fn read_unit(mut s Section, name string, makers map[string]Maker, mut sheet Flowsheet) !string {
 	kind := s.text('type')!
 	maker := makers[kind] or {
 		return s.fail('type', 'no unit type ${kind}', quantity.closest(kind, makers.keys()))
@@ -485,4 +494,5 @@ fn read_unit(mut s Section, name string, makers map[string]Maker, mut sheet Flow
 	ports := s.ports(u)!
 	s.finish()!
 	sheet.add_unit(u, ports) or { return s.located(err) }
+	return kind
 }

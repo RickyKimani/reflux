@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 6 are done, and step 7 is next.
+the owner's question. Steps 0 to 7 are done, and step 8 is next.
 
 ## Goal
 
@@ -192,7 +192,7 @@ output the tests check.
 | D8 | Results and failures | `solve` returns a `Solution` only when every component converged and every balance has been checked. Each stream's state, each unit's duty and work, the tears chosen and the convergence history come with it. A failure is a typed `FlowsheetError` (a bad file, a bad specification, a unit that failed with its `FlashError`, no convergence with the history), never a panic. | The flash's rule, D7 of M3, carried up: nothing that hasn't been shown right is returned. M10b exposes this to Python. |
 | D9 | File format | TOML, `format = 1`. Components by name or CAS from the database, plus your own data directories; the model and kᵢⱼ options; then streams and units, each unit with its ports and specifications. Every number with a unit, as a string ("230 K", "30 bar", "100 kmol/h"). A feed's composition is given as mole fractions, mass fractions, or each component's molar or mass flow, as in DWSIM, and converted to molar flows with the components' molar masses when the file loads. The results report flows and fractions on both bases. Unknown keys are errors. **Amended in step 6:** only feeds are declared, as `[feed.NAME]`, since every other stream is named by the ports at its two ends. `[estimate.NAME]` gives a tear a first value, with the same keys. A `\u` escape is refused, because it can crash V's parser. | Consistent with M2's data files, readable, and diffable. Units on every number remove the commonest input error. A version from the first file makes migration possible later (A6). |
 | D10 | Units of measure | `quantity` parses "value unit" for a stated dimension: temperature (K, degC, degF, R), pressure (Pa, kPa, MPa, bar, barg, atm, psi, psig, mmHg), molar and mass flow, energy rate and power, molar and specific enthalpy, volume flow. Gauge pressure takes 1 atm of ambient. An unknown unit gets suggestions. **Amended in step 1:** also temperature and pressure differences (the same scales with no offset, and no gauge units), fractions (a bare number or a percentage), °C and °F beside degC and degF, mbar, torr, psia and lbmol/h. An absolute T or P must be above zero. | A2 asks for the boundary; a fixed table is easy to check against NIST SP 811 and has nothing hidden. |
-| D11 | CLI and reports | `main.v` becomes `reflux solve plant.toml [--json out.json] [--csv streams.csv] [--trace]`, with the current demo as `reflux demo`. The JSON has a `format` version, every stream, every unit, the balances and the convergence history. A stream table goes to stdout. `--trace` prints every iteration. | F2 and F6. JSON is what Python and pandas read, and the version lets M10 depend on it. |
+| D11 | CLI and reports | `main.v` becomes `reflux solve plant.toml [--json out.json] [--csv streams.csv] [--trace]`, with the current demo as `reflux demo`. The JSON has a `format` version, every stream, every unit, the balances and the convergence history. A stream table goes to stdout. `--trace` prints every iteration. **Amended in step 7:** `--trace` prints the passes when the solve ends, not as they happen: no M4 flowsheet takes long enough for that to matter, and printing as it goes would need a callback in the solver, which M8 can add if its PFR needs one. A failure writes its JSON too, with the error and the passes so far, and removes a CSV left from an earlier run, so that nothing on disk can be taken for this run's results. Also `reflux version` and `reflux help`, and the exit status is 0, 1 for a flowsheet or report that failed, and 2 for a wrong command. | F2 and F6. JSON is what Python and pandas read, and the version lets M10 depend on it. |
 | D12 | DWSIM references | A by-hand tool, `tools/gen_m4_dwsim.py`, builds each reference flowsheet in DWSIM 9 from the same definition and records DWSIM's constants, kᵢⱼ and results in `testdata/`. It checks every unit's `ErrorMessage` and every stream, and tightens the recycle to its limit. reflux runs the same flowsheet on DWSIM's constants. Unit-by-unit cases go through the same route. **Fallback** if a recycle won't converge tightly in DWSIM: compare with the loop opened, giving DWSIM reflux's converged tear stream, which it must hand back unchanged within its tolerance. | M3's route, which works. The open loop tests the same claim without DWSIM's recycle. |
 | D13 | Golden flowsheets | `testdata/flowsheets/`: the reference flowsheet and a few others (no recycle, two interlocking loops, and a loop carrying a saturated pure component, which D6's H is for), each with its expected results, compared to 1e-9. They're regenerated only on purpose, with the change explained. | The roadmap's golden-flowsheet layer: whole-plant results that can't drift unnoticed. |
 | D14 | Speed | Measure first, as in M3: the reference flowsheet's solve, cold and warm, against DWSIM's, in the `benchmarks` harness. Within a solve each unit passes its last T as the next flash's estimate (PH and PS already take one). K-value warm starts across solves stay in M8 (F5), unless the measurement says the flowsheet needs them now. | M3 found that measuring first was worth it. Warm starts are a cache with real design questions, and M8 is where the roadmap puts them. |
@@ -713,10 +713,109 @@ flowchart LR
   - **A name with no backslash in it.** A layer of escaping turned `\\t` into a
     tab, so the writer's backslash escape was never used.
 
-### 7. The CLI and reports
-- `reflux solve`, `reflux demo`, the JSON and CSV reports and the stream
-  table (D11). `tools/check.vsh` runs the demo now; it'll run `reflux
-  demo` and solve the reference flowsheet instead.
+### 7. The CLI and reports — done
+- **[main.v](../main.v):** `reflux solve plant.toml [--json out.json] [--csv
+  streams.csv] [--trace]`, `reflux demo [T P]`, `reflux version` and `reflux
+  help`. The demo is the old `main.v` in [demo.v](../demo.v), and prints what it
+  did, byte for byte. The exit status is 0 when it worked, 1 when the flowsheet
+  or a report failed, and 2 for a wrong command.
+  - **A failure says where,** as a compiler does: `reflux: plant.toml:26:
+    unit.cooler.type: no unit type heatr (did you mean heater?)`. A misspelt
+    command or option gets suggestions too.
+  - **A report never overwrites the flowsheet,** nor the other report, whatever
+    the spelling of its path (`./plant.toml`, or another case on Windows).
+- **[flowsheet/report.v](../flowsheet/report.v):** a `Report`, from
+  `Loaded.report(sol)`, `Loaded.failure(err)` or `load_failure(err)`. The JSON
+  and the CSV are both written from it, so they can't disagree.
+  [docs/report-format.md](report-format.md) is format 1, key by key, with the
+  exit statuses.
+  - **The JSON is `json2`'s,** a value to a line so that two reports diff well,
+    and each double the shortest decimal that reads back as it: 1,004 lines for
+    the reference flowsheet.
+  - **A list by component is an array,** in the file's order, because `json2`
+    sorts a map's keys, which would have put a mixture in alphabetical order.
+  - **A failure's report** has the error and the passes as far as they got, but
+    no streams or units (D8).
+- **[flowsheet/table.v](../flowsheet/table.v):** the stream table in K, bar,
+  mol/s, kg/s and kJ/mol, to 5 significant figures, with as many streams to a
+  table as fit in 100 columns; each unit's duty and work in kW; and `--trace`'s
+  passes. Numbers are rounded by `math.round` and printed as integers, so tcc's
+  build and gcc's print the same.
+- **Changes to steps 5 and 6:**
+  - **A failure outside a loop lost the loops before it.** A valve that failed
+    after the loop had converged reported no passes. `solve` now keeps the
+    history on every failure.
+  - `UnitResult.balance()` is the unit balance `solve` checks, which the report
+    shares.
+  - `Loaded` keeps the file's component names, each unit's type and the plan.
+  - The every-unit flowsheet moved from `file_test.v` to
+    [testdata/flowsheets/every_unit.toml](../testdata/flowsheets/every_unit.toml).
+- **D11 amended:** see its row.
+- **[tools/check.vsh](../tools/check.vsh)** runs `reflux demo`, solves the
+  reference flowsheet with both reports, and checks that a file that isn't there
+  exits 1, for each compiler's build and gcc's `-prod` one.
+- **Tests in [flowsheet/report_test.v](../flowsheet/report_test.v),** 20
+  functions, on five flowsheets: the reference, every unit type, a heater
+  followed by two loops in series, two interlocking loops, and a drum with no
+  liquid, whose empty outlet feeds a splitter.
+  - **The JSON is the solution,** read as plain JSON, not through `Report`:
+    every stream's state and flows to the bit, mass flows from the database's
+    molar masses, fractions summing to 1, phases adding up to their stream, the
+    less dense first, each unit's energy, and each unit's balance worked out
+    again from its inlets, the worst unit's too.
+  - **It balances on its own numbers:** feeds in and products out, by component,
+    mass and energy, to what the tears leave open, and each unit on the streams
+    reported.
+  - **It's what the doc says:** the test reads docs/report-format.md and checks
+    every object's keys in order, and the CSV's columns.
+  - **It comes back from its JSON to the last bit,** a failure's too.
+  - **The CSV** has every number as the same double, with a compound and a
+    stream whose names need quoting: 1,3-butadiene and `let "down", gently`.
+  - **The table** shows every value to its 5 figures, the balances to 2, no
+    line past 100 columns, and as many streams to a table as fit. The trace has
+    every pass.
+  - **Failures:** out of passes, a valve after a loop, a flash's own cause, a
+    file that doesn't load, an error from outside the module, and a loop whose
+    first pass fails.
+- **Tests in [flowsheet/table_test.v](../flowsheet/table_test.v):** the
+  formatter, ties included: 1.03125 to 5 figures is 1.0313 under both
+  compilers, where glibc's printf gives 1.0312. 846064.9999999999 is 846060,
+  which multiplying by 0.1 rather than dividing by 10 rounds to 846070.
+- **Tests in [main_test.v](../main_test.v),** 11 functions, run in process: the
+  reports written and the table printed, the trace, each failure's status and
+  message, a stale CSV removed, a report that can't be written, every wrong
+  command, the flowsheet never overwritten, and the demo, which fails cleanly
+  with no data.
+- **Tests in [flowsheet/solve_test.v](../flowsheet/solve_test.v):** one new
+  function, for the balance check that `solve` now shares. A unit that makes
+  energy and one that turns one compound into another are each caught by their
+  own balance, the other one closing.
+- **Measured:** `reflux solve` on the reference flowsheet takes 0.9 s from the
+  command to the table, with a tcc build. Step 9 times it properly.
+- **Bug found and fixed by the gcc check:** the unit table's columns didn't
+  widen for a wide value. gcc's build gives the second drum's adiabatic duty as
+  −9.3132e-13 kW, a rounding, where tcc's gives exactly 0, and the 11 characters
+  overflowed a column of 10. A test now gives a report that duty, whatever the
+  compiler.
+- **Planted mistakes:** 157, on the CLI, the reports, the formatter, and the
+  changes to `solve` and `load`. 146 were caught at once, and 9 more after the
+  following. One went with code it showed could do nothing, and one survives.
+  The unit table's mistakes ran again on its rewrite, and the one that survived
+  that is caught by a new test too: a header naming a kind of energy twice.
+  - **New tests:** each phase's S and V add up to its stream's, as its H did;
+    a unit before the first loop, so that no history goes to a block with no
+    tears; a plan's notes reaching the report; the table's exact layout, a blank
+    line before each table, and one exactly 100 wide; two names for one report
+    file on Windows that differ in case; and in `solve_test.v`, a unit that
+    breaks one balance and keeps the other. The last two had survived in code
+    step 5 wrote: its leaking unit broke both balances at once.
+  - **Deleted:** `o.csv != ''` before comparing the two reports' paths, since
+    `os.real_path('')` is `''`. Dropping the guard that stays is caught.
+  - **The one that survives** is `k >= 0` as `k > 0` in `scaled`: at k = 0 it
+    multiplies or divides by 1, which is the same.
+  - **Before the run,** a search found why `scaled` divides: multiplying
+    846064.9999999999 by 0.1 gives the tie 84606.5, so it would print 846070.
+    It's a test now.
 
 ### 8. DWSIM references and golden flowsheets
 - `tools/gen_m4_dwsim.py` and its fixtures: unit by unit, and the

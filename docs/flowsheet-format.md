@@ -44,6 +44,10 @@ flowsheet: line 29: unit.cooler.type: no unit type heatr (did you mean heater?)
 A key the format doesn't have is an error, not ignored, so a misspelling can't
 silently leave a default in place.
 
+`reflux solve plant.toml` solves a file and prints its stream table, and
+`--json` and `--csv` write its results: [report-format.md](report-format.md)
+describes them.
+
 ## Numbers and units
 
 Every physical number is a string with its unit, such as `"230 K"` or

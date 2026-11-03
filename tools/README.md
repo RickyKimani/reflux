@@ -4,7 +4,7 @@ Scripts for working on reflux. Nothing here is part of the simulator.
 
 | Script | What it does |
 |---|---|
-| `check.vsh` | Runs the same checks as CI: format, vet, tests, build, demo. |
+| `check.vsh` | Runs the same checks as CI: format, vet, tests, build, then `reflux demo`, `reflux solve` on the reference flowsheet with both reports, and a solve that must fail. |
 | `import_chemsep.vsh` | Regenerates `../data/components/` from the vendored ChemSep XML. Run it after changing the importer or the vendored files; a test fails until you do. |
 | `data_quality.vsh` | Regenerates `../docs/data-quality.md`: the sweep over every compound's data, PR against ChemSep's vapour pressures, and the outliers against CoolProp. Run it after changing the data or anything the sweep evaluates; a test fails until you do. |
 | `flash_sweep.vsh` | Runs M3's robustness sweep, 10,000 seeded PT flashes of database mixtures, and writes `../docs/flash-robustness.md`. Build it with `-prod -cc gcc`: then it takes about three minutes, the build included, and about twenty under tcc. `sweep/sweep_test.v` runs the first 1,000 points in CI. |

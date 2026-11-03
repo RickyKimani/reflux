@@ -507,6 +507,55 @@ fn (l Leak) calculate(_ thermo.Fluid, inlets []Stream) !Outcome {
 	}
 }
 
+// Warm adds a thousandth to its stream's H and says nothing of it: the moles
+// balance, and the energy doesn't.
+struct Warm {
+	name string
+}
+
+fn (w Warm) inlet_ports() []string {
+	return ['in']
+}
+
+fn (w Warm) outlet_ports() []string {
+	return ['out']
+}
+
+fn (w Warm) calculate(_ thermo.Fluid, inlets []Stream) !Outcome {
+	return Outcome{
+		outlets: [Stream{
+			...inlets[0]
+			h: inlets[0].h + 1e-3 * math.abs(inlets[0].h)
+		}]
+	}
+}
+
+// Turn makes a tenth of its first component into its second, with the same
+// total flow and H: the energy balances, and the components don't.
+struct Turn {
+	name string
+}
+
+fn (t Turn) inlet_ports() []string {
+	return ['in']
+}
+
+fn (t Turn) outlet_ports() []string {
+	return ['out']
+}
+
+fn (t Turn) calculate(_ thermo.Fluid, inlets []Stream) !Outcome {
+	mut flows := inlets[0].flows.clone()
+	flows[1] += 0.1 * flows[0]
+	flows[0] *= 0.9
+	return Outcome{
+		outlets: [Stream{
+			...inlets[0]
+			flows: flows
+		}]
+	}
+}
+
 // Greedy is a unit that gives more outlets than it has ports.
 struct Greedy {
 	name string
@@ -557,6 +606,21 @@ fn test_a_unit_that_loses_mass_is_caught() {
 		return
 	}
 	assert false, 'a unit that loses a tenth'
+}
+
+fn test_each_balance_is_checked_on_its_own() {
+	// One unit that makes energy and one that makes one compound of another:
+	// each is caught by its own balance, the other closing.
+	fl := fluid()!
+	for u in [Unit(Warm{'warm'}), Turn{'turn'}] {
+		f := one_unit(fl, u)!
+		f.solve(fl) or {
+			e := err as FlowsheetError
+			assert e.kind == .unbalanced && e.unit == u.name, err.msg()
+			continue
+		}
+		assert false, '${u.name} was let through'
+	}
 }
 
 fn test_a_failure_in_a_loop_keeps_its_cause_and_history() {
