@@ -27,10 +27,10 @@ Keep this section current: update it whenever a step is committed.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed, 2–4× DWSIM's
   time for 5 and 10 components, was M4 step 9's to fix.
-- **M4 (the first flowsheet) is done** on branch `m4-flowsheet`, which is
-  pushed and has no PR yet. Its plan, `docs/m4-plan.md`, has exit criteria
-  1–10, decisions D1–D16 and steps 0–11, and ends with its exit review:
-  every criterion met, once CI passes on the tip.
+- **M4 (the first flowsheet) is done** on branch `m4-flowsheet`, with a PR
+  into `main`. Its plan, `docs/m4-plan.md`, has exit criteria 1–10,
+  decisions D1–D16 and steps 0–11, and ends with its exit review: every
+  criterion met, with CI green on the tip.
   - Step 0 is committed and pushed: the DWSIM flowsheet spike
     (`spike/dwsim_flowsheet/run.py`, `docs/spike-dwsim-flowsheet.md`), a
     go with conditions. DWSIM's recycle, scaled by 1e-8, closes its
@@ -99,10 +99,10 @@ Keep this section current: update it whenever a step is committed.
     roadmap's C9 (M4, M5, M11) and J1 (designed in `docs/design.md`).
     Carried forward: `flash.uv` on cold liquids, upstream reports, and
     v0.1.0's tag.
-  - Next: CI on the tip, whose run goes in the review. Then, when asked,
-    the PR into `main`; after its merge, date the CHANGELOG entry, run
-    `tools/release.vsh` on `main`, and tag v0.1.0 and push the tag only
-    when the owner says.
+  - CI passed on step 11's commit (run 41656509290), which is in the
+    review. Next: the PR's merge, when the owner says. After it, date the
+    CHANGELOG entry, run `tools/release.vsh` on `main`, and tag v0.1.0 and
+    push the tag only when the owner says.
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel

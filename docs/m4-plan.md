@@ -1084,9 +1084,9 @@ Checked on 2026-11-03 at the tip of `m4-flowsheet`. All 58 test files pass
 locally under `v run tools/check.vsh` with tcc (297 s) and gcc (629 s, with
 the `-prod` build), on Windows, and so does each check's run of `reflux demo`,
 `reflux solve` on the reference flowsheet with both reports, and a missing
-file's exit 1. CI last ran on step 6's commit (`ca4c1da`, run 41527794932),
-and passed on Windows and Linux with tcc and gcc. Steps 7 to 11 aren't pushed
-yet, so CI on the tip comes with the push.
+file's exit 1. CI passed on Windows and Linux, with tcc and gcc, on step 6's
+commit (`ca4c1da`, run 41527794932), and on this step's, the first to carry
+steps 7 to 11 (`9aef07b`, run 41656509290).
 
 | # | Criterion | Verdict | Evidence |
 |---|---|---|---|
@@ -1097,9 +1097,9 @@ yet, so CI on the tip comes with the push.
 | 5 | The reference flowsheet matches DWSIM 9 | **met, as M3's criterion 6 was amended** | `dwsim_test.v`, on `reference_dwsim.toml` with DWSIM's constants and kᵢⱼ, DWSIM's recycle at its tolerances scaled by 1e-8: every stream's T within 0.01 K but the recycle's (0.029 K), and every flow, β and composition within 5e-5. The cooler's duty is 1.7e-4 off, and the pump's power 42%. Both, and the recycle's T, are DWSIM's pump: with its liquid volume in a pump of the test's own, every stream is within the targets, the recycle to 1.7e-6 K, and the cooler to 3.3e-5. The bounds can't grow, and the open loop gives the same differences. |
 | 6 | The file format holds | **met** | `file_test.v`: a file builds what code builds, to the last bit; load, write and load again is the same to the last bit, and the writing a fixed point; six composition bases to 1e-12; about 60 wrong fields, each with its line, key and reason, and a suggestion for a misspelt name; 4,000 fuzzed files in every run and 40,000 more once, with no panic. The `\u` escape that panics V's parser is refused first. |
 | 7 | Units of measure are exact | **met** | `quantity_test.v`, against a table written by hand from NIST SP 811: 56 exact factors to 4 ulps, 11 others to SP 811's 7 figures, 13 affine conversions to 1e-12, all 75 units covered, and the round trip to 1e-12. Gauge pressure is only `barg` and `psig`. 20,000 seeded strings never panic. |
-| 8 | The CLI works end to end | **met; CI with the push** | `main_test.v`, 11 functions in process, and `check.vsh` on every compiler's build: `reflux solve` writes the JSON and CSV and prints the table, and a failure exits 1 with its report. `report_test.v` checks the JSON against [report-format.md](report-format.md), key by key, and reads it back to the last bit. |
+| 8 | The CLI works end to end | **met** | `main_test.v`, 11 functions in process, and `check.vsh` on every compiler's build: `reflux solve` writes the JSON and CSV and prints the table, and a failure exits 1 with its report. `report_test.v` checks the JSON against [report-format.md](report-format.md), key by key, and reads it back to the last bit. |
 | 9 | Speed is measured | **met** | [benchmarks.md](benchmarks.md), with gcc `-prod`: the reference flowsheet solves in 26 ms first and 23 ms again, against DWSIM's 559 ms (3.0 s at tight tolerances) and 92 ms from its last answer. `benchmarks/flowsheet_test.v` checks that each program solved the same flowsheet. |
-| 10 | CI green; docs updated | **met locally; CI with the push** | The docs: README, roadmap, design notes, V notes, [flowsheet-format.md](flowsheet-format.md) and [report-format.md](report-format.md) (step 11 above). |
+| 10 | CI green; docs updated | **met** | Run 41656509290: all four jobs. The docs: README, roadmap, design notes, V notes, [flowsheet-format.md](flowsheet-format.md) and [report-format.md](report-format.md) (step 11 above). |
 
 **Planted mistakes.** 659 were planted across steps 1 to 10, one change at a
 time, in scratch copies, with step 3 running step 2's 69 again on its
@@ -1164,7 +1164,7 @@ breaks one balance and keeps the other.
   DIPPR 124, `ideal_t`'s 300 K fallback, and a few small arrays allocated per
   residual call.
 
-**Verdict: M4 is done,** once CI passes on the tip.
+**Verdict: M4 is done.**
 
 ## Not in M4
 
