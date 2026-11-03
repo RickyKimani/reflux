@@ -1,0 +1,351 @@
+{
+  "format": 1,
+  "reflux": "0.0.1",
+  "file": "testdata/flowsheets/saturated_loop.toml",
+  "status": "solved",
+  "error": null,
+  "components": [
+    {
+      "name": "propane",
+      "compound": "Propane",
+      "molar_mass": 0.0440956
+    }
+  ],
+  "streams": [
+    {
+      "name": "vapour",
+      "from": null,
+      "to": "join",
+      "T": 300.0783054445137,
+      "P": 1000000,
+      "vapour_fraction": 1,
+      "molar_flow": 10,
+      "mass_flow": 0.440956,
+      "volume_flow": 0.020328949528752634,
+      "H": -105825.22639975983,
+      "S": 248.6679625021697,
+      "V": 0.0020328949528752634,
+      "molar_flows": [
+        10
+      ],
+      "mass_flows": [
+        0.440956
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 1,
+          "mole_fractions": [
+            1
+          ],
+          "H": -105825.22639975983,
+          "S": 248.6679625021697,
+          "V": 0.0020328949528752634
+        },
+        {
+          "phase": "liquid",
+          "fraction": 0,
+          "mole_fractions": [
+            1
+          ],
+          "H": -120570.97271742414,
+          "S": 199.52830112004796,
+          "V": 0.00008679059163268155
+        }
+      ]
+    },
+    {
+      "name": "joined",
+      "from": "join",
+      "to": "condense",
+      "T": 300.0783054445137,
+      "P": 1000000,
+      "vapour_fraction": 0.6399999999999995,
+      "molar_flow": 25.000000000000004,
+      "mass_flow": 1.1023900000000002,
+      "volume_flow": 0.03330743457069833,
+      "H": -111133.695074119,
+      "S": 230.97768440460584,
+      "V": 0.001332297382827933,
+      "molar_flows": [
+        25.000000000000004
+      ],
+      "mass_flows": [
+        1.1023900000000002
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 0.6399999999999995,
+          "mole_fractions": [
+            1
+          ],
+          "H": -105825.22639975983,
+          "S": 248.6679625021697,
+          "V": 0.0020328949528752634
+        },
+        {
+          "phase": "liquid",
+          "fraction": 0.36000000000000054,
+          "mole_fractions": [
+            1
+          ],
+          "H": -120570.97271742414,
+          "S": 199.52830112004796,
+          "V": 0.00008679059163268155
+        }
+      ]
+    },
+    {
+      "name": "wet",
+      "from": "condense",
+      "to": "share",
+      "T": 300.0783054445137,
+      "P": 1000000,
+      "vapour_fraction": 0.4,
+      "molar_flow": 25.000000000000004,
+      "mass_flow": 1.1023900000000002,
+      "volume_flow": 0.02163080840324286,
+      "H": -114672.67419035842,
+      "S": 219.18416567289665,
+      "V": 0.0008652323361297143,
+      "molar_flows": [
+        25.000000000000004
+      ],
+      "mass_flows": [
+        1.1023900000000002
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 0.4,
+          "mole_fractions": [
+            1
+          ],
+          "H": -105825.22639975983,
+          "S": 248.6679625021697,
+          "V": 0.0020328949528752634
+        },
+        {
+          "phase": "liquid",
+          "fraction": 0.6,
+          "mole_fractions": [
+            1
+          ],
+          "H": -120570.97271742414,
+          "S": 199.52830112004796,
+          "V": 0.00008679059163268155
+        }
+      ]
+    },
+    {
+      "name": "back",
+      "from": "share",
+      "to": "join",
+      "T": 300.0783054445137,
+      "P": 1000000,
+      "vapour_fraction": 0.4,
+      "molar_flow": 15.000000000000002,
+      "mass_flow": 0.6614340000000001,
+      "volume_flow": 0.012978485041945716,
+      "H": -114672.67419035842,
+      "S": 219.18416567289665,
+      "V": 0.0008652323361297143,
+      "molar_flows": [
+        15.000000000000002
+      ],
+      "mass_flows": [
+        0.6614340000000001
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 0.4,
+          "mole_fractions": [
+            1
+          ],
+          "H": -105825.22639975983,
+          "S": 248.6679625021697,
+          "V": 0.0020328949528752634
+        },
+        {
+          "phase": "liquid",
+          "fraction": 0.6,
+          "mole_fractions": [
+            1
+          ],
+          "H": -120570.97271742414,
+          "S": 199.52830112004796,
+          "V": 0.00008679059163268155
+        }
+      ]
+    },
+    {
+      "name": "out",
+      "from": "share",
+      "to": null,
+      "T": 300.0783054445137,
+      "P": 1000000,
+      "vapour_fraction": 0.4,
+      "molar_flow": 10.000000000000002,
+      "mass_flow": 0.44095600000000007,
+      "volume_flow": 0.008652323361297145,
+      "H": -114672.67419035842,
+      "S": 219.18416567289665,
+      "V": 0.0008652323361297143,
+      "molar_flows": [
+        10.000000000000002
+      ],
+      "mass_flows": [
+        0.44095600000000007
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 0.4,
+          "mole_fractions": [
+            1
+          ],
+          "H": -105825.22639975983,
+          "S": 248.6679625021697,
+          "V": 0.0020328949528752634
+        },
+        {
+          "phase": "liquid",
+          "fraction": 0.6,
+          "mole_fractions": [
+            1
+          ],
+          "H": -120570.97271742414,
+          "S": 199.52830112004796,
+          "V": 0.00008679059163268155
+        }
+      ]
+    }
+  ],
+  "units": [
+    {
+      "name": "join",
+      "type": "mixer",
+      "inlets": [
+        "vapour",
+        "back"
+      ],
+      "outlets": [
+        "joined"
+      ],
+      "energy": [],
+      "balance": {
+        "component": 0,
+        "energy": 0
+      }
+    },
+    {
+      "name": "condense",
+      "type": "heater",
+      "inlets": [
+        "joined"
+      ],
+      "outlets": [
+        "wet"
+      ],
+      "energy": [
+        {
+          "name": "duty",
+          "rate": -88474.47790598564
+        }
+      ],
+      "balance": {
+        "component": 0,
+        "energy": 0
+      }
+    },
+    {
+      "name": "share",
+      "type": "splitter",
+      "inlets": [
+        "wet"
+      ],
+      "outlets": [
+        "back",
+        "out"
+      ],
+      "energy": [],
+      "balance": {
+        "component": 0,
+        "energy": 3.732770990878404e-15
+      }
+    }
+  ],
+  "solver": {
+    "method": "wegstein",
+    "tol": 1e-9,
+    "max_iterations": 100
+  },
+  "blocks": [
+    {
+      "units": [
+        "join",
+        "condense",
+        "share"
+      ],
+      "tears": [
+        "back"
+      ],
+      "cycles": 1,
+      "residuals": [
+        [
+          3.5460856803232854
+        ],
+        [
+          0.375
+        ],
+        [
+          0.1836734693877551
+        ],
+        [
+          1.1842378929335e-16
+        ]
+      ]
+    }
+  ],
+  "notes": [],
+  "balance": {
+    "component": 1.7763568394002506e-16,
+    "energy": 1.8663854954392022e-14
+  },
+  "worst_unit": {
+    "component": 0,
+    "energy": 3.732770990878404e-15
+  }
+}

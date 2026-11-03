@@ -1,0 +1,33 @@
+# A loop that carries pure propane at saturation, where T and P don't fix the
+# state and its enthalpy does: the torn stream is two-phase, which is what D6's
+# tear variables (flows, P and H) are for.
+format = 1
+
+[components]
+names = ["propane"]
+
+[model]
+equation = "PR"
+
+[feed.vapour]
+P = "10 bar"
+vapour_fraction = 1.0
+flow = "10 mol/s"
+mole_fractions = { propane = 1.0 }
+
+[unit.join]
+type = "mixer"
+in = ["vapour", "back"]
+out = "joined"
+
+[unit.condense]
+type = "heater"
+in = "joined"
+out = "wet"
+outlet_vapour_fraction = 0.4
+
+[unit.share]
+type = "splitter"
+in = "wet"
+out = ["back", "out"]
+fractions = [0.6, 0.4]

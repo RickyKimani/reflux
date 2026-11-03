@@ -140,48 +140,9 @@ out = ["a", "b"]
 fractions = [0.5, 0.5]
 '
 
-// interlocking is the reference flowsheet's loop with a second recycle through
-// a pump of its own: two cycles in one block.
-const interlocking = read_flowsheet('reference.toml').all_before('[unit.mixer]') +
-	'
-[unit.mixer]
-type = "mixer"
-in = ["feed", "recycle", "recycle2"]
-out = "mixed"
-
-[unit.cooler]
-type = "heater"
-in = "mixed"
-out = "cold"
-outlet_T = "230 K"
-
-[unit.drum]
-type = "flash_drum"
-in = "cold"
-vapour = "gas"
-liquid = "liquid"
-duty = "0 W"
-
-[unit.split]
-type = "splitter"
-in = "liquid"
-out = ["back", "back2", "on"]
-fractions = [0.3, 0.2, 0.5]
-
-[unit.pump]
-type = "pump"
-in = "back"
-out = "recycle"
-outlet_P = "31 bar"
-efficiency = 0.75
-
-[unit.pump2]
-type = "pump"
-in = "back2"
-out = "recycle2"
-outlet_P = "32 bar"
-efficiency = 0.75
-'
+// interlocking is the reference flowsheet's loop with a second recycle
+// through a pump of its own: two cycles in one block.
+const interlocking = read_flowsheet('interlocking.toml')
 
 struct Case {
 	text  string

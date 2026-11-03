@@ -1100,3 +1100,16 @@ to a constant instead. `v vet` wouldn't have warned about either this or
 same in V, unlike Go's `"..."` and backquoted raw strings. A script that
 builds V source as text has to use raw strings, `r'${x}'`, or it
 interpolates its own variables.
+
+**An apostrophe in a single-quoted string ends it, and the error lands far
+away.** `println('expander by DWSIM's S: …')` closes the string at `DWSIM`. In
+[flowsheet/dwsim_test.v](../flowsheet/dwsim_test.v) the parser carried on and
+reported "unexpected token `}`" 64 lines further down, at the end of a later
+function. When an error makes no sense where it points, look above it for a
+`'s`, and write such a string in double quotes, as `v fmt` prefers anyway.
+
+**Options compare with `==`.** `s.from == none` is whether there's a value,
+and two Options are equal when neither has one or both have equal ones, as a
+probe showed. Go would compare two `*string` by address, so you'd write a
+helper; [flowsheet/golden_test.v](../flowsheet/golden_test.v) just writes
+`g.from == w.from`.

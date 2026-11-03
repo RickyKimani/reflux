@@ -158,3 +158,35 @@ n-pentane.
 - **Run the open loop as well as the closed one.** Fed reflux's converged
   recycle stream, DWSIM must hand it back to the level it hands back its
   own: 8e-14 here.
+
+## What step 8 found
+
+[tools/gen_m4_dwsim.py](../tools/gen_m4_dwsim.py) did all of the above, and
+[flowsheet/dwsim_test.v](../flowsheet/dwsim_test.v) compares reflux with it.
+The step's write-up in [m4-plan.md](m4-plan.md) has the numbers.
+
+- **The open loop's expectation was wrong.** DWSIM hands reflux's recycle back
+  within 1.4e-5 in flows and 0.029 K, not 8e-14. The two programs' models
+  differ, by the pump's density and by DWSIM's rounded constants, so reflux's
+  fixed point isn't DWSIM's. Its differences are the closed loop's.
+- **The pump was most of the loop's difference.** With DWSIM's liquid volume
+  in reflux's pump, every stream is within criterion 2's targets of DWSIM's,
+  the recycle to 1.7e-6 K, and the cooler's duty within 3.3e-5. Without it, the
+  warmer recycle puts the cooler's duty 1.7e-4 off.
+- **A two-phase expander shows DWSIM's mixing entropy.** Its ideal mixing term,
+  −R Σ xᵢ ln xᵢ · M/Mᵢ (M3), cancels from a single-phase outlet, as the
+  compressor's is. Two phases of different compositions carry different errors:
+  1.47 J/(mol·K) for the inlet gas, 1.32 for the outlet's mixture. DWSIM's
+  isentropic outlet lands 0.42 K colder, with 2.6% more work. The test follows
+  reflux's isentropic path by DWSIM's S and lands on DWSIM's expander.
+- **The separator's `EnergyImb`** is what goes in less what comes out. Every
+  other unit's `DeltaQ` is the heat or work it takes or gives, by its kind.
+- **A vessel takes an energy stream as an inlet,** and in
+  `HeatingCoolingIsothermic` mode, with `OverrideT` and `FlashTemperature`, it
+  holds a T and reports the heat in `DeltaQ`.
+- **A separator's specification** is a `ComponentSeparationSpec(name,
+  SeparationSpec.PercentInletMolarFlow, percent, "%")` per compound, in
+  `DWSIM.UnitOperations.UnitOperations.Auxiliary`, with `SpecifiedStreamIndex`
+  0 for the first outlet. Both outlets leave at the inlet's T and P.
+- **`RET_VKij` needs a stream first.** The property package reads its compounds
+  from `CurrentMaterialStream`, which has to be set before it can give its kᵢⱼ.

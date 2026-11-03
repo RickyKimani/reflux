@@ -69,13 +69,21 @@ Keep this section current: update it whenever a step is committed.
     (`docs/flowsheet-format.md`). D9 was amended there: only feeds are declared.
     V's TOML parser can panic on a `\u` escape, so `check_text` scans for those
     first: a report to make upstream.
-  - Step 7 is committed, not pushed: the CLI, `reflux solve` and `reflux
-    demo`, and the reports (`flowsheet/report.v`, `table.v`,
-    `docs/report-format.md`). D11 was amended there: `--trace` prints when
-    the solve ends, and a failure writes its JSON too. `solve` now keeps
-    the history on a failure outside a loop.
-  - Next is step 8: DWSIM's references, unit by unit and the reference
-    flowsheet, and the golden flowsheets (D12, D13).
+  - Steps 7 and 8 are committed, not pushed.
+  - Step 7: the CLI, `reflux solve` and `reflux demo`, and the reports
+    (`flowsheet/report.v`, `table.v`, `docs/report-format.md`). D11 was
+    amended there: `--trace` prints when the solve ends, and a failure
+    writes its JSON too. `solve` now keeps the history on a failure outside
+    a loop.
+  - Step 8: `tools/gen_m4_dwsim.py`, DWSIM's units and reference flowsheet
+    (`testdata/m4_dwsim.json`), compared in `flowsheet/dwsim_test.v`; and
+    the golden flowsheets
+    (`tools/golden.vsh`, `flowsheet/golden_test.v`). Five deviations over
+    criterion 2's targets are each reproduced from DWSIM: its pump's
+    density, its mixing entropy in a two-phase expander, its rounded
+    constants.
+  - Next is step 9: the flowsheet benchmark against DWSIM (D14), then PH's
+    speed for 5 and 10 components, carried from M3.
   - The owner's own benchmark, for M8 and M9: a one-PFR methane steam
     reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
   - The roadmap puts M10a (thermo and the flash from Python) in parallel
@@ -139,6 +147,9 @@ v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) a
     `docs/flash-robustness.md`, 10,000 PT flashes (about three minutes,
     the build included; about twenty under tcc). Regenerate it after
     changing the flash or the sweep's checks.
+  - `v run tools/golden.vsh` writes the golden flowsheets' reports
+    (`testdata/flowsheets/golden/`). Run it only when a change is meant to
+    move the answers, and explain why in the commit.
 - **Reference fixtures** come from uv scripts whose headers pin their
   dependencies: `thermo` 0.6.1, `chemicals` 1.5.2, `mpmath` 1.3.0,
   `CoolProp` 8.0.0, and for `tools/gen_m4_graphs.py`, `networkx` 3.4.2 and
@@ -159,6 +170,12 @@ v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) a
   stops at Python 3.13, so pass the same interpreter as above.
   - `tools/gen_m3_dwsim.py` writes `testdata/m3_dwsim.json`. It imports
     `gen_m3_fixtures.py` for its `thermo` helpers.
+  - `tools/gen_m4_dwsim.py` writes `testdata/m4_dwsim.json`, DWSIM's
+    constants as component files, and `reference_dwsim.toml`. It imports
+    `gen_m3_dwsim.py`, and needs V on the PATH: it solves that file with
+    reflux for the open loop. About five minutes.
+  - thermo 0.6.1's flash at a vapour fraction strictly between 0 and 1
+    fails on a mixture (`dew` unbound): bisect on its PT flash instead.
   - `spike/dwsim/run.py` is M3 step 0's spike, and
     `spike/dwsim_flowsheet/run.py` M4 step 0's: DWSIM's flowsheets and
     recycle (`docs/spike-dwsim-flowsheet.md`).
@@ -170,6 +187,10 @@ v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) a
     `Calculated` and `ErrorMessage`. Its recycle needs its tolerances scaled
     by 1e-8 to close the balances, its pump uses a liquid density that
     isn't PR's, and its flash drum is wrong with two inlets.
+  - Its separator's `EnergyImb` is what goes in less what comes out, and its
+    wrong mixing entropy moves a two-phase isentropic outlet: 0.42 K in
+    step 8's expander. "What step 8 found" in
+    `docs/spike-dwsim-flowsheet.md` has the rest.
 
 ## Architecture
 

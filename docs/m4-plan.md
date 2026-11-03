@@ -9,7 +9,7 @@ first, then exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-10-29, with D9's composition bases added at
-the owner's question. Steps 0 to 7 are done, and step 8 is next.
+the owner's question. Steps 0 to 8 are done, and step 9 is next.
 
 ## Goal
 
@@ -817,11 +817,79 @@ flowchart LR
     846064.9999999999 by 0.1 gives the tie 84606.5, so it would print 846070.
     It's a test now.
 
-### 8. DWSIM references and golden flowsheets
-- `tools/gen_m4_dwsim.py` and its fixtures: unit by unit, and the
-  reference flowsheet (D12), on the conditions step 0 found ("What step 8
-  must do" in [spike-dwsim-flowsheet.md](spike-dwsim-flowsheet.md)).
-- The golden flowsheets (D13).
+### 8. DWSIM references and golden flowsheets — done
+- **[tools/gen_m4_dwsim.py](../tools/gen_m4_dwsim.py),** by hand with DWSIM
+  9.0.5, on the conditions step 0 found. Every unit's `Calculated` and
+  `ErrorMessage` and every stream are checked before a number is used. The
+  recycle's tolerances are scaled by 1e-8, with no acceleration. It writes:
+  - [testdata/m4_dwsim/components/](../testdata/m4_dwsim/components): DWSIM's
+    constants as reflux component files, with no formation data, so that H is
+    from the ideal gas at 298.15 K as DWSIM's is;
+  - [testdata/flowsheets/reference_dwsim.toml](../testdata/flowsheets/reference_dwsim.toml):
+    the reference flowsheet on them and DWSIM's kᵢⱼ, which `reflux solve` runs
+    as it is;
+  - [testdata/m4_dwsim.json](../testdata/m4_dwsim.json): 13 units alone, each
+    from a stated inlet, the reference flowsheet, and its open loop. For each
+    state, H by the exact PR with DWSIM's constants and by DWSIM's rounded one,
+    and the exact PR's own answers for the three units furthest from DWSIM.
+- **Within criterion 2's targets of DWSIM:** the mixer, splitter, valve,
+  compressor, both drums and the separator, and the heater by outlet T, duty
+  and ΔT. In the reference flowsheet every stream's T is within 0.01 K but the
+  recycle's, and its flows, β and compositions within 5e-5. Each deviation has a
+  bound that can't grow.
+- **Over the targets, five, each reproduced from something in DWSIM** (M3's
+  criterion 6, as amended), and reflux the exact model's:
+  - **The pump**, 42% low: DWSIM's work is F·v·ΔP/η with the v of its own
+    reported density, to 2e-5. reflux's is PR's v, the exact PR's to 1e-9.
+    Given DWSIM's work, reflux's energy balance puts the outlet within 1e-3 K
+    of DWSIM's.
+  - **The expander,** 2.6% and 0.42 K: its outlet is two phases, so DWSIM's
+    wrong ideal mixing entropy (M3), −R Σ xᵢ ln xᵢ · M/Mᵢ, no longer cancels. The
+    test checks the formula against DWSIM's own term as M3 measured it, then
+    follows reflux's isentropic path by DWSIM's S, and ends within 2.5e-3 K, β
+    1.4e-5 and work 5.7e-5 of DWSIM's expander. reflux's own is the exact PR's,
+    whose isentropic and actual outlets the generator finds by bisection.
+  - **The heater to a vapour fraction,** duty 1.3e-4: DWSIM's rounded constants.
+    Its duty is its states' H by the rounded PR, to its convergence (1e-6), and
+    reflux's outlet and duty are the exact PR's, to 1e-7 K and 1e-9.
+  - **The reference cooler,** 1.7e-4, and **the recycle**, 0.029 K: the pump. With
+    DWSIM's liquid volume in a pump of the test's own, every stream of reflux's
+    loop is within the targets of DWSIM's, the recycle to 1.7e-6 K, and the
+    cooler's duty is 3.3e-5 from DWSIM's and 2e-6 from the exact PR's at DWSIM's
+    states.
+- **The open loop** hands reflux's converged recycle back within 1.4e-5 in
+  flows and 0.029 K: the same differences as the closed loop, not the 8e-14 at
+  which DWSIM hands back its own. D12's fallback wasn't needed, since the closed
+  loop converges.
+- **The golden flowsheets (D13):** the reference, every unit type, a chain with
+  no recycle (with a drum given a duty, and one that finds no liquid), the two
+  interlocking loops, and a loop carrying pure propane at
+  saturation, whose torn stream T and P can't fix and H does (D6).
+  [tools/golden.vsh](../tools/golden.vsh) writes each one's report to
+  [testdata/flowsheets/golden/](../testdata/flowsheets/golden), and
+  [flowsheet/golden_test.v](../flowsheet/golden_test.v) solves each again to 1e-9
+  of each value's scale, with the same passes.
+- **Tests in [flowsheet/dwsim_test.v](../flowsheet/dwsim_test.v),** 8 functions:
+  the generated files are DWSIM's constants, every unit's bound and target,
+  each of the five reproductions, the reference flowsheet's bounds, and the
+  open loop.
+- **Found:**
+  - **DWSIM's separator's `EnergyImb` is what goes in less what comes out,**
+    the opposite of its other units' duties.
+  - **thermo 0.6.1's flash at a vapour fraction between 0 and 1 fails on a
+    mixture,** with `dew` used before it's set, so the generator bisects on its
+    PT flash's β.
+  - **Most of the reference cooler's 1.7e-4 is the pump,** not DWSIM's rounded
+    constants: the recycle comes back warmer.
+- **Both generators reproduce their output byte for byte.** The fixture keeps no
+  time: step 9 measures that.
+- **Planted mistakes:** step 8 adds tests, not code, so its 29 mistakes went into
+  the units and the solver, and only the golden and DWSIM tests ran against
+  them. 24 were caught at once, and 2 more after the flowsheet with no recycle
+  gained a drum with a duty and a knockout drum that finds no liquid. The 3 that
+  survive are for older tests: the mixer's estimate, which can't change an
+  answer, and Wegstein's bound and the hold at zero flow, which no golden loop
+  reaches and `solve_test.v` checks.
 
 ### 9. Speed
 - The flowsheet benchmark against DWSIM (D14). Then, measured before
