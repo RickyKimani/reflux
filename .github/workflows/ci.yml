@@ -14,6 +14,10 @@ jobs:
   check:
     name: ${{ matrix.os }} / ${{ matrix.cc }}
     runs-on: ${{ matrix.os }}
+    # A job takes 4 to 9 minutes. A race can hang a test rather than fail it
+    # (the registry without its lock did, in M10a step 1), and GitHub's own
+    # limit is six hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -92,3 +96,10 @@ jobs:
       - name: Python FFI spike
         if: matrix.cc == 'gcc'
         run: v run spike/python_ffi/spike.vsh -cc ${{ matrix.cc }}
+
+      # M10a: the C API (capi/) built into the Python package, whose tests
+      # (python/tests/) call it. gcc only, for the same reasons as the spike,
+      # whose scenarios move into these tests as their functions arrive.
+      - name: Python package
+        if: matrix.cc == 'gcc'
+        run: v run tools/python.vsh test

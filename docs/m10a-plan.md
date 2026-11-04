@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Step 1 is next.
+Status: **approved** on 2026-11-04. Step 1 is done, and step 2 is next.
 
 ## Goal
 
@@ -35,7 +35,9 @@ Flowsheets from Python are M10b. Wheels that bundle the library come later
 **What M1's spike settled** ([spike-python-ffi.md](spike-python-ffi.md)), and
 CI has run since on Windows and Linux:
 - V's runtime and its garbage collector work inside a Python process. Module
-  initialisation runs when the library loads, so there's no init call.
+  initialisation runs when the library loads, so there's no init call. (Not
+  quite: step 1 found that it runs on the first call, which mustn't race; see
+  D5.)
 - **Integers at the boundary must be `i32` or `i64`.** V's `int` is 64-bit
   and C's 32-bit; the first version wrote 8-byte statuses into a 4-byte array
   and corrupted the heap.
@@ -142,9 +144,9 @@ Python tests against the library in the gcc jobs, on Windows and Linux.
 |---|---|---|---|
 | D1 | Where it lives | A V module `capi` with the exported functions, the registry and the thread registration, and `capi/reflux.h`. A Python package in `python/` (`python/reflux/`, its `pyproject.toml` and `tests/`). `tools/python.vsh` builds the library into the package and runs the Python tests. The spike's scenarios move into those tests, and its code and CI step go; its write-up stays as the record, corrected on Windows threads. | One module owns the boundary, so nothing else in reflux needs `unsafe` or C types. The package beside it keeps the two in step. |
 | D2 | ABI conventions | Every function is `reflux_*`, takes `i32`, `i64`, `f64` and pointers only, and returns an `i32`: 0, or a negative code for a failure of the whole call (a bad handle, wrong sizes, a lookup that fails), whose message it writes into a buffer the caller passes (pointer and length). Outputs go into arrays the caller allocated. No V memory crosses the boundary, only handles. | The caller owns every byte it sees, so nothing needs freeing on the Python side, and a message needs no shared state between threads. |
-| D3 | Exports | Only the header's functions: on Linux by `-fvisibility=hidden`, since V marks its exports visible; on Windows by a `.def` file generated from the header. A test compares the symbol table with the header on both OSes. | Not the collector's internals, which gcc exports today on Windows, and one list of truth. |
+| D3 | Exports | Only the header's functions: on Linux by `-fvisibility=hidden`, since V marks its exports visible; on Windows by a `.def` file generated from the header. A test compares the symbol table with the header on both OSes. **Amended in step 1:** on Linux by a linker version script, not `-fvisibility=hidden`, which can't hide the collector's symbols: they come from an object V compiled before (V's own macOS code says as much). And on Windows the header is compiled with the module, so the C compiler checks every declaration against the code. | Not the collector's internals, which gcc exports today on Windows, and one list of truth. |
 | D4 | Handles | An `i64` id into a registry: a map from id to fluid (or database) behind a `sync.Mutex`, ids from a counter that never repeats. `reflux_free(id)` drops one. In Python each handle belongs to an object with `close()`, a context manager and a `weakref.finalize`. | The collector can't see Python's references (the spike). A fresh id per object turns a stale or doubly freed handle into an error, not a crash. |
-| D5 | Threads | Every exported function registers the calling thread with the collector for the length of the call, on every OS (the spike's `gc_threads.h`). Concurrent calls are allowed; the registry's lock is the only shared state. | The probes: needed on Windows too, and correct under load. Their speed isn't M10a's target. |
+| D5 | Threads | Every exported function registers the calling thread with the collector for the length of the call, on every OS (the spike's `gc_threads.h`). Concurrent calls are allowed; the registry's lock is the only shared state. **Amended in step 1:** V starts a shared library on its first call, not when it loads, behind a flag that isn't thread-safe, so the first call mustn't race. The package makes it at import, which Python's import lock serialises, and `reflux.h` tells other callers to make one call from one thread first. | The probes: needed on Windows too, and correct under load. Their speed isn't M10a's target. |
 | D6 | Vectorised results | Arrays of N points, C-contiguous `float64` (and `int32` for statuses), shaped for two phases: β, T, P, the number of phases, each phase's label, fraction, composition (N × 2 × c), molar V, H and S, and the whole's H, S and V. An absent phase is NaN. M6's third phase will be a new ABI version. | One layout for every flash, which is what a plot or a DataFrame wants. Two phases is all M3's flash returns. |
 | D7 | Statuses | Per point, an `int32`: 0 for an answer, a stable number for each `FlashError` kind, and one for bad input. Python maps them to an `IntEnum`. A point's reason in words comes from the single-point form of the same call, which writes the message into the caller's buffer. | Numbers fill an array cheaply; words for every point would cost a string each. |
 | D8 | The Python API | `reflux.Database()` (or a data directory), `db.fluid('PR', ['methane', 'n-butane'], alpha=..., kij=...)`, then on the fluid `props`, `psat`, `stability`, `flash_pt`, `flash_ph`, `flash_ps`, `flash_tv`, `flash_uv`, `flash_tvf`, `flash_pvf`, `bubble_t`, `bubble_p`, `dew_t` and `dew_p`, each taking arrays or scalars. A flash returns a `FlashResult` of arrays with a `status` array and `ok` mask. SI throughout, as the V API. Python 3.11 or later, NumPy 2. | The V API's names and units, so that the V docs and design notes serve Python too. |
@@ -174,15 +176,150 @@ flowchart LR
 Each step from 2 on adds C functions with their V tests, their Python wrappers
 and their Python tests together.
 
-### 1. The library skeleton
-- `capi` with the registry (D4), thread registration (D5), the error buffer
-  (D2), `reflux_abi_version` and `reflux_free`; `capi/reflux.h`.
-- Exports restricted on both OSes, and the test that compares them with the
-  header (D3).
-- `tools/python.vsh build` and `test`, the package's skeleton, and the spike's
-  scenarios as its first tests. The CI step moves from the spike to them.
-- The spike's write-up corrected: Windows has thread support, and needs the
-  registration.
+### 1. The library skeleton — done
+- **The C API,** in [capi/](../capi/):
+  - [reflux.h](../capi/reflux.h) declares four functions:
+    - `reflux_abi_version`, which returns 1;
+    - `reflux_version`;
+    - `reflux_free`;
+    - `reflux_collect`: a full collection, and the heap's size, for step 6's
+      memory test.
+  - A call returns `REFLUX_OK` (0), `REFLUX_BAD_ARGUMENT` (−1) or
+    `REFLUX_BAD_HANDLE` (−2), with the reason in the caller's buffer.
+  - [capi.v](../capi/capi.v) has the exported functions. Each registers its
+    thread with the collector for the call (D5), through the spike's helper,
+    now [gc_threads.h](../capi/gc_threads.h).
+  - A reason is cut to fit the caller's buffer at the start of a character, so
+    it stays valid UTF-8, and it always ends in a NUL. A nil buffer, or one of
+    no length, gets nothing, and the call returns its code all the same.
+  - [registry.v](../capi/registry.v) is the registry of handles (D4):
+    - a map from id to item behind a `sync.Mutex`, with ids from a counter;
+    - an id freed twice is "freed already", and one never given out "not a
+      handle";
+    - it's empty until step 2 puts databases and fluids in it.
+  - On Windows the header is compiled with the module, so the C compiler checks
+    each declaration against its function. A probe header with an `int32_t` id
+    failed the build with "conflicting types". This can't be done on Linux
+    (D3, as amended): there `int64_t` is `long` and V's `i64` is `long long`,
+    so the same declarations would conflict.
+- **Exports:** [tools/python.vsh](../tools/python.vsh) reads the header's
+  declarations and gives the linker a `.def` file on Windows, or a version
+  script on Linux.
+  - Without it the DLL exported about 800 symbols; with it, the four.
+  - On Linux, `-fvisibility=hidden` wouldn't have done (D3, amended). The
+    collector's symbols come from an object V compiled earlier, which the flag
+    can't reach.
+  - Linux is checked only in CI, since this machine has no WSL.
+- **Building and testing:** `tools/python.vsh build` puts the library in
+  `python/reflux/_lib/`, built with gcc, with `-static-libgcc` on Windows.
+  - The build is `-prod` by default (about 40 s here), or `-debug` for a quicker
+    one.
+  - `test` builds the library, then runs the package's tests with uv, pytest
+    9.2.0 and NumPy 2.5.4 pinned. `--python` names the interpreter.
+- **The package,** in [python/](../python/): `pyproject.toml`, `reflux/_native.py`
+  and `reflux/__init__.py`.
+  - `_native.py` loads the library (or `$REFLUX_LIB`) and declares each function
+    with fixed-width ctypes.
+  - It makes the first call, checks the ABI version, and maps the codes to
+    `RefluxError`, `BadArgument` and `BadHandle`.
+  - `reflux` itself gives `abi_version()`, `version()`, `collect()` and
+    `__version__`.
+  - Installing it (a `[build-system]`, and the test that installs) is step 2's,
+    with D9's data.
+- **The first call mustn't race** (D5, amended). The spike said V's runtime
+  starts when the library loads. In fact it starts on the first call:
+  - each exported function's wrapper calls `_vno_main_init_caller()`;
+  - that runs `_vinit`, which starts the collector and calls
+    `GC_allow_register_threads()`, once, behind a plain `static bool`;
+  - the flag is set before `_vinit` runs, so a second thread goes straight on
+    while the first is still starting the runtime;
+  - eight Python threads making their first calls at once aborted in Boehm:
+    "Threads explicit registering is not previously enabled".
+  - So `_native` makes the first call at import, which Python's import lock
+    serialises, and `reflux.h` tells any other caller to make one call from
+    one thread first.
+  - One thread's first call is fine, even from a thread that then ends: three
+    runs, and a test.
+- **CI:** the gcc jobs run `tools/python.vsh test` on both OSes.
+  - The spike's step stays for now, because only its thread scenario has moved
+    (into `test_threads.py`). The rest need later steps' functions:
+    - its handle scenarios, step 2's fluids;
+    - its zero-copy, vectorised and `thermo` scenarios, step 3's properties;
+    - its collector stress, step 6;
+    - its per-call cost, step 7.
+  - Each job now stops after 30 minutes. It took 4 to 9, but a race can hang a
+    test rather than fail it (planted mistakes, below), and GitHub's own limit
+    is six hours.
+- **Tests:**
+  - [capi/capi_test.v](../capi/capi_test.v), 6, under tcc and gcc:
+    - the header against the code: its defines against the consts, and its
+      declarations against the `@[export]` names;
+    - the version is v.mod's;
+    - a reason cut to fit at a character, at every length, with guard bytes;
+    - a handle freed, then freed again, the last one given out among them, and
+      ids that were never handles;
+    - 20 rounds of 8 threads adding, reading and removing at once, each round
+      on a map that starts empty;
+    - `reflux_collect`.
+  - [python/tests/](../python/tests/), 10, with each scenario that could crash
+    run in a process of its own (D11):
+    - the versions agree: the ABI's in Python, the library and the header, and
+      the package's in v.mod and `pyproject.toml`;
+    - a library of another ABI version is refused;
+    - the codes are the header's;
+    - the library exports exactly the header's functions;
+    - a reason cut to fit at every length, without writing past the buffer;
+    - ids that aren't handles, at both ends of `i64`;
+    - the version needs room for its NUL;
+    - `collect`;
+    - 8 threads making 200 calls each at once, with collections;
+    - the import from a thread that ends.
+- **Found:**
+  - The spike's write-up was wrong twice about Windows. V 0.5.2's collector has
+    thread support there, so a Python thread must be registered, and V starts
+    the library on its first call. [spike-python-ffi.md](spike-python-ffi.md)
+    is corrected.
+  - In V, inside `or {}`, `err` is the error even where a parameter is called
+    `err`.
+  - `@[has_globals]` allows `__global` only in the file it heads.
+  - `v fmt -w` rewrote a file that didn't parse, dropping lines.
+  - A V map read without its lock goes wrong only while another thread's
+    write resizes it, so a test must make it grow (planted mistakes, below).
+  - These are in [v-for-go.md](v-for-go.md), §1, §4, §11 and §12.
+- **Planted mistakes:** 36, in a scratch copy of `capi/`, `python/` and
+  `tools/python.vsh`. 31 were caught at once.
+  - Two of those were caught by a hang, not a failure:
+    - `add` without its lock: with 8 threads writing the map at once, the V
+      test never ended;
+    - a thread never unregistered: once Python threads had ended while still
+      registered, the Python tests never ended.
+    - Hence the CI jobs' timeout. The mutation script's own timeout killed `v`
+      but not the test program `v` had started. That program kept the pipes
+      open, so the run waited two hours on the first hang. The script now kills
+      the whole tree.
+  - Four survivors got tests:
+    - `get` without its lock: reads in the threads, between the writes. At
+      first that failed only some runs: 11 of 30 under gcc `-prod`, 18 of 30
+      under tcc. It failed in the first round alone, since a read goes wrong
+      only while a write resizes the map.
+    - So the test runs 20 rounds, each on a map that starts empty. The mistake
+      then failed 30 runs of 30 under both compilers, and the code as it is
+      passed 30 of 30.
+    - The "freed already" bound one short: freeing the last handle given out,
+      twice.
+    - No ABI check, and no first call, which skipped the check along with the
+      call: a library of another ABI version is refused.
+  - One is equivalent: dropping `-static-libgcc`.
+    - With `-shared`, gcc links `-lgcc_s` before `-lgcc` (its specs). So a DLL
+      imports `libgcc_s_seh-1.dll` only if it calls one of libgcc's helpers.
+    - Neither `capi` nor the spike's library does with gcc 16.2, with `-g` or
+      `-prod`. M1's spike did.
+    - The flag stays for later steps' code. Should the DLL ever need that DLL,
+      every Python test fails at import, since Python doesn't search PATH for a
+      DLL's dependencies.
+  - Planted again with the new tests, the four survivors were caught, and so
+    were the registry's other five: 35 of 36, all but the equivalent one.
+    `add` without its lock now fails rather than hangs.
 
 ### 2. The database, fluids and data
 - Opening a database on a directory, lookup with suggestions, and a fluid

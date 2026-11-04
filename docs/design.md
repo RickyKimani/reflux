@@ -1066,6 +1066,32 @@ multiply by 10^(n−1−e), which isn't: 846064.9999999999 × 0.1 rounds to the
 tie 84606.5, and up, where the quotient by 10 is below it. A log₁₀ that rounds
 up just short of a power of ten needs nothing: m rounds up to 10ⁿ⁻¹ with it.
 
+## The C API
+
+M10a's library ([capi/](../capi), declared by
+[capi/reflux.h](../capi/reflux.h)) is the one place reflux meets another
+language, so its conventions are the same for every function (M10a's D2):
+
+- **A result code,** 0 or negative for a failure of the whole call, with the
+  reason written into a buffer the caller passes, NUL-terminated and cut at
+  the start of a UTF-8 character. A per-point status comes in step 4.
+- **Fixed widths:** `int32_t`, `int64_t`, `double` and pointers. Every array is
+  allocated by the caller, so no memory of V's reaches it but handles.
+- **Handles** are `int64_t` ids into a registry, a map behind a lock, from a
+  counter that never repeats. An id at or below the counter that the map
+  lacks was freed; any other isn't a handle. The registry is also what keeps
+  an object alive: the collector can't see the caller's references.
+- **Threads:** every function registers the calling thread with the collector
+  for the length of the call, and unregisters it after, so a thread the
+  collector never knew (Python's) can allocate and collect. The library
+  starts itself on its first call, which mustn't race, so one call comes
+  first, from one thread: the Python package makes it at import.
+- **Exports** are exactly the header's functions: a `.def` file on Windows and
+  a linker version script on Linux, both written from the header by
+  [tools/python.vsh](../tools/python.vsh). On Windows the header is compiled
+  with the module, so a declaration that disagrees with the code fails the
+  build.
+
 ## How equation-oriented solving will fit
 
 M13 solves a whole flowsheet's equations at once, by sparse Newton (roadmap

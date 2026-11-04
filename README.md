@@ -148,13 +148,20 @@ benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     flowsheet (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
+capi/               the C API (M10a): reflux.h, and the functions it declares,
+  capi.v            each registering its thread with the collector
+  registry.v        handles: ids into a registry behind a lock
+  gc_threads.h      registering a thread the collector doesn't know
+python/             the Python package over the C API (M10a): reflux/, with
+                    the library built into reflux/_lib/, and tests/
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m3_dwsim.py, gen_m4_dwsim.py, gen_m3_bench.py and
                     gen_m4_bench.py (DWSIM 9's answers and timings, by hand on
                     Windows), golden.vsh (the golden flowsheets' results),
-                    release.vsh (the release gate), import_chemsep.vsh,
+                    release.vsh (the release gate), python.vsh (the C API's
+                    library, and the Python tests), import_chemsep.vsh,
                     data_quality.vsh, flash_sweep.vsh and benchmarks.vsh
                     (generated data and reports), bench_case.v (reflux's side
                     of the benchmarks)

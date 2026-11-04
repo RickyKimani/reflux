@@ -46,13 +46,19 @@ Keep this section current: update it whenever a step is committed.
   `m10a-python`. Its plan, `docs/m10a-plan.md`, was approved on 2026-11-04:
   exit criteria 1–11, decisions D1–D14 and steps 1–10, ending in v0.2.0.
   - Its probes found that V 0.5.2's collector has thread support on Windows
-    too, so the spike's thread registration is needed on both OSes (the
-    spike's write-up says otherwise, and step 1 corrects it). 8 Python threads
-    at once get the serial answers bit for bit, at about 2× the serial rate.
-  - D9 changes `components`: the kᵢⱼ banks and `mc-PR.lib` load from the
-    source tree whatever `REFLUX_DATA` says, and must follow the data root.
-  - Next is step 1: the library skeleton (`capi`, `capi/reflux.h`, the
-    registry, thread registration, restricted exports, `tools/python.vsh`).
+    too, so the spike's thread registration is needed on both OSes. 8 Python
+    threads at once get the serial answers bit for bit, at about 2× the serial
+    rate.
+  - **Step 1 is done:** the library skeleton (`capi`, `capi/reflux.h`, the
+    registry, thread registration, exports restricted to the header's,
+    `tools/python.vsh`, the package's skeleton). It amended D3 (a version
+    script on Linux) and D5 (V starts the library on its first call, which
+    mustn't race, so the package makes it at import).
+  - The spike's CI step stays until its scenarios have homes: handles in
+    step 2, properties in 3, the collector in 6, the call's cost in 7.
+  - Next is step 2: the database, fluids and data. D9 changes `components`:
+    the kᵢⱼ banks and `mc-PR.lib` load from the source tree whatever
+    `REFLUX_DATA` says, and must follow the data root.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -90,6 +96,7 @@ v -W -stats test flash/pt_test.v # per-test results, and println output from pas
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
+v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
 ```
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,
@@ -103,8 +110,12 @@ v run tools/release.vsh          # the release gate: why this commit can't be ta
   slower. Run the gcc check in the background, and don't edit or regenerate
   anything it compiles or reads until it finishes.
 - **CI** (`.github/workflows/ci.yml`) runs `check.vsh` on Ubuntu and Windows
-  with both tcc and gcc. The gcc jobs also run the Python FFI spike. V is
-  pinned to the commit in `.v-version` (0.5.2, eab77e7).
+  with both tcc and gcc. The gcc jobs also run the Python FFI spike and
+  `tools/python.vsh test`. V is pinned to the commit in `.v-version`
+  (0.5.2, eab77e7).
+- **The Python tests** need the library, which only gcc can build, so
+  `check.vsh` doesn't run them: `v run tools/python.vsh test`. Here uv needs
+  the interpreter named, as below: `--python <path>`.
 - **Generated data:**
   - `v run tools/import_chemsep.vsh` regenerates `data/components/` from the
     vendored ChemSep XML. A test fails if it's stale.
@@ -171,7 +182,9 @@ v run tools/release.vsh          # the release gate: why this commit can't be ta
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
 `components`. `quantity`, units of measure (M4), depends on nothing, and
-so does `release`, the release gate's logic.
+so does `release`, the release gate's logic. `capi` (M10a) is the C API
+over the rest, built into a shared library for the Python package in
+`python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
 `components` and `flash`. `flowsheet` (M4) uses `flash`, `thermo` and
 `numeric`, and its tests use `components`.
@@ -247,6 +260,12 @@ so does `release`, the release gate's logic.
     struct, and its stream table rounds by `math.round`, never printf.
     `main.v` is the command line over it, tested in process by
     `main_test.v`.
+- **`capi`** is M10a's, in progress: the functions `capi/reflux.h` declares,
+  and nothing else is exported. Each returns 0 or a negative code with its
+  reason in the caller's buffer, takes `i32`, `i64`, `f64` and pointers only,
+  and registers its thread with the collector for the call. Handles are ids
+  into a registry behind a lock, never reused. The library starts on its
+  first call, which mustn't race, so the Python package makes it at import.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
@@ -332,3 +351,13 @@ or a test:
 - **A `!` in a test function that doesn't return a Result** can turn a typed
   error into a `V panic` with no FAIL line, so a panic in a test's output
   isn't always a panic in the code.
+- **Inside `or {}`, `err` is the error,** even where a parameter is called
+  `err`: name a C buffer parameter `buf`.
+- **`v fmt -w` rewrites a file that doesn't parse,** and can drop lines.
+  Compile first; mind an apostrophe in a single-quoted string.
+- **`@[has_globals]`** allows `__global` in the file it heads, not its whole
+  module.
+- **A V shared library starts on its first call,** from whichever thread,
+  behind a flag that isn't thread-safe: one call must come first, from one
+  thread. A Python thread must be registered with the collector on Windows
+  as on Linux (`capi/gc_threads.h`).

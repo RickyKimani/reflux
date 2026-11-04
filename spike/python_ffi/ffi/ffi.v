@@ -31,21 +31,22 @@ __global pinned_models = []voidptr{}
 // V's Windows build. #flag and #include pull a C header into a V module,
 // and @VEXEROOT is V's install directory, where the collector's headers are.
 #flag -I @VEXEROOT/thirdparty/libgc/include
-#flag -I @VMODROOT/spike/python_ffi/ffi
+// The header now lives in capi/ (M10a), until M10a retires this spike.
+#flag -I @VMODROOT/capi
 #include "gc_threads.h"
 
-fn C.reflux_enter() int
-fn C.reflux_leave(registered int)
+fn C.capi_gc_enter() int
+fn C.capi_gc_leave(registered int)
 
 // enter registers the calling thread if the collector doesn't know it, and
 // says whether it did. Every exported function calls it first and undoes
 // it on return.
 fn enter() int {
-	return C.reflux_enter()
+	return C.capi_gc_enter()
 }
 
 fn leave(registered int) {
-	C.reflux_leave(registered)
+	C.capi_gc_leave(registered)
 }
 
 fn pure_pr(tc f64, pc f64, omega f64) !thermo.Cubic {

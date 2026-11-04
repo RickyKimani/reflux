@@ -20,3 +20,8 @@
 # Editors
 .vscode/
 .idea/
+
+# Python
+__pycache__/
+.pytest_cache/
+*.egg-info/

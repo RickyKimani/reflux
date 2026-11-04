@@ -70,17 +70,25 @@ v run spike/python_ffi/spike.vsh -cc tcc    # shows what tcc does
    (`GC_THREADS`), so the collector has to know every thread that runs V
    code, and Python's threads are strangers to it. Each exported function
    now registers the calling thread for the length of the call and
-   unregisters it afterwards ([gc_threads.h](../spike/python_ffi/ffi/gc_threads.h)).
-   The helper is C because thread support is a preprocessor question: V's
-   Windows build has none, so there it does nothing, and the Windows test
-   passed without it.
+   unregisters it afterwards (the helper is now
+   [capi/gc_threads.h](../capi/gc_threads.h)). The helper is C because
+   thread support is a preprocessor question.
+   **Corrected in M10a:** this said that V's Windows build has no thread
+   support, so that the helper did nothing there. It has: V 0.5.2 builds the
+   collector with `GC_THREADS` and `GC_WIN32_THREADS` on Windows too, and
+   without the registration, 8 Python threads calling in crash with the same
+   "Collecting from unknown thread". The helper worked on Windows all along,
+   since it tests `GC_THREADS` ([m10a-plan.md](m10a-plan.md)).
 7. **tcc can't build a loadable Linux `.so` either.** It doesn't mark the
    library's stack as non-executable, and current glibc refuses to load
    it: "cannot enable executable stack as shared object requires". With
    finding 2, shared libraries need gcc (or clang) on every platform.
 
 What works without any help:
-- **Initialisation:** V's module initialisation runs when the DLL loads, so
+- **Initialisation:** **corrected in M10a:** V's module initialisation runs
+  on the library's first call, not when it loads. Each exported function
+  starts it, once, and two threads making the first calls at once race
+  ([v-for-go.md](v-for-go.md), §11). Either way
   there's no explicit init call.
 - **The garbage collector:** it runs normally inside the Python process, and
   its heap levels off rather than growing with the number of calls.
@@ -101,7 +109,8 @@ What works without any help:
   registry needs `-enable-globals`, or a registry struct reached from a
   single global.)
 - **Register the calling thread** with the collector at every entry point,
-  as `gc_threads.h` does, so Python threads work on Linux.
+  as `gc_threads.h` does, so Python threads work: on Linux, and (M10a
+  found) on Windows too.
 - **Build shared libraries with gcc or clang only**, never tcc.
 - **No panics reachable from the API.** Every failure becomes a status code.
   `thermo` already panics only on internal bugs (`CubicKind.consts`); the
@@ -133,7 +142,9 @@ spike isn't tied to one Python version.
   which is what the collector requires. But nothing yet tests two threads
   allocating at the same moment, or `thermo` being safe to call
   concurrently (it has no shared mutable state, so it should be). That test
-  belongs at the start of M10a.
+  belongs at the start of M10a. **Done in M10a's plan:** 8 Python threads
+  at once got the serial answers bit for bit, at about twice the serial rate
+  ([m10a-plan.md](m10a-plan.md)).
 - **A note from V master.** Some builds print "diagnostic replay for
   compiler_error produced no output". They still exit 0 and the library
   works, so it looks like noise from V's new compiler diagnostics, not a
