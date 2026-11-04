@@ -50,6 +50,43 @@
 #define REFLUX_ALPHA_EQUATION 0        /* the equation's own: Soave's, for SRK and PR */
 #define REFLUX_ALPHA_MATHIAS_COPEMAN 1 /* ChemSep's Mathias–Copeman constants, for PR */
 
+/* A point's status, in a status array: 0 for an answer, or why there's none.
+   A point without an answer has NaN for every value. */
+#define REFLUX_POINT_OK 0
+#define REFLUX_POINT_BAD_INPUT 1        /* a value it can't use: see the call */
+#define REFLUX_POINT_NO_CONVERGENCE 2   /* an iteration ran out of steps */
+#define REFLUX_POINT_NO_VOLUME_ROOT 3   /* no volume root at a state it needed */
+#define REFLUX_POINT_MORE_PHASES 4      /* a flash's phase is itself unstable */
+#define REFLUX_POINT_PHASES_SWAPPED 5   /* a vapour-fraction flash's phases swapped */
+#define REFLUX_POINT_OUTSIDE_ENVELOPE 6 /* no such point on the phase envelope */
+#define REFLUX_POINT_SUPERCRITICAL 7    /* at or above Tc: no vapour pressure */
+#define REFLUX_POINT_NOT_FINITE 8       /* an answer that isn't finite: beyond the model */
+
+/* A phase's label, by its phase identification parameter. */
+#define REFLUX_NO_PHASE (-1)
+#define REFLUX_LIQUID 0
+#define REFLUX_VAPOR 1
+
+/* Volume roots, for reflux_props. Where there's one root, it's that one. */
+#define REFLUX_ROOT_LIQUID 0 /* the smallest volume */
+#define REFLUX_ROOT_VAPOR 1  /* the largest */
+#define REFLUX_ROOT_STABLE 2 /* the one with the lower Gibbs energy */
+
+/* reflux_props' properties, per mole of the phase: out[k * n + i] is property
+   k at point i. */
+#define REFLUX_PROP_Z 0      /* compressibility factor, PV/(nRT) */
+#define REFLUX_PROP_V 1      /* molar volume, m3/mol */
+#define REFLUX_PROP_H 2      /* enthalpy, J/mol */
+#define REFLUX_PROP_S 3      /* entropy, J/(mol K) */
+#define REFLUX_PROP_G 4      /* Gibbs energy, J/mol */
+#define REFLUX_PROP_U 5      /* internal energy, J/mol */
+#define REFLUX_PROP_A 6      /* Helmholtz energy, J/mol */
+#define REFLUX_PROP_CP 7     /* isobaric heat capacity, J/(mol K) */
+#define REFLUX_PROP_CV 8     /* isochoric heat capacity, J/(mol K) */
+#define REFLUX_PROP_W 9      /* speed of sound, m/s */
+#define REFLUX_PROP_MU_JT 10 /* Joule-Thomson coefficient, K/Pa */
+#define REFLUX_PROPS 11      /* how many there are */
+
 /* reflux_abi_version returns REFLUX_ABI_VERSION, for a caller to check before
    it calls anything else. */
 int32_t reflux_abi_version(void);
@@ -111,11 +148,47 @@ int32_t reflux_fluid_new(int64_t db, int32_t equation, char **names, int32_t nc,
 
 /* reflux_fluid_setup writes how a fluid was built, as TOML: the equation, the
    kij bank's file, then each compound's CAS number, name, Tc (K), Pc (Pa),
-   acentric factor, molar mass (kg/mol) and alpha function, then each pair
-   i < j's kij and where it came from: "file" (with its line and comment, and
-   the lines of any listings not used), "override" or "missing". Floats are
-   written so that they read back exactly. */
+   acentric factor, molar mass (kg/mol), dhf and s0 (its ideal gas's ΔHf in
+   J/mol and S° in J/(mol K), at 298.15 K and 1 bar, where it has them) and
+   alpha function, then each pair i < j's kij and where it came from: "file"
+   (with its line and comment, and the lines of any listings not used),
+   "override" or "missing". Floats are written so that they read back
+   exactly. */
 int32_t reflux_fluid_setup(int64_t fluid, char *buf, int32_t len, int32_t *needed, char *err,
                            int32_t err_len);
+
+/* ---- Many points at once ----
+
+   The functions below evaluate n points in one call, n >= 0. An input of
+   per-point values has 1 entry, used for every point, or n. Each point gets
+   a status (REFLUX_POINT_*), and a point that fails leaves the others as
+   they would be alone. err gets the first failed point's reason, or "" if
+   none failed, so the reason for one point is the same call made for it
+   alone. A call fails as a whole only for a bad handle or an argument it
+   can't use: a NULL array, a count other than 1 or n, an unknown root. */
+
+/* reflux_props evaluates one phase of the fluid at n points (T in K, P in
+   Pa, and the mole amounts z, nc per point, normalised by their sum), taking
+   the volume root asked for (REFLUX_ROOT_*). It writes the REFLUX_PROPS
+   properties to out (REFLUX_PROPS * n values: see REFLUX_PROP_*), ln phi to
+   ln_phi (n * nc), the phase's label to phase (n), and each point's status
+   to status (n). A point's T or P must be finite and above zero, and its z
+   finite, non-negative and not all zero: anything else is
+   REFLUX_POINT_BAD_INPUT. H, S, G, U and A are on the ideal gas's formation
+   basis (ΔHf and S° at 298.15 K and 1 bar), which needs every compound's
+   ΔHf and S°: see reflux_fluid_setup. */
+int32_t reflux_props(int64_t fluid, int32_t root, int64_t n, double *t, int64_t t_len, double *p,
+                     int64_t p_len, double *z, int64_t z_rows, double *out, double *ln_phi,
+                     int32_t *phase, int32_t *status, char *err, int32_t err_len);
+
+/* reflux_psat writes one compound's vapour pressure, in Pa, at n
+   temperatures, in K: out[i] at t[i], with its status in status[i]. The
+   compound is the fluid's component'th, counting from 0, and its vapour
+   pressure is the fluid's equation and alpha for it alone, where its liquid
+   and vapour fugacities are equal. A temperature at or above its Tc is
+   REFLUX_POINT_SUPERCRITICAL, and one that isn't finite and above zero
+   REFLUX_POINT_BAD_INPUT. */
+int32_t reflux_psat(int64_t fluid, int32_t component, int64_t n, double *t, double *out,
+                    int32_t *status, char *err, int32_t err_len);
 
 #endif

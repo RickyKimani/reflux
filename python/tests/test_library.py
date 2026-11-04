@@ -44,9 +44,25 @@ def test_a_library_of_another_abi_is_refused(monkeypatch):
 
 
 def test_the_codes_are_the_headers():
-    d = header_defines()
-    assert (d["OK"], d["BAD_ARGUMENT"], d["BAD_HANDLE"]) == (_native.OK, _native.BAD_ARGUMENT,
-                                                             _native.BAD_HANDLE)
+    # Every number the package uses is the header's, and every one of the
+    # header's has its place in the package.
+    want = {"ABI_VERSION": _native.ABI_VERSION}
+    for name in ("OK", "BAD_ARGUMENT", "BAD_HANDLE", "NOT_FOUND", "DATA_ERROR", "TOO_SMALL"):
+        want[name] = getattr(_native, name)
+    for name, code in _native.EQUATIONS.items():
+        want[name] = code
+    for name, code in _native.ALPHAS.items():
+        want[f"ALPHA_{name.upper()}"] = code
+    for status in reflux.Status:
+        want[f"POINT_{status.name}"] = status.value
+    for phase in reflux.Phase:
+        want["NO_PHASE" if phase.name == "NONE" else phase.name] = phase.value
+    for name, code in _native.ROOTS.items():
+        want[f"ROOT_{name.upper()}"] = code
+    for k, name in enumerate(_native.PROPS):
+        want[f"PROP_{name.upper()}"] = k
+    want["PROPS"] = len(_native.PROPS)
+    assert header_defines() == want
 
 
 def test_the_library_exports_exactly_the_header():

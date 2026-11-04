@@ -25,7 +25,15 @@ TOO_SMALL = -5
 EQUATIONS = {"VDW": 0, "RK": 1, "SRK": 2, "PR": 3}
 ALPHAS = {"equation": 0, "mathias_copeman": 1}
 
+# Volume roots, for reflux_props.
+ROOTS = {"liquid": 0, "vapor": 1, "stable": 2}
+
+# reflux_props' properties, in the order it writes them (REFLUX_PROP_*).
+PROPS = ("z", "v", "h", "s", "g", "u", "a", "cp", "cv", "w", "mu_jt")
+
 _i32, _i64, _f64 = ctypes.c_int32, ctypes.c_int64, ctypes.c_double
+_doubles = ctypes.POINTER(_f64)
+_ints = ctypes.POINTER(_i32)
 _text = ctypes.c_char_p
 _texts = ctypes.POINTER(ctypes.c_char_p)
 _out = [_text, _i32, ctypes.POINTER(_i32)]  # text out: buf, len, needed
@@ -44,6 +52,9 @@ FUNCTIONS = {
     "reflux_fluid_new": (_i32, [_i64, _i32, _texts, _i32, _i32, _i32, _texts, _texts,
                                 ctypes.POINTER(_f64), _i32, ctypes.POINTER(_i64), *_err]),
     "reflux_fluid_setup": (_i32, [_i64, *_out, *_err]),
+    "reflux_props": (_i32, [_i64, _i32, _i64, _doubles, _i64, _doubles, _i64, _doubles, _i64,
+                            _doubles, _doubles, _ints, _ints, *_err]),
+    "reflux_psat": (_i32, [_i64, _i32, _i64, _doubles, _doubles, _ints, *_err]),
 }
 
 # Room for a reason. A longer one is cut at a character boundary.

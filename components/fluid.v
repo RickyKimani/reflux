@@ -110,8 +110,9 @@ pub fn (db Database) setup(kind thermo.CubicKind, names []string, opts FluidOpti
 
 // to_toml writes how the fluid was built, for a caller to read back (the C
 // API's reflux_fluid_setup): the equation and the kᵢⱼ bank; each component's
-// CAS number, name, Tc (K), Pc (Pa), ω, molar mass (kg/mol) and α; and each
-// pair i < j's kᵢⱼ with where it came from. Floats are V's shortest
+// CAS number, name, Tc (K), Pc (Pa), ω, molar mass (kg/mol), ΔH°f (J/mol)
+// and S° (J/(mol·K)) where it has them, and α; and each pair i < j's kᵢⱼ with
+// where it came from. Floats are V's shortest
 // round-trip form, so they read back exactly.
 pub fn (s Setup) to_toml() !string {
 	mut out := ['equation = ${quote(equation_name(s.kind))!}', 'kij_bank = ${quote(s.kij.bank)!}']
@@ -126,6 +127,13 @@ pub fn (s Setup) to_toml() !string {
 		out << 'pc = ${float(c.pc)!}'
 		out << 'omega = ${float(c.omega)!}'
 		out << 'mw = ${float(c.mw)!}'
+		ig := s.fluid.ideal[i]
+		if dhf := ig.dhf {
+			out << 'dhf = ${float(dhf)!}'
+		}
+		if s0 := ig.s0 {
+			out << 's0 = ${float(s0)!}'
+		}
 		out << 'alpha = ${quote(s.alphas[i])!}'
 	}
 	for p in s.kij.pairs {

@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 and 2 are done, and step 3 is
+Status: **approved** on 2026-11-04. Steps 1 to 3 are done, and step 4 is
 next.
 
 ## Goal
@@ -448,11 +448,132 @@ and their Python tests together.
   - The catches came from the module's own tests: `components` caught its 18,
     the flowsheet file test its one, `capi`'s V tests their 17, and the Python
     tests the package's 13.
+  - **Corrected in step 3:** three of these didn't compile, so no test had
+    caught them. Two left an import unused and one left a `mut` never
+    changed, each an error under `-W`, and the script counted the failed
+    build as caught. Rewritten to compile and rerun with the rest in step 3,
+    all 49 were caught.
 
-### 3. Properties and vapour pressure
-- Vectorised properties of a phase at (T, P, z), by root (liquid, vapour or
-  stable): Z, V, H, S, G, U, A, Cp, Cv, the speed of sound, μ_JT and ln φ.
-- Pure components' Psat.
+### 3. Properties and vapour pressure — done
+- **Many points in a call** ([capi/props.v](../capi/props.v)), the
+  conventions every vectorised function from here on keeps (D6, D7):
+  - n points, and each per-point input with a count of 1 or n, so a scalar or
+    one composition isn't repeated;
+  - outputs property-major, `out[k·n + i]`, so each property is a contiguous
+    array of the points;
+  - a status per point, `REFLUX_POINT_*` from 0 to 8. The flash's kinds
+    follow `flash.Failure`'s order, and 4 to 6 wait for step 4. A point
+    without an answer gets NaN and `REFLUX_NO_PHASE`, and the others are as
+    they'd be alone;
+  - `err` holds the first failed point's reason, so the reason for a point is
+    the same call made for it alone. Python's `reason(index)` does that.
+- **`reflux_props`:**
+  - the phase at each (T, P, z), by the root asked for (liquid, vapour or
+    stable), with Z, V, H, S, G, U, A, Cp, Cv, w and μ_JT per mole;
+  - ln φ, and the phase's label by its phase identification parameter;
+  - each value is the V API's (`solve_tp`, then `Fluid.props`), divided by
+    Σz where it's extensive, so a V program doing the same gets the same bits
+    (criterion 3, step 7).
+- **A point's inputs are checked first:** T and P finite and above zero, and z
+  finite, not negative and not all zero. thermo's own check, `t <= 0.0`, lets
+  NaN and ∞ through.
+- **An answer that isn't finite isn't one:** a new status,
+  `REFLUX_POINT_NOT_FINITE` (8). Probing the extremes found points returned
+  as answers that weren't:
+  - above about 1e10 K, ChemSep's ideal-gas Cp correlations overflow, so H
+    and S were NaN and Cp infinite, with the status OK;
+  - at 1e300 K the volume solver returned a spurious root, Z = 6e-301.
+  - Both now get `NOT_FINITE`. A volume root past what a float holds (1e-300
+    Pa, 1e-300 K, 1e100 Pa) is `REFLUX_POINT_NO_VOLUME_ROOT`, as thermo says.
+- **`reflux_psat`:** one compound's vapour pressure at n temperatures.
+  - It's the fluid's own cubic for that compound alone, with its own α, so
+    Mathias–Copeman's when the fluid has it.
+  - At or above Tc it's `REFLUX_POINT_SUPERCRITICAL`, and when thermo's
+    iteration fails it's `REFLUX_POINT_NO_CONVERGENCE`.
+  - It began as every compound in one call. Then a single-point call's reason
+    was the first failed compound's, which isn't always the one asked about,
+    so it became one compound per call.
+- **ΔH°f and S° in the setup's TOML,** where a compound has them, so the
+  package can say whether H, S, G, U and A have a formation basis
+  (`Fluid.absolute`).
+- **The package:**
+  - `Fluid.props(T, P, z=None, root="stable")` gives a `Properties`, and
+    `Fluid.psat(T, compound=None)` gives a `Saturation`: arrays of the
+    points' shape, with `status`, `ok` and `reason(index)`.
+  - `reflux.Status` and `reflux.Phase` are IntEnums of the header's numbers,
+    and `Fluid.index` finds a compound by position, name or CAS number.
+  - T, P and z broadcast by NumPy's rules, z's last axis the compounds'. An
+    input already of the points' shape, C-contiguous `float64`, isn't copied:
+    a test checks it shares memory.
+  - A pure fluid needs no z.
+- **The spike's scenarios** for zero copies, many points in one call and
+  agreement with `thermo` now live in the package's tests. Its CI step stays
+  for the collector stress (step 6) and the per-call cost (step 7).
+- **Against `thermo`:** `test_thermo_reference.py` builds M1's fixture
+  through the C API. M1's constants go in a directory of the caller's own
+  compounds, then all 14 cases are compared, PR and SRK, pure and ternary,
+  with their kᵢⱼ as overrides. The spike compared Z for pure n-butane alone.
+  - Hʳ and Sʳ are taken as the difference from the same state at 1 mPa, where
+    the residual part is below 1e-11 of the answer.
+  - Worst, against `thermo`:
+
+    | Quantity | Worst, relative |
+    |---|---|
+    | Z | 5.3e-15 |
+    | ln φ | 3.3e-15 |
+    | V | 1.8e-11 |
+    | Hʳ | 7.2e-10 of RT |
+    | Sʳ | 4.6e-10 of R |
+
+    V's is about what the two programs' gas constants' last digits give; Hʳ
+    and Sʳ are within M1's 1e-9, as in thermo's own fixture test.
+- **Tests:**
+  - [capi/props_test.v](../capi/props_test.v), 6: every point against the V
+    API, bit for bit, for every root; one value for every point; each bad
+    input between two good points, and alone; beyond the model; calls that
+    can't be made; and Psat, each compound's own, at Tc and where thermo
+    can't converge.
+  - `test_props.py`, 11 tests:
+    - a grid is its points one by one, bit for bit, and twice the moles is
+      the same per mole to 1e-13;
+    - inputs already in shape aren't copied;
+    - G, A and U keep their definitions to 1e-12, Cp > Cv, and Z = Pv/RT;
+    - the stable root is the one of lower G, and where there's one root every
+      root is it;
+    - at Psat the liquid's ln φ is the vapour's to 1e-9;
+    - Psat by compound, and a pure fluid's compound axis;
+    - failures, beyond the model, mistakes;
+    - `absolute`, with methane of your own without ΔH°f.
+  - `test_thermo_reference.py`, 15.
+  - `test_library.py` now checks every number in the package against the
+    header's.
+  - The Python suite is 57 tests.
+- **Found:**
+  - The non-finite answers above.
+  - thermo's `saturation_pressure`, successive substitution from Edmister's
+    start, gives up at Tc(1−1e-6) for n-butane though it converges at
+    Tc(1−1e-9), and doesn't converge at or below 10 K. The status says so;
+    a better method is carried forward.
+  - `Saturation.reason` read a one-compound fluid's `psat(T)` as one
+    compound's, without its last axis. Fixed, with a test, before the commit.
+  - Step 2's planted mistakes weren't all proven: three didn't compile, an
+    unused import twice and a `mut` never changed, and a failed build counted
+    as caught. The scripts now report a mutation that doesn't compile as NO
+    BUILD. Step 2's are rerun below, those three rewritten to compile.
+  - V writes 1e10 as `1e+10` and +∞ as `+inf`
+    ([v-for-go.md](v-for-go.md), §8).
+- **Planted mistakes:** 42 for this step, in a scratch copy, in one run with
+  step 2's 49. The script now reports a mutation that doesn't compile as NO
+  BUILD; none didn't.
+  - 40 were caught: 28 by `capi`'s V tests and 12 by the Python tests.
+  - "psat reason's compound" survived: with every compound's Psat, a reason
+    was always read for the first compound, and no test asked for another's.
+    A test now asks for n-butane's, and the mistake is caught.
+  - "ln φ not checked finite" survived, and is kept. For ln φ alone to be
+    infinite, Z would have to underflow to exactly 0, a finite value whose
+    log is −∞, with every property finite. No state found reaches it: at
+    1e300 K, where Z fell to 6e-301, H was already NaN. It's the same rule
+    every value keeps, that one that isn't finite is no answer.
 
 ### 4. Stability and the PT flash
 - The stability test (tm and its verdict) and the PT flash, vectorised, with

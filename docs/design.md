@@ -1107,6 +1107,24 @@ language, so its conventions are the same for every function (M10a's D2):
   belongs, say); `REFLUX_NOT_FOUND` for a compound lookup, whose reason names
   the closest; and `REFLUX_DATA_ERROR` for what the data can't do, which is
   what's left of `components`' failures once the arguments are checked.
+- **Many points in a call.** A function over points takes their number n,
+  and each per-point input with a count of 1 or n, so a scalar or one
+  composition needn't be repeated. The Python package passes an array that's
+  already of the points' shape, C-contiguous `float64`, as it is, and
+  broadcasts the rest by NumPy's rules. Outputs are property-major,
+  `out[k·n + i]`, so each property's values are contiguous: a NumPy array of
+  the points' shape with no copy.
+- **A status per point** (`REFLUX_POINT_*`, whose flash kinds follow
+  `flash.Failure`'s order). A point without an answer gets NaN, and
+  `REFLUX_NO_PHASE` for its label, and leaves the others as they would be
+  alone. `err` holds the first failed point's reason, so a point's reason is
+  the same call made for it alone (M10a's D7).
+- **A point's inputs are checked first:** finite, with T and P above zero and
+  z not negative nor all zero. thermo's own check is `t <= 0.0`, which NaN
+  and ∞ pass.
+- **Properties per mole** are the V API's extensive ones divided by Σz, so a
+  V program doing the same gets the same bits (criterion 3). A compound's
+  vapour pressure is the fluid's cubic for it alone, with its own α.
 
 ### Where the data comes from
 

@@ -4,9 +4,11 @@ through reflux's C API, capi/reflux.h. Units are SI throughout: K, Pa, mol, J.
     import reflux
     db = reflux.Database()
     fl = db.fluid("PR", ["methane", "n-butane"])
+    pr = fl.props(T=300.0, P=[1e5, 10e5, 50e5], z=[0.3, 0.7])
+    pr.h, pr.status
 
-So far it has component data and fluids; properties and flashes come in
-M10a's later steps (docs/m10a-plan.md).
+So far it has component data, fluids, properties and vapour pressures;
+flashes come in M10a's later steps (docs/m10a-plan.md).
 """
 
 import ctypes
@@ -15,9 +17,11 @@ from ._native import (ABI_VERSION, BadArgument, BadHandle, DataError, NotFound, 
                       check, lib)
 from .database import Database, data_root
 from .fluid import Fluid
+from .points import Phase, Properties, Saturation, Status
 
 __all__ = ["ABI_VERSION", "BadArgument", "BadHandle", "DataError", "Database", "Fluid",
-           "NotFound", "RefluxError", "abi_version", "collect", "data_root", "version"]
+           "NotFound", "Phase", "Properties", "RefluxError", "Saturation", "Status",
+           "abi_version", "collect", "data_root", "version"]
 
 
 def abi_version():

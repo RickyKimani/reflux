@@ -677,6 +677,14 @@ The one difference is overflow. Go returns ±Inf *and* `ErrRange`, but V's
 itself. An underflow's 0 then meets the same "above zero" check as a typed
 0.
 
+**Writing them: `nan`, `+inf`, `-inf`.** In `'${x}'` V writes NaN as `nan` and
+the infinities as `+inf` and `-inf`, where Go's `%v` writes `NaN`, `+Inf` and
+`-Inf`. A whole number keeps its point (`300.0`), but one written with an
+exponent doesn't: `1e+10`, `1e-300`, as Go's `%v` writes them. A test of a message that quotes a bad value has to expect V's
+spelling: [capi/props_test.v](../capi/props_test.v) does. And a comparison
+with NaN is false either way round, so `t <= 0.0` lets NaN through: check
+`math.is_finite` before a range.
+
 **Cutting strings: `all_after` and `trim_string_left`.** Go's
 `strings.Cut(s, "=")` returns `found`, and `TrimPrefix` and `TrimLeft` say
 which they are by name. In V:

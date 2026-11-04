@@ -152,10 +152,13 @@ capi/               the C API (M10a): reflux.h, and the functions it declares,
   capi.v            each registering its thread with the collector
   registry.v        handles: ids into a registry behind a lock
   database.v        component data and fluids, their text as TOML
+  props.v           a phase's properties and vapour pressure, many points
+                    at once, each with its status
   gc_threads.h      registering a thread the collector doesn't know
 python/             the Python package over the C API (M10a): reflux/
-                    (Database and Fluid, over _native's ctypes), with the
-                    library built into reflux/_lib/, and tests/
+                    (Database, Fluid, and points.py's results on NumPy arrays,
+                    over _native's ctypes), with the library built into
+                    reflux/_lib/, and tests/
 docs/               roadmap, milestone plans, design notes, data format,
                     data-quality report, spike write-ups, V notes
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),

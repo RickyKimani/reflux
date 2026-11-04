@@ -67,6 +67,29 @@ fn test_the_header_and_the_code_agree() {
 	for code, a in alphas {
 		want['REFLUX_ALPHA_' + a.str().to_upper()] = code
 	}
+	for name, code in {
+		'OK':               point_ok
+		'BAD_INPUT':        point_bad_input
+		'NO_CONVERGENCE':   point_no_convergence
+		'NO_VOLUME_ROOT':   point_no_volume_root
+		'MORE_PHASES':      point_more_phases
+		'PHASES_SWAPPED':   point_phases_swapped
+		'OUTSIDE_ENVELOPE': point_outside_envelope
+		'SUPERCRITICAL':    point_supercritical
+		'NOT_FINITE':       point_not_finite
+	} {
+		want['REFLUX_POINT_' + name] = code
+	}
+	want['REFLUX_NO_PHASE'] = no_phase
+	want['REFLUX_LIQUID'] = liquid
+	want['REFLUX_VAPOR'] = vapor
+	for code, root in roots {
+		want['REFLUX_ROOT_' + root.str().to_upper()] = code
+	}
+	for k, name in prop_names {
+		want['REFLUX_PROP_' + name.to_upper()] = k
+	}
+	want['REFLUX_PROPS'] = n_props
 	assert defines() == want
 	assert reflux_abi_version() == abi_version
 	// Every @[export] in this module is declared, and every declaration

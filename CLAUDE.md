@@ -59,10 +59,15 @@ Keep this section current: update it whenever a step is committed.
     (`components/` and `vendor/chemsep/`), and `components.load` became
     `open(root, extra)`: both go in 0.2.0's CHANGELOG entry, listed at the
     end of step 2's write-up. The package installs (D10), editable or not.
-  - The spike's CI step stays until its scenarios have homes: properties in
-    step 3, the collector in 6, the call's cost in 7 (its handles are in
-    `test_handles.py` now).
-  - Next is step 3: vectorised properties of a phase, and Psat.
+  - **Step 3 is done:** a phase's properties and each compound's Psat at many
+    points, each with a status (`REFLUX_POINT_*`, 0 to 8). A point whose
+    answer isn't finite has none (`NOT_FINITE`): above about 1e10 K the
+    ideal-gas Cp overflows.
+  - Carried forward from step 3: thermo's `saturation_pressure` (successive
+    substitution) fails at Tc(1−1e-6) for n-butane and at or below 10 K.
+  - The spike's CI step stays until its last scenarios have homes: the
+    collector in step 6, the call's cost in 7.
+  - Next is step 4: stability and the PT flash.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -286,6 +291,11 @@ over the rest, built into a shared library for the Python package in
     data's doing (`REFLUX_DATA_ERROR`). A lookup is `REFLUX_NOT_FOUND`.
   - The header has no `const`: V writes `char *`, and gcc refuses a header
     that disagrees.
+  - Many points per call: each input's count is 1 or n, outputs are
+    property-major (`out[k*n + i]`), and each point has a status
+    (`REFLUX_POINT_*`), NaN when it has no answer. A point with a value that
+    isn't finite has no answer (`NOT_FINITE`). `err` holds the first failed
+    point's reason, so one point's reason is the call for it alone.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
@@ -315,6 +325,12 @@ over the rest, built into a shared library for the Python package in
     and confirm the files match with `cmp`.
   - Each survivor gets a new test, gets its code deleted, or is explained
     in the plan.
+  - A mutation that doesn't compile isn't caught: no test saw it. Under `-W`
+    an import left unused or a `mut` never changed is an error, so write the
+    mutation to keep both used (`if !utf8.validate_str(s) && false`). The
+    scripts report it as NO BUILD.
+  - A timeout must kill the whole process tree: killing `v` leaves the test
+    program it started holding the pipes, and the script waits forever.
 - **Keep sensitive states exact.** Where a test state is sensitive to an
   ulp, store the exact double: build it from integers, for instance
   `(915 + k) * 1e4`.

@@ -58,6 +58,47 @@ class Fluid:
         return len(self.names)
 
     @property
+    def absolute(self):
+        """Whether every compound has its ideal gas's ΔH°f and S°, so that H, S,
+        G, U and A are on the formation basis. Without, they sit on an
+        arbitrary zero, and only differences at one composition mean
+        anything."""
+        return all("dhf" in c and "s0" in c for c in self.setup["components"])
+
+    def index(self, compound):
+        """A compound's position: given as one, or by its name or CAS number."""
+        if isinstance(compound, (int, np.integer)):
+            if not -self.nc <= compound < self.nc:
+                raise IndexError(f"no compound {compound}: the fluid has {self.nc}")
+            return int(compound) % self.nc
+        for j, (name, cas) in enumerate(zip(self.names, self.cas)):
+            if compound in (cas, name) or str(compound).casefold() == name.casefold():
+                return j
+        raise KeyError(f"{compound!r} isn't in the fluid: {', '.join(self.names)}")
+
+    def props(self, T, P, z=None, *, root="stable"):
+        """A phase's properties at many points: a Properties of arrays, per mole
+        and in SI.
+
+        T (K), P (Pa) and z broadcast together by NumPy's rules, z's last axis
+        being the compounds' mole amounts (normalised by their sum), so one
+        composition can serve every point. A pure fluid needs no z. Arrays
+        already of the points' shape, C-contiguous float64, aren't copied.
+        root is "liquid" (the smallest volume), "vapor" (the largest) or
+        "stable" (the lower Gibbs energy); where there's one root, it's that.
+        """
+        from .points import props
+        return props(self, T, P, z, root)
+
+    def psat(self, T, compound=None):
+        """Vapour pressures (Pa) at temperatures T (K): a Saturation, with each
+        compound's along a last axis, or one compound's (an index, name or
+        CAS number). It's the fluid's equation and α for the compound alone;
+        at or above its Tc there's none (Status.SUPERCRITICAL)."""
+        from .points import psat
+        return psat(self, T, compound)
+
+    @property
     def handle(self):
         """The library's handle, while the fluid is open."""
         if not self._finalizer.alive:

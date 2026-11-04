@@ -118,6 +118,10 @@ fn test_a_setup_says_how_it_was_built() {
 		assert field(m, 'name').string() == s.records[i].name
 		assert field(m, 'tc').f64() == c.tc && field(m, 'pc').f64() == c.pc
 		assert field(m, 'omega').f64() == c.omega && field(m, 'mw').f64() == c.mw
+		ig := s.fluid.ideal[i]
+		assert ig.dhf != none && ig.s0 != none
+		assert field(m, 'dhf').f64() == ig.dhf or { 0.0 }
+		assert field(m, 's0').f64() == ig.s0 or { 0.0 }
 		assert field(m, 'alpha').string() == s.alphas[i]
 	}
 	pairs := field(doc, 'pairs').array()
