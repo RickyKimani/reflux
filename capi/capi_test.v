@@ -5,6 +5,7 @@ module capi
 // header and the code agree, a reason is cut to fit at a character, a handle
 // once freed is an error, and the registry holds up under threads. The Python
 // tests (python/tests/) call the built library.
+import components
 import encoding.utf8
 import os
 import v.vmod
@@ -50,11 +51,24 @@ fn declared() []string {
 }
 
 fn test_the_header_and_the_code_agree() {
-	d := defines()
-	assert d['REFLUX_ABI_VERSION'] == abi_version && reflux_abi_version() == abi_version
-	assert d['REFLUX_OK'] == ok && d['REFLUX_BAD_ARGUMENT'] == bad_argument
-	assert d['REFLUX_BAD_HANDLE'] == bad_handle
-	assert d.len == 4, "a code the test doesn't know: ${d}"
+	// Every #define is the code's own value, and the code has no other.
+	mut want := {
+		'REFLUX_ABI_VERSION':  int(abi_version)
+		'REFLUX_OK':           ok
+		'REFLUX_BAD_ARGUMENT': bad_argument
+		'REFLUX_BAD_HANDLE':   bad_handle
+		'REFLUX_NOT_FOUND':    not_found
+		'REFLUX_DATA_ERROR':   data_error
+		'REFLUX_TOO_SMALL':    too_small
+	}
+	for code, kind in equations {
+		want['REFLUX_' + components.equation_name(kind).to_upper()] = code
+	}
+	for code, a in alphas {
+		want['REFLUX_ALPHA_' + a.str().to_upper()] = code
+	}
+	assert defines() == want
+	assert reflux_abi_version() == abi_version
 	// Every @[export] in this module is declared, and every declaration
 	// exported. The C compiler checks their types on Windows; the Python
 	// tests check the built library's symbol table.

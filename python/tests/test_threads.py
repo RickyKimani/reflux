@@ -13,10 +13,12 @@ import reflux
 from reflux import _native
 
 wrong = []
+db = reflux.Database()
+water = db.compound("water")
 
 
 def work():
-    for _ in range(200):
+    for i in range(200):
         if reflux.collect() <= 0 or reflux.version() != reflux.__version__:
             wrong.append("collect or version")
         try:
@@ -26,6 +28,13 @@ def work():
                 wrong.append(str(e))
         else:
             wrong.append("no BadHandle")
+        # One database, shared: fluids made and freed, and files read.
+        if i % 10 == 0:
+            with db.fluid("PR", ["methane", "n-butane"]) as fl:
+                if fl.kij[0, 1] != 0.0244:
+                    wrong.append(f"kij {fl.kij[0, 1]}")
+            if db.compound("water") != water:
+                wrong.append("water")
 
 
 threads = [threading.Thread(target=work) for _ in range(8)]

@@ -772,6 +772,26 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 - **`fn testsuite_end()`** runs after the file's tests, like the cleanup after
   `m.Run()` in Go's `TestMain`. main_test.v removes its scratch directory
   there.
+- **Each `_test.v` file is a program of its own,** built with its module's
+  other files but not with the other test files, so a helper in one isn't
+  seen by another. [capi/capi_test.v](../capi/capi_test.v) and
+  [capi/database_test.v](../capi/database_test.v) each have a `c_string`.
+- **A table of cases is an array of structs, not a map.** A map literal keyed
+  by calls runs every call and keeps one entry per distinct key, so cases
+  that all return the same code collapse into the last, and only it is
+  checked:
+
+```v
+m := {
+	code(1): 'first'  // both return -1
+	code(2): 'second'
+}
+// m is {-1: 'second'}, and m.len is 1
+```
+
+  A struct can't be a map key at all ("map key type not supported"). Go
+  allows a comparable struct as a key, and would have caught the duplicates
+  in a literal of constants, but not of calls either.
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
   Newton solver against the polynomial roots. Identities catch bugs that
@@ -849,6 +869,15 @@ What M1's spike and M10a learned, in V terms:
   header declaring `int64_t` can be compiled against V's functions only where
   they agree: `capi` includes `reflux.h` on Windows, and there gcc refuses a
   header whose declaration disagrees with the code ("conflicting types").
+- **V has no `const`.** `&char` is `char *` and `&&char` is `char **`, and an
+  exported function's definition says just that, so a header declaring
+  `const char *` conflicts with it, the same way. `reflux.h` declares
+  `char *` for text going in, and says in words that the library never
+  writes through it. Go's cgo has the same blind spot, from the other side:
+  it calls a `const char *` function with a `*C.char`.
+- **A C array of strings** arrives as `&&char`. Index it in `unsafe`, check
+  each pointer for nil, and copy it with `cstring_to_vstring`:
+  `texts_in` in [capi/database.v](../capi/database.v).
 - **Globals** (`__global registry = Registry{}`) need `@[has_globals]` at the
   top of the file that declares them, or `-enable-globals` for the whole
   build. The attribute covers that one file, not its module: in

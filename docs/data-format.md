@@ -195,12 +195,18 @@ test fails if the committed files differ from a fresh generation.
 
 ## Your own components
 
-Put your files, in this same format, in a directory of your own, and load
-it after the built-in one:
+Put your files, in this same format, in a directory of your own, and open
+it after the data root's compounds:
 
 ```v
-db := components.load([components.default_dir, 'my_components'])!
+db := components.open(components.data_root(), ['my_components'])!
 ```
+
+A data root is a directory holding `components/` and `vendor/chemsep/`,
+whose `pr.ipd`, `srk.ipd` and `mc-PR.lib` a fluid's kᵢⱼ and Mathias–Copeman
+constants come from. `data_root()` is `$REFLUX_DATA` if that's set, and the
+source tree's `data/` otherwise. To use a copy of the data elsewhere, copy
+both directories and point `REFLUX_DATA` at the copy.
 
 - A directory without an `index.toml` has every `*.toml` file in it read.
 - A compound whose CAS number is already in an earlier directory replaces

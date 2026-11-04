@@ -8,7 +8,8 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Step 1 is done, and step 2 is next.
+Status: **approved** on 2026-11-04. Steps 1 and 2 are done, and step 3 is
+next.
 
 ## Goal
 
@@ -321,12 +322,132 @@ and their Python tests together.
     were the registry's other five: 35 of 36, all but the equivalent one.
     `add` without its lock now fails rather than hangs.
 
-### 2. The database, fluids and data
-- Opening a database on a directory, lookup with suggestions, and a fluid
-  from names, the equation, α and kᵢⱼ choices and overrides; each compound's
-  constants readable.
-- The kᵢⱼ banks and `mc-PR.lib` from the same root as the compounds (D9), with
-  a test that moves a copy of the data away from the source tree.
+### 2. The database, fluids and data — done
+- **The data root (D9),** in `components`:
+  - A data root is a directory holding `components/` and `vendor/chemsep/`.
+    `components.open(root, extra)` opens one, with directories of the
+    caller's own compounds after its own. The `Database` keeps its `root` and
+    its `vendor` directory.
+  - A fluid's kᵢⱼ banks and `mc-PR.lib` come from that `vendor` directory.
+    `load_kij` and `load_mathias_copeman_pr` now take the directory, and
+    `setup` passes its database's.
+  - `data_root()` is `$REFLUX_DATA`, or else the source tree's `data/`, and
+    `load_default()` opens it.
+  - A directory that isn't a data root is named as such. One that looks like a
+    components directory, as `REFLUX_DATA` named before, gets a hint to give
+    its parent.
+  - `load(dirs)` is gone, so nothing can open compounds without saying where
+    their kᵢⱼ come from. The flowsheet file's `data` directories now follow
+    the caller's database's root, not the environment's.
+- **A fluid says how it was built:** `Setup` gains its equation and
+  `to_toml()`. That gives the equation, the kᵢⱼ bank, each compound's CAS
+  number, name, Tc, Pc, ω, molar mass and α, and each pair's kᵢⱼ with its
+  source, line, comment and unused listings. Floats are V's shortest
+  round-trip form, so they read back exactly.
+- **The C API,** [capi/database.v](../capi/database.v), with six functions:
+  - `reflux_data_root`;
+  - `reflux_database_open`;
+  - `reflux_database_index`, the compounds in `index.toml`'s format;
+  - `reflux_compound`, a compound's file;
+  - `reflux_fluid_new`;
+  - `reflux_fluid_setup`, the setup's TOML.
+- **Text out:** text goes into the caller's buffer, with the room it takes in
+  `*needed`, or `REFLUX_TOO_SMALL` with nothing written.
+- **Text in:** NUL-terminated UTF-8, checked. A list of texts is a pointer
+  array and a count.
+- **New codes:** `REFLUX_NOT_FOUND` (a lookup, whose reason names the
+  closest), `REFLUX_DATA_ERROR` and `REFLUX_TOO_SMALL`.
+- **Arguments first:** everything a caller can get wrong is checked before the
+  V API is called, so what `components` refuses after is the data's.
+  - The checks: the equation, α and kᵢⱼ numbers; Mathias–Copeman with
+    anything but PR; no compounds; a compound named twice, two ways; and an
+    override that's NaN, pairs a compound with itself, repeats a pair or
+    names a compound outside the fluid.
+  - A handle of the wrong kind is `REFLUX_BAD_HANDLE`, "handle 7 is a fluid,
+    not a database". A fluid outlives its database.
+- **No `const` in the header:** V's definitions take `char *`, and gcc refused
+  a probe header's `const char *` with "conflicting types". So the header
+  says in words that the library never writes through text going in.
+- **The package:**
+  - `reflux.Database(root=None, extra=())` has `compound(query)`, a dict read
+    from the TOML with `tomllib`, `compounds()`, and `fluid(equation, names,
+    alpha=, kij=, overrides=)`.
+  - `reflux.Fluid` has `names`, `cas`, `nc`, `tc`, `pc`, `omega`,
+    `molar_mass` and `kij`, read-only NumPy arrays, and `setup`.
+  - `reflux.data_root()`, and the errors `NotFound`, a `LookupError`, and
+    `DataError`.
+  - Each object frees its handle on `close()`, at the end of a `with`, or by
+    a `weakref.finalize` when it's garbage (D4).
+  - Text comes back in a 64 KiB buffer at first, and again with the room the
+    library asks for.
+- **Installing (D10):** `pyproject.toml` has a setuptools build with the
+  library as package data.
+  - Installed from a copy into a fresh environment, the package uses its own
+    library and finds the data in the source tree the library was built from:
+    kᵢⱼ included.
+  - `uv pip install -e python` gives the source tree's own package.
+- **Tests:**
+  - [capi/database_test.v](../capi/database_test.v), 7 tests: every function
+    against the V API's answer for the same request; the room text needs;
+    each mistake with its code and reason; and handles of the wrong kind.
+  - In `components`:
+    - a root needs both its directories, with the hint;
+    - a moved copy is used whole: its `pr.ipd` lists 0.0313 for
+      methane/n-butane where the source tree's lists 0.0244, and its
+      `mc-PR.lib` has no methane;
+    - `REFLUX_DATA` moves the default;
+    - the setup's TOML reads back exactly;
+    - an empty query finds nothing.
+  - In `flowsheet`: a file's `data` follows its database's root.
+  - In Python, `test_database.py` (19 tests):
+    - a compound is its file in the repository, read with `tomllib`;
+    - the fluid's constants are its compounds' files', and its kᵢⱼ the lines
+      of `pr.ipd`;
+    - the arrays are read-only;
+    - every mistake raises its error;
+    - closing is closing;
+    - a fluid only Python held is freed;
+    - your own directory replaces the root's methane;
+    - text longer than the first buffer comes back whole;
+    - the moved copy, opened directly and through `REFLUX_DATA`, set before
+      the process and by Python after the import.
+  - `test_handles.py`, the spike's handle scenarios: a fluid only Python holds
+    survives 40 rounds of databases and fluids made, freed and collected
+    around it.
+  - `test_install.py`; and `test_threads.py`, whose 8 threads now also build
+    fluids from one shared database and read its files.
+  - The Python suite is 31 tests, in 43 s here: the install takes 14, and each
+    thread test 11.
+- **Found:**
+  - An empty query matched the 35 compounds without an InChIKey, so it was
+    "ambiguous" and listed them all: `find` compared the query with each
+    compound's InChIKey, or `''`. An empty or blank query now finds nothing.
+    It came from M2.
+  - On Windows, Python's `os.environ` and the library share the UCRT's
+    environment, so `REFLUX_DATA` set after the import is seen. The test
+    checks it.
+  - V: a map literal keyed by calls keeps one entry per distinct key, so a
+    table of cases checked only its last until it became an array of structs;
+    a struct can't be a map key; and `_test.v` files don't share helpers
+    ([v-for-go.md](v-for-go.md), §9). V has no `const`, and a C array of
+    strings is `&&char` (§11).
+- **For 0.2.0's CHANGELOG entry** (step 9):
+  - `REFLUX_DATA` now names the data root, not its `components/`, and the
+    kᵢⱼ and Mathias–Copeman constants come from it too;
+  - `components.load(dirs)` is now `components.open(root, extra)`;
+  - `load_kij` and `load_mathias_copeman_pr` take a directory;
+  - `Database` has `root` and `vendor`, and `Setup` has `kind` and
+    `to_toml()`;
+  - an empty name finds no compound.
+- **Planted mistakes:** 49, in a scratch copy of the repository, across
+  `components`, `flowsheet/file.v`, `capi/database.v` and the package. All
+  were caught, none by a hang.
+  - Three were caught by tests written for them before the run, for gaps seen
+    while writing the list: a file's `data` following its database's root,
+    your own directory from Python, and text longer than its first buffer.
+  - The catches came from the module's own tests: `components` caught its 18,
+    the flowsheet file test its one, `capi`'s V tests their 17, and the Python
+    tests the package's 13.
 
 ### 3. Properties and vapour pressure
 - Vectorised properties of a phase at (T, P, z), by root (liquid, vapour or

@@ -201,13 +201,13 @@ fn pr_psat(r components.Record) !PrPsat {
 // from (@VMODROOT): the component files, the vendored XML and parameter
 // files, and the CoolProp fixture.
 pub fn generate() !string {
-	db := components.load([components.default_dir])!
+	db := components.open(components.default_root, [])!
 	s := sweep(db)!
 	imp := chemsep.import_files(@VMODROOT, chemsep.vendored)!
 	cool := read_coolprop(os.join_path(@VMODROOT, 'testdata', 'm2_coolprop.json'))!
-	pr := components.load_kij(.pr)!
-	srk := components.load_kij(.srk)!
-	mc := components.load_mathias_copeman_pr()!
+	pr := components.load_kij(db.vendor, .pr)!
+	srk := components.load_kij(db.vendor, .srk)!
+	mc := components.load_mathias_copeman_pr(db.vendor)!
 	return render(s, imp, cool, [pr, srk], mc, db)
 }
 

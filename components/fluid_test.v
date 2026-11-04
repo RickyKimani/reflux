@@ -4,6 +4,7 @@ import json2
 import math
 import os
 import thermo
+import toml
 
 // M2 exit criterion 9, end to end: db.fluid builds a working thermo.Fluid,
 // and with database constants it reproduces M1's n-butane results.
@@ -87,6 +88,68 @@ fn test_mathias_copeman_alpha() {
 	}
 	if _ := db9.setup(.pr, ['3967-55-3']) {
 		assert false, 'a compound without Tc, Pc and ω'
+	}
+}
+
+fn field(m map[string]toml.Any, key string) toml.Any {
+	return m[key] or { panic('no `${key}`') }
+}
+
+fn test_a_setup_says_how_it_was_built() {
+	// to_toml is what the C API gives Python (M10a): read back, it must say
+	// exactly what the setup holds, floats included.
+	s := db9.setup(.pr, ['methane', 'n-butane', 'nitrogen'],
+		alpha:     .mathias_copeman
+		overrides: [Kij{
+			cas1: '7727-37-9'
+			cas2: '74-82-8'
+			k:    0.0311
+		}]
+	)!
+	doc := toml.parse_text(s.to_toml()!)!.to_any().as_map()
+	assert doc.keys() == ['equation', 'kij_bank', 'components', 'pairs']
+	assert field(doc, 'equation').string() == 'PR'
+	assert field(doc, 'kij_bank').string() == s.kij.bank
+	comps := field(doc, 'components').array()
+	assert comps.len == 3
+	for i, c in s.fluid.model.components() {
+		m := comps[i].as_map()
+		assert field(m, 'cas').string() == s.records[i].ids.cas
+		assert field(m, 'name').string() == s.records[i].name
+		assert field(m, 'tc').f64() == c.tc && field(m, 'pc').f64() == c.pc
+		assert field(m, 'omega').f64() == c.omega && field(m, 'mw').f64() == c.mw
+		assert field(m, 'alpha').string() == s.alphas[i]
+	}
+	pairs := field(doc, 'pairs').array()
+	assert pairs.len == 3
+	for n, p in s.kij.pairs {
+		m := pairs[n].as_map()
+		assert field(m, 'i').int() == p.i && field(m, 'j').int() == p.j
+		assert field(m, 'k').f64() == p.k
+		assert field(m, 'source').string() == p.source.str()
+		if used := p.used {
+			assert field(m, 'line').int() == used.line
+			assert field(m, 'comment').string() == used.comment
+		} else {
+			assert 'line' !in m && 'comment' !in m
+		}
+		if p.others.len > 0 {
+			assert field(m, 'others').array().map(it.int()) == p.others.map(it.line)
+		} else {
+			assert 'others' !in m
+		}
+	}
+	// Methane/n-butane from the bank, with three listings unused; the override;
+	// and n-butane/nitrogen.
+	assert s.kij.pairs.map(it.source) == [KijSource.file, .override, .file]
+	assert s.kij.pairs[0].others.len == 3
+	for kind, name in {
+		thermo.CubicKind.vdw: 'vdW'
+		.rk:                  'RK'
+		.srk:                 'SRK'
+		.pr:                  'PR'
+	} {
+		assert equation_name(kind) == name
 	}
 }
 

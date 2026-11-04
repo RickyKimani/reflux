@@ -20,10 +20,11 @@ pub:
 }
 
 // Setup is a fluid built from the database, with a record of how: the
-// records used, the kᵢⱼ matrix and where each value came from, and how each
-// α was chosen.
+// equation, the records used, the kᵢⱼ matrix and where each value came from,
+// and how each α was chosen.
 pub struct Setup {
 pub:
+	kind    thermo.CubicKind
 	fluid   thermo.Fluid
 	records []Record
 	kij     KijMatrix
@@ -42,8 +43,8 @@ pub fn (db Database) fluid(kind thermo.CubicKind, names []string, opts FluidOpti
 
 // setup builds the fluid:
 // - each compound's Tc, Pc, ω and M, and its ideal-gas Cp, ΔH°f and S°;
-// - kᵢⱼ from ChemSep's bank for the equation, with any overrides (the first
-//   listing of a repeated pair, M2 decision D12);
+// - kᵢⱼ from ChemSep's bank for the equation, in the database's root, with
+//   any overrides (the first listing of a repeated pair, M2 decision D12);
 // - α as chosen. Mathias–Copeman is for PR only, since that's what mc-PR.lib
 //   was fitted for. A compound without a complete set gets the equation's
 //   own α, and `alphas` says so.
@@ -65,7 +66,7 @@ pub fn (db Database) setup(kind thermo.CubicKind, names []string, opts FluidOpti
 	}
 	cas := records.map(it.ids.cas)
 	bank := if opts.kij && kind in [.pr, .srk] {
-		load_kij(kind)!
+		load_kij(db.vendor, kind)!
 	} else {
 		KijBank{
 			file: 'no kij file'
@@ -75,7 +76,7 @@ pub fn (db Database) setup(kind thermo.CubicKind, names []string, opts FluidOpti
 	mut alphas := []thermo.Alpha{}
 	mut how := []string{}
 	if opts.alpha == .mathias_copeman {
-		lib := load_mathias_copeman_pr()!
+		lib := load_mathias_copeman_pr(db.vendor)!
 		for i, r in records {
 			own := kind.default_alpha(comps[i].omega)
 			e := lib.find(r.ids.cas) or {
@@ -99,9 +100,60 @@ pub fn (db Database) setup(kind thermo.CubicKind, names []string, opts FluidOpti
 	}
 	eos := thermo.new_cubic(kind, comps, kij: kij.k, alphas: alphas)!
 	return Setup{
+		kind:    kind
 		fluid:   thermo.new_fluid(eos, ideal)!
 		records: records
 		kij:     kij
 		alphas:  how
+	}
+}
+
+// to_toml writes how the fluid was built, for a caller to read back (the C
+// API's reflux_fluid_setup): the equation and the kᵢⱼ bank; each component's
+// CAS number, name, Tc (K), Pc (Pa), ω, molar mass (kg/mol) and α; and each
+// pair i < j's kᵢⱼ with where it came from. Floats are V's shortest
+// round-trip form, so they read back exactly.
+pub fn (s Setup) to_toml() !string {
+	mut out := ['equation = ${quote(equation_name(s.kind))!}', 'kij_bank = ${quote(s.kij.bank)!}']
+	comps := s.fluid.model.components()
+	for i, r in s.records {
+		c := comps[i]
+		out << ''
+		out << '[[components]]'
+		out << 'cas = ${quote(r.ids.cas)!}'
+		out << 'name = ${quote(r.name)!}'
+		out << 'tc = ${float(c.tc)!}'
+		out << 'pc = ${float(c.pc)!}'
+		out << 'omega = ${float(c.omega)!}'
+		out << 'mw = ${float(c.mw)!}'
+		out << 'alpha = ${quote(s.alphas[i])!}'
+	}
+	for p in s.kij.pairs {
+		out << ''
+		out << '[[pairs]]'
+		out << 'i = ${p.i}'
+		out << 'j = ${p.j}'
+		out << 'k = ${float(p.k)!}'
+		out << 'source = ${quote(p.source.str())!}'
+		if used := p.used {
+			out << 'line = ${used.line}'
+			out << 'comment = ${quote(used.comment)!}'
+		}
+		if p.others.len > 0 {
+			out << 'others = [${p.others.map(it.line.str()).join(', ')}]'
+		}
+	}
+	return out.join('
+') + '
+'
+}
+
+// equation_name is an equation's name as a flowsheet file writes it.
+pub fn equation_name(kind thermo.CubicKind) string {
+	return match kind {
+		.vdw { 'vdW' }
+		.rk { 'RK' }
+		.srk { 'SRK' }
+		.pr { 'PR' }
 	}
 }

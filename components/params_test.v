@@ -4,9 +4,9 @@ import thermo
 
 // ChemSep's parameter files, read once. The expected counts were checked
 // independently, with a Python whitespace-split over the same files.
-const pr = load_kij(.pr) or { panic(err) }
-const srk = load_kij(.srk) or { panic(err) }
-const mc = load_mathias_copeman_pr() or { panic(err) }
+const pr = load_kij(vendor_dir, .pr) or { panic(err) }
+const srk = load_kij(vendor_dir, .srk) or { panic(err) }
+const mc = load_mathias_copeman_pr(vendor_dir) or { panic(err) }
 
 const h2 = '1333-74-0'
 const n2 = '7727-37-9'
@@ -158,7 +158,7 @@ fn test_overrides() {
 
 fn test_no_kij_for_the_older_cubics() {
 	for kind in [thermo.CubicKind.vdw, .rk] {
-		if _ := load_kij(kind) {
+		if _ := load_kij(vendor_dir, kind) {
 			assert false, '${kind}'
 		}
 	}

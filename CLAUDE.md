@@ -54,11 +54,15 @@ Keep this section current: update it whenever a step is committed.
     `tools/python.vsh`, the package's skeleton). It amended D3 (a version
     script on Linux) and D5 (V starts the library on its first call, which
     mustn't race, so the package makes it at import).
-  - The spike's CI step stays until its scenarios have homes: handles in
-    step 2, properties in 3, the collector in 6, the call's cost in 7.
-  - Next is step 2: the database, fluids and data. D9 changes `components`:
-    the kᵢⱼ banks and `mc-PR.lib` load from the source tree whatever
-    `REFLUX_DATA` says, and must follow the data root.
+  - **Step 2 is done:** databases and fluids through the C API and the
+    package, and the data root (D9). `REFLUX_DATA` now names the data root
+    (`components/` and `vendor/chemsep/`), and `components.load` became
+    `open(root, extra)`: both go in 0.2.0's CHANGELOG entry, listed at the
+    end of step 2's write-up. The package installs (D10), editable or not.
+  - The spike's CI step stays until its scenarios have homes: properties in
+    step 3, the collector in 6, the call's cost in 7 (its handles are in
+    `test_handles.py` now).
+  - Next is step 3: vectorised properties of a phase, and Psat.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -115,7 +119,10 @@ v run tools/python.vsh test      # the C API's library (gcc), then the Python te
   (0.5.2, eab77e7).
 - **The Python tests** need the library, which only gcc can build, so
   `check.vsh` doesn't run them: `v run tools/python.vsh test`. Here uv needs
-  the interpreter named, as below: `--python <path>`.
+  the interpreter named, as below: `--python <path>`. `test_install.py`
+  installs the package into a fresh environment, so uv needs setuptools and
+  NumPy from its cache or the network. An editable install leaves
+  `python/reflux.egg-info/`, which git ignores.
 - **Generated data:**
   - `v run tools/import_chemsep.vsh` regenerates `data/components/` from the
     vendored ChemSep XML. A test fails if it's stale.
@@ -238,6 +245,11 @@ over the rest, built into a shared library for the Python package in
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
   vendored `pr.ipd`/`srk.ipd`, taking the first entry listed for a pair.
+  - A `Database` opens on a data root, `components/` and `vendor/chemsep/`,
+    with `components.open(root, extra)`. The default root is `$REFLUX_DATA`,
+    or else the source tree's `data/` (`@VMODROOT`). A fluid's kᵢⱼ and
+    Mathias–Copeman α come from its database's root (M10a's D9), never from
+    the source tree behind its back.
 - **`flowsheet`** is M4's: streams, units, the graph, the solver, the file
   and the reports.
   - A `Stream` is its molar flows plus the flash that gave its state, so
@@ -266,6 +278,14 @@ over the rest, built into a shared library for the Python package in
   and registers its thread with the collector for the call. Handles are ids
   into a registry behind a lock, never reused. The library starts on its
   first call, which mustn't race, so the Python package makes it at import.
+  - Text comes out into the caller's buffer, with the room it takes in
+    `*needed`, or `REFLUX_TOO_SMALL`. Its formats are components' own: a
+    compound is its component file, and a fluid's setup `Setup.to_toml`.
+  - Everything a caller can get wrong is checked in `capi` first
+    (`REFLUX_BAD_ARGUMENT`), so that what `components` refuses after is the
+    data's doing (`REFLUX_DATA_ERROR`). A lookup is `REFLUX_NOT_FOUND`.
+  - The header has no `const`: V writes `char *`, and gcc refuses a header
+    that disagrees.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

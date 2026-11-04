@@ -28,10 +28,11 @@ def v_mod_version():
     return re.search(r"version:\s*'([^']+)'", (ROOT / "v.mod").read_text())[1]
 
 
-def isolated(code, timeout=300):
-    """Run code in a Python process of its own, with this package importable,
-    and return what it printed. A crash fails the test with its exit status."""
-    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+def isolated(code, timeout=300, env=None):
+    """Run code in a Python process of its own, with this package importable
+    and env's variables set, and return what it printed. A crash fails the
+    test with its exit status."""
+    env = {**os.environ, **(env or {}), "PYTHONPATH": str(ROOT / "python")}
     r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True,
                        timeout=timeout)
     assert r.returncode == 0, f"exit {r.returncode}\n{r.stdout}\n{r.stderr}"

@@ -1090,7 +1090,39 @@ language, so its conventions are the same for every function (M10a's D2):
   a linker version script on Linux, both written from the header by
   [tools/python.vsh](../tools/python.vsh). On Windows the header is compiled
   with the module, so a declaration that disagrees with the code fails the
-  build.
+  build. That's also why the header has no `const`: V can't write it, so
+  the definitions it generates take `char *`, and a `const char *` in the
+  header would conflict.
+- **Text** goes in as NUL-terminated UTF-8, checked, and comes out into the
+  caller's buffer with the room it takes in `*needed`. Text that doesn't fit
+  is `REFLUX_TOO_SMALL`, with nothing written, and the Python package asks
+  again with the room it was told. What comes out is in formats already
+  documented: a compound is its component file
+  ([data-format.md](data-format.md)), the index is `index.toml`'s format, and
+  a fluid's setup is TOML written by `components.Setup.to_toml`. Floats are
+  V's shortest round-trip form, so they read back exactly.
+- **Codes** say whose the failure is: `REFLUX_BAD_ARGUMENT` for anything the
+  caller could get wrong, checked before the V API is called; `REFLUX_BAD_HANDLE`
+  for an id that isn't a live handle of its kind (a fluid's where a database's
+  belongs, say); `REFLUX_NOT_FOUND` for a compound lookup, whose reason names
+  the closest; and `REFLUX_DATA_ERROR` for what the data can't do, which is
+  what's left of `components`' failures once the arguments are checked.
+
+### Where the data comes from
+
+A **data root** is a directory with `components/`, a file per compound, and
+`vendor/chemsep/`, ChemSep's kᵢⱼ banks (`pr.ipd`, `srk.ipd`) and
+Mathias–Copeman constants (`mc-PR.lib`). `components.open(root, extra)` opens
+one, with directories of the caller's own compounds after its own, and the
+`Database` it returns keeps its root's `vendor/chemsep/`, so a fluid's kᵢⱼ and
+α come from the same copy of the data as its compounds (M10a's D9). The
+default root, `components.data_root()`, is `$REFLUX_DATA` if that's set, and
+otherwise the source tree's `data/`, whose path V fills in when it compiles
+(`@VMODROOT`). So a library or a binary built from the source tree finds the
+data wherever it's moved to, as long as the tree stays, and a copy of the
+data can go anywhere with `REFLUX_DATA` pointing at it. Before M10a,
+`REFLUX_DATA` named the compounds' directory alone, and the kᵢⱼ always came
+from the source tree.
 
 ## How equation-oriented solving will fit
 

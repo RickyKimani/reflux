@@ -20,8 +20,9 @@ const max_nesting = 32
 @[params]
 pub struct LoadParams {
 pub:
-	// db is the component data, if the caller has it: otherwise it's read, with
-	// the file's own data directories after the built-in ones.
+	// db is the component data, if the caller has it: otherwise the data root's
+	// (components.data_root()) is read. A file's own data directories go after
+	// its root's compounds.
 	db ?components.Database
 	// dir is what a file's data directories are relative to.
 	dir string
@@ -271,18 +272,22 @@ fn syntax_error(message string) (int, string) {
 	return 0, reason
 }
 
-// database is the component data for a file.
+// database is the component data for a file: the caller's, or the data root's
+// (components.data_root()), with the file's own data directories after its
+// compounds.
 fn database(params LoadParams, data []string) !components.Database {
+	mut root := components.data_root()
 	if db := params.db {
 		if data.len == 0 {
 			return db
 		}
+		root = db.root
 	}
-	mut dirs := [os.getenv_opt('REFLUX_DATA') or { components.default_dir }]
+	mut extra := []string{}
 	for d in data {
-		dirs << if os.is_abs_path(d) { d } else { os.join_path(params.dir, d) }
+		extra << if os.is_abs_path(d) { d } else { os.join_path(params.dir, d) }
 	}
-	return components.load(dirs)!
+	return components.open(root, extra)!
 }
 
 // read_model builds the fluid from [model].

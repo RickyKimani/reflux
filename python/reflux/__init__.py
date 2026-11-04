@@ -1,16 +1,23 @@
 """reflux from Python (M10a): thermodynamics and flashes on NumPy arrays,
 through reflux's C API, capi/reflux.h. Units are SI throughout: K, Pa, mol, J.
 
-So far it has the library's own functions; the database, fluids and flashes
-come in M10a's later steps (docs/m10a-plan.md).
+    import reflux
+    db = reflux.Database()
+    fl = db.fluid("PR", ["methane", "n-butane"])
+
+So far it has component data and fluids; properties and flashes come in
+M10a's later steps (docs/m10a-plan.md).
 """
 
 import ctypes
 
-from ._native import ABI_VERSION, BadArgument, BadHandle, RefluxError, check, lib
+from ._native import (ABI_VERSION, BadArgument, BadHandle, DataError, NotFound, RefluxError,
+                      check, lib)
+from .database import Database, data_root
+from .fluid import Fluid
 
-__all__ = ["ABI_VERSION", "BadArgument", "BadHandle", "RefluxError", "abi_version", "collect",
-           "version"]
+__all__ = ["ABI_VERSION", "BadArgument", "BadHandle", "DataError", "Database", "Fluid",
+           "NotFound", "RefluxError", "abi_version", "collect", "data_root", "version"]
 
 
 def abi_version():

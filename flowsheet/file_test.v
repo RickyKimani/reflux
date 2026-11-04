@@ -428,11 +428,12 @@ fn test_what_would_bring_the_parser_down_is_refused_first() {
 fn test_the_database_given_is_the_one_used() {
 	// With an empty one, no compound is found.
 	dir := os.join_path(os.vtmp_dir(), 'reflux_empty_db_${os.getpid()}')
-	os.mkdir_all(dir)!
+	os.mkdir_all(os.join_path(dir, 'components'))!
+	os.mkdir_all(os.join_path(dir, 'vendor', 'chemsep'))!
 	defer {
 		os.rmdir_all(dir) or {}
 	}
-	empty := components.load([dir])!
+	empty := components.open(dir, [])!
 	flowsheet.load_text(reference_text(), db: empty) or {
 		assert err.msg().contains('no compound methane'), err.msg()
 		return
@@ -460,6 +461,38 @@ fn test_your_own_component_data_overrides_the_database() {
 		assert false, 'read a file that is not there'
 	} else {
 		assert err.msg().contains("can't be read"), err.msg()
+	}
+}
+
+fn test_a_files_data_follows_the_databases_root() {
+	// A file's own data directories go after the compounds of the database's
+	// root, whose kᵢⱼ come with them (M10a's D9): here a copy of the data whose
+	// pr.ipd lists 0.0313 for methane/n-butane, where the source tree's lists
+	// 0.0244.
+	root := os.join_path(os.vtmp_dir(), 'reflux_file_root_${os.getpid()}')
+	comps := os.join_path(root, 'components')
+	vendor := os.join_path(root, 'vendor', 'chemsep')
+	os.mkdir_all(comps)!
+	os.mkdir_all(vendor)!
+	os.mkdir_all(os.join_path(root, 'mine'))!
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	for cas in ['74-82-8', '74-84-0', '74-98-6', '106-97-8', '109-66-0'] {
+		os.cp(os.join_path(components.default_dir, '${cas}.toml'), os.join_path(comps,
+			'${cas}.toml'))!
+	}
+	ipd := os.read_file(os.join_path(components.vendor_dir, 'pr.ipd'))!
+	os.write_file(os.join_path(vendor, 'pr.ipd'), ipd.replace('106-97-8   .244e-1',
+		'106-97-8   .313e-1'))!
+	copy := components.open(root, [])!
+	l := flowsheet.load_text(sub('names = [', 'data = ["mine"]\nnames = ['), db: copy, dir: root)!
+	m := l.fluid.model
+	if m is thermo.Cubic {
+		// Methane is the first of five compounds, and n-butane the fourth.
+		assert m.kij[3] == 0.0313 && m.kij[15] == 0.0313
+	} else {
+		assert false, 'not a cubic'
 	}
 }
 
