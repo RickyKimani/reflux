@@ -38,13 +38,22 @@ Keep this section current: update it whenever a step is committed.
     escape and a smart-cast interface's field inside `${}`; to `thermo`, its
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
     unit failures.
-- **v0.1.0** is M0 to M4, a source release. Its CHANGELOG entry is dated
-  2026-11-03 on `main`. Next: the tag, when the owner says, once
-  `v run tools/release.vsh` passes on `main` (`git tag -a v0.1.0 -m "reflux
-  0.1.0"`, then `git push origin v0.1.0`).
-- **The next milestone** is the owner's to choose. By the roadmap, M10a
-  (thermo and the flash from Python), then M10b (flowsheets from Python);
-  M5 to M9 build on M4.
+- **v0.1.0** is released: M0 to M4, a source release, tagged on
+  2026-11-03 at `45d4ce6` on `main` (an annotated tag, pushed). The next
+  release starts with a new CHANGELOG entry and its version in `v.mod`, and
+  a changed golden report goes in that entry by name.
+- **M10a (thermo and the flash from Python) is planned** on branch
+  `m10a-python`. Its plan, `docs/m10a-plan.md`, was approved on 2026-11-04:
+  exit criteria 1–11, decisions D1–D14 and steps 1–10, ending in v0.2.0.
+  - Its probes found that V 0.5.2's collector has thread support on Windows
+    too, so the spike's thread registration is needed on both OSes (the
+    spike's write-up says otherwise, and step 1 corrects it). 8 Python threads
+    at once get the serial answers bit for bit, at about 2× the serial rate.
+  - D9 changes `components`: the kᵢⱼ banks and `mc-PR.lib` load from the
+    source tree whatever `REFLUX_DATA` says, and must follow the data root.
+  - Next is step 1: the library skeleton (`capi`, `capi/reflux.h`, the
+    registry, thread registration, restricted exports, `tools/python.vsh`).
+  - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
 
