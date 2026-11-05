@@ -387,10 +387,13 @@ thread's rate. Every point allocates, and the collector's lock is shared.
 
 ## Speed
 
-A call costs 0.1 to 0.25 ms more than V's own loop over the same points, the
-package's NumPy setup and its result objects, so pass arrays, not one point at
-a time. Per point, the C API adds a few µs to properties and nothing measurable
-to a flash. [benchmarks.md](benchmarks.md), "From Python", has the numbers.
+A call costs about 0.1 to 0.2 ms more than V's own loop over the same points,
+the package's NumPy setup and its result objects, so pass arrays, not one
+point at a time. Per point, the C API adds a few µs to properties and nothing
+measurable to a flash. But V's code runs 1.3 to 1.8 times slower inside the
+library, in a Python process, than in a V program of its own, for a reason
+not yet known, so a PT flash takes that much longer from Python.
+[benchmarks.md](benchmarks.md), "From Python", has the numbers.
 
 ## From other languages
 

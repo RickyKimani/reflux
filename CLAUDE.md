@@ -88,7 +88,11 @@ Keep this section current: update it whenever a step is committed.
     The script found a bug in M3's PT flash, which is fixed: the split's
     extrapolation is kept only if it lowers the residual. It goes in 0.2.0's
     CHANGELOG entry.
-  - Next is step 9: release v0.2.0.
+  - **Step 9 is done:** v.mod and the package are 0.2.0, with its CHANGELOG
+    entry undated until the tag, which comes on `main` after step 10 and the
+    merge, as v0.1.0's did. The golden reports carry 0.2.0, and their test
+    now holds each to v.mod's version. No number in them moved.
+  - Next is step 10: docs and the exit review.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.

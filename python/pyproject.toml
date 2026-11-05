@@ -18,7 +18,7 @@ reflux = ["_lib/*.dll", "_lib/*.so"]
 [project]
 name = "reflux"
 # v.mod's, which python/tests/test_library.py checks.
-version = "0.1.0"
+version = "0.2.0"
 description = "A steady-state chemical process simulator: thermodynamics and flashes from Python, on NumPy arrays"
 license = "MIT"
 requires-python = ">=3.11"

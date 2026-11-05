@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 8 are done, and step 9 is
+Status: **approved** on 2026-11-04. Steps 1 to 9 are done, and step 10 is
 next.
 
 ## Goal
@@ -1030,8 +1030,49 @@ and their Python tests together.
   - on the page, one printed digit, and an example's UV flash given H for U;
   - in the package, `bubble_t` at β = 1.
 
-### 9. Release v0.2.0
-- The CHANGELOG entry, v.mod's version, and the release gate, as for v0.1.0.
+### 9. Release v0.2.0 — done
+- **The version:** v.mod's and the package's are 0.2.0. `CHANGELOG.md` has its
+  entry, undated until the tag. As for v0.1.0, the tag comes on `main` after
+  step 10 and the merge, so 0.2.0 is the reviewed commit. Then a commit dates
+  the entry, and `tools/release.vsh` runs there.
+- **The entry:**
+  - Added: the C API, the package, the same numbers as the V API, the exit
+    script, and the speed from Python.
+  - Changed: `REFLUX_DATA` as a data root, with the kᵢⱼ from it;
+    `components`' API, as step 2 listed it; the golden reports written again.
+  - Fixed: step 8's PT flash, and an empty name.
+  - Known limitations: 0.1.0's, with no wheels, threads that don't scale far,
+    and V's code slower inside the library.
+- **What a version promises from 0.2.0 on** (D13), in the CHANGELOG:
+  - a change to the C API that would break a caller is a new ABI version, and
+    the package refuses a library of another;
+  - the package's API changes as the V modules' does, in a minor release
+    before 1.0 and never in a patch.
+- **The golden reports were written again** (`tools/golden.vsh`), for the
+  version each carries, and the entry names all five. Compared with v0.1.0's
+  number by number, none moved, so step 8's flash fix doesn't touch their
+  flashes.
+- **A version's golden reports are its own now.** `flowsheet/golden_test.v`
+  checks that each report's `reflux` is v.mod's version. Before, a new version
+  could leave them saying the old one, and the gate wouldn't see a change to
+  name.
+- **The gate on this branch** refuses for exactly the reasons it should: the
+  branch isn't `main`, and the entry is undated. While the step was
+  uncommitted, it also refused on the tree's changes.
+- **The guide's speed section** now says what a flash costs from Python: V's
+  code runs 1.3 to 1.8 times slower inside the library. The entry's Known
+  limitations say so too.
+- **Tests:** the golden test's version check.
+- **Planted mistakes:** 4, in a local clone with the step committed in it,
+  since the gate reads git. All were caught:
+  - a golden report left at 0.1.0, by the golden test;
+  - the package at 0.1.0, by `test_library.py`;
+  - a golden report not named in the entry, by the gate, which names it;
+  - v.mod at 0.1.0, by the gate.
+  - The third first survived, in a clone with the step uncommitted. The gate
+    reads the golden reports' changes from git, between the last tag and
+    `HEAD`, and they weren't in `HEAD`. A release's tree is clean, so `HEAD` is
+    the tree, and committed, the gate named it.
 
 ### 10. Docs and exit review
 - README, roadmap, design notes, the V notes, and a criterion-by-criterion
