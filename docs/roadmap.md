@@ -257,6 +257,22 @@ NumPy, pandas and Jupyter on reflux results the way you use them on
 anything else.
 
 **M10a — thermo and flash from Python (after M3)**
+
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m10a-plan.md](m10a-plan.md), and the guide is
+[python.md](python.md). The plan went further than the exit below:
+- properties, vapour pressures and the stability test as well as every
+  flash, each point with its own status and its reason in words;
+- exactly the header's functions exported, its types held by a test on both
+  OSes, seeded fuzzing of every function, 8 threads giving the serial answers
+  bit for bit, and memory flat over 100,000 calls;
+- a data root (D9), so that a build away from its source tree still finds its
+  kᵢⱼ, which fixed the CLI too;
+- the cost of a call from Python measured, and a guide whose every example
+  runs in CI;
+- a PT-flash bug the exit script found, fixed, and the second release,
+  v0.2.0.
+
 - A C API built with `v -shared`. Its functions are exported with V's
   `@[export: 'reflux_…']` attribute and take plain pointer-and-length `f64`
   arrays, so NumPy arrays pass in and out **without copying** (I1).
@@ -278,8 +294,8 @@ anything else.
   - the calling thread registered with the GC at every entry point (Python
     threads abort a Linux collection otherwise);
   - no panics reachable from the API.
-- Still to test: concurrent calls from several Python threads, since
-  `ctypes` releases the GIL.
+- Concurrent calls from several Python threads, since `ctypes` releases the
+  GIL: tested in M10a, safe and bit for bit, though they don't scale far.
 
 **Exit:** a script computes a T–x–y diagram and a phase-fraction map into
 NumPy arrays and plots them with matplotlib, and that script runs in CI.
@@ -433,8 +449,9 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - H5 Monte Carlo uncertainty propagation. **after M8**
 
 ### I — Interoperability
-- I1 C ABI shared library: zero-copy arrays, vectorised calls. **M10a**
-- I2 Python package (`ctypes` first, wheels later); flowsheet objects. **M10a, M10b**
+- I1 C ABI shared library: zero-copy arrays, vectorised calls. **M10a** (done)
+- I2 Python package (`ctypes` first, wheels later); flowsheet objects. **M10a** (the
+  `ctypes` package, done), **M10b**
 - I3 CAPE-OPEN 1.1 property package; then unit operations; then reflux
   as a host for other vendors' CAPE-OPEN components. **M11**
 - I4 FMI 3.0 export (co-simulation first, model exchange after M13). **M11**

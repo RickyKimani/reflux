@@ -8,8 +8,8 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 9 are done, and step 10 is
-next.
+Status: **done** on Windows, on 2026-11-05, with the exit review at the end.
+CI on the tip (steps 4 to 10) is still to run.
 
 ## Goal
 
@@ -1074,19 +1074,147 @@ and their Python tests together.
     `HEAD`, and they weren't in `HEAD`. A release's tree is clean, so `HEAD` is
     the tree, and committed, the gate named it.
 
-### 10. Docs and exit review
-- README, roadmap, design notes, the V notes, and a criterion-by-criterion
-  review, as in M1 to M4.
+### 10. Docs and exit review — done
+- **README:**
+  - M10a marked done, with what it brought in the status list;
+  - its plan and the Python guide in the list of docs;
+  - the library's build command among the first commands.
+- **Roadmap:**
+  - M10a marked done, with what the plan went beyond its exit;
+  - its open item, concurrent calls from Python threads, settled;
+  - I1 done, and I2's `ctypes` package done, its wheels still to come.
+- **Design notes:** "The C API" and "Where the data comes from", and step 8's
+  extrapolation test in "PT flash", were written as the steps went.
+- **V notes:** the test count, 63 files against M4's 58.
+- **What the review added:**
+  - **Criterion 1 asks that every integer be `i32` or `i64`.** The C
+    compiler checks the header's declarations against the code, but only on
+    Windows (D3). And the Python tests compared ctypes' functions with the
+    header's by name, not by type. So `test_library.py` now parses the
+    header's 14 declarations, 100 parameters in all. Each must return an
+    `int32_t` and take only `int32_t`, `int64_t`, `double`, text and pointers
+    to them, and ctypes must declare each function as the header does, type
+    for type, on both OSes. Two mistakes planted for it are caught: a
+    handle's ctypes argument as `c_int32`, and a count in the header as
+    `long`.
+  - **Criterion 9 names `mc-PR.lib`.** The install test checked that an
+    installed package finds its compounds and kᵢⱼ, and a Mathias–Copeman α
+    from the data root was tested only with a root passed by hand. The
+    install test now also asks the installed package for a Mathias–Copeman
+    α, and holds it to mc-PR.lib's constants, not the fallback.
+- **Tests:** the Python suite is 83 tests.
 
 ## Risks
 
 | Risk | Effect | Fallback |
 |---|---|---|
-| Restricting exports on Windows breaks V's own initialisation, which runs from the DLL's entry | a library that loads but doesn't start | export by `__declspec(dllexport)` through a C wrapper instead of a `.def` file; or keep gcc's export-all and test that the header's functions are present |
-| Concurrent calls fail on Linux, where the probes didn't run | crashes under threads | a lock around every call (correct, if slower), and a report to V upstream |
-| A flash path panics on input the V tests never gave it | Python dies | the fuzzing of step 6; each panic found becomes a typed error in the module it came from |
-| A V update changes the collector or `-shared` | the library breaks | V is pinned (`.v-version`); the Python tests run in CI on every change |
-| `ctypes` overhead dominates small calls | slow scalar use from Python | vectorised calls are the way in; the benchmarks say how small is too small |
+| Restricting exports on Windows breaks V's own initialisation, which runs from the DLL's entry | a library that loads but doesn't start | export by `__declspec(dllexport)` through a C wrapper instead of a `.def` file; or keep gcc's export-all and test that the header's functions are present. **Didn't happen:** with the `.def` file the DLL exports the header's functions alone, and starts (step 1). V's runtime starts on the first call, not at load, which D5 now says. |
+| Concurrent calls fail on Linux, where the probes didn't run | crashes under threads | a lock around every call (correct, if slower), and a report to V upstream. **Half happened:** concurrent calls were fine, but a first call made from a Python thread that then ended aborted Linux's next collection (CI, after step 3). The library unregisters that thread now (D5, amended in step 3), and no lock was needed. |
+| A flash path panics on input the V tests never gave it | Python dies | the fuzzing of step 6; each panic found becomes a typed error in the module it came from. **Didn't happen:** 102,000 fuzzed calls across six seeds found no panic and no hang (step 6). |
+| A V update changes the collector or `-shared` | the library breaks | V is pinned (`.v-version`); the Python tests run in CI on every change. **Didn't happen:** V stayed at 0.5.2. |
+| `ctypes` overhead dominates small calls | slow scalar use from Python | vectorised calls are the way in; the benchmarks say how small is too small. **As expected:** a call costs about 0.1 ms more from Python, against 9.3 µs for one point of properties in V. At 100 points that's 4.6 µs a point (step 7). |
+
+## Exit review
+
+Checked on 2026-11-05 at the tip of `m10a-python`, under V 0.5.2 (eab77e7)
+and gcc 16.2 on Windows 11.
+- **Locally:** all 63 V test files pass under `v run tools/check.vsh`, with
+  tcc (354 s) and with gcc (684 s, with the `-prod` build), and so
+  does each check's run of the CLI. All 83 Python tests pass under `v run
+  tools/python.vsh test`, with the `-prod` library and the V reference built
+  alike.
+- **In CI:** the last pass, on Windows and Linux with tcc and gcc, was step
+  3's commit (`40360d4`, run 41977580431). Steps 4 to 10 haven't been through
+  CI yet, since the branch hasn't been pushed since then. Their Linux half
+  waits on that run, criterion 7's above all.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | The C API is what its header says | **met** | `capi_test.v`: the header's every `#define` is the code's own value, and its declarations are exactly the `@[export]`s. On Windows the header is compiled with the module, so the C compiler checks each declaration's types (D3). `test_library.py`: the library exports exactly the header's functions, by `objdump` on Windows and `nm` on Linux; the ABI's version is the same in Python, the library and the header. Every call returns an `int32_t` and takes only fixed-width integers, doubles, text and pointers to them, and ctypes declares each the same, type for type (added by this review). Arrays are a pointer with a count: each input's 1 or n, and n for the outputs. |
+| 2 | Nothing panics | **met** | Each function's bad input is a test, in V and Python: NaN, ±∞, a T or P at or below 0, a negative mole fraction, a feed of no moles, zero and negative counts, counts that don't match, codes out of range, unknown, stale and freed handles, a handle of the wrong kind, empty and unknown names, text that isn't UTF-8. `fuzz_test.v` calls every exported function with mutated arguments, holding each call to the header's contract with its own oracle for bad input: 2,000 calls in every CI job under both compilers, and 100,000 more under five seeds with gcc `-prod`. No panic, no hang. |
+| 3 | The same numbers as the V API, bit for bit | **met on Windows; Linux in CI** | `tools/capi_reference.v`, built with the library's compiler and flags (D12), and `test_reference.py`: the text, 240 property points over four fluids and three roots, 44 vapour pressures, 36 stability tests, and every flash, failures included. `test_examples.py` adds the exit script's 202 vapour-fraction flashes and 6,480 PT flashes. Every bit agrees, NaN and −0 included, with the library built `-prod` and `-debug`. CI's gcc jobs run them on both OSes. |
+| 4 | Vectorised, without copies | **met** | A call takes N points and fills arrays the caller made. `test_props.py`: an input already of the points' shape, C-contiguous `float64`, shares memory with what the library is given, and one that must be broadcast or converted is copied. T, P and z broadcast by NumPy's rules, z one composition for every point or a row each, and a grid's every point equals that point alone, bit for bit (`test_props.py`, `test_flash.py`). 10,000 points in one call agree with `thermo` (`test_thermo_reference.py`). |
+| 5 | Each point has its own status | **met** | In V and Python, a point that fails leaves every other's answer as it is alone, bit for bit (`props_test.v`, `test_props.py`, `test_flash.py`). Every status is reached through the public API, each `Failure` kind with its own number: no convergence, no volume root, more phases, swapped phases, outside the envelope, supercritical, not finite, and bad input (`test_flashes.py`, step 5). `reason(index)` gives a point's reason in words, the library's for that point alone. |
+| 6 | Handles are safe, and memory is flat | **met** | Ids are never reused: a freed or never-given id, at both ends of `i64`, and a handle of the wrong kind are errors (`capi_test.v`, `database_test.v`, `test_library.py`). The registry holds up under 20 rounds of 8 threads. A closed fluid or database is a `BadHandle`, and one only Python held is freed when it's garbage (`test_database.py`), while one Python holds survives the collector (`test_handles.py`). `test_memory.py`: 100,000 calls of every kind, fluids made and freed among them, and the heap stays at 4,580 KiB throughout. |
+| 7 | Threads are safe | **met on Windows; Linux in CI** | `test_threads.py`: 8 Python threads calling every vectorised function three times each get the serial answers bit for bit, NaN included. The first call from a thread that ends is safe, on Linux too (CI, step 3). Throughput is recorded, with no target: 1.6× serial for properties, 2.3× for the PT flash and 1.3× for PH, since the collector's lock is shared. The full test first runs on Linux in CI on this branch's next push. |
+| 8 | The exit script | **met on Windows; Linux in CI** | [python/examples/phase_diagrams.py](../python/examples/phase_diagrams.py): a T–x–y of methane and n-butane at 20 bar and a phase-fraction map of a natural gas, into NumPy arrays, drawn with matplotlib. `test_examples.py` runs it, checks its diagrams by their claims, and holds its numbers to the V API's bit for bit. It's in `tools/python.vsh test`, which CI's gcc jobs run. |
+| 9 | It installs, and finds its data | **met** | `v run tools/python.vsh build` builds the library, and `pip install -e python` (or `uv pip`) installs the package, editable or not. `test_install.py` installs both ways into a fresh environment from a copy away from the source tree, and the package finds its data root, ChemSep's kᵢⱼ and, since this review, mc-PR.lib's constants. A copy of the data root elsewhere is used whole, `REFLUX_DATA` moves the default, and a directory of your own comes after the root (`test_database.py`). |
+| 10 | Speed is measured | **met** | [benchmarks.md](benchmarks.md), "From Python", with gcc `-prod`: properties and a PT flash at 1, 100 and 10,000 points, against V's own loop doing the C API's work, in eight alternating rounds. The overhead: about 0.1 to 0.2 ms a call, a few µs a point for properties, and nothing measurable from the C API for a flash, though V's code runs 1.3 to 1.8 times slower inside the library. `benchmarks/flowsheet_test.v` checks that the committed report has every timing. |
+| 11 | CI green, docs updated | **met locally; CI on the tip to come** | The docs: README, roadmap, design notes, V notes, the header, and [python.md](python.md), whose 15 examples `test_docs.py` runs, each printing exactly what the page shows. CI passed on `40360d4`; steps 4 to 10 run on the next push. |
+
+**Planted mistakes.** 217 were planted across steps 1 to 10, one change at a
+time, in scratch copies. Step 2's 49 were run again in step 3, after three of
+them were found not to compile. Every survivor got a new test or is explained
+in its step. Two are explained:
+- dropping `-static-libgcc`, which changes nothing while gcc 16.2's builds
+  call none of libgcc's helpers (step 1);
+- ln φ's own finite check, which no state reaches on its own (step 3).
+
+Survivors also made the tests stronger:
+- the registry's threads test runs 20 rounds on fresh maps (step 1);
+- the fuzzer computes its own oracle for bad input and tries every text's
+  buffer at its edge (step 6);
+- the reference's feeds add to 3, not 2, so that x/n and x·(1/n) differ
+  (step 7).
+
+The scripts learned two things:
+- a timeout must kill the whole process tree (step 1);
+- a mutation that doesn't compile is no catch (step 3).
+
+**Bugs found along the way,** each fixed in its step:
+- the data's kᵢⱼ and Mathias–Copeman constants always came from the source
+  tree, whatever `REFLUX_DATA` said, in the CLI too (the research; D9, step 2);
+- an empty compound name matched the 35 compounds without an InChIKey (step
+  2, from M2);
+- a one-compound fluid's `Saturation.reason` lost its compound axis (step 3);
+- on Linux, the collector aborted once the thread of the library's first call
+  had ended (step 3, by CI);
+- V's loop in the benchmarks skipped the phase label the C API computes, which
+  made the C API look dearer (step 7);
+- M3's PT flash failed well inside a natural gas's two-phase region, where an
+  extrapolation overshot (step 8, by the exit script);
+- `gen_m10a_bench.py` wrote CRLF (step 8);
+- the spike's write-up was wrong twice about Windows: V's collector has thread
+  support there, and V starts a library on its first call (step 1);
+- in V 0.5.2: a shared library's first call starts the runtime behind a flag
+  that isn't thread-safe, so the first call mustn't race (step 1).
+
+**Changed from the plan along the way:**
+- **Decisions amended:** D3 (step 1), D5 (steps 1 and 3) and D6 (step 4),
+  each marked in its table.
+- **The flash (M3):** a split's extrapolation is kept only if it lowers the
+  residual (step 8).
+- **The golden reports** carry v.mod's version, which their test now checks
+  (step 9).
+- **The release** is tagged on `main` after the merge, as v0.1.0 was (step 9).
+- **This review** added the header's types to criterion 1's test, and
+  Mathias–Copeman constants to criterion 9's.
+
+**Carried forward, not done in M10a:**
+- **CI on this branch's tip,** steps 4 to 10, on Windows and Linux, before the
+  PR.
+- **v0.2.0's tag,** after the merge: date its CHANGELOG entry, run
+  `tools/release.vsh` on `main`, then tag and push.
+- **V's code runs 1.3 to 1.8 times slower inside the library** in a Python
+  process than in a V program, and fewer collections don't remove it. Threads
+  scale to 1.3 to 2.3 times with 8, the collector's lock being shared. Both
+  are M8's, with its parallel sweeps.
+- **thermo's `saturation_pressure`** gives up at Tc(1−1e-6) for n-butane and
+  at or below 10 K. The status says so, and a better method is to come.
+- **The stability test's extrapolation** is still kept unjudged, on M3's
+  evidence of 6,000 states. The split's wasn't safe, so it's worth watching.
+- **Wheels** with the library inside, and publishing (I2).
+- **The figure** in `docs/images/` is drawn by the exit script and committed.
+  No test compares it, so it's drawn again by hand when the script changes.
+- **From M4:** `flash.uv` on cold liquids, PH for 10 components a little
+  slower than DWSIM's, and warm starts (M8).
+- **Upstream reports:** to V, a shared library's first call that isn't
+  thread-safe (and from M4, the TOML panic and the interpolation bug); to
+  `thermo` and DWSIM, M4's.
+
+**Verdict: M10a is done on Windows.** It's done once CI passes on the tip,
+whose Linux jobs run criteria 3, 7 and 8 there for the first time since step
+3.
 
 ## Not in M10a
 

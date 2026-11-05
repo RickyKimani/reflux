@@ -12,7 +12,7 @@ import pytest
 
 import reflux
 from reflux import _native
-from support import ROOT, header_defines, header_functions, v_mod_version
+from support import ROOT, header_declarations, header_defines, header_functions, v_mod_version
 
 
 def exported(path):
@@ -78,6 +78,37 @@ def test_the_library_exports_exactly_the_header():
     # spike found 1,600 of them), and not a function the header lacks.
     assert exported(_native.library_path()) == set(header_functions())
     assert set(_native.FUNCTIONS) == set(header_functions())
+
+
+# The C types a ctypes declaration may stand for, by identity: ctypes.c_int32 is
+# c_long on Windows and c_int on Linux, so a declaration of c_int, which V's
+# 64-bit int would need to be c_int64, fails on one of them.
+C_TYPES = [(ctypes.c_int32, "int32_t"), (ctypes.c_int64, "int64_t"), (ctypes.c_double, "double"),
+           (ctypes.c_char_p, "char*"), (ctypes.POINTER(ctypes.c_char_p), "char**"),
+           (ctypes.POINTER(ctypes.c_int32), "int32_t*"), (ctypes.POINTER(ctypes.c_int64), "int64_t*"),
+           (ctypes.POINTER(ctypes.c_double), "double*")]
+
+
+def c_type(t):
+    return next((name for k, name in C_TYPES if t is k), repr(t))
+
+
+def test_the_header_takes_fixed_widths_and_ctypes_declares_them_so():
+    # Exit criterion 1: every call returns an int32_t, and takes integers of
+    # fixed width, doubles, text and pointers to them, nothing else. The C
+    # compiler checks the header against the code only on Windows (D3), so
+    # this checks the header itself, on both. And ctypes must declare each
+    # function as the header does, type for type: a c_int32 where the header
+    # has int64_t would pass a handle's low half, and nothing else would
+    # notice until a handle passed 2³¹.
+    decls = header_declarations()
+    assert set(decls) == set(header_functions()) == set(_native.FUNCTIONS)
+    allowed = {name for _, name in C_TYPES}
+    for name, (result, params) in decls.items():
+        assert result == "int32_t", name
+        assert set(params) <= allowed, (name, params)
+        restype, argtypes = _native.FUNCTIONS[name]
+        assert (c_type(restype), [c_type(t) for t in argtypes]) == (result, params), name
 
 
 def test_a_reason_is_cut_to_fit():

@@ -18,6 +18,21 @@ def header_functions():
     return re.findall(r"^\w[\w \*]*?\b(reflux_\w+)\(", HEADER, re.M)
 
 
+def header_declarations():
+    """Each function capi/reflux.h declares: its result's C type and its
+    parameters' types, spaces removed ("int64_t", "double*", "char**")."""
+    out = {}
+    for result, name, params in re.findall(r"^(\w[\w \*]*?)\s*\b(reflux_\w+)\(([^)]*)\);", HEADER,
+                                           re.M):
+        types = []
+        for p in params.split(","):
+            p = " ".join(p.split())
+            if p and p != "void":
+                types.append(re.match(r"^(.*?)\w+$", p)[1].replace(" ", ""))
+        out[name] = (result.replace(" ", ""), types)
+    return out
+
+
 def header_defines():
     """The header's #define REFLUX_* values, without the prefix."""
     return {name: int(value) for name, value in

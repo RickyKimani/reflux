@@ -77,8 +77,9 @@ resolves the bare name, so the module is now `benchmarks`.
 
 **`v test` is slower than `go test`, and two settings matter.** Go compiles
 each package once and links its tests. V compiles every `_test.v` file into
-a program of its own, with all of `vlib` it uses: 58 C compilations for
-reflux's 58 test files at the end of M4, against 45 at the end of M3.
+a program of its own, with all of `vlib` it uses: 63 C compilations for
+reflux's 63 test files at the end of M10a, against 58 at the end of M4 and 45
+at the end of M3.
 - **Jobs:** the runner allows one job per 8 GiB of RAM, at most 4, so a
   14 GiB machine runs them one at a time. A build peaks near 1 GB, so
   `VJOBS=4` is safe there, and [tools/check.vsh](../tools/check.vsh) sets it.

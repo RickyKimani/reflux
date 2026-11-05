@@ -42,9 +42,11 @@ Keep this section current: update it whenever a step is committed.
   2026-11-03 at `45d4ce6` on `main` (an annotated tag, pushed). The next
   release starts with a new CHANGELOG entry and its version in `v.mod`, and
   a changed golden report goes in that entry by name.
-- **M10a (thermo and the flash from Python) is planned** on branch
-  `m10a-python`. Its plan, `docs/m10a-plan.md`, was approved on 2026-11-04:
-  exit criteria 1–11, decisions D1–D14 and steps 1–10, ending in v0.2.0.
+- **M10a (thermo and the flash from Python) is done** on branch
+  `m10a-python`, on Windows: steps 1–10 of `docs/m10a-plan.md` (approved on
+  2026-11-04), whose exit review is at its end. CI on the tip, steps 4 to 10,
+  is still to run, since the branch was last pushed at step 3. Then the PR
+  into `main`, and v0.2.0's tag after the merge.
   - Its probes found that V 0.5.2's collector has thread support on Windows
     too, so the spike's thread registration is needed on both OSes. 8 Python
     threads at once get the serial answers bit for bit, at about 2× the serial
@@ -92,7 +94,15 @@ Keep this section current: update it whenever a step is committed.
     entry undated until the tag, which comes on `main` after step 10 and the
     merge, as v0.1.0's did. The golden reports carry 0.2.0, and their test
     now holds each to v.mod's version. No number in them moved.
-  - Next is step 10: docs and the exit review.
+  - **Step 10 is done:** the README, roadmap and V notes, and the exit
+    review. The review added a test of the header's types against ctypes'
+    (criterion 1), and Mathias–Copeman constants to the install test
+    (criterion 9).
+  - Carried forward (in the review): V's code slower inside the library and
+    threads that don't scale (M8); thermo's `saturation_pressure` near Tc
+    and below 10 K; the stability test's unjudged extrapolation, to watch;
+    wheels (I2); the committed figure, drawn by hand; a report to V on a
+    shared library's first call.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.

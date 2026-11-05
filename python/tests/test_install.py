@@ -1,7 +1,7 @@
 """Installing the package (D10, exit criterion 9). Built and installed into a
 fresh environment from a copy away from the source tree, it uses the library
 inside itself and finds the data in the source tree the library was built
-from: kᵢⱼ included. Installed editable, as the README says to, it's the source
+from: kᵢⱼ and Mathias–Copeman constants included. Installed editable, as the README says to, it's the source
 tree's own package."""
 
 import os
@@ -16,6 +16,9 @@ import reflux
 print(reflux.__file__)
 print(reflux.data_root())
 print(reflux.Database().fluid("PR", ["methane", "n-butane"]).kij[0, 1])
+mc = reflux.Database().fluid("PR", ["n-butane"], alpha="mathias_copeman")
+# Not "the equation's own: mc-PR.lib has no …", its fallback.
+print(mc.setup["components"][0]["alpha"].startswith("Mathias–Copeman, mc-PR.lib line"))
 """
 
 
@@ -38,12 +41,12 @@ def test_the_package_installs(tmp_path):
     python = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
     run(["uv", "pip", "install", "--quiet", "--python", str(python), str(src)], env=env)
-    where, root, kij = run([str(python), "-c", CHECK], cwd=tmp_path, env=env).split()
+    where, root, kij, mc = run([str(python), "-c", CHECK], cwd=tmp_path, env=env).split()
     assert where.startswith(str(venv)) and where.endswith("__init__.py")
-    assert root == str(ROOT / "data") and kij == "0.0244"
+    assert root == str(ROOT / "data") and kij == "0.0244" and mc == "True"
 
     run(["uv", "pip", "install", "--quiet", "--python", str(python), "-e",
          str(ROOT / "python")], env=env)
-    where, root, kij = run([str(python), "-c", CHECK], cwd=tmp_path, env=env).split()
+    where, root, kij, mc = run([str(python), "-c", CHECK], cwd=tmp_path, env=env).split()
     assert where == str(ROOT / "python" / "reflux" / "__init__.py")
-    assert root == str(ROOT / "data") and kij == "0.0244"
+    assert root == str(ROOT / "data") and kij == "0.0244" and mc == "True"

@@ -20,12 +20,19 @@ v run . demo 300 2.5  # T in K, P in bar
 v -W test .           # all tests, warnings treated as errors
 ```
 
+```bash
+v run tools/python.vsh build   # the C API's library, for reflux from Python: docs/python.md
+```
+
 - [docs/roadmap.md](docs/roadmap.md) is what gets built, in what order, and
   how each piece is tested. [docs/m1-plan.md](docs/m1-plan.md) is M1's
   plan, step by step, with its exit review at the end. The same goes for
   [docs/m2-plan.md](docs/m2-plan.md), component data,
   [docs/m3-plan.md](docs/m3-plan.md), the flash, and
-  [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet.
+  [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet, and
+  [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python.
+- [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
+  and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
   10,000 random mixtures from the database, every answer checked, and
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
@@ -193,10 +200,11 @@ at the edges, i.e. input files and printed output.
 
 ## Status
 
-**M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash) and
-M4 (the first flowsheet) are done.** The exit reviews are at the ends of
-[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
-[docs/m3-plan.md](docs/m3-plan.md) and [docs/m4-plan.md](docs/m4-plan.md).
+**M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash), M4
+(the first flowsheet) and M10a (thermo and the flash from Python) are done.**
+The exit reviews are at the ends of [docs/m1-plan.md](docs/m1-plan.md),
+[docs/m2-plan.md](docs/m2-plan.md), [docs/m3-plan.md](docs/m3-plan.md),
+[docs/m4-plan.md](docs/m4-plan.md) and [docs/m10a-plan.md](docs/m10a-plan.md).
 What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
@@ -298,8 +306,28 @@ And from M4, the first flowsheet:
 - [x] A first release, v0.1.0, with a release gate
       ([CHANGELOG.md](CHANGELOG.md)).
 
-By the roadmap, next is M10a: thermo and the flash callable from Python,
-with NumPy arrays, then M10b, flowsheets from Python. M5 to M9 build on M4:
+And from M10a, thermo and the flash from Python
+([docs/python.md](docs/python.md)):
+
+- [x] A C API, [capi/reflux.h](capi/reflux.h): component data and fluids,
+      properties, vapour pressures, stability and every flash, many points
+      in a call, each with its own status. The library exports exactly the
+      header's functions, on Windows and Linux.
+- [x] A Python package over it, with `ctypes`: NumPy arrays in and out,
+      broadcast by NumPy's rules, an input that's already contiguous
+      `float64` never copied, and NaN with a status and its reason where a
+      point has no answer.
+- [x] The same numbers as the V API, bit for bit, checked in CI against a V
+      program built with the library's compiler and flags.
+- [x] Safe from many Python threads at once, with the serial answers bit for
+      bit, memory flat over 100,000 calls, and seeded fuzzing of every
+      function with no crash.
+- [x] An exit script that draws a T–x–y diagram and a phase-fraction map
+      with matplotlib. It found a PT-flash bug, now fixed.
+- [x] A second release, v0.2.0, tagged on `main` after M10a's merge
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10b: flowsheets from Python. M5 to M9 build on M4:
 steam, activity models, columns, specifications and reactors.
 
 ## Roadmap
@@ -310,8 +338,8 @@ how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
 (ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
-✓. Next, **M10a** makes thermo and flash callable from Python with NumPy
-arrays, and **M10b** the flowsheets.
+✓ → **M10a** thermo and flash from Python ✓. Next, **M10b** makes the
+flowsheets callable from Python.
 
 ## Development
 
