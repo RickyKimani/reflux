@@ -903,7 +903,13 @@ What M1's spike and M10a learned, in V terms:
     aborts with "Threads explicit registering is not previously enabled". So
     one call must come first, from one thread: the Python package makes it at
     import;
-  - the thread making that call becomes the collector's main thread.
+  - the thread making that call becomes the collector's main thread, and
+    stays registered for good. If it ends, on Linux the next collection
+    signals the dead thread and aborts ("Signals delivery fails constantly").
+    Windows asks whether a thread has exited before suspending it. So on
+    Linux the library unregisters that thread at the end of its first call,
+    unless it's the process's first thread, as Boehm allows once for the main
+    thread ([capi/gc_threads.h](../capi/gc_threads.h)).
 - **`defer { … }`** runs at function exit, as in Go, except that it takes a
   block rather than a call.
 - **tcc can't build usable shared libraries** on Windows or Linux; use gcc.

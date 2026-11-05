@@ -23,7 +23,8 @@
  *   independent: freeing one leaves the other as it was.
  * - Any thread may call, and several at once. But the library starts itself
  *   on its first call, and that start must not race: make one call, such as
- *   reflux_abi_version(), from one thread before calling from several.
+ *   reflux_abi_version(), from one thread before calling from several. That
+ *   thread may end afterwards.
  */
 #ifndef REFLUX_H
 #define REFLUX_H

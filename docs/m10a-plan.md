@@ -147,7 +147,7 @@ Python tests against the library in the gcc jobs, on Windows and Linux.
 | D2 | ABI conventions | Every function is `reflux_*`, takes `i32`, `i64`, `f64` and pointers only, and returns an `i32`: 0, or a negative code for a failure of the whole call (a bad handle, wrong sizes, a lookup that fails), whose message it writes into a buffer the caller passes (pointer and length). Outputs go into arrays the caller allocated. No V memory crosses the boundary, only handles. | The caller owns every byte it sees, so nothing needs freeing on the Python side, and a message needs no shared state between threads. |
 | D3 | Exports | Only the header's functions: on Linux by `-fvisibility=hidden`, since V marks its exports visible; on Windows by a `.def` file generated from the header. A test compares the symbol table with the header on both OSes. **Amended in step 1:** on Linux by a linker version script, not `-fvisibility=hidden`, which can't hide the collector's symbols: they come from an object V compiled before (V's own macOS code says as much). And on Windows the header is compiled with the module, so the C compiler checks every declaration against the code. | Not the collector's internals, which gcc exports today on Windows, and one list of truth. |
 | D4 | Handles | An `i64` id into a registry: a map from id to fluid (or database) behind a `sync.Mutex`, ids from a counter that never repeats. `reflux_free(id)` drops one. In Python each handle belongs to an object with `close()`, a context manager and a `weakref.finalize`. | The collector can't see Python's references (the spike). A fresh id per object turns a stale or doubly freed handle into an error, not a crash. |
-| D5 | Threads | Every exported function registers the calling thread with the collector for the length of the call, on every OS (the spike's `gc_threads.h`). Concurrent calls are allowed; the registry's lock is the only shared state. **Amended in step 1:** V starts a shared library on its first call, not when it loads, behind a flag that isn't thread-safe, so the first call mustn't race. The package makes it at import, which Python's import lock serialises, and `reflux.h` tells other callers to make one call from one thread first. | The probes: needed on Windows too, and correct under load. Their speed isn't M10a's target. |
+| D5 | Threads | Every exported function registers the calling thread with the collector for the length of the call, on every OS (the spike's `gc_threads.h`). Concurrent calls are allowed; the registry's lock is the only shared state. **Amended in step 1:** V starts a shared library on its first call, not when it loads, behind a flag that isn't thread-safe, so the first call mustn't race. The package makes it at import, which Python's import lock serialises, and `reflux.h` tells other callers to make one call from one thread first. **Amended in step 3:** that first call's thread is where the collector starts, and it keeps it registered. On Linux a registered thread that has ended aborts the next collection, so the library unregisters it after its first call, unless it's the process's first thread. | The probes: needed on Windows too, and correct under load. Their speed isn't M10a's target. |
 | D6 | Vectorised results | Arrays of N points, C-contiguous `float64` (and `int32` for statuses), shaped for two phases: β, T, P, the number of phases, each phase's label, fraction, composition (N × 2 × c), molar V, H and S, and the whole's H, S and V. An absent phase is NaN. M6's third phase will be a new ABI version. | One layout for every flash, which is what a plot or a DataFrame wants. Two phases is all M3's flash returns. |
 | D7 | Statuses | Per point, an `int32`: 0 for an answer, a stable number for each `FlashError` kind, and one for bad input. Python maps them to an `IntEnum`. A point's reason in words comes from the single-point form of the same call, which writes the message into the caller's buffer. | Numbers fill an array cheaply; words for every point would cost a string each. |
 | D8 | The Python API | `reflux.Database()` (or a data directory), `db.fluid('PR', ['methane', 'n-butane'], alpha=..., kij=...)`, then on the fluid `props`, `psat`, `stability`, `flash_pt`, `flash_ph`, `flash_ps`, `flash_tv`, `flash_uv`, `flash_tvf`, `flash_pvf`, `bubble_t`, `bubble_p`, `dew_t` and `dew_p`, each taking arrays or scalars. A flash returns a `FlashResult` of arrays with a `status` array and `ok` mask. SI throughout, as the V API. Python 3.11 or later, NumPy 2. | The V API's names and units, so that the V docs and design notes serve Python too. |
@@ -240,7 +240,8 @@ and their Python tests together.
     serialises, and `reflux.h` tells any other caller to make one call from
     one thread first.
   - One thread's first call is fine, even from a thread that then ends: three
-    runs, and a test.
+    runs, and a test. (On Windows. On Linux it wasn't: CI found it after
+    step 3, and step 3's write-up has the fix.)
 - **CI:** the gcc jobs run `tools/python.vsh test` on both OSes.
   - The spike's step stays for now, because only its thread scenario has moved
     (into `test_threads.py`). The rest need later steps' functions:
@@ -550,6 +551,28 @@ and their Python tests together.
   - The Python suite is 57 tests.
 - **Found:**
   - The non-finite answers above.
+  - **In CI after the step was pushed,** the Linux gcc job aborted in
+    `test_an_import_from_a_thread_that_ends`: "Signals delivery fails
+    constantly at GC #2". This had gone unseen since step 1, since this
+    machine has no Linux.
+    - The library's first call starts the collector in its thread, which the
+      collector keeps registered as its main thread. When a Python thread
+      made that call, through its import, and ended, the next collection
+      signalled a dead thread.
+    - Windows asks whether a thread has exited before suspending it, which is
+      why the test passed here.
+    - The fix, in [capi/gc_threads.h](../capi/gc_threads.h): on Linux, in the
+      library, the first call's thread is unregistered when the call ends,
+      as Boehm allows once for the main thread. That isn't done if it's the
+      process's first thread (thread id = process id), which lives as long
+      as the process.
+    - Unregistering it always would have been simpler. But then Python's
+      main thread registers on every call, and an empty call from it took
+      2.29 µs instead of 0.37.
+    - The library is told it's the library by `-DCAPI_LIBRARY`, from
+      `tools/python.vsh`. A probe header that refused to compile with it
+      showed that it reaches the header there, and not in capi's own tests,
+      whose main thread is V's. D5 is amended.
   - thermo's `saturation_pressure`, successive substitution from Edmister's
     start, gives up at Tc(1−1e-6) for n-butane though it converges at
     Tc(1−1e-9), and doesn't converge at or below 10 K. The status says so;

@@ -396,4 +396,6 @@ or a test:
 - **A V shared library starts on its first call,** from whichever thread,
   behind a flag that isn't thread-safe: one call must come first, from one
   thread. A Python thread must be registered with the collector on Windows
-  as on Linux (`capi/gc_threads.h`).
+  as on Linux (`capi/gc_threads.h`). The collector keeps the first call's
+  thread registered for good, and on Linux it aborts once that thread has
+  ended, so the library unregisters it unless it's the process's first.

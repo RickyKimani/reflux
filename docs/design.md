@@ -1086,6 +1086,12 @@ language, so its conventions are the same for every function (M10a's D2):
   collector never knew (Python's) can allocate and collect. The library
   starts itself on its first call, which mustn't race, so one call comes
   first, from one thread: the Python package makes it at import.
+- **The first call's thread** is where the collector starts, and the
+  collector keeps it registered as its main thread. On Linux a registered
+  thread that has ended makes the next collection abort, so the library
+  unregisters it at the end of that call, unless it's the process's first
+  thread, which lives as long as the process. Then it registers per call,
+  like any other. Windows drops an exited thread itself.
 - **Exports** are exactly the header's functions: a `.def` file on Windows and
   a linker version script on Linux, both written from the header by
   [tools/python.vsh](../tools/python.vsh). On Windows the header is compiled

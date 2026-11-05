@@ -67,13 +67,17 @@ fn build(prod bool) ! {
 	if names.len == 0 {
 		return error('capi/reflux.h declares no functions')
 	}
-	mut cmd := ['v', '-cc', 'gcc', '-nocache', '-W', '-shared']
+	// CAPI_LIBRARY tells capi/gc_threads.h it's in the library, whose first call
+	// starts the collector in the caller's thread.
+	mut cmd := ['v', '-cc', 'gcc', '-nocache', '-W', '-shared', '-cflags', '-DCAPI_LIBRARY']
 	if prod {
 		cmd << '-prod'
 	}
 	$if windows {
-		// Without it the DLL needs libgcc_s_seh-1.dll, which Python won't find:
-		// since 3.8 it doesn't search PATH for a DLL's dependencies.
+		// Without it a DLL that calls one of libgcc's helpers needs
+		// libgcc_s_seh-1.dll, which Python won't find: since 3.8 it doesn't
+		// search PATH for a DLL's dependencies. (gcc 16.2's builds call none,
+		// so far: M10a step 1.)
 		cmd << ['-cflags', '-static-libgcc']
 	}
 	cmd << export_flags(names, join_path(temp_dir(), 'reflux_capi'))!
