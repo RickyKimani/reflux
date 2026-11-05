@@ -90,6 +90,19 @@ class Fluid:
         from .points import props
         return props(self, T, P, z, root)
 
+    def stability(self, T, P, z=None):
+        """Whether each feed is stable as one phase at T (K) and P (Pa): a
+        Stability, with tm and the phase that would appear. T, P and z
+        broadcast as for props."""
+        from .points import stability
+        return stability(self, T, P, z)
+
+    def flash_pt(self, T, P, z=None):
+        """The PT flash at many points: a FlashResult, its arrays of the
+        points' shape. T (K), P (Pa) and z broadcast as for props."""
+        from .points import flash
+        return flash(self, "pt", T, P, z)
+
     def psat(self, T, compound=None):
         """Vapour pressures (Pa) at temperatures T (K): a Saturation, with each
         compound's along a last axis, or one compound's (an index, name or

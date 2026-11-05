@@ -31,6 +31,14 @@ ROOTS = {"liquid": 0, "vapor": 1, "stable": 2}
 # reflux_props' properties, in the order it writes them (REFLUX_PROP_*).
 PROPS = ("z", "v", "h", "s", "g", "u", "a", "cp", "cv", "w", "mu_jt")
 
+# Flashes, for reflux_flash: what a point's two values are (REFLUX_FLASH_PT...).
+FLASHES = {"pt": 0}
+
+# A flash's values per point, and a phase's, in the order reflux_flash
+# writes them (REFLUX_FLASH_BETA..., REFLUX_PHASE_FRACTION...).
+FLASH_VALUES = ("beta", "t", "p", "h", "s", "v")
+PHASE_VALUES = ("fraction", "v", "h", "s")
+
 _i32, _i64, _f64 = ctypes.c_int32, ctypes.c_int64, ctypes.c_double
 _doubles = ctypes.POINTER(_f64)
 _ints = ctypes.POINTER(_i32)
@@ -55,6 +63,10 @@ FUNCTIONS = {
     "reflux_props": (_i32, [_i64, _i32, _i64, _doubles, _i64, _doubles, _i64, _doubles, _i64,
                             _doubles, _doubles, _ints, _ints, *_err]),
     "reflux_psat": (_i32, [_i64, _i32, _i64, _doubles, _doubles, _ints, *_err]),
+    "reflux_stability": (_i32, [_i64, _i64, _doubles, _i64, _doubles, _i64, _doubles, _i64, _ints,
+                                _doubles, _doubles, _ints, *_err]),
+    "reflux_flash": (_i32, [_i64, _i32, _i64, _doubles, _i64, _doubles, _i64, _doubles, _i64,
+                            _doubles, _doubles, _doubles, _ints, _ints, *_err]),
 }
 
 # Room for a reason. A longer one is cut at a character boundary.

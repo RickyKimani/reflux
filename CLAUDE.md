@@ -65,9 +65,14 @@ Keep this section current: update it whenever a step is committed.
     ideal-gas Cp overflows.
   - Carried forward from step 3: thermo's `saturation_pressure` (successive
     substitution) fails at Tc(1−1e-6) for n-butane and at or below 10 K.
+  - **Step 4 is done:** stability and the PT flash at many points, through
+    one `reflux_flash(fluid, spec, …)` whose layout every flash will share.
+    D6 is amended: each phase is in the place of its label.
   - The spike's CI step stays until its last scenarios have homes: the
     collector in step 6, the call's cost in 7.
-  - Next is step 4: stability and the PT flash.
+  - Next is step 5: the other flashes (PH, PS, TV, UV, the vapour-fraction
+    ones, bubble and dew points), as new specs of `reflux_flash`. Its tests
+    should reach a no-convergence status, which step 4's couldn't.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -296,6 +301,9 @@ over the rest, built into a shared library for the Python package in
     (`REFLUX_POINT_*`), NaN when it has no answer. A point with a value that
     isn't finite has no answer (`NOT_FINITE`). `err` holds the first failed
     point's reason, so one point's reason is the call for it alone.
+  - Every flash is `reflux_flash(fluid, spec, …)` with one layout (D6): the
+    whole's values, then each phase's in the place of its label, liquid (0)
+    then vapour (1). A single phase takes its label's place, the other NaN.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

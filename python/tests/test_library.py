@@ -62,6 +62,14 @@ def test_the_codes_are_the_headers():
     for k, name in enumerate(_native.PROPS):
         want[f"PROP_{name.upper()}"] = k
     want["PROPS"] = len(_native.PROPS)
+    for name, code in _native.FLASHES.items():
+        want[f"FLASH_{name.upper()}"] = code
+    for k, name in enumerate(_native.FLASH_VALUES):
+        want[f"FLASH_{name.upper()}"] = k
+    want["FLASH_VALUES"] = len(_native.FLASH_VALUES)
+    for k, name in enumerate(_native.PHASE_VALUES):
+        want[f"PHASE_{name.upper()}"] = k
+    want["PHASE_VALUES"] = len(_native.PHASE_VALUES)
     assert header_defines() == want
 
 

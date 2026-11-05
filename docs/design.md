@@ -1131,6 +1131,15 @@ language, so its conventions are the same for every function (M10a's D2):
 - **Properties per mole** are the V API's extensive ones divided by Σz, so a
   V program doing the same gets the same bits (criterion 3). A compound's
   vapour pressure is the fluid's cubic for it alone, with its own α.
+- **One flash function, one layout** (M10a's D6). `reflux_flash` takes a
+  spec saying what a point's two values are, (T, P) for the PT flash. It
+  writes the whole's β, T, P, H, S and V per mole of feed, and each phase's
+  fraction, V, H, S and composition in the place of its label: the
+  liquid's (0) then the vapour's (1). A split's less dense phase is the
+  vapour, and a single phase takes its label's place, the other NaN, so the
+  vapour's composition is always the same column of the arrays. The whole's
+  H, S and V are its phases', summed in the flash's order, as
+  `flowsheet.Stream` sums them.
 
 ### Where the data comes from
 

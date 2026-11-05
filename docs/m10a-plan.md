@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 3 are done, and step 4 is
+Status: **approved** on 2026-11-04. Steps 1 to 4 are done, and step 5 is
 next.
 
 ## Goal
@@ -148,7 +148,7 @@ Python tests against the library in the gcc jobs, on Windows and Linux.
 | D3 | Exports | Only the header's functions: on Linux by `-fvisibility=hidden`, since V marks its exports visible; on Windows by a `.def` file generated from the header. A test compares the symbol table with the header on both OSes. **Amended in step 1:** on Linux by a linker version script, not `-fvisibility=hidden`, which can't hide the collector's symbols: they come from an object V compiled before (V's own macOS code says as much). And on Windows the header is compiled with the module, so the C compiler checks every declaration against the code. | Not the collector's internals, which gcc exports today on Windows, and one list of truth. |
 | D4 | Handles | An `i64` id into a registry: a map from id to fluid (or database) behind a `sync.Mutex`, ids from a counter that never repeats. `reflux_free(id)` drops one. In Python each handle belongs to an object with `close()`, a context manager and a `weakref.finalize`. | The collector can't see Python's references (the spike). A fresh id per object turns a stale or doubly freed handle into an error, not a crash. |
 | D5 | Threads | Every exported function registers the calling thread with the collector for the length of the call, on every OS (the spike's `gc_threads.h`). Concurrent calls are allowed; the registry's lock is the only shared state. **Amended in step 1:** V starts a shared library on its first call, not when it loads, behind a flag that isn't thread-safe, so the first call mustn't race. The package makes it at import, which Python's import lock serialises, and `reflux.h` tells other callers to make one call from one thread first. **Amended in step 3:** that first call's thread is where the collector starts, and it keeps it registered. On Linux a registered thread that has ended aborts the next collection, so the library unregisters it after its first call, unless it's the process's first thread. | The probes: needed on Windows too, and correct under load. Their speed isn't M10a's target. |
-| D6 | Vectorised results | Arrays of N points, C-contiguous `float64` (and `int32` for statuses), shaped for two phases: β, T, P, the number of phases, each phase's label, fraction, composition (N × 2 × c), molar V, H and S, and the whole's H, S and V. An absent phase is NaN. M6's third phase will be a new ABI version. | One layout for every flash, which is what a plot or a DataFrame wants. Two phases is all M3's flash returns. |
+| D6 | Vectorised results | Arrays of N points, C-contiguous `float64` (and `int32` for statuses), shaped for two phases: β, T, P, the number of phases, each phase's label, fraction, composition (N × 2 × c), molar V, H and S, and the whole's H, S and V. An absent phase is NaN. M6's third phase will be a new ABI version. **Amended in step 4:** the two phases are in the places of their labels, the liquid's (0) then the vapour's (1), as `REFLUX_LIQUID` and `REFLUX_VAPOR` number them. So a phase's label is its place, with no array of labels, and the vapour's composition is always the same column. A single phase takes its label's place, the other's values NaN. | One layout for every flash, which is what a plot or a DataFrame wants. Two phases is all M3's flash returns. |
 | D7 | Statuses | Per point, an `int32`: 0 for an answer, a stable number for each `FlashError` kind, and one for bad input. Python maps them to an `IntEnum`. A point's reason in words comes from the single-point form of the same call, which writes the message into the caller's buffer. | Numbers fill an array cheaply; words for every point would cost a string each. |
 | D8 | The Python API | `reflux.Database()` (or a data directory), `db.fluid('PR', ['methane', 'n-butane'], alpha=..., kij=...)`, then on the fluid `props`, `psat`, `stability`, `flash_pt`, `flash_ph`, `flash_ps`, `flash_tv`, `flash_uv`, `flash_tvf`, `flash_pvf`, `bubble_t`, `bubble_p`, `dew_t` and `dew_p`, each taking arrays or scalars. A flash returns a `FlashResult` of arrays with a `status` array and `ok` mask. SI throughout, as the V API. Python 3.11 or later, NumPy 2. | The V API's names and units, so that the V docs and design notes serve Python too. |
 | D9 | Data | A database opens on a data directory: the caller's, or `$REFLUX_DATA`, or the source tree's. The kᵢⱼ banks and `mc-PR.lib` come from the same root (`components` changes so they do), which fixes the CLI too. The package records the source tree it was built from. | A library away from its source tree must still find its kᵢⱼ. |
@@ -598,9 +598,97 @@ and their Python tests together.
     1e300 K, where Z fell to 6e-301, H was already NaN. It's the same rule
     every value keeps, that one that isn't finite is no answer.
 
-### 4. Stability and the PT flash
-- The stability test (tm and its verdict) and the PT flash, vectorised, with
-  statuses (D6, D7), and the single-point form for a reason in words.
+### 4. Stability and the PT flash — done
+- **`reflux_stability`** ([capi/flash.v](../capi/flash.v)) tests n feeds with
+  the V API's defaults: Wilson's two trial phases and a nearly pure one of
+  each compound. For each feed it gives:
+  - the verdict (1, 0, or −1 without an answer);
+  - tm, the lowest tangent-plane distance any trial reached away from the
+    feed, negative where the feed is unstable;
+  - w, that trial's composition, the phase that would appear.
+  - If every trial came back to the feed, as for a vapour well away from its
+    dew point or a pure compound, tm is 0 and w the feed.
+- **`reflux_flash(fluid, spec, …)`** is one function for every flash.
+  - Each point has two values, a and b, whose meaning `spec` gives:
+    `REFLUX_FLASH_PT`, (T, P), is this step's. Step 5's flashes are new specs
+    with the same layout.
+  - It writes the whole's β, T, P, H, S and V per mole of feed, and each
+    phase's fraction, V, H and S per mole of the phase.
+  - It also writes each phase's composition, and how many phases there are.
+- **Each phase is in the place of its label** (D6, as amended):
+  - the liquid's (0) then the vapour's (1), so `x[..., VAPOR, :]` is always
+    the vapour's composition;
+  - a split's less dense phase is the vapour (D6 of M3), and a single phase
+    takes its label's place, with NaN in the other;
+  - the whole's H, S and V are its phases', summed in the order the flash
+    gives them, as `flowsheet.Stream` sums them.
+- **Statuses:** a flash's failure gets the status of its kind, in
+  `flash.Failure`'s order: no convergence, no volume root, or more phases
+  than two. An answer that isn't finite is `NOT_FINITE`, checked on the whole's
+  values. Each phase's values enter the whole's, so a phase's needs no check
+  of its own.
+- **The package:**
+  - `Fluid.stability(T, P, z)` gives a `Stability` (`stable`, `tm`, `w`).
+  - `Fluid.flash_pt(T, P, z)` gives a `FlashResult`: `beta`, `t`, `p`, `h`,
+    `s`, `v` and `phases`, with `fraction` and `x` on an axis of two phases.
+  - Its `liquid` and `vapor` are `PhaseView`s, each with `fraction`, `x`,
+    `v`, `h`, `s` and `present`.
+  - Broadcasting is `props`', through one function now shared by props,
+    stability and the flashes.
+- **Against `thermo`:** `test_flash.py` flashes all 83 of M3's PT states
+  (`testdata/m3_thermo.json`) through the package, with M3's constants as
+  the caller's own compounds.
+  - The splits agree to 2.0e-12 and the phases' volumes to 1.9e-11, the same
+    worst deviations `flash/thermo_test.v` measures for the V API.
+  - The fixture's ideal-gas Cp isn't ChemSep's, so H and S aren't compared
+    here.
+  - Two of the 39 splits are ones `thermo` labels liquid–liquid. The C API
+    calls the less dense phase of each the vapour (D6), and the fixture lists
+    its phases by density, so they're matched by order.
+- **Tests:**
+  - [capi/flash_test.v](../capi/flash_test.v), 5 tests:
+    - every point against the V API's flash, bit for bit;
+    - a three-compound split's balances and equal fugacities, from the arrays
+      and from states solved again;
+    - a single phase in its label's place;
+    - a failure's status: bad input, three phases (water, n-decane and
+      methane with a water–hydrocarbon kᵢⱼ of 0.5), not finite, no volume
+      root;
+    - calls that can't be made;
+    - stability against the V API, a pure compound, and a bad point.
+  - `test_flash.py`, 7 tests:
+    - M3's splits;
+    - a grid is its points one by one, bit for bit;
+    - a split's balances close and its fugacities agree, checked through
+      `props`;
+    - the whole is its phases, and a single phase is `props`' stable root;
+    - a single phase takes its label's place;
+    - stability agrees with the flash on a 9 × 9 grid;
+    - failures.
+  - The Python suite is 64 tests.
+- **Found:** I'd written a closure (`reduce` with an anonymous function) to sum
+  a composition in code that runs per point, which CLAUDE.md forbids. It's
+  `numeric.sum` now. A per-phase finite check that could never fire on its own
+  is deleted.
+- **Planted mistakes:** 40, in `capi/flash.v` and the package, in a scratch
+  copy. 36 were caught at once: 28 by `capi`'s V tests, 8 by the Python
+  tests.
+  - One didn't compile: V refuses `if (…)`'s parentheses. Rewritten to
+    compile, it was caught.
+  - "failed phase left" survived: a failed point's phase values were never
+    checked to be NaN. Both test files now check them, and it's caught.
+  - Two survive, and are explained:
+    - **The flash's own bad input**, mapped to another status, is never
+      seen. The C API checks a point's inputs before the flash does, so the
+      flash's `.bad_input` never comes back. The arm stays, since V's
+      `match` on an enum must cover every value.
+    - **No convergence**, mapped to another status, is never seen either.
+      With the defaults the C API uses, no state is known that makes the PT
+      flash or stability fail to converge: M3's 10,000-point sweep found
+      none, and the V tests reach it only with `tol: 1e-16` or
+      `max_steps: 1`. The vapour-fraction flashes do reach it at their
+      defaults (`flash/vf_test.v`), so step 5's tests can check this
+      mapping.
 
 ### 5. The other flashes
 - PH, PS, TV, UV, and the vapour-fraction flashes with bubble and dew points.

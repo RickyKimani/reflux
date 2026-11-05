@@ -90,6 +90,15 @@ fn test_the_header_and_the_code_agree() {
 		want['REFLUX_PROP_' + name.to_upper()] = k
 	}
 	want['REFLUX_PROPS'] = n_props
+	want['REFLUX_FLASH_PT'] = flash_pt
+	for k, name in flash_names {
+		want['REFLUX_FLASH_' + name.to_upper()] = k
+	}
+	want['REFLUX_FLASH_VALUES'] = n_flash
+	for k, name in phase_names {
+		want['REFLUX_PHASE_' + name.to_upper()] = k
+	}
+	want['REFLUX_PHASE_VALUES'] = n_phase
 	assert defines() == want
 	assert reflux_abi_version() == abi_version
 	// Every @[export] in this module is declared, and every declaration

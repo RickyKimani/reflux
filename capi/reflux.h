@@ -192,4 +192,54 @@ int32_t reflux_props(int64_t fluid, int32_t root, int64_t n, double *t, int64_t 
 int32_t reflux_psat(int64_t fluid, int32_t component, int64_t n, double *t, double *out,
                     int32_t *status, char *err, int32_t err_len);
 
+/* ---- Stability and flashes ---- */
+
+/* reflux_stability tests whether each of n feeds (T in K, P in Pa, and z,
+   nc per point) is stable as one phase, by Michelsen's tangent-plane
+   analysis: Wilson's two trial phases and a nearly pure one of each
+   compound. It writes stable (n: 1, 0, or -1 for a point without an
+   answer), the lowest tangent-plane distance tm any trial reached away from
+   the feed (n), negative where the feed is unstable, and that trial's
+   composition w (n * nc), the phase that would appear. If every trial came
+   back to the feed itself, tm is 0 and w the feed. */
+int32_t reflux_stability(int64_t fluid, int64_t n, double *t, int64_t t_len, double *p,
+                         int64_t p_len, double *z, int64_t z_rows, int32_t *stable, double *tm,
+                         double *w, int32_t *status, char *err, int32_t err_len);
+
+/* Flashes, for reflux_flash: what a point's two values a and b are. */
+#define REFLUX_FLASH_PT 0 /* a: T (K), b: P (Pa) */
+
+/* A flash's values per point, out[k * n + i]: per mole of feed. */
+#define REFLUX_FLASH_BETA 0   /* vapour fraction */
+#define REFLUX_FLASH_T 1      /* K */
+#define REFLUX_FLASH_P 2      /* Pa */
+#define REFLUX_FLASH_H 3      /* J/mol */
+#define REFLUX_FLASH_S 4      /* J/(mol K) */
+#define REFLUX_FLASH_V 5      /* m3/mol */
+#define REFLUX_FLASH_VALUES 6 /* how many there are */
+
+/* A phase's values per point, phase[(k * n + i) * 2 + j], per mole of the
+   phase except the fraction, which is of the feed's moles. j is the phase's
+   label, REFLUX_LIQUID (0) or REFLUX_VAPOR (1): a split's phase of lower mass
+   density is the vapour, and a single phase takes the place of its label,
+   the other's values being NaN. */
+#define REFLUX_PHASE_FRACTION 0
+#define REFLUX_PHASE_V 1      /* m3/mol */
+#define REFLUX_PHASE_H 2      /* J/mol */
+#define REFLUX_PHASE_S 3      /* J/(mol K) */
+#define REFLUX_PHASE_VALUES 4 /* how many there are */
+
+/* reflux_flash flashes n feeds of mole amounts z (nc per point), each at
+   its two values a and b, whose meaning spec gives (REFLUX_FLASH_*). For
+   each point it writes the REFLUX_FLASH_VALUES values to out, the
+   REFLUX_PHASE_VALUES values of each phase to phase (REFLUX_PHASE_VALUES *
+   n * 2), each phase's composition to x, as mole fractions (x[(i * 2 + j)
+   * nc + c]), and the number of phases, 1 or 2, to n_phases. A flash that
+   fails at a point gives that point the status of its kind: no
+   convergence, no volume root, or more phases than two. H and S are on the
+   basis reflux_props describes. */
+int32_t reflux_flash(int64_t fluid, int32_t spec, int64_t n, double *a, int64_t a_len, double *b,
+                     int64_t b_len, double *z, int64_t z_rows, double *out, double *phase,
+                     double *x, int32_t *n_phases, int32_t *status, char *err, int32_t err_len);
+
 #endif

@@ -154,6 +154,8 @@ capi/               the C API (M10a): reflux.h, and the functions it declares,
   database.v        component data and fluids, their text as TOML
   props.v           a phase's properties and vapour pressure, many points
                     at once, each with its status
+  flash.v           stability, and the flashes in one layout: each phase in
+                    the place of its label
   gc_threads.h      registering a thread the collector doesn't know
 python/             the Python package over the C API (M10a): reflux/
                     (Database, Fluid, and points.py's results on NumPy arrays,
