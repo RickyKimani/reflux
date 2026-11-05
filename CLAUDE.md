@@ -73,8 +73,12 @@ Keep this section current: update it whenever a step is committed.
   - **Step 5 is done:** PH, PS, TV, UV and the vapour-fraction flashes, with
     bubble and dew points, as specs of `reflux_flash`. Every failure kind is
     reached and tested through the public API.
-  - Next is step 6: threads, memory and fuzzing. Its collector stress is the
-    spike's next-to-last scenario to move.
+  - **Step 6 is done:** seeded fuzzing of every exported function
+    (`capi/fuzz_test.v`), 8 threads on every vectorised function, and a flat
+    heap over 100,000 calls. Throughput with 8 threads is 1.3 to 2.3 times
+    serial, the collector's lock being shared.
+  - Next is step 7: the V reference program (D12), bit for bit, and the
+    speed, which moves the spike's last scenario.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -113,6 +117,7 @@ v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (do
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
+REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v   # a longer fuzz
 ```
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,

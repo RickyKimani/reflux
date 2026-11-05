@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 5 are done, and step 6 is
+Status: **approved** on 2026-11-04. Steps 1 to 6 are done, and step 7 is
 next.
 
 ## Goal
@@ -767,11 +767,94 @@ and their Python tests together.
   - One gap was seen while writing the list and filled first: no test gave a
     flash other than PT a bad feed.
 
-### 6. Threads, memory and fuzzing
-- 8 threads on every vectorised function, against the serial answers, on both
-  OSes (criterion 7), with the throughput recorded.
-- The heap over 100,000 calls, stale and freed handles, and seeded fuzzing of
-  every function (criteria 2 and 6).
+### 6. Threads, memory and fuzzing — done
+- **Seeded fuzzing** (criterion 2): [capi/fuzz_test.v](../capi/fuzz_test.v)
+  calls every exported function with mutated arguments, in process, so it
+  runs in every CI job under both compilers.
+  - Handles: live ones of each kind, freed ones, 0, −1, ±2⁶³.
+  - Counts: right, wrong or negative.
+  - Codes out of range: root, spec, equation, α, kᵢⱼ and compound.
+  - Names: empty, junk, 5,000 characters, or not UTF-8.
+  - Values: NaN, ±∞, ±0, denormals, ±1e308, and ordinary ones on log scales,
+    mixed with plausible T, P, H, V and β, so that the flashes run too.
+  - Buffers are always the size the call is told: a C caller that lies about
+    a buffer can't be caught.
+  - Every call must keep its contract:
+    - a known code, and a known status for every point;
+    - NaN for a point without an answer, and finite values for one with;
+    - bad input exactly where a point's T, P (or the like) or feed break the
+      header's rules, an oracle the fuzzer computes itself;
+    - nothing written past a buffer, at lengths around the room each text
+      needs;
+    - the whole version or none of it, and a reason for a refused fluid.
+  - CI runs 2,000 calls (seed 20261105) in about 10 s under tcc.
+    `REFLUX_FUZZ_SEED` and `REFLUX_FUZZ_CALLS` set others: five more seeds of
+    20,000 calls each, 100,000 in all with gcc `-prod`, ran clean here, each
+    in under a minute.
+  - It tallies each function's statuses, which shows it gets past the checks.
+    Under CI's seed:
+    - the flashes answered 16 points and reached no convergence, no volume
+      root, more phases, outside the envelope and not finite;
+    - properties answered 69 points and reached not finite and no volume root;
+    - stability answered 21 and failed to converge at 11 extreme points;
+    - Psat reached supercritical and no convergence.
+  - Nothing panicked or hung, so the risk table's fallback (each panic
+    becoming a typed error in its module) wasn't needed.
+- **Threads** (criterion 7): `test_every_vectorised_function_under_threads`.
+  - 8 Python threads call every vectorised function three times each: props
+    at two roots, Psat, stability, and all seven flashes with bubble and dew
+    points, on a 32-point grid.
+  - Every array equals the serial run's bit for bit, NaN included.
+  - It runs on Windows and on Linux in CI.
+  - Throughput, with the `-prod` library on 8 logical CPUs, and no target:
+
+    | Work | Serial | 8 threads | Ratio |
+    |---|---|---|---|
+    | props, 1,000 points a call | 25,763 points/s | 42,195 points/s | 1.6× |
+    | PT flash | 626 points/s | 1,454 points/s | 2.3× |
+    | PH flash | 241 points/s | 307 points/s | 1.3× |
+
+    Each point allocates, and the collector's lock is shared, so threads add
+    little. The PH flash, which allocates most, gains least. Parallel speed
+    is M8's question, as the plan's probes said.
+- **Memory** (criterion 6): `test_memory.py` makes 100,000 calls.
+  - Most are a single point of properties, where a per-call leak would show.
+    One call in a hundred each makes and frees a fluid, flashes PT, tests
+    stability, looks up a compound, or flashes PH.
+  - The heap, measured every 10,000 calls, stayed at 4,580 KiB throughout. A
+    leak of 100 bytes a call would have added 10 MB.
+  - It runs in a process of its own, in about 35 s. This replaces the
+    spike's collector stress, which made 500 calls.
+- **The Python suite** is 71 tests, in about two minutes here. The memory,
+  install and thread tests take most of that.
+  - Stale and freed handles were step 2's (`test_closed_is_closed`,
+    `test_a_fluid_only_python_held_is_freed`), and step 1's ids are never
+    reused.
+- **The spike's CI step** keeps one scenario now, the per-call cost, which
+  step 7 moves.
+- **Planted mistakes:** step 6 adds tests, not library code, so its six
+  mistakes are ones each new test is there to catch, run against those tests
+  alone:
+  - an answer not checked finite;
+  - the feed unchecked;
+  - text written a byte past its buffer;
+  - the version a byte past its buffer;
+  - a fluid that leaks;
+  - threads left unregistered.
+  The first run caught three. The other three showed the fuzzer was weaker
+  than it should be:
+  - Its contract was loose. A NaN feed that skipped its check came back as
+    "not finite", which keeps NaN with a failure status, so the fuzzer
+    couldn't tell. It now computes which points break the rules and holds
+    them to bad input, and the feed is negative now and then.
+  - Its buffer lengths never met the edge: 0, 1, 5, 64 and 65,536 are never a
+    text's length exactly. It now asks each text's room first and tries a
+    byte short, exact and a byte over.
+  - The version's check, made one short, only cut the version, since
+    `write_message` bounds itself. So nothing was written past, but the
+    answer was wrong. The fuzzer now checks that an answer is the whole
+    version.
+  Rerun, all six were caught.
 
 ### 7. The V reference and speed
 - The V program of D12 and the bit-for-bit comparison over every function

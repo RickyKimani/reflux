@@ -784,6 +784,10 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
   other files but not with the other test files, so a helper in one isn't
   seen by another. [capi/capi_test.v](../capi/capi_test.v) and
   [capi/database_test.v](../capi/database_test.v) each have a `c_string`.
+  Its functions do join the module's, though, so a test function named like
+  a local in one of the module's files makes that local a notice ("shadows a
+  function") in the test's build: the fuzzer's `text` did, against
+  `database.v`'s `text`, and became `c_text`.
 - **A table of cases is an array of structs, not a map.** A map literal keyed
   by calls runs every call and keeps one entry per distinct key, so cases
   that all return the same code collapse into the last, and only it is
