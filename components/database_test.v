@@ -42,6 +42,12 @@ fn test_an_unknown_name_suggests_the_closest() {
 	// Otherwise the smallest edit distance wins.
 	assert lookup_error(builtin, 'watr').suggestions[0] == 'Water (7732-18-5)'
 	assert lookup_error(builtin, 'tolune').suggestions[0] == 'Toluene (108-88-3)'
+	// An empty query finds nothing, and suggests nothing. (It once matched the
+	// 35 compounds without an InChIKey, as an ambiguous query.)
+	for q in ['', '  '] {
+		e2 := lookup_error(builtin, q)
+		assert !e2.ambiguous && e2.suggestions == [] && e2.msg() == 'no compound `` in the database'
+	}
 }
 
 fn test_an_ambiguous_query_lists_every_match() {
@@ -82,7 +88,7 @@ fn test_a_users_directory_adds_and_overrides() {
 	if _ := builtin.find('Unobtainium') {
 		assert false, 'the test compound is in ChemSep after all'
 	}
-	mine := load([default_dir, dir])!
+	mine := open(default_root, [dir])!
 	assert mine.count() == 643
 	// The whole record is replaced: a later directory wins.
 	assert mine.find('n-butane')!.constants.tc or { 0.0 } == 425.125
@@ -102,7 +108,7 @@ fn test_find_by_alias() {
 	defer {
 		os.rmdir_all(dir) or {}
 	}
-	mine := load([default_dir, dir])!
+	mine := open(default_root, [dir])!
 	for q in ['element 119', 'EKA-FRANCIUM', '  eka-francium '] {
 		assert mine.find(q)!.ids.cas == '12345-67-4', q
 	}
@@ -116,7 +122,7 @@ fn test_a_name_used_twice_is_ambiguous() {
 	defer {
 		os.rmdir_all(dir) or {}
 	}
-	e := lookup_error(load([default_dir, dir])!, 'water')
+	e := lookup_error(open(default_root, [dir])!, 'water')
 	assert e.ambiguous
 	assert e.suggestions == ['Water (12345-67-4)', 'Water (7732-18-5)']
 }
@@ -128,7 +134,7 @@ fn test_bad_directories_are_errors() {
 	defer {
 		os.rmdir_all(bad) or {}
 	}
-	if _ := load([bad]) {
+	if _ := load_dirs([bad]) {
 		assert false, 'a bad file loaded'
 	} else {
 		assert err.msg().contains('12345-67-4.toml: `constants.tc` should be a number')
@@ -140,14 +146,85 @@ fn test_bad_directories_are_errors() {
 	defer {
 		os.rmdir_all(stale) or {}
 	}
-	if _ := load([stale]) {
+	if _ := load_dirs([stale]) {
 		assert false, 'a stale index loaded'
 	} else {
 		assert err.msg().contains('lists 106-97-8, but') && err.msg().contains('is missing')
 	}
-	if _ := load([os.join_path(stale, 'nowhere')]) {
+	if _ := load_dirs([os.join_path(stale, 'nowhere')]) {
 		assert false, 'a missing directory loaded'
 	}
+}
+
+fn test_a_data_root_holds_both_its_directories() {
+	empty := user_dir('empty_root', map[string]string{})
+	defer {
+		os.rmdir_all(empty) or {}
+	}
+	if _ := open(empty, []) {
+		assert false, 'an empty directory opened'
+	} else {
+		assert err.msg() == '${empty} is not a data root: it has no components directory'
+	}
+	// REFLUX_DATA named the components directory before M10a, so that mistake
+	// is named.
+	if _ := open(default_dir, []) {
+		assert false, 'a components directory opened as a root'
+	} else {
+		assert err.msg() == '${default_dir} is not a data root: it has no components directory; it looks like a components directory itself, so its parent is the root'
+	}
+	os.mkdir_all(os.join_path(empty, 'components'))!
+	if _ := open(empty, []) {
+		assert false, 'a root without its vendor directory opened'
+	} else {
+		assert err.msg() == '${empty} is not a data root: it has no vendor/chemsep directory'
+	}
+}
+
+fn test_a_copy_of_the_data_is_used_whole() {
+	// D9 (M10a): a copy of the data root, away from the source tree, gives its
+	// own compounds, kᵢⱼ and Mathias–Copeman constants. Here the copy's pr.ipd
+	// lists 0.0313 for methane/n-butane at line 133, where the source tree's
+	// lists 0.0244, and its mc-PR.lib has no methane.
+	root := os.join_path(os.temp_dir(), 'reflux_db_test_${os.getpid()}_copy')
+	os.rmdir_all(root) or {}
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	comps := os.join_path(root, 'components')
+	vendor := os.join_path(root, 'vendor', 'chemsep')
+	os.mkdir_all(comps)!
+	os.mkdir_all(vendor)!
+	for cas in ['74-82-8', '106-97-8'] {
+		os.cp(os.join_path(default_dir, '${cas}.toml'), os.join_path(comps, '${cas}.toml'))!
+	}
+	ipd := os.read_file(os.join_path(vendor_dir, 'pr.ipd'))!
+	assert ipd.count('106-97-8   .244e-1') == 1
+	os.write_file(os.join_path(vendor, 'pr.ipd'), ipd.replace('106-97-8   .244e-1', '106-97-8   .313e-1'))!
+	lib := os.read_file(os.join_path(vendor_dir, 'mc-PR.lib'))!
+	os.write_file(os.join_path(vendor, 'mc-PR.lib'), lib.split_into_lines().filter(!it.starts_with('74-82-8\t')).join('\n'))!
+
+	db := open(root, [])!
+	assert db.root == root && db.dirs == [comps] && db.vendor == vendor && db.count() == 2
+	s := db.setup(.pr, ['methane', 'n-butane'], alpha: .mathias_copeman)!
+	assert s.kij.bank == 'pr.ipd'
+	assert s.kij.k == [0.0, 0.0313, 0.0313, 0.0]
+	assert (s.kij.pairs[0].used or { Kij{} }).line == 133
+	assert s.alphas[0] == "the equation's own: mc-PR.lib has no Methane"
+	assert s.alphas[1].starts_with('Mathias–Copeman, mc-PR.lib line ')
+
+	// REFLUX_DATA moves the default root the same way.
+	old := os.getenv_opt('REFLUX_DATA')
+	os.setenv('REFLUX_DATA', root, true)
+	moved_root := data_root()
+	moved := load_default() or { Database{} }
+	if o := old {
+		os.setenv('REFLUX_DATA', o, true)
+	} else {
+		os.unsetenv('REFLUX_DATA')
+	}
+	assert moved_root == root && moved.root == root && moved.vendor == vendor
+	assert moved.count() == 2
 }
 
 fn test_n_butane_as_thermo_sees_it() {

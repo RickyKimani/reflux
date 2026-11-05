@@ -22,6 +22,10 @@ fn test_every_golden_flowsheet_solves_to_its_results() {
 	for f in files {
 		want := json2.decode[Report](os.read_file(os.join_path(golden_dir, f))!)!
 		assert want.file == 'testdata/flowsheets/${f.all_before('.json')}.toml'
+		// A version's golden reports are its own, written again when v.mod's
+		// version changes, so the release gate sees each and its entry names
+		// it (M10a step 9).
+		assert want.reflux == flowsheet.version(), '${f} was written by ${want.reflux}: run tools/golden.vsh for ${flowsheet.version()}'
 		l := flowsheet.load(os.join_path(@VMODROOT, want.file))!
 		same(l.report(l.solve()!), want, f)
 	}

@@ -77,8 +77,9 @@ resolves the bare name, so the module is now `benchmarks`.
 
 **`v test` is slower than `go test`, and two settings matter.** Go compiles
 each package once and links its tests. V compiles every `_test.v` file into
-a program of its own, with all of `vlib` it uses: 58 C compilations for
-reflux's 58 test files at the end of M4, against 45 at the end of M3.
+a program of its own, with all of `vlib` it uses: 63 C compilations for
+reflux's 63 test files at the end of M10a, against 58 at the end of M4 and 45
+at the end of M3.
 - **Jobs:** the runner allows one job per 8 GiB of RAM, at most 4, so a
   14 GiB machine runs them one at a time. A build peaks near 1 GB, so
   `VJOBS=4` is safe there, and [tools/check.vsh](../tools/check.vsh) sets it.
@@ -98,6 +99,13 @@ bugs.vlang.io. The report holds the V version, the OS, the C compiler, the
 build command and up to 64 KB of the C compiler's errors, so it includes
 your paths, but no source. It's off under GitHub Actions, and
 `V_C_ERROR_BUG_REPORT_DISABLED=1` turns it off anywhere.
+
+**Gotcha: `v fmt -w` rewrites a file that doesn't parse.** `gofmt` refuses
+one. A single quote in `'a code the test doesn't know'` ended the string
+early, and `v fmt -w` reformatted what it made of the rest: the string's tail
+became a label and a stray name, and three lines after it, a comment and a
+declaration, were gone. Compile before formatting, or format with `-verify`
+first.
 
 A `.vsh` script inside the project can import the project's own modules,
 just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
@@ -391,6 +399,12 @@ rec := db.find('watr') or {
   You get the message, not something you can unwrap.
 - `or {}` blocks that have to produce a value can end in `exit()`,
   `panic()` or any function marked `@[noreturn]`.
+- **Gotcha: inside `or {}`, `err` is the error,** even when the function has
+  a parameter called `err`. Go names its error variable yourself, so the clash
+  can't happen. M10a's `reflux_free(id i64, err &char, err_len i32)` wrote
+  `remove(id) or { return fail(code, err, err_len, err.msg()) }`, and V took
+  both `err`s for the error: "cannot use `IError` as `&char`". The parameter
+  is `buf` now ([capi/capi.v](../capi/capi.v)).
 
 ---
 
@@ -664,6 +678,14 @@ The one difference is overflow. Go returns ±Inf *and* `ErrRange`, but V's
 itself. An underflow's 0 then meets the same "above zero" check as a typed
 0.
 
+**Writing them: `nan`, `+inf`, `-inf`.** In `'${x}'` V writes NaN as `nan` and
+the infinities as `+inf` and `-inf`, where Go's `%v` writes `NaN`, `+Inf` and
+`-Inf`. A whole number keeps its point (`300.0`), but one written with an
+exponent doesn't: `1e+10`, `1e-300`, as Go's `%v` writes them. A test of a message that quotes a bad value has to expect V's
+spelling: [capi/props_test.v](../capi/props_test.v) does. And a comparison
+with NaN is false either way round, so `t <= 0.0` lets NaN through: check
+`math.is_finite` before a range.
+
 **Cutting strings: `all_after` and `trim_string_left`.** Go's
 `strings.Cut(s, "=")` returns `found`, and `TrimPrefix` and `TrimLeft` say
 which they are by name. In V:
@@ -759,6 +781,30 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 - **`fn testsuite_end()`** runs after the file's tests, like the cleanup after
   `m.Run()` in Go's `TestMain`. main_test.v removes its scratch directory
   there.
+- **Each `_test.v` file is a program of its own,** built with its module's
+  other files but not with the other test files, so a helper in one isn't
+  seen by another. [capi/capi_test.v](../capi/capi_test.v) and
+  [capi/database_test.v](../capi/database_test.v) each have a `c_string`.
+  Its functions do join the module's, though, so a test function named like
+  a local in one of the module's files makes that local a notice ("shadows a
+  function") in the test's build: the fuzzer's `text` did, against
+  `database.v`'s `text`, and became `c_text`.
+- **A table of cases is an array of structs, not a map.** A map literal keyed
+  by calls runs every call and keeps one entry per distinct key, so cases
+  that all return the same code collapse into the last, and only it is
+  checked:
+
+```v
+m := {
+	code(1): 'first'  // both return -1
+	code(2): 'second'
+}
+// m is {-1: 'second'}, and m.len is 1
+```
+
+  A struct can't be a map key at all ("map key type not supported"). Go
+  allows a comparable struct as a key, and would have caught the duplicates
+  in a literal of constants, but not of calls either.
 - The thermo tests are mostly **identities**, not stored numbers: derivatives
   against finite differences, Euler homogeneity, Σ nᵢ ln φᵢ = Gʳ/RT, and the
   Newton solver against the polynomial roots. Identities catch bugs that
@@ -790,56 +836,94 @@ const imported = import_files(@VMODROOT, vendored) or { panic(err) }
 ## 11. C interop, both directions
 
 This is V's biggest practical advantage over Go: there's no cgo tax and no
-separate build mode. The Python spike ([spike/python_ffi/](../spike/python_ffi))
-does it both ways.
+separate build mode. M10a's C API, [capi/](../capi), does it both ways, and
+M1's spike ([spike-python-ffi.md](spike-python-ffi.md), its code removed
+in M10a step 7) found the way.
 
 **V calling C.** `#flag` adds compiler flags, `#include` pulls in a header,
 and `fn C.name(...)` declares what you'll call. `@VEXEROOT` is V's install
 directory and `@VMODROOT` the folder holding `v.mod`. From
-[ffi/ffi.v](../spike/python_ffi/ffi/ffi.v):
+[capi/capi.v](../capi/capi.v):
 
 ```v
 #flag -I @VEXEROOT/thirdparty/libgc/include
-#flag -I @VMODROOT/spike/python_ffi/ffi
 #include "gc_threads.h"
 
-fn C.reflux_enter() int
+fn C.capi_gc_enter() int
 
-reg := C.reflux_enter()
+r := C.capi_gc_enter()
 ```
 
 When the C side needs the preprocessor (`#if defined(GC_THREADS)`), write a
-small C header and call it, as `gc_threads.h` does. V code can't see C
-macros.
+small C header and call it, as [gc_threads.h](../capi/gc_threads.h) does.
+V code can't see C macros.
 
 **C (or Python) calling V.** `@[export: 'name']` gives a function a fixed C
 symbol, and `v -shared` builds a `.dll` or `.so`:
 
 ```v
-@[export: 'reflux_scale']
-pub fn reflux_scale(x &f64, n i32, k f64) {
-	for i in 0 .. n {
-		unsafe {
-			x[i] *= k // pointer indexing is allowed only inside unsafe
-		}
+@[export: 'reflux_abi_version']
+pub fn reflux_abi_version() i32 {
+	r := enter() // register the calling thread with the collector
+	defer {
+		leave(r)
 	}
+	return abi_version
 }
 ```
 
 ```bash
-v -cc gcc -shared -enable-globals -o reflux_ffi spike/python_ffi/ffi
+v -cc gcc -shared -o reflux capi
 ```
 
-What the spike learned, in V terms:
+What M1's spike and M10a learned, in V terms:
 - **`int` is 64-bit.** Use `i32` or `i64` at the boundary (§8).
-- **Globals** (`__global pinned = []voidptr{}`) need `-enable-globals`. V
-  discourages them, but a registry of handles that the garbage collector
-  must see is a legitimate use.
-- **A module's `fn init()`** runs when the library loads, like a Go package's
-  `init()`.
+- **V's `i64` is C's `long long`.** That's `int64_t` on Windows and macOS,
+  but on Linux `int64_t` is `long`, a different type to the C compiler. So a
+  header declaring `int64_t` can be compiled against V's functions only where
+  they agree: `capi` includes `reflux.h` on Windows, and there gcc refuses a
+  header whose declaration disagrees with the code ("conflicting types").
+- **V has no `const`.** `&char` is `char *` and `&&char` is `char **`, and an
+  exported function's definition says just that, so a header declaring
+  `const char *` conflicts with it, the same way. `reflux.h` declares
+  `char *` for text going in, and says in words that the library never
+  writes through it. Go's cgo has the same blind spot, from the other side:
+  it calls a `const char *` function with a `*C.char`.
+- **A C array of strings** arrives as `&&char`. Index it in `unsafe`, check
+  each pointer for nil, and copy it with `cstring_to_vstring`:
+  `texts_in` in [capi/database.v](../capi/database.v).
+- **Globals** (`__global registry = Registry{}`) need `@[has_globals]` at the
+  top of the file that declares them, or `-enable-globals` for the whole
+  build. The attribute covers that one file, not its module: in
+  [capi/registry.v](../capi/registry.v) it had to move there from `capi.v`.
+  V discourages globals, but a registry of handles that the garbage
+  collector must see is a legitimate use.
+- **A shared library starts on its first call, not when it loads.** V 0.5.2
+  wraps every exported function so that it first runs the library's
+  initialisation (`_vinit`: the collector, the globals, each module's
+  `fn init()`), once, behind a plain `static bool`. Go's `-buildmode=c-shared`
+  starts its runtime when the library loads. Two consequences, both found by
+  M10a's probes:
+  - two threads making the first calls at once race through that flag, and
+    the second can run before the collector allows threads to register: Boehm
+    aborts with "Threads explicit registering is not previously enabled". So
+    one call must come first, from one thread: the Python package makes it at
+    import;
+  - the thread making that call becomes the collector's main thread, and
+    stays registered for good. If it ends, on Linux the next collection
+    signals the dead thread and aborts ("Signals delivery fails constantly").
+    Windows asks whether a thread has exited before suspending it. So on
+    Linux the library unregisters that thread at the end of its first call,
+    unless it's the process's first thread, as Boehm allows once for the main
+    thread ([capi/gc_threads.h](../capi/gc_threads.h)).
 - **`defer { … }`** runs at function exit, as in Go, except that it takes a
   block rather than a call.
 - **tcc can't build usable shared libraries** on Windows or Linux; use gcc.
+- **gcc exports every symbol from a Windows DLL** unless told otherwise: 1,600
+  of them, the collector's included. A `.def` file listing the exports
+  (`-ldflags reflux.def`) gives exactly those; on Linux a linker version
+  script does the same, since `-fvisibility=hidden` can't hide symbols from
+  objects compiled before ([tools/python.vsh](../tools/python.vsh)).
 
 For dense linear algebra beyond the built-in LU, the
 [`vsl`](https://github.com/vlang/vsl) package wraps BLAS and LAPACK, with
@@ -875,6 +959,33 @@ that would otherwise hang can fail this way:
 [numeric/minimize_test.v](../numeric/minimize_test.v) does. The test
 program still exits while the thread spins, as a Go program does when
 `main` returns.
+
+**A thread returns a value.** `spawn` gives a `thread T`, and an array of
+them waits for all and gives their results, where Go needs a `WaitGroup` and
+a slice to write into:
+
+```v
+mut ts := []thread []i64{}
+for k in 0 .. 8 {
+	ts << spawn work(k) // fn work(k int) []i64
+}
+all := ts.wait() // [][]i64, in the order spawned
+```
+
+**A map isn't safe for concurrent use,** as in Go, and V doesn't catch the
+misuse, as Go's runtime often does ("concurrent map writes"). `capi`'s
+registry is a map behind a `sync.Mutex` (`mu.lock()`, then `defer {
+mu.unlock() }`). Its planted mistakes in M10a step 1 showed what the lock
+prevents, with 8 threads:
+- writes without the lock hung the test rather than failing it;
+- reads without the lock, while the others wrote under it, went wrong only
+  while a write was resizing the map. A live key wasn't found, in about one
+  run in three under gcc `-prod`, and only in the first round, which grew
+  the map from empty.
+
+So a test of a lock must make the map grow while it reads, and more than
+once: [capi/capi_test.v](../capi/capi_test.v) runs 20 rounds, each on an
+empty map. It then catches the unlocked read in every run.
 
 ---
 

@@ -4,7 +4,8 @@
 // M3's benchmarks (decision D10, exit criterion 8), which
 // tools/gen_m3_bench.py writes with all three programs' timings, and
 // testdata/m4_bench.json, M4's flowsheet benchmark (D14, criterion 9), which
-// tools/gen_m4_bench.py writes:
+// tools/gen_m4_bench.py writes, and testdata/m10a_bench.json, M10a's calls
+// from Python (criterion 10), which tools/gen_m10a_bench.py writes:
 //
 //     v run tools/benchmarks.vsh          # write the report
 //     v -prod -cc gcc run tools/benchmarks.vsh --time
@@ -18,7 +19,9 @@ import flowsheet
 
 fx := benchmarks.load()!
 ff := benchmarks.load_flowsheets()!
-write_file(benchmarks.report_path, benchmarks.report(fx) + benchmarks.flowsheet_section(ff))!
+pf := benchmarks.load_python()!
+write_file(benchmarks.report_path, benchmarks.report(fx) + benchmarks.flowsheet_section(ff) +
+	benchmarks.python_section(pf))!
 println('wrote ${benchmarks.report_path}')
 if '--time' in arguments() {
 	$if !prod {

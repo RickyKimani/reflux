@@ -77,7 +77,7 @@ Required, and 1. A later format will come with a way to migrate.
 | Key | |
 |---|---|
 | `names` | Required. A list of compounds, by name, alias or CAS number. |
-| `data` | A list of directories of your own component files, which are read after the built-in data and override it. A relative path is from the flowsheet file. |
+| `data` | A list of directories of your own component files, which are read after the data root's compounds and override them. A relative path is from the flowsheet file. The data root is `$REFLUX_DATA`, or the source tree's `data/` ([data-format.md](data-format.md#your-own-components)). |
 
 [data-format.md](data-format.md) describes a component file.
 

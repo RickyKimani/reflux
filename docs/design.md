@@ -473,6 +473,21 @@ dominant-eigenvalue extrapolation as stability. Rachford–Rice may give β
 outside [0, 1] on the way (the negative flash); only the converged split
 must have 0 < β < 1.
 
+Unlike stability's, the split's extrapolation is kept only if it lowers the
+residual, max |ln fᵢⱽ − ln fᵢᴸ|, below that of the split it was made from.
+Otherwise the plain step it replaced is taken, and the rejected one counts
+as a step. Michelsen and Mollerup's test is that G falls, but G has no
+meaning at a β outside [0, 1], which the negative flash passes through, and
+the residual does. M10a step 8 found the case. A natural gas (PR: 80%
+methane, ethane to n-pentane) at 265 K and 81 bar is well inside its
+two-phase region, with K from 1.7 to 0.07. There the extrapolation at the
+sixth step threw β from 0.14 to 0.87 and the residual from 0.005 to 1.5.
+The split then slid off towards the feed and collapsed onto it, and the
+flash failed. On 16,160 PT flashes of that gas, from 150 to 350 K and 1 to
+160 bar, the test undoes 392 extrapolations. It removes the one failure and
+leaves the total steps the same: 67,754 against 67,751, with that point's
+21 included.
+
 **Newton on G.** After 20 steps it switches to minimising the Gibbs energy
 of the split over the vapour mole numbers v (one mole of feed, l = z − v):
 
@@ -1065,6 +1080,110 @@ For n − 1 − e below 0 it divides by 10^(e−n+1), which is exact, rather tha
 multiply by 10^(n−1−e), which isn't: 846064.9999999999 × 0.1 rounds to the
 tie 84606.5, and up, where the quotient by 10 is below it. A log₁₀ that rounds
 up just short of a power of ten needs nothing: m rounds up to 10ⁿ⁻¹ with it.
+
+## The C API
+
+M10a's library ([capi/](../capi), declared by
+[capi/reflux.h](../capi/reflux.h)) is the one place reflux meets another
+language, so its conventions are the same for every function (M10a's D2):
+
+- **A result code,** 0 or negative for a failure of the whole call, with the
+  reason written into a buffer the caller passes, NUL-terminated and cut at
+  the start of a UTF-8 character. A per-point status comes in step 4.
+- **Fixed widths:** `int32_t`, `int64_t`, `double` and pointers. Every array is
+  allocated by the caller, so no memory of V's reaches it but handles.
+- **Handles** are `int64_t` ids into a registry, a map behind a lock, from a
+  counter that never repeats. An id at or below the counter that the map
+  lacks was freed; any other isn't a handle. The registry is also what keeps
+  an object alive: the collector can't see the caller's references.
+- **Threads:** every function registers the calling thread with the collector
+  for the length of the call, and unregisters it after, so a thread the
+  collector never knew (Python's) can allocate and collect. The library
+  starts itself on its first call, which mustn't race, so one call comes
+  first, from one thread: the Python package makes it at import.
+- **The first call's thread** is where the collector starts, and the
+  collector keeps it registered as its main thread. On Linux a registered
+  thread that has ended makes the next collection abort, so the library
+  unregisters it at the end of that call, unless it's the process's first
+  thread, which lives as long as the process. Then it registers per call,
+  like any other. Windows drops an exited thread itself.
+- **Exports** are exactly the header's functions: a `.def` file on Windows and
+  a linker version script on Linux, both written from the header by
+  [tools/python.vsh](../tools/python.vsh). On Windows the header is compiled
+  with the module, so a declaration that disagrees with the code fails the
+  build. That's also why the header has no `const`: V can't write it, so
+  the definitions it generates take `char *`, and a `const char *` in the
+  header would conflict.
+- **Text** goes in as NUL-terminated UTF-8, checked, and comes out into the
+  caller's buffer with the room it takes in `*needed`. Text that doesn't fit
+  is `REFLUX_TOO_SMALL`, with nothing written, and the Python package asks
+  again with the room it was told. What comes out is in formats already
+  documented: a compound is its component file
+  ([data-format.md](data-format.md)), the index is `index.toml`'s format, and
+  a fluid's setup is TOML written by `components.Setup.to_toml`. Floats are
+  V's shortest round-trip form, so they read back exactly.
+- **Codes** say whose the failure is: `REFLUX_BAD_ARGUMENT` for anything the
+  caller could get wrong, checked before the V API is called; `REFLUX_BAD_HANDLE`
+  for an id that isn't a live handle of its kind (a fluid's where a database's
+  belongs, say); `REFLUX_NOT_FOUND` for a compound lookup, whose reason names
+  the closest; and `REFLUX_DATA_ERROR` for what the data can't do, which is
+  what's left of `components`' failures once the arguments are checked.
+- **Many points in a call.** A function over points takes their number n,
+  and each per-point input with a count of 1 or n, so a scalar or one
+  composition needn't be repeated. The Python package passes an array that's
+  already of the points' shape, C-contiguous `float64`, as it is, and
+  broadcasts the rest by NumPy's rules. Outputs are property-major,
+  `out[k·n + i]`, so each property's values are contiguous: a NumPy array of
+  the points' shape with no copy.
+- **A status per point** (`REFLUX_POINT_*`, whose flash kinds follow
+  `flash.Failure`'s order). A point without an answer gets NaN, and
+  `REFLUX_NO_PHASE` for its label, and leaves the others as they would be
+  alone. `err` holds the first failed point's reason, so a point's reason is
+  the same call made for it alone (M10a's D7).
+- **A point's inputs are checked first:** finite, with T and P above zero and
+  z not negative nor all zero. thermo's own check is `t <= 0.0`, which NaN
+  and ∞ pass.
+- **Properties per mole** are the V API's extensive ones divided by Σz, so a
+  V program doing the same gets the same bits (criterion 3). A compound's
+  vapour pressure is the fluid's cubic for it alone, with its own α.
+- **One flash function, one layout** (M10a's D6). `reflux_flash` takes a
+  spec saying what a point's two values are, (T, P) for the PT flash. It
+  writes the whole's β, T, P, H, S and V per mole of feed, and each phase's
+  fraction, V, H, S and composition in the place of its label: the
+  liquid's (0) then the vapour's (1). A split's less dense phase is the
+  vapour, and a single phase takes its label's place, the other NaN, so the
+  vapour's composition is always the same column of the arrays. The whole's
+  H, S and V are its phases', summed in the flash's order, as
+  `flowsheet.Stream` sums them.
+- **Held to the V API bit for bit.** `tools/capi_reference.v` computes a
+  reference set of states with `components`, `thermo` and `flash` alone, as
+  the header documents each point, and the Python tests compare the
+  library's answers with it to the bit. Both are built by one compiler with
+  one set of flags, because bits differ between compilers and maths
+  libraries (M10a's D12). The flags include `-ffp-contract=off`. Where the
+  target has FMA, gcc fuses a·b + c into one rounding wherever its inlining
+  lets it, and the library (`-shared`, without LTO) and the reference (with
+  it) would differ. Ubuntu's CI found it (M10a's exit review).
+- **The specs** are PT, PH, PS, TV, UV, and the vapour-fraction flashes TVF
+  and PVF, whose β of 0 or 1 makes a bubble or dew point. Each checks its own
+  two values before the feed. A vapour-fraction flash gives both phases,
+  even one with no moles, whose composition is the incipient phase's.
+
+### Where the data comes from
+
+A **data root** is a directory with `components/`, a file per compound, and
+`vendor/chemsep/`, ChemSep's kᵢⱼ banks (`pr.ipd`, `srk.ipd`) and
+Mathias–Copeman constants (`mc-PR.lib`). `components.open(root, extra)` opens
+one, with directories of the caller's own compounds after its own, and the
+`Database` it returns keeps its root's `vendor/chemsep/`, so a fluid's kᵢⱼ and
+α come from the same copy of the data as its compounds (M10a's D9). The
+default root, `components.data_root()`, is `$REFLUX_DATA` if that's set, and
+otherwise the source tree's `data/`, whose path V fills in when it compiles
+(`@VMODROOT`). So a library or a binary built from the source tree finds the
+data wherever it's moved to, as long as the tree stays, and a copy of the
+data can go anywhere with `REFLUX_DATA` pointing at it. Before M10a,
+`REFLUX_DATA` named the compounds' directory alone, and the kᵢⱼ always came
+from the source tree.
 
 ## How equation-oriented solving will fit
 

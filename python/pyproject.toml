@@ -1,0 +1,31 @@
+# The reflux Python package (M10a): thermodynamics and flashes on NumPy arrays,
+# through reflux's C API (capi/reflux.h). Build its library first, with
+# `v run tools/python.vsh build`, which puts it in reflux/_lib/, then install
+# the package: `pip install -e python`, or `uv pip install -e python`. The
+# library finds its data in the source tree it was built from, wherever the
+# package goes, unless REFLUX_DATA names another data root.
+[build-system]
+# 77 reads `license` as an SPDX expression.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["reflux"]
+
+[tool.setuptools.package-data]
+reflux = ["_lib/*.dll", "_lib/*.so"]
+
+[project]
+name = "reflux"
+# v.mod's, which python/tests/test_library.py checks.
+version = "0.2.0"
+description = "A steady-state chemical process simulator: thermodynamics and flashes from Python, on NumPy arrays"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2,<3"]
+
+[tool.pytest.ini_options]
+# Import the package from this directory, built library and all, without
+# installing it.
+pythonpath = ["."]
+testpaths = ["tests"]

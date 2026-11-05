@@ -156,8 +156,9 @@ fn test_every_split_is_an_equilibrium() {
 }
 
 fn test_the_split_budget() {
-	// Recorded, and can't grow by more than 2.4%: 2,246 split steps over
-	// the fixture's 166 splits, 44 of them finished by Newton on G. Newton
+	// Recorded, and can't grow by more than 2.3%: 2,248 split steps over
+	// the fixture's 166 splits, 44 of them finished by Newton on G (2,246
+	// and 44 until M10a step 8 judged each extrapolation). Newton
 	// rescues a poor start or a slow iteration, so mistakes there show up
 	// as work, not wrong answers: without DEM it's 2,697 steps and 70
 	// finishes, and with K = w/z instead of W/z it's 2,372 and 49.
@@ -276,6 +277,54 @@ fn test_retrograde_condensation() {
 	assert liquid[3] > liquid[4] && liquid[4] > liquid[5], '${liquid}'
 	// And at 170 bar it is a single phase again, above its dew point.
 	assert flash.pt(m, 400.0, 170e5, condensate_z)!.phases.len == 1
+}
+
+// natural_gas is M10a's exit script's natural gas: PR with the database's
+// constants and ChemSep's kᵢⱼ for methane, ethane, propane, n-butane and
+// n-pentane, exactly as components gives them.
+fn natural_gas() !thermo.Cubic {
+	names := ['methane', 'ethane', 'propane', 'n-butane', 'n-pentane']
+	tc := [190.56, 305.32, 369.83, 425.12, 469.7]
+	pc := [4599000.0, 4872000.0, 4248000.0, 3796000.0, 3370000.0]
+	omega := [0.011, 0.099, 0.152, 0.199, 0.251]
+	mw := [0.0160425, 0.030069, 0.0440956, 0.0581222, 0.0721488]
+	comps := []Component{len: 5, init: Component{
+		name:  names[index]
+		tc:    tc[index]
+		pc:    pc[index]
+		omega: omega[index]
+		mw:    mw[index]
+	}}
+	kij := [0.0, -0.0033, 0.0119, 0.0244, 0.023, -0.0033, 0.0, 0.0011, 0.0089, 0.0078, 0.0119,
+		0.0011, 0.0, 0.0033, 0.0267, 0.0244, 0.0089, 0.0033, 0.0, 0.0174, 0.023, 0.0078, 0.0267,
+		0.0174, 0.0]
+	return thermo.new_cubic(.pr, comps, kij: kij)!
+}
+
+const gas_z = [0.8, 0.1, 0.05, 0.03, 0.02]
+
+fn test_an_extrapolation_that_overshoots_is_undone() {
+	// M10a's exit script found this gas failing at 265.0 and 265.1 K and 81
+	// bar, well inside its two-phase region (K from 1.7 to 0.07), while
+	// 264.9 K split in 23 steps. There the extrapolation at the sixth step
+	// threw β from 0.14 to 0.87 and the residual from 0.005 to 1.5, and the
+	// split slid off towards the feed and collapsed onto it. So did 262 K at
+	// 105 bar. An extrapolation is kept now only if it lowers the residual;
+	// each of these takes 21 steps, which is recorded and can't grow.
+	m := natural_gas()!
+	mut betas := []f64{}
+	for t in [264.9, 265.0, 265.1] {
+		r := flash.pt(m, t, 81e5, gas_z)!
+		check_equilibrium(m, r, 'the gas at ${t} K and 81 bar')!
+		assert r.iterations <= 21, '${t} K: ${r.iterations} steps'
+		betas << r.beta
+	}
+	// β rises smoothly with T across them, about 0.0059 a kelvin: the two
+	// steps of 0.1 K differ by 0.26%, the curve's own bend.
+	d1, d2 := betas[1] - betas[0], betas[2] - betas[1]
+	assert d1 > 0.0 && d2 > 0.0 && math.abs(d2 - d1) < 0.01 * d1, '${betas}'
+	r := flash.pt(m, 262.0, 105e5, gas_z)!
+	check_equilibrium(m, r, 'the gas at 262 K and 105 bar')!
 }
 
 fn test_light_and_heavy_side_by_side() {

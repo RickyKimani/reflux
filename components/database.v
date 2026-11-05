@@ -3,19 +3,29 @@ module components
 import os
 import strings
 
-// default_dir is the built-in component data: ChemSep converted, in this
-// repository's data/components/. @VMODROOT is the directory holding v.mod,
-// filled in when reflux is compiled, so this works for anything built from
-// the repository. Set REFLUX_DATA to use a copy somewhere else.
-pub const default_dir = os.join_path(@VMODROOT, 'data', 'components')
+// default_root is the data reflux comes with: this repository's data/.
+// @VMODROOT is the directory holding v.mod, filled in when reflux is
+// compiled, so this works for anything built from the repository, the C
+// API's library among them. A data root holds:
+// - components/, the compounds: ChemSep converted, one file each;
+// - vendor/chemsep/, ChemSep's kᵢⱼ banks (pr.ipd, srk.ipd) and
+//   Mathias–Copeman constants (mc-PR.lib).
+// Set REFLUX_DATA to a root elsewhere, a copy of this one for instance.
+pub const default_root = os.join_path(@VMODROOT, 'data')
 
-// Database finds compounds in one or more directories of component files.
+// default_dir is the default root's compounds.
+pub const default_dir = os.join_path(default_root, 'components')
+
+// Database finds compounds in one or more directories of component files,
+// and holds where its root's kᵢⱼ banks and Mathias–Copeman constants are.
 // A compound whose CAS number appears in a later directory replaces the
 // earlier one entirely, which is how a directory of your own overrides the
 // built-in data. Files are parsed only when a compound is asked for.
 pub struct Database {
 pub:
-	dirs []string
+	root   string   // the data root
+	dirs   []string // the root's components/, then any others, in order
+	vendor string   // the root's vendor/chemsep/
 mut:
 	entries map[string]Entry // CAS number → the latest entry
 }
@@ -25,16 +35,48 @@ struct Entry {
 	path string // the component file
 }
 
-// load_default loads the built-in data, from $REFLUX_DATA if that's set.
-pub fn load_default() !Database {
-	return load([os.getenv_opt('REFLUX_DATA') or { default_dir }])
+// data_root is where a database opens unless told otherwise: $REFLUX_DATA if
+// that's set, and default_root if not.
+pub fn data_root() string {
+	return os.getenv_opt('REFLUX_DATA') or { default_root }
 }
 
-// load loads directories of component files, in order. A directory with an
-// index.toml is read through it, as the built-in one is. A directory
+// load_default opens data_root().
+pub fn load_default() !Database {
+	return open(data_root(), [])
+}
+
+// open opens a data root: its compounds, then those in any extra
+// directories, which replace the root's compounds of the same CAS number;
+// and its kᵢⱼ banks and Mathias–Copeman constants, so that a copy of the data
+// moved elsewhere is used whole.
+pub fn open(root string, extra []string) !Database {
+	comps := os.join_path(root, 'components')
+	vendor := os.join_path(root, 'vendor', 'chemsep')
+	if !os.is_dir(comps) {
+		hint := if os.exists(os.join_path(root, 'index.toml')) {
+			'; it looks like a components directory itself, so its parent is the root'
+		} else {
+			''
+		}
+		return error('${root} is not a data root: it has no components directory${hint}')
+	}
+	if !os.is_dir(vendor) {
+		return error('${root} is not a data root: it has no vendor/chemsep directory')
+	}
+	mut db := load_dirs([comps, ...extra])!
+	return Database{
+		...db
+		root:   root
+		vendor: vendor
+	}
+}
+
+// load_dirs reads directories of component files, in order. A directory with
+// an index.toml is read through it, as the built-in one is. A directory
 // without one, such as a directory of your own, has every *.toml file in it
 // read, which is quick for a handful of files.
-pub fn load(dirs []string) !Database {
+fn load_dirs(dirs []string) !Database {
 	mut db := Database{
 		dirs: dirs
 	}
@@ -108,6 +150,12 @@ pub fn (e LookupError) msg() string {
 // query that matches nothing, or more than one compound, is a LookupError.
 pub fn (db Database) find(query string) !Record {
 	q := query.trim_space()
+	if q == '' {
+		// Not ambiguous: a compound without an InChIKey would match it below.
+		return LookupError{
+			query: q
+		}
+	}
 	if e := db.entries[q] {
 		return read_toml(e.path)!
 	}

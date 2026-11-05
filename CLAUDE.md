@@ -38,13 +38,73 @@ Keep this section current: update it whenever a step is committed.
     escape and a smart-cast interface's field inside `${}`; to `thermo`, its
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
     unit failures.
-- **v0.1.0** is M0 to M4, a source release. Its CHANGELOG entry is dated
-  2026-11-03 on `main`. Next: the tag, when the owner says, once
-  `v run tools/release.vsh` passes on `main` (`git tag -a v0.1.0 -m "reflux
-  0.1.0"`, then `git push origin v0.1.0`).
-- **The next milestone** is the owner's to choose. By the roadmap, M10a
-  (thermo and the flash from Python), then M10b (flowsheets from Python);
-  M5 to M9 build on M4.
+- **v0.1.0** is released: M0 to M4, a source release, tagged on
+  2026-11-03 at `45d4ce6` on `main` (an annotated tag, pushed). The next
+  release starts with a new CHANGELOG entry and its version in `v.mod`, and
+  a changed golden report goes in that entry by name.
+- **M10a (thermo and the flash from Python) is done** on branch
+  `m10a-python`: steps 1–10 of `docs/m10a-plan.md` (approved on 2026-11-04),
+  whose exit review is at its end. CI passed on the tip on Windows and Linux
+  (run 42080776945), after the run before found Ubuntu's gcc fusing
+  multiply-adds. Next: the PR into `main`, then v0.2.0's tag after the
+  merge.
+  - Its probes found that V 0.5.2's collector has thread support on Windows
+    too, so the spike's thread registration is needed on both OSes. 8 Python
+    threads at once get the serial answers bit for bit, at about 2× the serial
+    rate.
+  - **Step 1 is done:** the library skeleton (`capi`, `capi/reflux.h`, the
+    registry, thread registration, exports restricted to the header's,
+    `tools/python.vsh`, the package's skeleton). It amended D3 (a version
+    script on Linux) and D5 (V starts the library on its first call, which
+    mustn't race, so the package makes it at import).
+  - **Step 2 is done:** databases and fluids through the C API and the
+    package, and the data root (D9). `REFLUX_DATA` now names the data root
+    (`components/` and `vendor/chemsep/`), and `components.load` became
+    `open(root, extra)`: both go in 0.2.0's CHANGELOG entry, listed at the
+    end of step 2's write-up. The package installs (D10), editable or not.
+  - **Step 3 is done:** a phase's properties and each compound's Psat at many
+    points, each with a status (`REFLUX_POINT_*`, 0 to 8). A point whose
+    answer isn't finite has none (`NOT_FINITE`): above about 1e10 K the
+    ideal-gas Cp overflows.
+  - Carried forward from step 3: thermo's `saturation_pressure` (successive
+    substitution) fails at Tc(1−1e-6) for n-butane and at or below 10 K.
+  - **Step 4 is done:** stability and the PT flash at many points, through
+    one `reflux_flash(fluid, spec, …)` whose layout every flash will share.
+    D6 is amended: each phase is in the place of its label.
+  - **Step 5 is done:** PH, PS, TV, UV and the vapour-fraction flashes, with
+    bubble and dew points, as specs of `reflux_flash`. Every failure kind is
+    reached and tested through the public API.
+  - **Step 6 is done:** seeded fuzzing of every exported function
+    (`capi/fuzz_test.v`), 8 threads on every vectorised function, and a flat
+    heap over 100,000 calls. Throughput with 8 threads is 1.3 to 2.3 times
+    serial, the collector's lock being shared.
+  - **Step 7 is done:** `tools/capi_reference.v` (D12) writes the V API's
+    answers, and the Python tests match them bit for bit through the C API.
+    `docs/benchmarks.md` has the cost from Python (criterion 10). The spike's
+    code and CI step are gone, every scenario living in the package's tests.
+  - Carried forward from step 7: V's code runs 1.3 to 1.8 times slower inside
+    the library in a Python process than in a V program, and fewer
+    collections don't remove it. For M8.
+  - **Step 8 is done:** the exit script, `python/examples/phase_diagrams.py`
+    (a T–x–y and a phase-fraction map, matched to the V API bit for bit), and
+    `docs/python.md`, whose every example `python/tests/test_docs.py` runs.
+    The script found a bug in M3's PT flash, which is fixed: the split's
+    extrapolation is kept only if it lowers the residual. It goes in 0.2.0's
+    CHANGELOG entry.
+  - **Step 9 is done:** v.mod and the package are 0.2.0, with its CHANGELOG
+    entry undated until the tag, which comes on `main` after step 10 and the
+    merge, as v0.1.0's did. The golden reports carry 0.2.0, and their test
+    now holds each to v.mod's version. No number in them moved.
+  - **Step 10 is done:** the README, roadmap and V notes, and the exit
+    review. The review added a test of the header's types against ctypes'
+    (criterion 1), and Mathias–Copeman constants to the install test
+    (criterion 9).
+  - Carried forward (in the review): V's code slower inside the library and
+    threads that don't scale (M8); thermo's `saturation_pressure` near Tc
+    and below 10 K; the stability test's unjudged extrapolation, to watch;
+    wheels (I2); the committed figure, drawn by hand; a report to V on a
+    shared library's first call.
+  - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
 
@@ -81,6 +141,8 @@ v -W -stats test flash/pt_test.v # per-test results, and println output from pas
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
+v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
+REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v   # a longer fuzz
 ```
 
 - **`check.vsh`** runs `v fmt -verify .`, `v vet .`, `v -cc <cc> -W test .`,
@@ -94,8 +156,20 @@ v run tools/release.vsh          # the release gate: why this commit can't be ta
   slower. Run the gcc check in the background, and don't edit or regenerate
   anything it compiles or reads until it finishes.
 - **CI** (`.github/workflows/ci.yml`) runs `check.vsh` on Ubuntu and Windows
-  with both tcc and gcc. The gcc jobs also run the Python FFI spike. V is
+  with both tcc and gcc. The gcc jobs also run `tools/python.vsh test`. V is
   pinned to the commit in `.v-version` (0.5.2, eab77e7).
+- **The Python tests** need the library, which only gcc can build, so
+  `check.vsh` doesn't run them: `v run tools/python.vsh test`. It also builds
+  `tools/capi_reference.v` with the library's compiler and flags, for the
+  bit-for-bit tests (`REFLUX_REFERENCE`); pytest alone skips those. Both
+  are built with `-ffp-contract=off`: where gcc's target has FMA, as
+  Ubuntu's CI gcc's does, it fuses a·b + c by its inlining, and the two builds
+  inline differently (M10a's exit review). Here uv needs
+  the interpreter named, as below: `--python <path>`. `test_install.py`
+  installs the package into a fresh environment, so uv needs setuptools and
+  NumPy from its cache or the network. matplotlib (pinned) is for the exit
+  script, whose test runs it. An editable install leaves
+  `python/reflux.egg-info/`, which git ignores.
 - **Generated data:**
   - `v run tools/import_chemsep.vsh` regenerates `data/components/` from the
     vendored ChemSep XML. A test fails if it's stale.
@@ -162,7 +236,9 @@ v run tools/release.vsh          # the release gate: why this commit can't be ta
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
 `components`. `quantity`, units of measure (M4), depends on nothing, and
-so does `release`, the release gate's logic.
+so does `release`, the release gate's logic. `capi` (M10a) is the C API
+over the rest, built into a shared library for the Python package in
+`python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
 `components` and `flash`. `flowsheet` (M4) uses `flash`, `thermo` and
 `numeric`, and its tests use `components`.
@@ -184,8 +260,8 @@ so does `release`, the release gate's logic.
     vapour- and liquid-like ones plus a nearly pure phase of each component.
     Substitution with DEM is followed by a second-order finish in α = 2√W.
   - `pt` tests stability, then splits: substitution with Rachford–Rice and
-    DEM, then Newton on G through `numeric.minimize`, then each phase
-    re-verified. Its feed's test stops at the first proof of instability
+    DEM (an extrapolation kept only if it lowers the residual), then Newton
+    on G through `numeric.minimize`, then each phase re-verified. Its feed's test stops at the first proof of instability
     once Wilson's two trials have run, and runs the rest only if no split
     from those stands.
   - `tvf` and `pvf` (`vf.v`) find P or T for a given β; bubble and dew
@@ -216,6 +292,11 @@ so does `release`, the release gate's logic.
   one TOML file per compound in `data/components/`, then the database API.
   The API yields `thermo.Component`, `IdealGas` and kᵢⱼ matrices from the
   vendored `pr.ipd`/`srk.ipd`, taking the first entry listed for a pair.
+  - A `Database` opens on a data root, `components/` and `vendor/chemsep/`,
+    with `components.open(root, extra)`. The default root is `$REFLUX_DATA`,
+    or else the source tree's `data/` (`@VMODROOT`). A fluid's kᵢⱼ and
+    Mathias–Copeman α come from its database's root (M10a's D9), never from
+    the source tree behind its back.
 - **`flowsheet`** is M4's: streams, units, the graph, the solver, the file
   and the reports.
   - A `Stream` is its molar flows plus the flash that gave its state, so
@@ -238,6 +319,28 @@ so does `release`, the release gate's logic.
     struct, and its stream table rounds by `math.round`, never printf.
     `main.v` is the command line over it, tested in process by
     `main_test.v`.
+- **`capi`** is M10a's, in progress: the functions `capi/reflux.h` declares,
+  and nothing else is exported. Each returns 0 or a negative code with its
+  reason in the caller's buffer, takes `i32`, `i64`, `f64` and pointers only,
+  and registers its thread with the collector for the call. Handles are ids
+  into a registry behind a lock, never reused. The library starts on its
+  first call, which mustn't race, so the Python package makes it at import.
+  - Text comes out into the caller's buffer, with the room it takes in
+    `*needed`, or `REFLUX_TOO_SMALL`. Its formats are components' own: a
+    compound is its component file, and a fluid's setup `Setup.to_toml`.
+  - Everything a caller can get wrong is checked in `capi` first
+    (`REFLUX_BAD_ARGUMENT`), so that what `components` refuses after is the
+    data's doing (`REFLUX_DATA_ERROR`). A lookup is `REFLUX_NOT_FOUND`.
+  - The header has no `const`: V writes `char *`, and gcc refuses a header
+    that disagrees.
+  - Many points per call: each input's count is 1 or n, outputs are
+    property-major (`out[k*n + i]`), and each point has a status
+    (`REFLUX_POINT_*`), NaN when it has no answer. A point with a value that
+    isn't finite has no answer (`NOT_FINITE`). `err` holds the first failed
+    point's reason, so one point's reason is the call for it alone.
+  - Every flash is `reflux_flash(fluid, spec, …)` with one layout (D6): the
+    whole's values, then each phase's in the place of its label, liquid (0)
+    then vapour (1). A single phase takes its label's place, the other NaN.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
@@ -267,6 +370,12 @@ so does `release`, the release gate's logic.
     and confirm the files match with `cmp`.
   - Each survivor gets a new test, gets its code deleted, or is explained
     in the plan.
+  - A mutation that doesn't compile isn't caught: no test saw it. Under `-W`
+    an import left unused or a `mut` never changed is an error, so write the
+    mutation to keep both used (`if !utf8.validate_str(s) && false`). The
+    scripts report it as NO BUILD.
+  - A timeout must kill the whole process tree: killing `v` leaves the test
+    program it started holding the pipes, and the script waits forever.
 - **Keep sensitive states exact.** Where a test state is sensitive to an
   ulp, store the exact double: build it from integers, for instance
   `(915 + k) * 1e4`.
@@ -323,3 +432,15 @@ or a test:
 - **A `!` in a test function that doesn't return a Result** can turn a typed
   error into a `V panic` with no FAIL line, so a panic in a test's output
   isn't always a panic in the code.
+- **Inside `or {}`, `err` is the error,** even where a parameter is called
+  `err`: name a C buffer parameter `buf`.
+- **`v fmt -w` rewrites a file that doesn't parse,** and can drop lines.
+  Compile first; mind an apostrophe in a single-quoted string.
+- **`@[has_globals]`** allows `__global` in the file it heads, not its whole
+  module.
+- **A V shared library starts on its first call,** from whichever thread,
+  behind a flag that isn't thread-safe: one call must come first, from one
+  thread. A Python thread must be registered with the collector on Windows
+  as on Linux (`capi/gc_threads.h`). The collector keeps the first call's
+  thread registered for good, and on Linux it aborts once that thread has
+  ended, so the library unregisters it unless it's the process's first.

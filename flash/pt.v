@@ -83,7 +83,8 @@ fn k_of(lnk f64) f64 {
 //     ln Kᵢ ← ln φᵢᴸ(x) − ln φᵢⱽ(y),
 //
 // with x, y and β from Rachford–Rice at each step and Michelsen's
-// dominant-eigenvalue extrapolation every fifth step. Rachford–Rice may
+// dominant-eigenvalue extrapolation every fifth step, kept only if it lowers
+// the residual max |ln fᵢⱽ − ln fᵢᴸ|. Rachford–Rice may
 // return β outside [0, 1] along the way (the negative flash), which keeps
 // the iteration going where a clipped β would stall. A split still going
 // after 20 steps, as near a critical point, switches to Newton's method on
@@ -259,13 +260,31 @@ fn (sp Splitter) split(k0 []f64) !Split {
 	mut last_step := []f64{}
 	mut since_dem := 0
 	mut tried_newton := false
+	// After an extrapolation, the plain step it replaced and the residual of
+	// the split it was made from, until the next step has judged it.
+	mut plain := []f64{}
+	mut res_before := 0.0
 	for iter in 1 .. sp.params.max_steps + 1 {
 		rr := numeric.rachford_rice(sp.z, lnk.map(k_of(it))) or {
 			return fail(.no_convergence, 'the K-values left the two-phase range: ${err.msg()}')
 		}
 		sx := sp.state(rr.x)!
 		sy := sp.state(rr.y)!
-		if sp.residual(rr.x, sx, rr.y, sy) <= sp.params.tol {
+		res := sp.residual(rr.x, sx, rr.y, sy)
+		if plain.len > 0 {
+			// An extrapolation is kept only if it lowers the residual, as
+			// Michelsen and Mollerup keep one only if it lowers G. One that
+			// overshoots can carry the split off towards the feed, where it
+			// collapses or crawls (a natural gas at 265 K and 81 bar).
+			// Otherwise the plain step is taken, and this one counts as a step.
+			if !(res < res_before) {
+				lnk = plain.clone()
+				plain = []f64{}
+				continue
+			}
+			plain = []f64{}
+		}
+		if res <= sp.params.tol {
 			if !(rr.beta > 0.0 && rr.liquid > 0.0) {
 				return fail(.no_convergence, 'the split converged to β = ${rr.beta}, outside (0, 1)')
 			}
@@ -318,6 +337,8 @@ fn (sp Splitter) split(k0 []f64) !Split {
 				jump := lambda / (1.0 - lambda)
 				acc := []f64{len: nc, init: next[index] + jump * step[index]}
 				if _ := numeric.rachford_rice(sp.z, acc.map(k_of(it))) {
+					plain = next.clone()
+					res_before = res
 					next = acc.clone()
 				}
 			}

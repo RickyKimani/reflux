@@ -7,7 +7,10 @@ copying, and the results agree with the `thermo` fixtures to 5e-15.
 Getting there turned up seven problems (five on Windows, two more in Linux
 CI), and any one of them would have broken M10a if it had been found late.
 
-The spike lives in [spike/python_ffi/](../spike/python_ffi):
+The spike lived in `spike/python_ffi/` until M10a step 7, which removed it
+once each of its scenarios had a home in M10a's C API and Python package
+(`capi/`, `python/`). This write-up stays as the record, and the code is in
+git: `git show 48b23e2 -- spike/python_ffi`.
 
 | File | Role |
 |---|---|
@@ -15,13 +18,17 @@ The spike lives in [spike/python_ffi/](../spike/python_ffi):
 | `run.py` | Python + NumPy scenarios, each in its own process so a crash is reported, not hidden (uv script) |
 | `spike.vsh` | Builds the library and runs the scenarios |
 
-```bash
-v run spike/python_ffi/spike.vsh            # gcc
-```
+Where each scenario went:
 
-```bash
-v run spike/python_ffi/spike.vsh -cc tcc    # shows what tcc does
-```
+| Scenario | Its home in M10a |
+|---|---|
+| zero-copy | `python/tests/test_props.py`: an input already in shape shares its memory |
+| matches `thermo` | `python/tests/test_thermo_reference.py`: M1's 14 cases, Z, V, ln φ, Hʳ and Sʳ |
+| vectorised | the same file: 10,000 points in one call |
+| per-call overhead | `docs/benchmarks.md`, "From Python" (`tools/gen_m10a_bench.py`) |
+| collector stress | `python/tests/test_memory.py`: 100,000 calls |
+| handles, unpinned and pinned | `capi/registry.v`, and `python/tests/test_handles.py` |
+| a Python thread | `python/tests/test_threads.py` |
 
 ## Results (Windows 11, V eab77e7, MSYS2 gcc 16.2, Python 3.14.9, NumPy 2.5.4)
 
@@ -70,17 +77,25 @@ v run spike/python_ffi/spike.vsh -cc tcc    # shows what tcc does
    (`GC_THREADS`), so the collector has to know every thread that runs V
    code, and Python's threads are strangers to it. Each exported function
    now registers the calling thread for the length of the call and
-   unregisters it afterwards ([gc_threads.h](../spike/python_ffi/ffi/gc_threads.h)).
-   The helper is C because thread support is a preprocessor question: V's
-   Windows build has none, so there it does nothing, and the Windows test
-   passed without it.
+   unregisters it afterwards (the helper is now
+   [capi/gc_threads.h](../capi/gc_threads.h)). The helper is C because
+   thread support is a preprocessor question.
+   **Corrected in M10a:** this said that V's Windows build has no thread
+   support, so that the helper did nothing there. It has: V 0.5.2 builds the
+   collector with `GC_THREADS` and `GC_WIN32_THREADS` on Windows too, and
+   without the registration, 8 Python threads calling in crash with the same
+   "Collecting from unknown thread". The helper worked on Windows all along,
+   since it tests `GC_THREADS` ([m10a-plan.md](m10a-plan.md)).
 7. **tcc can't build a loadable Linux `.so` either.** It doesn't mark the
    library's stack as non-executable, and current glibc refuses to load
    it: "cannot enable executable stack as shared object requires". With
    finding 2, shared libraries need gcc (or clang) on every platform.
 
 What works without any help:
-- **Initialisation:** V's module initialisation runs when the DLL loads, so
+- **Initialisation:** **corrected in M10a:** V's module initialisation runs
+  on the library's first call, not when it loads. Each exported function
+  starts it, once, and two threads making the first calls at once race
+  ([v-for-go.md](v-for-go.md), §11). Either way
   there's no explicit init call.
 - **The garbage collector:** it runs normally inside the Python process, and
   its heap levels off rather than growing with the number of calls.
@@ -101,7 +116,8 @@ What works without any help:
   registry needs `-enable-globals`, or a registry struct reached from a
   single global.)
 - **Register the calling thread** with the collector at every entry point,
-  as `gc_threads.h` does, so Python threads work on Linux.
+  as `gc_threads.h` does, so Python threads work: on Linux, and (M10a
+  found) on Windows too.
 - **Build shared libraries with gcc or clang only**, never tcc.
 - **No panics reachable from the API.** Every failure becomes a status code.
   `thermo` already panics only on internal bugs (`CubicKind.consts`); the
@@ -133,7 +149,9 @@ spike isn't tied to one Python version.
   which is what the collector requires. But nothing yet tests two threads
   allocating at the same moment, or `thermo` being safe to call
   concurrently (it has no shared mutable state, so it should be). That test
-  belongs at the start of M10a.
+  belongs at the start of M10a. **Done in M10a's plan:** 8 Python threads
+  at once got the serial answers bit for bit, at about twice the serial rate
+  ([m10a-plan.md](m10a-plan.md)).
 - **A note from V master.** Some builds print "diagnostic replay for
   compiler_error produced no output". They still exit 0 and the library
   works, so it looks like noise from V's new compiler diagnostics, not a

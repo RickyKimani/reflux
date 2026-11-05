@@ -17,8 +17,9 @@ import thermo
 // or a compound is listed more than once, the first listing is the one used
 // and the rest are reported.
 
-// vendor_dir holds the vendored ChemSep files.
-pub const vendor_dir = os.join_path(@VMODROOT, 'data', 'vendor', 'chemsep')
+// vendor_dir holds the vendored ChemSep files of the default root. A
+// database has its own root's (Database.vendor).
+pub const vendor_dir = os.join_path(default_root, 'vendor', 'chemsep')
 
 // Defect is a data line that couldn't be read.
 pub struct Defect {
@@ -47,15 +48,16 @@ pub:
 	defects []Defect
 }
 
-// load_kij loads ChemSep's kᵢⱼ for a cubic equation of state: DECHEMA's,
+// load_kij loads ChemSep's kᵢⱼ for a cubic equation of state from a
+// directory of its files (vendor_dir, or a database's vendor): DECHEMA's,
 // for Peng–Robinson and Soave–Redlich–Kwong. ChemSep has none for vdW or RK.
-pub fn load_kij(kind thermo.CubicKind) !KijBank {
+pub fn load_kij(dir string, kind thermo.CubicKind) !KijBank {
 	name := match kind {
 		.pr { 'pr.ipd' }
 		.srk { 'srk.ipd' }
 		else { return error('ChemSep has no kᵢⱼ for ${kind}') }
 	}
-	return read_ipd(os.join_path(vendor_dir, name))!
+	return read_ipd(os.join_path(dir, name))!
 }
 
 // read_ipd reads a ChemSep .ipd file of kᵢⱼ.
@@ -135,11 +137,11 @@ pub:
 }
 
 // load_mathias_copeman_pr loads ChemSep's Mathias–Copeman constants for
-// Peng–Robinson (mc-PR.lib). See M2 decision D10: the XML's own constants
-// don't say which equation they were fitted for, and agree with none of
-// these.
-pub fn load_mathias_copeman_pr() !McBank {
-	return read_lib(os.join_path(vendor_dir, 'mc-PR.lib'))!
+// Peng–Robinson (mc-PR.lib) from a directory of its files. See M2 decision
+// D10: the XML's own constants don't say which equation they were fitted
+// for, and agree with none of these.
+pub fn load_mathias_copeman_pr(dir string) !McBank {
+	return read_lib(os.join_path(dir, 'mc-PR.lib'))!
 }
 
 // read_lib reads a ChemSep Mathias–Copeman .lib file.

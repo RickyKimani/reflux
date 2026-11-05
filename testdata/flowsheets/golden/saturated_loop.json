@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "reflux": "0.1.0",
+  "reflux": "0.2.0",
   "file": "testdata/flowsheets/saturated_loop.toml",
   "status": "solved",
   "error": null,
