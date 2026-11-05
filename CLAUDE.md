@@ -43,10 +43,11 @@ Keep this section current: update it whenever a step is committed.
   release starts with a new CHANGELOG entry and its version in `v.mod`, and
   a changed golden report goes in that entry by name.
 - **M10a (thermo and the flash from Python) is done** on branch
-  `m10a-python`, on Windows: steps 1–10 of `docs/m10a-plan.md` (approved on
-  2026-11-04), whose exit review is at its end. CI on the tip, steps 4 to 10,
-  is still to run, since the branch was last pushed at step 3. Then the PR
-  into `main`, and v0.2.0's tag after the merge.
+  `m10a-python`: steps 1–10 of `docs/m10a-plan.md` (approved on 2026-11-04),
+  whose exit review is at its end. CI passed on the tip on Windows and Linux
+  (run 42080776945), after the run before found Ubuntu's gcc fusing
+  multiply-adds. Next: the PR into `main`, then v0.2.0's tag after the
+  merge.
   - Its probes found that V 0.5.2's collector has thread support on Windows
     too, so the spike's thread registration is needed on both OSes. 8 Python
     threads at once get the serial answers bit for bit, at about 2× the serial
@@ -161,9 +162,9 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
   `check.vsh` doesn't run them: `v run tools/python.vsh test`. It also builds
   `tools/capi_reference.v` with the library's compiler and flags, for the
   bit-for-bit tests (`REFLUX_REFERENCE`); pytest alone skips those. Both
-  are built with `-ffp-contract=off`: where gcc's target has FMA, it fuses
-  a·b + c by its inlining, and the two builds inline differently (M10a's exit
-  review, on Ubuntu). Here uv needs
+  are built with `-ffp-contract=off`: where gcc's target has FMA, as
+  Ubuntu's CI gcc's does, it fuses a·b + c by its inlining, and the two builds
+  inline differently (M10a's exit review). Here uv needs
   the interpreter named, as below: `--python <path>`. `test_install.py`
   installs the package into a fresh environment, so uv needs setuptools and
   NumPy from its cache or the network. matplotlib (pinned) is for the exit
