@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 4 are done, and step 5 is
+Status: **approved** on 2026-11-04. Steps 1 to 5 are done, and step 6 is
 next.
 
 ## Goal
@@ -689,9 +689,83 @@ and their Python tests together.
       `max_steps: 1`. The vapour-fraction flashes do reach it at their
       defaults (`flash/vf_test.v`), so step 5's tests can check this
       mapping.
+    - **Caught in step 5:** both are now reached through the public API (an
+      H no temperature reaches, and a dew point that doesn't converge), and
+      both mistakes are caught.
 
-### 5. The other flashes
-- PH, PS, TV, UV, and the vapour-fraction flashes with bubble and dew points.
+### 5. The other flashes — done
+- **Six more specs for `reflux_flash`,** each a pair of values a and b, in
+  the one layout of step 4:
+
+  | Spec | a | b |
+  |---|---|---|
+  | PH | P (Pa) | H (J/mol) |
+  | PS | P (Pa) | S (J/(mol·K)) |
+  | TV | T (K) | V (m³/mol) |
+  | UV | U (J/mol) | V (m³/mol) |
+  | TVF | T (K) | β |
+  | PVF | P (Pa) | β |
+
+  - Each spec checks its own two values first:
+    - T and P finite and above zero;
+    - H, S and U finite;
+    - V finite and above zero;
+    - β between 0 and 1, NaN refused.
+  - Then the feed is checked, and the V API's flash called with its
+    defaults.
+- **Bubble and dew points** are the vapour-fraction flashes at β = 0 and 1.
+  - Both phases come back, even the one with no moles. Its composition is
+    the incipient phase's: the first bubble, or the first drop.
+  - The package names them: `bubble_p`, `dew_p`, `bubble_t`, `dew_t`.
+- **Every failure kind can now be reached,** and is tested through the
+  public API. With M3's methane/n-butane, 40/60:
+  - `dew_t` at 90 bar fails to converge;
+  - both points at 100 bar are outside the envelope;
+  - at 110 bar the dew-point iteration reaches a boundary at 26 K the wrong
+    way round, so its phases are swapped.
+  - An H that no temperature from 10 K to 10⁴ K reaches is the PH flash's
+    own bad input.
+  - Step 4 couldn't test the first and last of these mappings, and explained
+    them; step 5 tests them.
+- **The package:** `Fluid.flash_ph(P, H, z)`, `flash_ps(P, S, z)`,
+  `flash_tv(T, V, z)`, `flash_uv(U, V, z)`, `flash_tvf(T, beta, z)`,
+  `flash_pvf(P, beta, z)`, `bubble_p(T, z)`, `dew_p(T, z)`, `bubble_t(P, z)`
+  and `dew_t(P, z)`. Each gives a `FlashResult`, broadcast as `props`.
+- **Against `thermo`,** through the package with M3's constants:
+  - its 40 bubble and dew points to 9.0e-13 in T or P and 1.3e-13 in the
+    incipient phase;
+  - its 36 pure saturation states to 9.1e-13.
+  - These are the V API's own measured deviations (`flash/vf_test.v`).
+- **Round trips:** a grid of PT states, splits and single phases, given back
+  to each flash (its P and H, its T and V, and so on) lands on T, P and β to
+  1e-8.
+  - One of ten splits came back from TVF at 80.6 bar where the PT state was
+    at 50. Near the critical region two pressures have the same β, and
+    Newton finds the one its start leads to (documented in `vf.v`).
+  - So the vapour-fraction flashes are held to the claim: a PT flash at
+    their answer has the β asked for, to 1e-8. Nine of ten land on the state
+    they came from.
+- **Tests:**
+  - [capi/flash_test.v](../capi/flash_test.v) now has 8 tests:
+    - every spec against the V API, bit for bit, landing on the PT state it
+      came from;
+    - a bubble and a dew point's incipient phases;
+    - each spec's checks of its values, with their reasons, a bad feed, and
+      the PH flash's own bad input.
+  - `test_flashes.py`, 5 tests: the round trips on arrays; M3's boundaries
+    and saturation states; bubble and dew points; every failure kind.
+  - `test_flash.py` and `test_flashes.py` share M3's database through
+    `support.py`.
+  - The Python suite is 69 tests.
+- **Planted mistakes:** 23, in `capi/flash.v` and the package, in a scratch
+  copy. All were caught, every one compiling: 15 by `capi`'s V tests and 8
+  by the Python tests.
+  - Among them are step 4's two explained survivors, the flash's own bad
+    input and no convergence each mapped to another status, and the
+    swapped-phases and outside-the-envelope mappings. Step 5's tests catch
+    all four.
+  - One gap was seen while writing the list and filled first: no test gave a
+    flash other than PT a bad feed.
 
 ### 6. Threads, memory and fuzzing
 - 8 threads on every vectorised function, against the serial answers, on both

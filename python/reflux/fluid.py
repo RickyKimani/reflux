@@ -103,6 +103,62 @@ class Fluid:
         from .points import flash
         return flash(self, "pt", T, P, z)
 
+    def flash_ph(self, P, H, z=None):
+        """The flash at pressure P (Pa) and molar enthalpy H (J per mole of
+        feed, on the basis Properties describes): it finds T. An H no
+        temperature from 10 K to 10⁴ K reaches is Status.BAD_INPUT."""
+        from .points import flash
+        return flash(self, "ph", P, H, z)
+
+    def flash_ps(self, P, S, z=None):
+        """The flash at pressure P (Pa) and molar entropy S (J/(mol·K)): it
+        finds T."""
+        from .points import flash
+        return flash(self, "ps", P, S, z)
+
+    def flash_tv(self, T, V, z=None):
+        """The flash at temperature T (K) and molar volume V (m³ per mole of
+        feed): it finds P."""
+        from .points import flash
+        return flash(self, "tv", T, V, z)
+
+    def flash_uv(self, U, V, z=None):
+        """The flash at molar internal energy U (J/mol) and molar volume V
+        (m³/mol): it finds T and P."""
+        from .points import flash
+        return flash(self, "uv", U, V, z)
+
+    def flash_tvf(self, T, beta, z=None):
+        """The flash at temperature T (K) and vapour fraction beta: it finds
+        P. Both phases come back, even one with no moles at beta 0 or 1,
+        whose composition is the incipient phase's."""
+        from .points import flash
+        return flash(self, "tvf", T, beta, z)
+
+    def flash_pvf(self, P, beta, z=None):
+        """The flash at pressure P (Pa) and vapour fraction beta: it finds T,
+        with both phases as flash_tvf."""
+        from .points import flash
+        return flash(self, "pvf", P, beta, z)
+
+    def bubble_p(self, T, z=None):
+        """The bubble-point pressure at T: flash_tvf at beta 0, whose vapour is
+        the first bubble's."""
+        return self.flash_tvf(T, 0.0, z)
+
+    def dew_p(self, T, z=None):
+        """The dew-point pressure at T: flash_tvf at beta 1, whose liquid is
+        the first drop's."""
+        return self.flash_tvf(T, 1.0, z)
+
+    def bubble_t(self, P, z=None):
+        """The bubble-point temperature at P: flash_pvf at beta 0."""
+        return self.flash_pvf(P, 0.0, z)
+
+    def dew_t(self, P, z=None):
+        """The dew-point temperature at P: flash_pvf at beta 1."""
+        return self.flash_pvf(P, 1.0, z)
+
     def psat(self, T, compound=None):
         """Vapour pressures (Pa) at temperatures T (K): a Saturation, with each
         compound's along a last axis, or one compound's (an index, name or

@@ -32,7 +32,7 @@ ROOTS = {"liquid": 0, "vapor": 1, "stable": 2}
 PROPS = ("z", "v", "h", "s", "g", "u", "a", "cp", "cv", "w", "mu_jt")
 
 # Flashes, for reflux_flash: what a point's two values are (REFLUX_FLASH_PT...).
-FLASHES = {"pt": 0}
+FLASHES = {"pt": 0, "ph": 1, "ps": 2, "tv": 3, "uv": 4, "tvf": 5, "pvf": 6}
 
 # A flash's values per point, and a phase's, in the order reflux_flash
 # writes them (REFLUX_FLASH_BETA..., REFLUX_PHASE_FRACTION...).

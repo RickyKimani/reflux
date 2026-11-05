@@ -103,9 +103,17 @@ fn status_of(e IError) i32 {
 // check_tp refuses a temperature or pressure that isn't finite and above
 // zero. thermo's own check, `t <= 0.0`, lets NaN and infinity through.
 fn check_tp(t f64, p f64) ! {
+	check_t(t)!
+	check_p(p)!
+}
+
+fn check_t(t f64) ! {
 	if !math.is_finite(t) || t <= 0.0 {
 		return point_error(point_bad_input, 'T = ${t} K: a temperature must be finite and above 0')
 	}
+}
+
+fn check_p(p f64) ! {
 	if !math.is_finite(p) || p <= 0.0 {
 		return point_error(point_bad_input, 'P = ${p} Pa: a pressure must be finite and above 0')
 	}
@@ -250,9 +258,7 @@ fn pure_model(m thermo.Model, j int) !thermo.Cubic {
 // saturation is one point of reflux_psat.
 fn saturation(pure thermo.Cubic, t f64) !f64 {
 	c := pure.comps[0]
-	if !math.is_finite(t) || t <= 0.0 {
-		return point_error(point_bad_input, 'T = ${t} K: a temperature must be finite and above 0')
-	}
+	check_t(t)!
 	if t >= c.tc {
 		return point_error(point_supercritical, '${c.name}: T = ${t} K is at or above its Tc, ${c.tc} K, so it has no vapour pressure')
 	}

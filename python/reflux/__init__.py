@@ -7,9 +7,9 @@ through reflux's C API, capi/reflux.h. Units are SI throughout: K, Pa, mol, J.
     pr = fl.props(T=300.0, P=[1e5, 10e5, 50e5], z=[0.3, 0.7])
     pr.h, pr.status
 
-So far it has component data, fluids, properties, vapour pressures,
-stability and the PT flash; the other flashes come in M10a's later steps
-(docs/m10a-plan.md).
+It has component data, fluids, properties, vapour pressures, stability
+and every flash: PT, PH, PS, TV, UV and the vapour-fraction flashes, with
+bubble and dew points (docs/m10a-plan.md).
 """
 
 import ctypes

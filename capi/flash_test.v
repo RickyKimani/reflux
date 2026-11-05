@@ -62,8 +62,11 @@ fn (o FlashOut) comp(i int, j int, nc int) []f64 {
 
 // expect checks point i against the V API's PT flash.
 fn expect(f thermo.Fluid, t f64, p f64, z []f64, got FlashOut, i int, n int) ! {
-	r := flash.pt(f.model, t, p, z)!
-	nc := z.len
+	expect_result(f, flash.pt(f.model, t, p, z)!, z.len, got, i, n)
+}
+
+// expect_result checks point i against a V API flash's result.
+fn expect_result(f thermo.Fluid, r flash.FlashResult, nc int, got FlashOut, i int, n int) {
 	mut h, mut s, mut v := 0.0, 0.0, 0.0
 	mut seen := [false, false]
 	for ph in r.phases {
@@ -211,8 +214,9 @@ fn test_a_flash_call_that_cant_be_made() {
 	defer {
 		remove(fl) or {}
 	}
-	got := call_flash(fl, 1, 2, [300.0], [1e5], [0.5, 0.5], 1)
-	assert got.code == bad_argument && got.reason == 'no flash 1: REFLUX_FLASH_PT (0)'
+	got := call_flash(fl, 7, 2, [300.0], [1e5], [0.5, 0.5], 1)
+	assert got.code == bad_argument
+	assert got.reason == 'no flash 7: REFLUX_FLASH_PT (0), REFLUX_FLASH_PH (1), REFLUX_FLASH_PS (2), REFLUX_FLASH_TV (3), REFLUX_FLASH_UV (4), REFLUX_FLASH_TVF (5), REFLUX_FLASH_PVF (6)'
 	assert got.out.all(it == 7.0)
 	bad := call_flash(fl, flash_pt, 2, [300.0, 310.0], [1e5], [0.5, 0.5], 3)
 	assert bad.code == bad_argument && bad.reason == 'a has 2 entries: 1, or n = 3'
@@ -288,4 +292,114 @@ fn test_stability_is_the_v_apis() {
 	assert bad.status == [point_ok, point_bad_input] && bad.stable[1] == -1
 	assert math.is_nan(bad.tm[1]) && bad.w[2..].all(math.is_nan(it))
 	assert bad.reason == 'T = -1.0 K: a temperature must be finite and above 0'
+}
+
+// v_api is the V API's flash for a spec, as reflux_flash runs it.
+fn v_api(spec i32, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashResult {
+	return match spec {
+		flash_pt { flash.pt(f.model, a, b, z)! }
+		flash_ph { flash.ph(f, a, b, z)! }
+		flash_ps { flash.ps(f, a, b, z)! }
+		flash_tv { flash.tv(f.model, a, b, z)! }
+		flash_uv { flash.uv(f, a, b, z)! }
+		flash_tvf { flash.tvf(f.model, a, b, z)! }
+		else { flash.pvf(f.model, a, b, z)! }
+	}
+}
+
+fn test_every_flash_is_the_v_apis() {
+	// From a split and a vapour, each flash gets its own pair of values back:
+	// its answer is the V API's, bit for bit, and lands on the PT state.
+	fl, s := fluid_of(['methane', 'n-butane'])!
+	defer {
+		remove(fl) or {}
+	}
+	f := s.fluid
+	z := [0.5, 0.5]
+	for tp in [[300.0, 20e5], [400.0, 5e5]] {
+		t, p := tp[0], tp[1]
+		r := flash.pt(f.model, t, p, z)!
+		mut h, mut en, mut v, mut u := 0.0, 0.0, 0.0, 0.0
+		for ph in r.phases {
+			pr := f.props(ph.state)
+			h += ph.fraction * pr.h
+			en += ph.fraction * pr.s
+			v += ph.fraction * ph.state.v
+			u += ph.fraction * pr.u
+		}
+		mut cases := [[f64(flash_ph), p, h], [f64(flash_ps), p, en], [f64(flash_tv), t, v],
+			[f64(flash_uv), u, v]]
+		if r.phases.len == 2 {
+			cases << [f64(flash_tvf), t, r.beta]
+			cases << [f64(flash_pvf), p, r.beta]
+		}
+		for c in cases {
+			spec := i32(c[0])
+			got := call_flash(fl, spec, 2, [c[1]], [c[2]], z, 1)
+			assert got.code == ok && got.status == [point_ok], '${spec}: ${got.reason}'
+			expect_result(f, v_api(spec, f, c[1], c[2], z)!, 2, got, 0, 1)
+			assert math.abs(got.value(1, 0, 1) - t) <= 1e-8 * t, '${spec}: T'
+			assert math.abs(got.value(2, 0, 1) - p) <= 1e-8 * p, '${spec}: P'
+			assert got.n_phases[0] == r.phases.len, '${spec}'
+		}
+	}
+}
+
+fn test_a_bubble_point_has_its_incipient_vapour() {
+	// A vapour-fraction flash gives both phases, even one with no moles: at a
+	// bubble point the vapour's fraction is 0 and its composition the first
+	// bubble's; at a dew point the liquid's fraction is 0.
+	fl, _ := fluid_of(['methane', 'n-butane'])!
+	defer {
+		remove(fl) or {}
+	}
+	z := [0.2, 0.8]
+	got := call_flash(fl, flash_tvf, 2, [300.0], [0.0, 1.0], z, 2)
+	assert got.status == [point_ok, point_ok] && got.n_phases == [i32(2), 2]
+	assert got.value(0, 0, 2) == 0.0 && got.of_phase(0, 0, vapor, 2) == 0.0
+	assert got.of_phase(0, 0, liquid, 2) == 1.0 && got.comp(0, liquid, 2) == z
+	y := got.comp(0, vapor, 2)
+	assert math.abs(y[0] + y[1] - 1.0) < 1e-15 && y[0] > z[0]
+	assert got.value(0, 1, 2) == 1.0 && got.of_phase(0, 1, liquid, 2) == 0.0
+	assert got.comp(1, vapor, 2) == z
+	// The bubble pressure is above the dew pressure.
+	assert got.value(2, 0, 2) > got.value(2, 1, 2)
+}
+
+fn test_each_flash_checks_its_values() {
+	fl, _ := fluid_of(['methane', 'n-butane'])!
+	defer {
+		remove(fl) or {}
+	}
+	z := [0.5, 0.5]
+	for c in [
+		[f64(flash_ph), 0.0, -1e4],
+		[f64(flash_ph), 1e5, math.nan()],
+		[f64(flash_ps), 1e5, math.inf(1)],
+		[f64(flash_tv), 300.0, 0.0],
+		[f64(flash_uv), math.nan(), 1e-3],
+		[f64(flash_tvf), 300.0, 1.5],
+		[f64(flash_pvf), 1e5, math.nan()],
+	] {
+		got := call_flash(fl, i32(c[0]), 2, [c[1]], [c[2]], z, 1)
+		assert got.status == [point_bad_input], '${c}'
+	}
+	why := fn [fl, z] (spec i32, a f64, b f64) string {
+		return call_flash(fl, spec, 2, [a], [b], z, 1).reason
+	}
+	assert why(flash_ph, 0.0, -1e4) == 'P = 0.0 Pa: a pressure must be finite and above 0'
+	assert why(flash_ph, 1e5, math.nan()) == 'H = nan J/mol: it must be finite'
+	assert why(flash_ps, 1e5, math.inf(1)) == 'S = +inf J/(mol K): it must be finite'
+	assert why(flash_tv, 300.0, 0.0) == 'V = 0.0 m3/mol: a molar volume must be finite and above 0'
+	assert why(flash_uv, math.nan(), 1e-3) == 'U = nan J/mol: it must be finite'
+	assert why(flash_tvf, 300.0, 1.5) == 'β = 1.5: a vapour fraction must be between 0 and 1'
+	assert why(flash_pvf, 1e5, math.nan()) == 'β = nan: a vapour fraction must be between 0 and 1'
+	// Every flash checks the feed too.
+	badz := call_flash(fl, flash_ph, 2, [1e5], [-1e4], [-0.1, 1.1], 1)
+	assert badz.status == [point_bad_input]
+	assert badz.reason == 'z[0] = -0.1: amounts must be finite and not negative'
+	// An enthalpy no temperature from 10 K to 10⁴ K reaches is the flash's
+	// own bad input.
+	far := call_flash(fl, flash_ph, 2, [1e5], [1e10], z, 1)
+	assert far.status == [point_bad_input] && far.reason.starts_with('flash: '), far.reason
 }

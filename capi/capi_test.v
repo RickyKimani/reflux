@@ -90,7 +90,9 @@ fn test_the_header_and_the_code_agree() {
 		want['REFLUX_PROP_' + name.to_upper()] = k
 	}
 	want['REFLUX_PROPS'] = n_props
-	want['REFLUX_FLASH_PT'] = flash_pt
+	for name, code in flash_specs {
+		want['REFLUX_FLASH_' + name] = code
+	}
 	for k, name in flash_names {
 		want['REFLUX_FLASH_' + name.to_upper()] = k
 	}

@@ -206,8 +206,16 @@ int32_t reflux_stability(int64_t fluid, int64_t n, double *t, int64_t t_len, dou
                          int64_t p_len, double *z, int64_t z_rows, int32_t *stable, double *tm,
                          double *w, int32_t *status, char *err, int32_t err_len);
 
-/* Flashes, for reflux_flash: what a point's two values a and b are. */
-#define REFLUX_FLASH_PT 0 /* a: T (K), b: P (Pa) */
+/* Flashes, for reflux_flash: what a point's two values a and b are. H, S
+   and U are per mole of feed, on the basis reflux_props describes, and V is
+   the molar volume. */
+#define REFLUX_FLASH_PT 0  /* a: T (K), b: P (Pa) */
+#define REFLUX_FLASH_PH 1  /* a: P (Pa), b: H (J/mol) */
+#define REFLUX_FLASH_PS 2  /* a: P (Pa), b: S (J/(mol K)) */
+#define REFLUX_FLASH_TV 3  /* a: T (K), b: V (m3/mol) */
+#define REFLUX_FLASH_UV 4  /* a: U (J/mol), b: V (m3/mol) */
+#define REFLUX_FLASH_TVF 5 /* a: T (K), b: vapour fraction, 0 for a bubble point, 1 for a dew point */
+#define REFLUX_FLASH_PVF 6 /* a: P (Pa), b: vapour fraction */
 
 /* A flash's values per point, out[k * n + i]: per mole of feed. */
 #define REFLUX_FLASH_BETA 0   /* vapour fraction */
@@ -236,8 +244,12 @@ int32_t reflux_stability(int64_t fluid, int64_t n, double *t, int64_t t_len, dou
    n * 2), each phase's composition to x, as mole fractions (x[(i * 2 + j)
    * nc + c]), and the number of phases, 1 or 2, to n_phases. A flash that
    fails at a point gives that point the status of its kind: no
-   convergence, no volume root, or more phases than two. H and S are on the
-   basis reflux_props describes. */
+   convergence, no volume root, more phases than two, and for the
+   vapour-fraction flashes phases that came out swapped or a point outside
+   the phase envelope. A value it can't reach, such as an H no temperature
+   from 10 K to 10000 K gives, is REFLUX_POINT_BAD_INPUT. A vapour-fraction
+   flash gives both phases, even one with no moles at a vapour fraction of 0
+   or 1: its composition is the incipient phase's. */
 int32_t reflux_flash(int64_t fluid, int32_t spec, int64_t n, double *a, int64_t a_len, double *b,
                      int64_t b_len, double *z, int64_t z_rows, double *out, double *phase,
                      double *x, int32_t *n_phases, int32_t *status, char *err, int32_t err_len);

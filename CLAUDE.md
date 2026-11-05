@@ -70,9 +70,11 @@ Keep this section current: update it whenever a step is committed.
     D6 is amended: each phase is in the place of its label.
   - The spike's CI step stays until its last scenarios have homes: the
     collector in step 6, the call's cost in 7.
-  - Next is step 5: the other flashes (PH, PS, TV, UV, the vapour-fraction
-    ones, bubble and dew points), as new specs of `reflux_flash`. Its tests
-    should reach a no-convergence status, which step 4's couldn't.
+  - **Step 5 is done:** PH, PS, TV, UV and the vapour-fraction flashes, with
+    bubble and dew points, as specs of `reflux_flash`. Every failure kind is
+    reached and tested through the public API.
+  - Next is step 6: threads, memory and fuzzing. Its collector stress is the
+    spike's next-to-last scenario to move.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.

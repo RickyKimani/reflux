@@ -1140,6 +1140,10 @@ language, so its conventions are the same for every function (M10a's D2):
   vapour's composition is always the same column of the arrays. The whole's
   H, S and V are its phases', summed in the flash's order, as
   `flowsheet.Stream` sums them.
+- **The specs** are PT, PH, PS, TV, UV, and the vapour-fraction flashes TVF
+  and PVF, whose β of 0 or 1 makes a bubble or dew point. Each checks its own
+  two values before the feed. A vapour-fraction flash gives both phases,
+  even one with no moles, whose composition is the incipient phase's.
 
 ### Where the data comes from
 

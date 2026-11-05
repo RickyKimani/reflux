@@ -4,21 +4,12 @@ one by one; a split's balances close and its fugacities agree, checked from
 the arrays; the whole is its phases; each phase is in its label's place; and
 stability agrees with the flash (D6, D7)."""
 
-import json
-import re
-
 import numpy as np
 import pytest
 
 import reflux
 from reflux import Phase, Status
-from support import ROOT
-
-M3 = json.loads((ROOT / "testdata" / "m3_thermo.json").read_text(encoding="utf-8"))
-CAS = {"methane": "74-82-8", "ethane": "74-84-0", "propane": "74-98-6", "n-butane": "106-97-8",
-       "n-pentane": "109-66-0", "n-hexane": "110-54-3", "n-heptane": "142-82-5",
-       "n-decane": "124-18-5", "carbon dioxide": "124-38-9", "nitrogen": "7727-37-9",
-       "isobutane": "75-28-5"}
+from support import M3, m3_compounds, m3_fluid
 FLASH = ("beta", "t", "p", "h", "s", "v")
 
 
@@ -41,18 +32,8 @@ def fl(db):
 
 @pytest.fixture(scope="module")
 def m3(tmp_path_factory):
-    """The database, with M3's constants for its eleven compounds. Their
-    ideal-gas Cp stays ChemSep's, so only what the model alone decides is
-    compared: the splits and the volumes."""
-    mine = tmp_path_factory.mktemp("m3")
-    for c in M3["components"]:
-        cas = CAS[c["name"]]
-        text = (ROOT / "data" / "components" / f"{cas}.toml").read_text(encoding="utf-8")
-        for key in ("tc", "pc", "omega", "mw"):
-            text, n = re.subn(rf"^{key} = .*$", f"{key} = {c[key]!r}", text, flags=re.M)
-            assert n == 1, (cas, key)
-        (mine / f"{cas}.toml").write_text(text, encoding="utf-8")
-    with reflux.Database(extra=[mine]) as d:
+    """The database, with M3's constants for its eleven compounds."""
+    with reflux.Database(extra=[m3_compounds(tmp_path_factory.mktemp("m3"))]) as d:
         yield d
 
 
@@ -61,14 +42,9 @@ def test_the_splits_are_thermos(m3):
     # flash/thermo_test.v holds the V API to: all 83 of M3's PT states.
     worst_split, worst_v, splits = 0.0, 0.0, 0
     for c in M3["pt"]:
-        names = [M3["components"][i]["name"] for i in c["components"]]
-        nc = len(names)
-        k = c["kij"]
-        overrides = {(names[i], names[j]): k[i * nc + j] for i in range(nc)
-                     for j in range(i + 1, nc)}
-        with m3.fluid(c["eos"], [CAS[n] for n in names], kij=False, overrides=overrides) as f:
+        with m3_fluid(m3, c) as f:
             r = f.flash_pt(c["t"], c["p"], c["z"])
-        at = f"{c['eos']} {names} z {c['z']} at {c['t']} K, {c['p']} Pa"
+        at = f"{c['eos']} {c['components']} z {c['z']} at {c['t']} K, {c['p']} Pa"
         assert r.status == Status.OK, f"{at}: {r.reason(())}"
         assert r.phases == len(c["phases"]), at
         if r.phases == 2:

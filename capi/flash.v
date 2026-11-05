@@ -11,7 +11,24 @@ import numeric
 import thermo
 
 // Flashes, as reflux.h numbers them: what a point's two values are.
-const flash_pt = i32(0)
+const flash_pt = i32(0) // T, P
+const flash_ph = i32(1) // P, H
+const flash_ps = i32(2) // P, S
+const flash_tv = i32(3) // T, V
+const flash_uv = i32(4) // U, V
+const flash_tvf = i32(5) // T, β
+const flash_pvf = i32(6) // P, β
+
+// flash_specs names them as reflux.h does: REFLUX_FLASH_PT and so on.
+const flash_specs = {
+	'PT':  flash_pt
+	'PH':  flash_ph
+	'PS':  flash_ps
+	'TV':  flash_tv
+	'UV':  flash_uv
+	'TVF': flash_tvf
+	'PVF': flash_pvf
+}
 
 // A flash's values and a phase's, in reflux.h's order.
 const flash_names = ['beta', 't', 'p', 'h', 's', 'v']
@@ -114,17 +131,67 @@ struct FlashPoint {
 	n_phases int
 }
 
-// flash_at runs one point's flash.
+// flash_at runs one point's flash, once its two values and z are checked.
 fn flash_at(spec i32, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashResult {
-	return match spec {
+	match spec {
 		flash_pt {
 			check_tp(a, b)!
-			check_z(z)!
-			flash.pt(f.model, a, b, z)!
+		}
+		flash_ph {
+			check_p(a)!
+			check_finite(b, 'H', 'J/mol')!
+		}
+		flash_ps {
+			check_p(a)!
+			check_finite(b, 'S', 'J/(mol K)')!
+		}
+		flash_tv {
+			check_t(a)!
+			check_volume(b)!
+		}
+		flash_uv {
+			check_finite(a, 'U', 'J/mol')!
+			check_volume(b)!
+		}
+		flash_tvf {
+			check_t(a)!
+			check_beta(b)!
+		}
+		flash_pvf {
+			check_p(a)!
+			check_beta(b)!
 		}
 		else {
-			error('no flash ${spec}')
+			return error('no flash ${spec}')
 		}
+	}
+	check_z(z)!
+	return match spec {
+		flash_pt { flash.pt(f.model, a, b, z)! }
+		flash_ph { flash.ph(f, a, b, z)! }
+		flash_ps { flash.ps(f, a, b, z)! }
+		flash_tv { flash.tv(f.model, a, b, z)! }
+		flash_uv { flash.uv(f, a, b, z)! }
+		flash_tvf { flash.tvf(f.model, a, b, z)! }
+		else { flash.pvf(f.model, a, b, z)! }
+	}
+}
+
+fn check_finite(x f64, what string, unit string) ! {
+	if !math.is_finite(x) {
+		return point_error(point_bad_input, '${what} = ${x} ${unit}: it must be finite')
+	}
+}
+
+fn check_volume(v f64) ! {
+	if !math.is_finite(v) || v <= 0.0 {
+		return point_error(point_bad_input, 'V = ${v} m3/mol: a molar volume must be finite and above 0')
+	}
+}
+
+fn check_beta(beta f64) ! {
+	if !(beta >= 0.0 && beta <= 1.0) {
+		return point_error(point_bad_input, 'β = ${beta}: a vapour fraction must be between 0 and 1')
 	}
 }
 
@@ -163,8 +230,12 @@ pub fn reflux_flash(fluid i64, spec i32, n i64, a &f64, a_len i64, b &f64, b_len
 		leave(r)
 	}
 	s := setup_of(fluid) or { return failed(err, buf, buf_len) }
-	if spec != flash_pt {
-		return fail(bad_argument, buf, buf_len, 'no flash ${spec}: REFLUX_FLASH_PT (0)')
+	if spec !in flash_specs.values() {
+		mut known := []string{}
+		for name, code in flash_specs {
+			known << 'REFLUX_FLASH_${name} (${code})'
+		}
+		return fail(bad_argument, buf, buf_len, 'no flash ${spec}: ${known.join(', ')}')
 	}
 	pts := check_points(n, [voidptr(a), b, z, out, phase, x, n_phases, status], [
 		'a',
