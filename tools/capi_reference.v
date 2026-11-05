@@ -334,6 +334,38 @@ fn fluid_json(db components.Database, fc FluidCase) !string {
 	return '{\n  ${fields.join(',\n  ')}\n}'
 }
 
+// The exit script's diagrams (python/examples/phase_diagrams.py), on its
+// grids: a T–x–y of methane and n-butane at 20 bar, methane's mole fraction
+// i/100, and a natural gas's PT flash at T = 150 + 2.5i K and P = 1.5j bar. Each
+// value is exact in binary, or a quotient both sides round alike, so NumPy and
+// V build the same states.
+const txy_names = ['methane', 'n-butane']
+const txy_p = 20e5
+const txy_steps = 100
+const gas_names = ['methane', 'ethane', 'propane', 'n-butane', 'n-pentane']
+const gas_z = [0.8, 0.1, 0.05, 0.03, 0.02]
+const map_ts = 81
+const map_ps = 80
+
+fn examples_json(db components.Database) !string {
+	binary := db.setup(.pr, txy_names)!.fluid
+	mut bubble := []string{}
+	mut dew := []string{}
+	for i in 0 .. txy_steps + 1 {
+		x := f64(i) / f64(txy_steps)
+		bubble << flash_point('pvf', binary, txy_p, 0.0, [x, 1.0 - x]).json
+		dew << flash_point('pvf', binary, txy_p, 1.0, [x, 1.0 - x]).json
+	}
+	gas := db.setup(.pr, gas_names)!.fluid
+	mut grid := []string{}
+	for j in 1 .. map_ps + 1 {
+		for i in 0 .. map_ts {
+			grid << flash_point('pt', gas, 150.0 + 2.5 * f64(i), 1.5e5 * f64(j), gas_z).json
+		}
+	}
+	return '{"bubble": [\n  ${bubble.join(',\n  ')}],\n "dew": [\n  ${dew.join(',\n  ')}],\n "map": [\n  ${grid.join(',\n  ')}]}'
+}
+
 fn main() {
 	if os.args.len != 2 {
 		eprintln('usage: capi_reference <file to write>')
@@ -355,8 +387,12 @@ fn main() {
 		rec := db.find(name) or { panic(err) }
 		compounds << '${quote(name)}: ${quote(components.write_toml(rec) or { panic(err) })}'
 	}
+	examples := examples_json(db) or {
+		eprintln('the exit script: ${err.msg()}')
+		exit(1)
+	}
 	how := $if prod { 'prod' } $else { 'debug' }
-	text := '{"built": ${quote(how)}, "fluids": [\n${parts.join(',\n')}\n], "compounds": {${compounds.join(', ')}}}\n'
+	text := '{"built": ${quote(how)}, "fluids": [\n${parts.join(',\n')}\n], "compounds": {${compounds.join(', ')}},\n"examples": ${examples}}\n'
 	os.write_file(os.args[1], text) or {
 		eprintln(err.msg())
 		exit(1)

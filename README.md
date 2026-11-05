@@ -160,9 +160,11 @@ capi/               the C API (M10a): reflux.h, and the functions it declares,
 python/             the Python package over the C API (M10a): reflux/
                     (Database, Fluid, and points.py's results on NumPy arrays,
                     over _native's ctypes), with the library built into
-                    reflux/_lib/, and tests/
+                    reflux/_lib/; tests/; and examples/phase_diagrams.py, M10a's
+                    exit script (docs/python.md is its guide)
 docs/               roadmap, milestone plans, design notes, data format,
-                    data-quality report, spike write-ups, V notes
+                    data-quality report, spike write-ups, V notes, the
+                    Python guide (python.md, its figure in images/)
 tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m3_dwsim.py, gen_m4_dwsim.py, gen_m3_bench.py and
                     gen_m4_bench.py (DWSIM 9's answers and timings, by hand on

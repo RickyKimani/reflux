@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 7 are done, and step 8 is
+Status: **approved** on 2026-11-04. Steps 1 to 8 are done, and step 9 is
 next.
 
 ## Goal
@@ -938,12 +938,97 @@ and their Python tests together.
     agree to the bit.
   - The reference's second feeds now add to 3, and all four are caught.
 
-### 8. The exit script and the Python docs
-- A T–x–y diagram of a binary below its critical locus and a phase-fraction
-  map over T and P, into NumPy arrays and plotted with matplotlib, run in CI
-  and checked against the V reference.
-- `docs/python.md`: install, the API, statuses and threads, with every example
-  run in CI.
+### 8. The exit script and the Python docs — done
+- **The exit script** (criterion 8):
+  [python/examples/phase_diagrams.py](../python/examples/phase_diagrams.py)
+  computes two phase diagrams into NumPy arrays and draws them with
+  matplotlib. Both are PR with ChemSep's kᵢⱼ.
+  - A T–x–y of methane and n-butane at 20 bar, below the binary's critical
+    locus: 101 bubble and 101 dew points, with tie lines from bubble points to
+    their first bubbles.
+  - A vapour-fraction map of a natural gas (80% methane, then ethane to
+    n-pentane) from 6,480 PT flashes, 150 to 350 K and 1.5 to 120 bar. That's
+    past its cricondenbar, about 108 bar, and the two-phase region is outlined.
+  - Its grids are exact in binary, or quotients both sides round alike: x =
+    i/100, T = 150 + 2.5i K, P = 1.5j bar. So
+    [tools/capi_reference.v](../tools/capi_reference.v)'s new `examples`
+    section flashes the same states through the V API.
+  - Its figure, [images/phase-diagrams.png](images/phase-diagrams.png), is in
+    the guide. Drawn again, it's the same byte for byte (matplotlib 3.11.2).
+- **Its tests,** `python/tests/test_examples.py`, 4:
+  - It runs as a program, says every point has an answer, and draws a PNG of
+    1,210 × 506 pixels.
+  - The T–x–y is a phase diagram, by the claims alone:
+    - at the pure ends, bubble and dew are the same T, the compound's
+      saturation at 20 bar (its Psat there misses by 5.2e-11 for n-butane and
+      3.1e-11 for methane);
+    - each tie line closes: a first bubble's dew point is the same T to
+      2.0e-13, and its first drop the liquid to 4.2e-13;
+    - inside, the dew point is above the bubble point, by 5.1 K at least.
+  - The map splits exactly where the stability test calls the feed unstable,
+    at all 6,480 points (2,445 splits).
+  - Its numbers are the V API's bit for bit, its inputs included: 202
+    vapour-fraction flashes and 6,480 PT flashes.
+- **[python.md](python.md),** the guide (criterion 11):
+  - What it covers: installing, a first flash, many points at once, what a
+    flash gives, properties, vapour pressure, stability, the other flashes,
+    statuses and errors, fluids, closing, threads, speed, the C API from
+    other languages, and the exit script.
+  - Its 15 examples run in order as one session, in
+    `python/tests/test_docs.py`, and what each prints must be exactly the text
+    block under it. So the page can't drift from the package.
+  - Its outputs were read as claims before they were kept. Two examples
+    changed for it: a Psat at 150 K printed n-butane's 11 Pa as `0.` bar, and
+    a stable feed's trial isn't "the phase that would appear".
+- **A bug the exit script found, in M3's PT flash, fixed.** On a first grid,
+  the gas failed at 265.0 and 265.1 K at 81 bar: "the split did not converge
+  in 200 steps". That's well inside its two-phase region, where K runs from 1.7
+  to 0.07, and 264.9 K split in 23 steps.
+  - The cause: from the first start, substitution was converging, its
+    residual down to 0.005 by step 5. Then the extrapolation at step 6 threw β
+    from 0.14 to 0.87, and the residual up to 1.5. The split slid off towards
+    the feed, β passing 1 and growing to 42,000 in the negative flash, until it
+    collapsed onto it. The other starts began near the trivial solution and
+    crept away too slowly to finish in 200 steps. At 264.9 K the same jump
+    happened, and substitution happened to recover.
+  - The split extrapolated as stability does, keeping every extrapolation
+    Rachford–Rice accepts. Michelsen and Mollerup keep one only if it lowers G,
+    a test stability skips on the evidence of 6,000 states
+    ([design.md](design.md)).
+  - The fix: an extrapolation is kept only if it lowers the residual, max
+    |ln fᵢⱽ − ln fᵢᴸ|, below that of the split it was made from. Otherwise the
+    plain step is taken, and the rejected one counts as a step. The residual,
+    not G, because G means nothing at a β outside [0, 1], which the negative
+    flash passes through.
+  - What it changed:
+    - on 16,160 flashes of the gas, 150 to 350 K and 1 to 160 bar, it undoes
+      392 extrapolations, and the failures go from 1 (262 K, 105 bar) to 0;
+    - the steps total 67,754 against 67,751, the point that failed included;
+    - M3's 166 fixture splits take 2,248 steps against 2,246, and 44 Newton
+      finishes as before;
+    - the robustness sweep's 10,000 flashes change at one point. Point 5752
+      is still refused as three phases, but by a tm of −6.643 rather than
+      −4.047, since its split converged to another one before the
+      verification;
+    - the golden flowsheets solve to their reports, to 1e-9, as before.
+  - The fix goes in 0.2.0's CHANGELOG entry. `test_an_extrapolation_that_overshoots_is_undone`
+    in `flash/pt_test.v` flashes the failing states, each to criterion 3's
+    equilibrium checks and a recorded 21 steps. The map's own test asks every
+    point for an answer.
+- **Smaller:**
+  - `tools/python.vsh test` pins matplotlib 3.11.2.
+  - `tools/gen_m10a_bench.py` writes LF line endings, as the other generators
+    do. Git had normalised the committed file, but a regenerated one was CRLF.
+- **Tests:** `test_examples.py`, 4, and `test_docs.py`, 2 (the page's
+  examples, and its block finder). In V, the PT flash's new test. The Python
+  suite is 82 tests.
+- **Planted mistakes:** 11, all caught:
+  - in the flash, no extrapolation judged, and a rejected one kept;
+  - in the script, the compositions over 101, bubble and dew swapped, the
+    figure at 100 dpi, and the gas reversed;
+  - in the reference, the gas's composition, and its pressures one step off;
+  - on the page, one printed digit, and an example's UV flash given H for U;
+  - in the package, `bubble_t` at β = 1.
 
 ### 9. Release v0.2.0
 - The CHANGELOG entry, v.mod's version, and the release gate, as for v0.1.0.

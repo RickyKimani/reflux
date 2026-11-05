@@ -82,7 +82,13 @@ Keep this section current: update it whenever a step is committed.
   - Carried forward from step 7: V's code runs 1.3 to 1.8 times slower inside
     the library in a Python process than in a V program, and fewer
     collections don't remove it. For M8.
-  - Next is step 8: the exit script and `docs/python.md`.
+  - **Step 8 is done:** the exit script, `python/examples/phase_diagrams.py`
+    (a T–x–y and a phase-fraction map, matched to the V API bit for bit), and
+    `docs/python.md`, whose every example `python/tests/test_docs.py` runs.
+    The script found a bug in M3's PT flash, which is fixed: the split's
+    extrapolation is kept only if it lowers the residual. It goes in 0.2.0's
+    CHANGELOG entry.
+  - Next is step 9: release v0.2.0.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -143,7 +149,8 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
   bit-for-bit tests (`REFLUX_REFERENCE`); pytest alone skips those. Here uv needs
   the interpreter named, as below: `--python <path>`. `test_install.py`
   installs the package into a fresh environment, so uv needs setuptools and
-  NumPy from its cache or the network. An editable install leaves
+  NumPy from its cache or the network. matplotlib (pinned) is for the exit
+  script, whose test runs it. An editable install leaves
   `python/reflux.egg-info/`, which git ignores.
 - **Generated data:**
   - `v run tools/import_chemsep.vsh` regenerates `data/components/` from the
@@ -235,8 +242,8 @@ over the rest, built into a shared library for the Python package in
     vapour- and liquid-like ones plus a nearly pure phase of each component.
     Substitution with DEM is followed by a second-order finish in α = 2√W.
   - `pt` tests stability, then splits: substitution with Rachford–Rice and
-    DEM, then Newton on G through `numeric.minimize`, then each phase
-    re-verified. Its feed's test stops at the first proof of instability
+    DEM (an extrapolation kept only if it lowers the residual), then Newton
+    on G through `numeric.minimize`, then each phase re-verified. Its feed's test stops at the first proof of instability
     once Wilson's two trials have run, and runs the rest only if no split
     from those stands.
   - `tvf` and `pvf` (`vf.v`) find P or T for a given β; bubble and dew

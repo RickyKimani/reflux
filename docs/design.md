@@ -473,6 +473,21 @@ dominant-eigenvalue extrapolation as stability. Rachford–Rice may give β
 outside [0, 1] on the way (the negative flash); only the converged split
 must have 0 < β < 1.
 
+Unlike stability's, the split's extrapolation is kept only if it lowers the
+residual, max |ln fᵢⱽ − ln fᵢᴸ|, below that of the split it was made from.
+Otherwise the plain step it replaced is taken, and the rejected one counts
+as a step. Michelsen and Mollerup's test is that G falls, but G has no
+meaning at a β outside [0, 1], which the negative flash passes through, and
+the residual does. M10a step 8 found the case. A natural gas (PR: 80%
+methane, ethane to n-pentane) at 265 K and 81 bar is well inside its
+two-phase region, with K from 1.7 to 0.07. There the extrapolation at the
+sixth step threw β from 0.14 to 0.87 and the residual from 0.005 to 1.5.
+The split then slid off towards the feed and collapsed onto it, and the
+flash failed. On 16,160 PT flashes of that gas, from 150 to 350 K and 1 to
+160 bar, the test undoes 392 extrapolations. It removes the one failure and
+leaves the total steps the same: 67,754 against 67,751, with that point's
+21 included.
+
 **Newton on G.** After 20 steps it switches to minimising the Gibbs energy
 of the split over the vapour mole numbers v (one mole of feed, l = z − v):
 

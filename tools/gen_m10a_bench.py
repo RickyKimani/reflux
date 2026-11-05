@@ -115,7 +115,7 @@ def main():
         "reflux_build": build,
         "timings": timings,
     }
-    OUT.write_text(json.dumps(fixture, indent=1) + "\n", encoding="utf-8")
+    OUT.write_text(json.dumps(fixture, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {OUT.relative_to(ROOT)}")
 
 

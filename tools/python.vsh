@@ -15,9 +15,11 @@
 // from the header. -fvisibility=hidden wouldn't do on Linux: it can't hide the
 // collector's symbols, which come from an object V built beforehand.
 
-// The Python tests' dependencies, pinned (D11).
+// The Python tests' dependencies, pinned (D11). matplotlib is the exit
+// script's (python/examples/phase_diagrams.py), which a test runs.
 const pytest_version = '9.2.0'
 const numpy_version = '2.5.4'
+const matplotlib_version = '3.11.2'
 
 // run executes one command and stops the script if it fails. Commands are
 // argument arrays, as in check.vsh: no shell parses them.
@@ -121,8 +123,9 @@ match command {
 				exit(2)
 			}]
 		}
-		cmd << ['--with', 'pytest==${pytest_version}', '--with', 'numpy==${numpy_version}', 'python',
-			'-m', 'pytest', join_path('python', 'tests'), '-q']
+		cmd << ['--with', 'pytest==${pytest_version}', '--with', 'numpy==${numpy_version}', '--with',
+			'matplotlib==${matplotlib_version}', 'python', '-m', 'pytest',
+			join_path('python', 'tests'), '-q']
 		run(cmd)
 	}
 	else {
