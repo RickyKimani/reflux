@@ -63,15 +63,40 @@ fn export_flags(names []string, dir string) ![]string {
 	}
 }
 
+// no_contraction keeps gcc from fusing a·b + c into one rounding, an FMA, in
+// the library and in the V reference alike. Where the target has FMA,
+// -ffp-contract=fast, gcc's default for GNU C, fuses where its inlining lets
+// it, and the library (-shared, without LTO) and the reference (with it)
+// inline differently, so their answers would differ in the last bits:
+// Ubuntu's gcc job found 609 of the exit script's 6,480 flashes apart (M10a's
+// exit review). Off, each is the arithmetic its source says, on every target.
+const no_contraction = ['-cflags', '-ffp-contract=off']
+
+// fma_note says whether gcc's default target has FMA, which no_contraction
+// matters for: a line in the log, for when bits differ between machines.
+fn fma_note() string {
+	probe := join_path(temp_dir(), 'reflux_capi', 'fma_probe.c')
+	write_file(probe, '') or { return 'gcc: no probe (${err})' }
+	r := exec(['gcc', '-dM', '-E', '-x', 'c', probe])
+	if r.exit_code != 0 {
+		return 'gcc: the probe failed'
+	}
+	has := if r.output.contains('#define __FMA__ 1') { 'has' } else { 'has no' }
+	return "gcc's default target ${has} FMA; contraction is off for the library and the reference"
+}
+
 // build makes the library: python/reflux/_lib/reflux.dll, or reflux.so.
 fn build(prod bool) ! {
 	names := header_functions(read_file('capi/reflux.h')!)
 	if names.len == 0 {
 		return error('capi/reflux.h declares no functions')
 	}
+	mkdir_all(join_path(temp_dir(), 'reflux_capi'))!
+	println(fma_note())
 	// CAPI_LIBRARY tells capi/gc_threads.h it's in the library, whose first call
 	// starts the collector in the caller's thread.
 	mut cmd := ['v', '-cc', 'gcc', '-nocache', '-W', '-shared', '-cflags', '-DCAPI_LIBRARY']
+	cmd << no_contraction
 	if prod {
 		cmd << '-prod'
 	}
@@ -107,6 +132,7 @@ match command {
 		mkdir_all(ref_dir)!
 		exe := join_path(ref_dir, 'capi_reference')
 		mut ref_cmd := ['v', '-cc', 'gcc', '-nocache', '-W']
+		ref_cmd << no_contraction
 		if prod {
 			ref_cmd << '-prod'
 		}

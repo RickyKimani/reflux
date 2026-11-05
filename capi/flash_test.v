@@ -151,6 +151,34 @@ fn test_a_splits_balances_close() {
 	}
 }
 
+fn test_each_failure_kind_has_its_own_status() {
+	// Every flash.Failure kind gets the REFLUX_POINT_* of its own name, checked
+	// for each kind here, since a state that reaches it isn't always to be had.
+	// Swapped phases above an envelope come at isolated points, among
+	// "outside the envelope", and rounding moves them from one platform to
+	// another (M10a's exit review). capi_test.v holds the numbers to the
+	// header's.
+	by_name := {
+		'bad_input':        point_bad_input
+		'no_convergence':   point_no_convergence
+		'no_volume_root':   point_no_volume_root
+		'more_phases':      point_more_phases
+		'phases_swapped':   point_phases_swapped
+		'outside_envelope': point_outside_envelope
+	}
+	kinds := [flash.Failure.bad_input, .no_convergence, .no_volume_root, .more_phases, .phases_swapped,
+		.outside_envelope]
+	assert kinds.len == by_name.len
+	mut seen := map[i32]bool{}
+	for kind in kinds {
+		got := flash_status(flash.FlashError{ kind: kind, reason: 'why' })
+		assert got == by_name[kind.str()], '${kind}: ${got}'
+		seen[got] = true
+	}
+	// No two kinds share one, and none is OK.
+	assert seen.len == kinds.len && point_ok !in seen
+}
+
 fn test_a_flash_that_fails_says_why() {
 	fl, _ := fluid_of(['methane', 'n-butane'])!
 	defer {

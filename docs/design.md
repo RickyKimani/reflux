@@ -1160,7 +1160,10 @@ language, so its conventions are the same for every function (M10a's D2):
   the header documents each point, and the Python tests compare the
   library's answers with it to the bit. Both are built by one compiler with
   one set of flags, because bits differ between compilers and maths
-  libraries (M10a's D12).
+  libraries (M10a's D12). The flags include `-ffp-contract=off`. Where the
+  target has FMA, gcc fuses a·b + c into one rounding wherever its inlining
+  lets it, and the library (`-shared`, without LTO) and the reference (with
+  it) would differ. Ubuntu's CI found it (M10a's exit review).
 - **The specs** are PT, PH, PS, TV, UV, and the vapour-fraction flashes TVF
   and PVF, whose β of 0 or 1 makes a bubble or dew point. Each checks its own
   two values before the feed. A vapour-fraction flash gives both phases,

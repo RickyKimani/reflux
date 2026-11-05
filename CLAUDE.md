@@ -160,7 +160,10 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
 - **The Python tests** need the library, which only gcc can build, so
   `check.vsh` doesn't run them: `v run tools/python.vsh test`. It also builds
   `tools/capi_reference.v` with the library's compiler and flags, for the
-  bit-for-bit tests (`REFLUX_REFERENCE`); pytest alone skips those. Here uv needs
+  bit-for-bit tests (`REFLUX_REFERENCE`); pytest alone skips those. Both
+  are built with `-ffp-contract=off`: where gcc's target has FMA, it fuses
+  a·b + c by its inlining, and the two builds inline differently (M10a's exit
+  review, on Ubuntu). Here uv needs
   the interpreter named, as below: `--python <path>`. `test_install.py`
   installs the package into a fresh environment, so uv needs setuptools and
   NumPy from its cache or the network. matplotlib (pinned) is for the exit

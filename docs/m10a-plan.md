@@ -1212,6 +1212,46 @@ The scripts learned two things:
   thread-safe (and from M4, the TOML panic and the interpolation bug); to
   `thermo` and DWSIM, M4's.
 
+**What CI found on the tip** (`1d550fa`, run 42072683340). Three jobs passed.
+Ubuntu's gcc job, on Ubuntu 26.04 with gcc 15.2, failed 4 of the 83 Python
+tests:
+- **Three were bits that should agree and didn't.**
+  - The library against the V reference: a PT flash's β one ulp apart, and 609
+    of the exit script's 6,480 flashes.
+  - The library against itself: a flash's whole H against Σ fraction × H as
+    NumPy computes it.
+  - That last is pure arithmetic, `h += f·h` over two phases. On x86-64, only
+    a fused multiply-add changes it, `a·b + c` rounded once. gcc's default for
+    GNU C, `-ffp-contract=fast`, fuses wherever the target has FMA and its
+    inlining lets it. The library (`-shared`, no LTO) and the reference
+    (`-flto`) inline differently, so they would disagree where it fused.
+  - On Windows, without FMA, nothing fuses, and everything agrees.
+  - So `tools/python.vsh` builds both with `-ffp-contract=off`, and each
+    computes what its source says on every target, FMA or not. It also prints
+    whether gcc's default target has FMA, which the next run's log shows.
+  - (Ubuntu 26.04 keeps the plain x86-64 baseline, by its own account, so
+    the line is there to confirm the cause, not assume it.)
+- **One asked for a knife edge.** `test_flashes.py` expected the dew point at
+  110 bar to fail with swapped phases, and Ubuntu's failed outside the
+  envelope instead.
+  - A scan here shows swapped phases at 110 bar alone, with 109 and 111 bar
+    outside the envelope. Over 2,600 vapour-fraction flashes above this
+    envelope, they come only at isolated points. Which points, rounding
+    decides, and a platform's maths library rounds its own way.
+  - The test now asks only robust states for their kinds: no convergence at 90
+    bar (85 to 93 alike), and outside the envelope at 100 bar (94 to 106). It
+    holds each failure in a scan above the envelope to the expected kinds,
+    each with its own reason.
+  - `capi/flash_test.v` checks every `Failure` kind's number by name, so no
+    kind's mapping rests on reaching it.
+  - The scan also showed bubble points at 115 to 139 bar, above the
+    envelope's top. They're PR's liquid–liquid split at 43 K: fugacities
+    equal to 1e-13, phases far apart, and a PT flash half a kelvin below
+    splits. That's the model's answer far below methane's triple point, not
+    a bug.
+- Two mistakes planted for the new tests are caught: swapped phases mapped as
+  outside the envelope, and a flash's reason read for its first point.
+
 **Verdict: M10a is done on Windows.** It's done once CI passes on the tip,
 whose Linux jobs run criteria 3, 7 and 8 there for the first time since step
 3.

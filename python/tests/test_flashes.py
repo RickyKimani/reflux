@@ -122,20 +122,39 @@ def test_bubble_and_dew_points_give_the_incipient_phase(db):
 
 
 def test_each_kind_of_failure_has_its_status(m3, db):
-    # M3's methane/n-butane, 40/60, whose envelope's top is near 90 bar:
-    # there's no dew point at 90 bar and the iteration can't converge, neither
-    # point exists at 100 bar, and at 110 bar the dew-point iteration reaches
-    # a boundary at 26 K the wrong way round.
+    # M3's methane/n-butane, 40/60, whose envelope's top is near 93 bar: there's
+    # no dew point at 90 bar and the iteration can't converge (85 to 93 bar
+    # alike), and neither point exists at 100 bar (94 to 106 bar alike).
     case = {"components": [0, 3], "kij": [0.0, 0.02, 0.02, 0.0]}
     with m3_fluid(m3, case) as f:
         z = [0.4, 0.6]
-        r = f.dew_t([90e5, 100e5, 110e5], z)
-        assert r.status.tolist() == [Status.NO_CONVERGENCE, Status.OUTSIDE_ENVELOPE,
-                                     Status.PHASES_SWAPPED]
+        r = f.dew_t([90e5, 100e5], z)
+        assert r.status.tolist() == [Status.NO_CONVERGENCE, Status.OUTSIDE_ENVELOPE]
         assert r.reason(0).startswith("flash: the dew point at 9e+06 Pa")
-        assert "where the phase of fraction β is the denser" in r.reason(2)
         assert f.bubble_t(100e5, z).status == Status.OUTSIDE_ENVELOPE
         assert np.all(r.phases == 0) and np.all(np.isnan(r.x))
+        # Further above it, a vapour-fraction flash fails as its iteration
+        # goes: mostly outside the envelope, and now and then on PR's
+        # liquid–liquid branch near 43 K, with its phases swapped or a third
+        # phase. Those are isolated points, which rounding moves from one
+        # platform to another (M10a's exit review: Ubuntu's 110 bar wasn't
+        # Windows'), so here each failure need only be one of those kinds,
+        # with its own reason. capi/flash_test.v checks each kind's number.
+        why = {Status.OUTSIDE_ENVELOPE: "There is very likely no such point",
+               Status.PHASES_SWAPPED: "where the phase of fraction β is the denser",
+               Status.MORE_PHASES: "is unstable (tm =",
+               Status.NO_CONVERGENCE: "flash: "}
+        seen = set()
+        for z1 in (0.4, 0.8, 0.95):
+            g = f.flash_pvf(np.arange(105.0, 200.0, 5.0)[:, None] * 1e5,
+                            [0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0], [z1, 1 - z1])
+            assert set(g.status.ravel().tolist()) <= {Status.OK, *why}, z1
+            for s in set(g.status.ravel().tolist()) - {Status.OK}:
+                at = tuple(int(i) for i in np.argwhere(g.status == s)[0])
+                assert why[s] in g.reason(at), (z1, Status(s), g.reason(at))
+                seen.add(s)
+        # Outside the envelope above all; the rest as rounding has it.
+        assert Status.OUTSIDE_ENVELOPE in seen
     with db.fluid("PR", ["methane", "n-butane"]) as f:
         # An enthalpy no temperature reaches is the flash's own bad input.
         far = f.flash_ph(1e5, 1e10, [0.5, 0.5])
