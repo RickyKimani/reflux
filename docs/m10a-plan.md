@@ -8,7 +8,7 @@ exit criteria, decisions and steps. The roadmap entry is in
 [roadmap.md](roadmap.md), and M1's spike, which retired the biggest risks, in
 [spike-python-ffi.md](spike-python-ffi.md).
 
-Status: **approved** on 2026-11-04. Steps 1 to 6 are done, and step 7 is
+Status: **approved** on 2026-11-04. Steps 1 to 7 are done, and step 8 is
 next.
 
 ## Goal
@@ -856,10 +856,87 @@ and their Python tests together.
     version.
   Rerun, all six were caught.
 
-### 7. The V reference and speed
-- The V program of D12 and the bit-for-bit comparison over every function
-  (criterion 3).
-- The overhead benchmarks (criterion 10), in `docs/benchmarks.md`.
+### 7. The V reference and speed — done
+- **The V reference** (D12, criterion 3):
+  [tools/capi_reference.v](../tools/capi_reference.v) writes the V API's
+  answers for a reference set of states to JSON, each float as the hex of
+  its bits.
+  - It calls `components`, `thermo` and `flash`, never `capi`, and computes
+    each point as `reflux.h` documents it: properties per mole as the
+    extensive ones over Σz, a phase in its label's place, the whole summed in
+    the flash's order, and an answer that isn't finite as none.
+  - `tools/python.vsh test` builds it with the library's compiler and flags
+    (gcc, with or without `-prod`, as the library), runs it, and points
+    `REFLUX_REFERENCE` at what it wrote. The file is never committed.
+  - `python/tests/test_reference.py` computes the same through the package
+    and the library, and every bit must agree, NaN and −0 included:
+    - each fluid's setup, and three compounds' files, as text;
+    - 240 property points: four fluids (PR binary, SRK ternary, PR n-butane
+      with Mathias–Copeman α, and a five-compound PR with a kᵢⱼ override),
+      three roots, 18 states and two beyond the model;
+    - 44 vapour pressures, 36 stability tests;
+    - every flash: PT at nine states each, with PH, PS, TV and UV from its
+      answer, and TVF and PVF at three β, failures included.
+  - pytest run alone skips these, since there's no reference without
+    `python.vsh`.
+- **Speed** (criterion 10), in [benchmarks.md](benchmarks.md), "From
+  Python".
+  - The work: properties and a PT flash of methane, ethane and n-butane at
+    20 bar, at 1, 100 and 10,000 points. Each is timed in V's own loop
+    (`tools/bench_case.v --capi`, the work the C API does at each point) and
+    from Python through the package.
+  - `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, and a test
+    checks that the committed report shows every timing.
+  - The overheads measured:
+
+    | Work | Per call (at 1 point) | Per point (100) | Per point (10,000) |
+    |---|---|---|---|
+    | Properties | 109 µs | 4.6 µs | 6.2 µs |
+    | PT flash | 250 µs | 188 µs | 117 µs |
+
+  - **What they are,** found by a scratch library that ran V's own loop
+    inside itself, from Python:
+    - A call costs 0.1 to 0.2 ms more from Python at any size: the package's
+      NumPy setup and result objects.
+    - The C API adds a few µs a point to properties (the checks, the copies
+      out). For the PT flash it adds nothing measurable: V's loop inside the
+      library took as long as the call.
+    - V's code runs slower inside the library, in a Python process, than in a
+      V program of its own: the flash at 100 points took 41 to 49 ms against
+      27 to 31. With a 2 GB initial heap, so that the collector rarely runs,
+      it was still 41 against 31 to 34. So it's more than the collections, and
+      its cause isn't known: carried forward to M8, with parallel speed.
+  - **Timing on this laptop moves by up to 2×** within minutes, with its
+    power state, as M3 found. So each pair is timed in eight rounds, V then
+    Python, about four seconds in all, which keeps the comparison fair even
+    when the absolute times move.
+  - The first version of V's loop skipped the phase label that the C API
+    computes for each point, four extra pressure derivatives, and so made
+    the C API look 2.5 µs a point dearer than it is.
+- **The spike is retired** (D1): its code and its CI step are gone, and its
+  write-up stays as the record.
+  - [spike-python-ffi.md](spike-python-ffi.md) now lists where each scenario
+    went: zero copies, `thermo`, the vectorised call, the collector, the
+    handles and the thread all to the package's tests, and the per-call cost
+    to the benchmarks.
+  - CI's gcc jobs run `tools/python.vsh test` alone.
+- **Tests:**
+  - `test_reference.py`, 5 tests: text; properties; Psat; stability; every
+    flash, each with answers.
+  - In `benchmarks/flowsheet_test.v`, the committed report has every Python
+    timing.
+  - The Python suite is 76 tests.
+- **Planted mistakes:** four changes of an ulp or so, which only a
+  bit-for-bit comparison can see, run against `test_reference.py` alone, the
+  library and the reference rebuilt each time:
+  - a property scaled by (1 + 1e-15);
+  - a phase's S scaled the same way;
+  - the compositions normalised again;
+  - V computed as V·(1/n).
+  - Three were caught. "V·(1/n)" survived, because every feed's amounts
+    added to 1 or 2. Dividing by a power of two is exact, so x/n and x·(1/n)
+    agree to the bit.
+  - The reference's second feeds now add to 3, and all four are caught.
 
 ### 8. The exit script and the Python docs
 - A T–x–y diagram of a binary below its critical locus and a phase-fraction

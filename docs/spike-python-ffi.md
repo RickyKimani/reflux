@@ -7,7 +7,10 @@ copying, and the results agree with the `thermo` fixtures to 5e-15.
 Getting there turned up seven problems (five on Windows, two more in Linux
 CI), and any one of them would have broken M10a if it had been found late.
 
-The spike lives in [spike/python_ffi/](../spike/python_ffi):
+The spike lived in `spike/python_ffi/` until M10a step 7, which removed it
+once each of its scenarios had a home in M10a's C API and Python package
+(`capi/`, `python/`). This write-up stays as the record, and the code is in
+git: `git show 48b23e2 -- spike/python_ffi`.
 
 | File | Role |
 |---|---|
@@ -15,13 +18,17 @@ The spike lives in [spike/python_ffi/](../spike/python_ffi):
 | `run.py` | Python + NumPy scenarios, each in its own process so a crash is reported, not hidden (uv script) |
 | `spike.vsh` | Builds the library and runs the scenarios |
 
-```bash
-v run spike/python_ffi/spike.vsh            # gcc
-```
+Where each scenario went:
 
-```bash
-v run spike/python_ffi/spike.vsh -cc tcc    # shows what tcc does
-```
+| Scenario | Its home in M10a |
+|---|---|
+| zero-copy | `python/tests/test_props.py`: an input already in shape shares its memory |
+| matches `thermo` | `python/tests/test_thermo_reference.py`: M1's 14 cases, Z, V, ln φ, Hʳ and Sʳ |
+| vectorised | the same file: 10,000 points in one call |
+| per-call overhead | `docs/benchmarks.md`, "From Python" (`tools/gen_m10a_bench.py`) |
+| collector stress | `python/tests/test_memory.py`: 100,000 calls |
+| handles, unpinned and pinned | `capi/registry.v`, and `python/tests/test_handles.py` |
+| a Python thread | `python/tests/test_threads.py` |
 
 ## Results (Windows 11, V eab77e7, MSYS2 gcc 16.2, Python 3.14.9, NumPy 2.5.4)
 

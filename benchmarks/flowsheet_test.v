@@ -50,3 +50,22 @@ fn test_the_committed_report_has_every_timing() {
 		assert lines.filter(it.starts_with('| ${t.label} | ')).len == 2, t.label
 	}
 }
+
+fn test_the_committed_report_has_every_python_timing() {
+	pf := benchmarks.load_python()!
+	// Each piece of work at each number of points, timed from both sides.
+	for what in benchmarks.python_work {
+		for n in benchmarks.python_points {
+			ts := pf.timings.filter(it.what == what && it.points == n)
+			assert ts.len == 1, '${what} at ${n}'
+			assert ts[0].v_us.len >= 5 && ts[0].python_us.len == ts[0].v_us.len
+			assert ts[0].v_us.all(it > 0.0) && ts[0].python_us.all(it > 0.0)
+		}
+	}
+	text := os.read_file(benchmarks.report_path)!
+	assert text.contains('## From Python')
+	lines := text.all_after('## From Python').split_into_lines()
+	for label in ['Properties', 'PT flash'] {
+		assert lines.filter(it.starts_with('| ${label} | ')).len == benchmarks.python_points.len, label
+	}
+}

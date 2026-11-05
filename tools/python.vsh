@@ -98,6 +98,21 @@ match command {
 	}
 	'test' {
 		build(prod)!
+		// D12: the V API's answers for the reference states, from a program
+		// built with the library's compiler and flags, for test_reference.py
+		// to compare with bit for bit.
+		ref_dir := join_path(temp_dir(), 'reflux_capi')
+		mkdir_all(ref_dir)!
+		exe := join_path(ref_dir, 'capi_reference')
+		mut ref_cmd := ['v', '-cc', 'gcc', '-nocache', '-W']
+		if prod {
+			ref_cmd << '-prod'
+		}
+		ref_cmd << ['-o', exe, join_path('tools', 'capi_reference.v')]
+		run(ref_cmd)
+		reference := join_path(ref_dir, 'reference.json')
+		run([$if windows { exe + '.exe' } $else { exe }, reference])
+		setenv('REFLUX_REFERENCE', reference, true)
 		mut cmd := ['uv', 'run', '--no-project']
 		i := args.index('--python')
 		if i >= 0 {

@@ -1140,6 +1140,12 @@ language, so its conventions are the same for every function (M10a's D2):
   vapour's composition is always the same column of the arrays. The whole's
   H, S and V are its phases', summed in the flash's order, as
   `flowsheet.Stream` sums them.
+- **Held to the V API bit for bit.** `tools/capi_reference.v` computes a
+  reference set of states with `components`, `thermo` and `flash` alone, as
+  the header documents each point, and the Python tests compare the
+  library's answers with it to the bit. Both are built by one compiler with
+  one set of flags, because bits differ between compilers and maths
+  libraries (M10a's D12).
 - **The specs** are PT, PH, PS, TV, UV, and the vapour-fraction flashes TVF
   and PVF, whose β of 0 or 1 makes a bubble or dew point. Each checks its own
   two values before the feed. A vapour-fraction flash gives both phases,

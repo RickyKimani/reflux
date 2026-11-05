@@ -68,8 +68,6 @@ Keep this section current: update it whenever a step is committed.
   - **Step 4 is done:** stability and the PT flash at many points, through
     one `reflux_flash(fluid, spec, …)` whose layout every flash will share.
     D6 is amended: each phase is in the place of its label.
-  - The spike's CI step stays until its last scenarios have homes: the
-    collector in step 6, the call's cost in 7.
   - **Step 5 is done:** PH, PS, TV, UV and the vapour-fraction flashes, with
     bubble and dew points, as specs of `reflux_flash`. Every failure kind is
     reached and tested through the public API.
@@ -77,8 +75,14 @@ Keep this section current: update it whenever a step is committed.
     (`capi/fuzz_test.v`), 8 threads on every vectorised function, and a flat
     heap over 100,000 calls. Throughput with 8 threads is 1.3 to 2.3 times
     serial, the collector's lock being shared.
-  - Next is step 7: the V reference program (D12), bit for bit, and the
-    speed, which moves the spike's last scenario.
+  - **Step 7 is done:** `tools/capi_reference.v` (D12) writes the V API's
+    answers, and the Python tests match them bit for bit through the C API.
+    `docs/benchmarks.md` has the cost from Python (criterion 10). The spike's
+    code and CI step are gone, every scenario living in the package's tests.
+  - Carried forward from step 7: V's code runs 1.3 to 1.8 times slower inside
+    the library in a Python process than in a V program, and fewer
+    collections don't remove it. For M8.
+  - Next is step 8: the exit script and `docs/python.md`.
   - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
@@ -131,11 +135,12 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
   slower. Run the gcc check in the background, and don't edit or regenerate
   anything it compiles or reads until it finishes.
 - **CI** (`.github/workflows/ci.yml`) runs `check.vsh` on Ubuntu and Windows
-  with both tcc and gcc. The gcc jobs also run the Python FFI spike and
-  `tools/python.vsh test`. V is pinned to the commit in `.v-version`
-  (0.5.2, eab77e7).
+  with both tcc and gcc. The gcc jobs also run `tools/python.vsh test`. V is
+  pinned to the commit in `.v-version` (0.5.2, eab77e7).
 - **The Python tests** need the library, which only gcc can build, so
-  `check.vsh` doesn't run them: `v run tools/python.vsh test`. Here uv needs
+  `check.vsh` doesn't run them: `v run tools/python.vsh test`. It also builds
+  `tools/capi_reference.v` with the library's compiler and flags, for the
+  bit-for-bit tests (`REFLUX_REFERENCE`); pytest alone skips those. Here uv needs
   the interpreter named, as below: `--python <path>`. `test_install.py`
   installs the package into a fresh environment, so uv needs setuptools and
   NumPy from its cache or the network. An editable install leaves

@@ -93,3 +93,25 @@ Medians, but for the fastest. What each solved, the products in mol/s after the 
 | DWSIM at 1e-8 | 65.194534 | 9.910907 | 24.894559 |
 | reflux, Wegstein | 65.193098 | 9.91116 | 24.895742 |
 | reflux, direct substitution | 65.193098 | 9.91116 | 24.895742 |
+
+## From Python
+
+M10a step 7, exit criterion 10: what a call from Python costs over V's own loop doing the same work. Methane, ethane and n-butane, 30/30/40, at 20 bar, from 220 to 400 K (one point at 300 K), with Peng–Robinson and the database's kᵢⱼ. `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, timing V and Python alternately, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-05, with Python 3.13.17 and NumPy 2.5.4.
+
+- **V's loop** is `tools/bench_case.v`, built with gcc 16.2.0 -prod, doing at each point what the C API does: for properties, the stable volume root, the properties per mole and the phase's label; for the PT flash, the flash and each phase's properties.
+- **Each pair is timed in eight rounds,** V then Python, about four seconds in all, so that the laptop's power state moves both alike.
+- **From Python** is one call of `Fluid.props` or `Fluid.flash_pt` with every point, through the library built with the same compiler, its arrays allocated and its results shaped as the package does.
+- **The overhead** is the difference of the medians: per call at one point, and per point at more.
+
+| | Points | V's loop | From Python | Overhead | Per point |
+|---|---|---|---|---|---|
+| Properties | 1 | 9.30 µs | 118 µs | 109 µs | 109 µs |
+| Properties | 100 | 1.02 ms | 1.48 ms | 457 µs | 4.57 µs |
+| Properties | 10000 | 105 ms | 166 ms | 61.5 ms | 6.15 µs |
+| PT flash | 1 | 351 µs | 601 µs | 250 µs | 250 µs |
+| PT flash | 100 | 26.8 ms | 45.5 ms | 18.8 ms | 188 µs |
+| PT flash | 10000 | 3.73 s | 4.89 s | 1.17 s | 117 µs |
+
+Medians of each call; per point is the overhead over the points.
+
+What the overhead is (M10a step 7). A call costs about 0.1 to 0.2 ms more from Python, at any size: the package's arrays and result objects. Past that, the C API adds a few µs a point to properties (the inputs' checks, and copying the results out), and to the PT flash nothing measurable: V's own loop, run inside the library from Python, takes as long as the call. But V's code runs slower inside the library, in a Python process, than in a V program of its own, the flash 1.3 to 1.8 times as long. A heap made large enough that the collector rarely runs doesn't remove it, so it's more than the collections, and its cause isn't known yet: M8's question, with parallel speed.

@@ -836,7 +836,8 @@ m := {
 
 This is V's biggest practical advantage over Go: there's no cgo tax and no
 separate build mode. M10a's C API, [capi/](../capi), does it both ways, and
-M1's spike ([spike/python_ffi/](../spike/python_ffi)) found the way.
+M1's spike ([spike-python-ffi.md](spike-python-ffi.md), its code removed
+in M10a step 7) found the way.
 
 **V calling C.** `#flag` adds compiler flags, `#include` pulls in a header,
 and `fn C.name(...)` declares what you'll call. `@VEXEROOT` is V's install

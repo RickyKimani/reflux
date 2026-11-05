@@ -6,6 +6,7 @@
 //     v -prod -cc gcc -o bench_case.exe tools/bench_case.v
 //     bench_case.exe case.json    # {"system": …, "flash": …}, as in testdata/m3_bench.json
 //     bench_case.exe --build      # how it was built
+//     bench_case.exe --capi props 100 20   # V's loop for M10a, 20 calls of 100 points
 //
 // It's a .v program, not a .vsh script, because a script runs whenever V
 // compiles it (see docs/v-for-go.md, §1).
@@ -19,6 +20,11 @@ import os
 struct Input {
 	system benchmarks.System
 	flash  benchmarks.Case
+}
+
+// VLoop is --capi's answer: each call's time in µs.
+struct VLoop {
+	us []f64
 }
 
 fn main() {
@@ -42,8 +48,18 @@ fn main() {
 		println(json2.encode(timing))
 		return
 	}
+	if os.args.len == 5 && os.args[1] == '--capi' {
+		// M10a's: V's own loop over the points tools/gen_m10a_bench.py also
+		// times from Python, each call's µs.
+		us := benchmarks.time_v(os.args[2], os.args[3].int(), os.args[4].int()) or {
+			eprintln(err.msg())
+			exit(1)
+		}
+		println(json2.encode(VLoop{us}))
+		return
+	}
 	if os.args.len != 2 {
-		eprintln('usage: bench_case case.json, bench_case --build, or bench_case --flowsheet file.toml wegstein|direct cold warm')
+		eprintln('usage: bench_case case.json, bench_case --build, bench_case --flowsheet file.toml wegstein|direct cold warm, or bench_case --capi props|flash_pt points reps')
 		exit(2)
 	}
 	if os.args[1] == '--build' {
