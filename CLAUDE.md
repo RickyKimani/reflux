@@ -20,7 +20,7 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
-- **M0 to M4 are done** and merged into `main` (PRs #1 to #4).
+- **M0 to M4 and M10a are done** and merged into `main` (PRs #1 to #5).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
@@ -38,16 +38,22 @@ Keep this section current: update it whenever a step is committed.
     escape and a smart-cast interface's field inside `${}`; to `thermo`, its
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
     unit failures.
-- **v0.1.0** is released: M0 to M4, a source release, tagged on
-  2026-11-03 at `45d4ce6` on `main` (an annotated tag, pushed). The next
-  release starts with a new CHANGELOG entry and its version in `v.mod`, and
-  a changed golden report goes in that entry by name.
-- **M10a (thermo and the flash from Python) is done** on branch
-  `m10a-python`: steps 1–10 of `docs/m10a-plan.md` (approved on 2026-11-04),
-  whose exit review is at its end. CI passed on the tip on Windows and Linux
-  (run 42080776945), after the run before found Ubuntu's gcc fusing
-  multiply-adds. Next: the PR into `main`, then v0.2.0's tag after the
-  merge.
+- **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`, and
+  v0.2.0 (M10a), tagged on 2026-11-08 on `main`: source releases, annotated
+  tags, pushed. The next release starts with a new CHANGELOG entry and its
+  version in `v.mod`, and a changed golden report goes in that entry by name.
+- **`test_memory.py` is flaky on Ubuntu,** to fix early in M9. It holds the
+  collector's `heap_size` from `reflux_collect`, free blocks included, and
+  Boehm grows that in one large step when it chooses to and never gives it
+  back. On `main`'s merge of M10a it doubled once, 5,580 KiB to about 11 MB,
+  and failed; the rerun passed, as both PR runs had. The fix: compare the
+  bytes live after a full collection (heap size less free bytes), which
+  changes what `reflux_collect` reports, or adds an output, so the header
+  and `docs/python.md` say so.
+- **M10a (thermo and the flash from Python) is done,** merged in PR #5:
+  steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
+  passed on its tip on Windows and Linux (run 42080776945), after the run
+  before found Ubuntu's gcc fusing multiply-adds.
   - Its probes found that V 0.5.2's collector has thread support on Windows
     too, so the spike's thread registration is needed on both OSes. 8 Python
     threads at once get the serial answers bit for bit, at about 2× the serial

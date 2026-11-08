@@ -37,7 +37,7 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
-## [0.2.0] — unreleased
+## [0.2.0] — 2026-11-08
 
 Thermodynamics and flashes from Python: the roadmap's M10a. A C API that any
 language can load, and a Python package over it that takes and gives NumPy
