@@ -63,7 +63,7 @@ flowchart LR
   M4 --> M7[M7 Columns]
   M6 --> M7
   M4 --> M8[M8 Specs, sensitivity, optimisation]
-  M2 --> M9[M9 Reactors, kinetics, exchangers]
+  M2 --> M9[M9 Equations, kinetics, reactors]
   M4 --> M9
   M3 --> M10a[M10a Thermo from Python]
   M4 --> M10b[M10b Flowsheets from Python]
@@ -230,7 +230,16 @@ study of 50 feed temperatures took 30 minutes in the app, about 36 s a point.
 One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
 of that is in one reactor.
 
-### M9 — Reactors, kinetics and heat exchangers
+### M9 — Equations, kinetics and reactors
+**Planned.** The plan, approved on 2026-11-08, is in [m9-plan.md](m9-plan.md).
+Heat exchangers, here at first, move to a milestone after M9 (its D14):
+nothing in M9's exit needs them, and a cooled PFR wants a coolant stream,
+which belongs with them.
+
+- **Equations as data** (A9). DWSIM takes every equation as a string it
+  evaluates: a rate, an equilibrium constant, a specification. reflux parses
+  each into a structure, binds its names to the model, checks its units,
+  renders it back and differentiates it exactly. Kinetics is its first user.
 - **Kinetics as structured data** (Track L, design in
   [kinetics.md](kinetics.md)). This responds to DWSIM's text-box LHHW input.
   Rate laws are power law, LHHW, Eley–Rideal or a parsed expression.
@@ -242,7 +251,6 @@ of that is in one reactor.
   can be built before the reactors.
 - Conversion and yield reactors; Gibbs-minimisation equilibrium reactor (E6);
   CSTR; PFR and packed bed (which need an ODE integrator, B5).
-- Two-stream exchangers specified by duty, outlet T, UA or approach (G2).
 
 **Exit:** the Vanden Bussche–Froment methanol kinetics loads from TOML,
 renders back as the published equations, passes every check, and
@@ -365,6 +373,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |
 | A8 Releases: semver, changelog, golden suite gates every release | M4 |
+| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first; then M8's specifications and objectives, and every later equation |
 
 ### B — Numerics
 | Item | Pure V | C backend | Needed by |
@@ -423,7 +432,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 ### G — Unit operations
 - G1 Mixer, splitter, valve, heater/cooler, pump, compressor/expander,
   flash drum, component separator. **M4**
-- G2 Heat exchangers. **M9**
+- G2 Heat exchangers: two-stream, by duty, outlet T, UA or approach. **after M9**
+  (moved out of M9 by its D14)
 - G3 Reactors: conversion, yield, Gibbs, CSTR, PFR, packed bed (using Track L
   kinetics). **M9**
 - G4 Columns: shortcut, inside-out, Naphtali–Sandholm; absorbers and
@@ -482,7 +492,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
   physical-sanity warnings, factor tables. **M9**
 - L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9**
 - L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9**
-- L7 Free-form expression rate laws (parsed, unit-checked, differentiated). **after M9**
+- L7 Free-form expression rate laws (parsed, unit-checked, differentiated): A9's
+  expressions, so **M9**
 
 ---
 

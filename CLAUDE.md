@@ -50,6 +50,17 @@ Keep this section current: update it whenever a step is committed.
   bytes live after a full collection (heap size less free bytes), which
   changes what `reflux_collect` reports, or adds an output, so the header
   and `docs/python.md` say so.
+- **M9 (equations, kinetics and reactors) is planned** on branch
+  `m9-reactors`. Its plan, `docs/m9-plan.md`, was approved on 2026-11-08:
+  exit criteria 1–11, decisions D1–D16 and steps 0–13, ending in v0.3.0.
+  - The owner's principle drives it: no equation is ever taken as text, not
+    only LHHW rates (roadmap A9). Users type their own, with species by
+    name, numbers with units, named definitions, and built-in constants at
+    the SI's exact values (`R`, not a typed 8.314).
+  - Its benchmark is the owner's reforming PFR (see the memory), whose DWSIM
+    file gives the three reactions three different denominators.
+  - Heat exchangers (G2) moved out of M9 to a later milestone (D14).
+  - Next is step 0: spikes on DWSIM's PFR and on the tape's speed.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run

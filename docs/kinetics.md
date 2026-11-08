@@ -9,6 +9,12 @@ Setting up an LHHW model for a heterogeneous catalytic reactor meant:
 - entering the adsorption (denominator) terms one by one for every
   reaction, and leaving out by hand the species that weren't involved.
 
+The owner's own reforming case shows what that costs. In Xu and Froment's
+kinetics, all three reactions share one adsorption term. In the case's DWSIM
+file, the overall reaction's denominator has no CO term and the water–gas
+shift's no CH₄ term, because a DWSIM rate can only name its own reaction's
+species, and by their place in it: `R1`, `P2`.
+
 reflux treats kinetics as **structured data that the program understands**,
 not as strings it evaluates. The structure is what makes checking possible.
 
@@ -111,8 +117,12 @@ site_power = 1
 ```
 
 Power-law and Eley–Rideal rates use the same building blocks. A free-form
-expression type (a small parsed expression language, never `eval`) is the
-escape hatch for anything else, and it gets the same checks.
+expression is the escape hatch for anything else, and it gets the same
+checks. It's reflux's one expression language (roadmap A9), used wherever an
+equation is needed, not only in kinetics: parsed, never evaluated as text,
+with its names bound, its units checked, and exact derivatives. The structured
+forms build the same expressions, so a structured rate and the same rate typed
+out render, evaluate and differentiate alike ([m9-plan.md](m9-plan.md)).
 
 ## Checking that the model is what you meant
 

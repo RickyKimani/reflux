@@ -31,6 +31,8 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m3-plan.md](docs/m3-plan.md), the flash, and
   [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet, and
   [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python.
+  [docs/m9-plan.md](docs/m9-plan.md) is M9's, in progress: equations,
+  kinetics and reactors.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
@@ -66,7 +68,7 @@ These goals come from what went wrong with DWSIM:
 | Docs are years behind the code (8.x docs for 9.x/10.x) | Docs are generated from the code (`v doc`). Every example in the docs is compiled and run by the test suite, so it can't drift from the release. |
 | 10.x didn't work, so we had to go back to 9.x | A regression suite of reference cases runs on every commit. Flowsheet files carry a format version and are migrated, never silently reinterpreted. |
 | Flowsheets, especially sensitivity analyses, solve slowly | Analytic derivatives throughout, Newton/Broyden recycle convergence, warm-started and parallel sensitivity cases, and later exact sensitivities from the Jacobian. |
-| LHHW kinetics is a text box: no way to check the equation, and every adsorption term typed in again for each reaction | Kinetics is structured data ([docs/kinetics.md](docs/kinetics.md)). Adsorption terms are defined once per catalyst site and shared by every reaction on it. `reflux kinetics check` renders each rate back as a formula and checks element balance, units and consistency with equilibrium. |
+| Every equation is a text box: LHHW rates, equilibrium constants, specifications. Nothing checks it, a rate names its species by their place in the reaction, and every adsorption term is typed in again for each reaction | Equations are data reflux understands: parsed, never evaluated as text, every name bound to the model, units checked, rendered back as a formula and differentiated exactly. Kinetics is the first user ([docs/kinetics.md](docs/kinetics.md)): adsorption terms are defined once per catalyst site and shared by every reaction on it, and `reflux kinetics check` renders each rate back and checks element balance, units and consistency with equilibrium. |
 | Scripting is awkward, and you can't bring NumPy, pandas or Jupyter to your own analysis | A Python package over reflux's C API, available from the first flash onwards. NumPy arrays go in and come out without copying, calls are vectorised over many states, and flowsheets are Python objects. The CLI also writes JSON and CSV that pandas reads directly. |
 
 ## Layout
