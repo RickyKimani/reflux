@@ -583,6 +583,13 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `const butane = Component{…}` and `const kinds = [CubicKind.vdw, .rk, .srk, .pr]`.
 - Receivers: `fn (c Cubic) residual(…)` is a value receiver, and
   `fn (mut s Solver) step()` is the equivalent of Go's `func (s *Solver) Step()`.
+- **A reference parameter can't be kept in a struct for free.** Go's escape
+  analysis moves a value to the heap when a pointer to it outlives the
+  call. V refuses instead: putting a `&Definitions` parameter in a struct
+  field is "`defs` cannot be assigned outside `unsafe` blocks as it might
+  refer to an object stored on stack. Consider declaring `Definitions` as
+  `@[heap]`". The tape's builder holds a copy, `defs: *defs`, cheap since
+  the struct's arrays are shared headers ([expr/tape.v](../expr/tape.v)).
 - **Read-only exported fields.** In Go an exported field can always be
   written by anyone who has the struct. V separates the two: fields under
   `pub:` can be read outside the module but not assigned, and only

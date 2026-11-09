@@ -21,9 +21,26 @@ fn (e &Expr) value_of(defs &Definitions, x []f64, i int) f64 {
 		.sub { e.value_of(defs, x, n.a) - e.value_of(defs, x, n.b) }
 		.mul { e.value_of(defs, x, n.a) * e.value_of(defs, x, n.b) }
 		.div { e.value_of(defs, x, n.a) / e.value_of(defs, x, n.b) }
-		.pow { math.pow(e.value_of(defs, x, n.a), e.value_of(defs, x, n.b)) }
+		.pow { raise(e.value_of(defs, x, n.a), e.value_of(defs, x, n.b)) }
 		.call { apply(n.index, e.value_of(defs, x, n.a)) }
 	}
+}
+
+// raise is a^b: a whole power up to 16 by repeated multiplication, a
+// negative one as 1 over that, whose bits IEEE arithmetic makes the same
+// on every platform; any other by math.pow, the C library's. The tree and
+// the tape both raise this way, so they give the same bits.
+@[inline]
+fn raise(a f64, b f64) f64 {
+	if b == math.trunc(b) && math.abs(b) <= 16.0 {
+		n := int(math.abs(b))
+		mut y := 1.0
+		for _ in 0 .. n {
+			y *= a
+		}
+		return if b < 0.0 { 1.0 / y } else { y }
+	}
+	return math.pow(a, b)
 }
 
 // apply is function f of x.

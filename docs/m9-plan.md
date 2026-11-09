@@ -18,7 +18,7 @@ equations users type themselves, with named definitions; built-in
 constants; reaction types as properties, with restricted equilibrium; and
 stoichiometry checked by counting elements. Step 0 is done, and amended D5,
 D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1
-amended D3. Step 2 is done and amended D2. Step 3 is next.
+amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is next.
 
 ## Goal
 
@@ -490,10 +490,60 @@ flowchart LR
     before the run.
 - **V's notes:** `none` is a keyword, so it can't name a variable.
 
-### 3. Evaluation and derivatives
-- The tape, constant folding and shared subexpressions, evaluation into the
-  caller's buffer, and the reverse sweep (D5). Derivatives against SymPy and
-  central differences; no allocation per evaluation; the cost measured.
+### 3. Evaluation and derivatives — done
+- **[expr/tape.v](../expr/tape.v)** compiles expressions onto one tape (D5,
+  as amended in step 0), as [design.md](design.md#the-tape) sets out:
+  - **folding** constants with eval's own arithmetic, **merging** repeats
+    (+ and · with their operands in order, and each definition compiled
+    once), **fusing** a constant operand into its operation (x + c, c − x,
+    c·x, x/c, c/x, a^c), an Arrhenius or van 't Hoff term into c·exp(d/x)
+    on a shared R·T, and an equilibrium correlation into exp(c + d/x), and
+    **pruning** what no output uses. Every fusion keeps the tree's
+    arithmetic, so the tape gives eval's bits;
+  - **evaluation** into a `Buffer` the caller owns, its constants put in
+    place once, allocating nothing;
+  - **the gradient** by one reverse sweep with an adjoint per output, so
+    every output's derivative with respect to every input comes at once.
+- **Powers:** the tree and the tape both raise by `raise`, a whole power up
+  to 16 as a repeated product (the same bits on every platform), any other
+  by `math.pow`.
+- **Tests in [expr/tape_test.v](../expr/tape_test.v),** nine:
+  - **the tree's bits:** all 260 fixture cases at all four points, and Xu
+    and Froment's three rates through their definitions, to the bit;
+  - **SymPy's derivatives:** [testdata/m9_expressions.json](../testdata/m9_expressions.json)
+    now carries SymPy's derivative of each case with respect to each of its
+    six inputs at each point, by mpmath at 50 digits (its symbols declared
+    positive, which kept two more seeded cases real: 260 now). Every one to
+    1e-10 of the larger of the derivative, the scale and 1: 6.5e-16 at
+    worst;
+  - **central differences** on Xu and Froment's rates, with respect to T, P
+    and every partial pressure, to 1e-7 of each row's largest term, with P,
+    no rate's input, at 0;
+  - **one tape for three rates:** 55 operations against 96 on three tapes (8
+    merged, 5 folded, 40 fused); the same values to the bit, the same
+    gradients to 1e-14; every Arrhenius and van 't Hoff term one operation
+    (7 c·exp(d/x), 3 exp(c + d/x)), and no constant left;
+  - **nothing allocated:** 0 bytes in 100,000 evaluations with gradients;
+  - a fixed expression with a gradient of 0; 60 definitions each using the
+    next twice, compiled into 61 operations; whole powers as products to the
+    bit (0.01⁴, where `math.pow` gives 1e-8); and a scaled exponential not
+    scaled again, (4·exp(d/T))·2 staying the tree's arithmetic.
+- **The cost** ([tools/tape_bench.v](../tools/tape_bench.v), gcc `-prod`, the
+  best of nine rounds taking turns, three runs): the same three rates
+  written out in SI, agreeing with the tape to 1.2e-13 and their gradients
+  to 1.3e-14, take 127 ns, and 156 ns with gradients. The tape takes 400 ns
+  (3.2 times) and 1.04 µs (6.7 times). The rates' ratio is the spike's; the
+  gradients' is higher because this hand-written gradient reuses its terms
+  for 30 ns more, where the spike's took about 80. About 1 µs for three rates and
+  every derivative, as D5 expected; step 11 profiles the PFR.
+- **Planted mistakes: 34,** none failing to build, all caught: 33 by a
+  failed test, and the definitions memo's loss by a timeout, the 60-deep
+  chain then compiling 2⁶⁰ times. Before the run, folding's arms for the
+  fused operations were deleted, since a fused operation is only ever made
+  with a varying operand.
+- **V's notes:** a reference parameter can't be kept in a struct without
+  `unsafe` or `@[heap]`, where Go's escape analysis would move it to the
+  heap.
 
 ### 4. Reactions and equilibrium constants
 - Equations parsed, with species by name, formula or CAS number.

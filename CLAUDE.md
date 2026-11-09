@@ -85,7 +85,15 @@ Keep this section current: update it whenever a step is committed.
     renderings itself: SymPy's LaTeX readers misread function calls. D2
     amended: units after a space or in brackets, "2 R" refused as
     ambiguous, offset units and `log` refused, `·` `×` `−` accepted.
-  - Next is step 3: the tape, evaluation and derivatives.
+  - **Step 3 is done:** `expr/tape.v`, expressions compiled onto one tape
+    (folded, merged, fused, pruned), evaluated into the caller's `Buffer`
+    with nothing allocated, and differentiated by one reverse sweep for
+    every output. Every fusion keeps the tree's arithmetic, so the tape
+    gives eval's bits; derivatives match SymPy's (now in
+    `testdata/m9_expressions.json`) to 6.5e-16. Xu and Froment's three
+    rates: 55 operations, 3.2 times hand-written V for the rates and 6.7
+    with gradients, about 1 µs in all (`tools/tape_bench.v`).
+  - Next is step 4: reactions and equilibrium constants.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run

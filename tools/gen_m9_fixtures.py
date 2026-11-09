@@ -15,7 +15,8 @@ cases
     function and every operator's spelling, and seeded random ones. SymPy
     reads each (as Python syntax, ^ as **), and mpmath at 50 digits gives
     its value at four points, with the largest magnitude of any of its
-    subexpressions there, the scale a rounding error is measured against.
+    subexpressions there, the scale a rounding error is measured against,
+    and its derivative with respect to each input there (step 3).
     Then reflux writes each back as plain text, Unicode and LaTeX
     (tools/expr_render.v), and this script decodes each of those itself,
     with a small reader for exactly what reflux writes, and holds the result
@@ -57,7 +58,7 @@ getcontext().prec = 60
 
 VARS = ["a", "b", "x", "y"]
 MEMBERS = {"p[CH4]": "p_CH4", "p[H2O]": "p_H2O"}
-SYMBOLS = {name: sympy.Symbol(name) for name in VARS + list(MEMBERS.values())}
+SYMBOLS = {name: sympy.Symbol(name, positive=True) for name in VARS + list(MEMBERS.values())}  # every point is in [0.5, 2]
 
 HAND = [
     # Precedence and associativity, each as Python reads it.
@@ -477,6 +478,7 @@ def main():
             "points": [[pt[k] for k in SYMBOLS] for pt in pts],
             "values": [float(at(e, pt)) for pt in pts],
             "scales": [scale_of(e, pt) for pt in pts],
+            "gradients": [[float(at(sympy.diff(e, sym), pt)) for sym in SYMBOLS.values()] for pt in pts],
             "plain": r["plain"], "unicode": r["unicode"], "latex": r["latex"],
         })
     data = {
@@ -487,6 +489,8 @@ def main():
             "values": "SymPy's reading of each text as Python syntax (^ as **), at each point, by mpmath at 50 "
                       "digits, rounded to the nearest double; scales are each point's largest magnitude of any "
                       "subexpression",
+            "gradients": "SymPy's derivative of each case with respect to each input, in the inputs' order, at "
+                         "each point, by mpmath at 50 digits, rounded to the nearest double",
             "renderings": "reflux's, from tools/expr_render.v, each decoded here and found to mean the text, to "
                           "50 digits at every point",
         },

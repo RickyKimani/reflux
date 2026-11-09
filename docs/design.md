@@ -1021,6 +1021,70 @@ write it (D2). The standard pressure is left out, since a pressure near
   \log_{10}, \sqrt, \left| \right|, 4.22 \times 10^{15}, units in
   \mathrm{}, species as p_{\mathrm{CH_{4}}}.
 
+**Powers** are a^b by `raise`: a whole power up to 16 as a repeated
+product, a negative one as 1 over that, and any other by `math.pow`. The
+product's bits are the same on every platform, where `math.pow` is the C
+library's, and the tree and the tape both raise this way.
+
+### The tape
+
+Expressions are compiled for speed into a tape (D5, as step 0 amended it):
+a flat array of operations on slots, one slot per operation, every operand
+before its use. Several expressions compile onto one tape, so what they
+share is computed once.
+
+**Compiling,** node by node:
+- **Folding:** an operation whose operands are all constants is computed
+  as eval would, and becomes a constant.
+- **Merging:** an operation identical to one already there (its kind, its
+  operands, its constants) is that one. + and · put their operands in
+  order first, which IEEE arithmetic allows exactly. A definition is
+  compiled once, whatever uses it, so a chain of definitions each using the
+  next twice compiles in linear time.
+- **Fusing,** each keeping the tree's arithmetic to the bit:
+
+| Tree | Tape | Why the bits are the same |
+|---|---|---|
+| x + c, c + x | addc(x; c) | + commutes exactly |
+| x − c | addc(x; −c) | x − c is x + (−c), and negation is exact |
+| c − x | csub(x; c) | the same operation |
+| c·x, x·c | mulc(x; c) | · commutes exactly |
+| x/c, c/x | divc(x; c), cdiv(x; c) | the same operations |
+| exp(d/x) | aexp(x; 1, d) | 1·y is y |
+| c·exp(d/x) | aexp(x; c, d), if the exponential isn't scaled already | the same operations |
+| exp(c + d/x), exp(c − d/x) | expl(x; c, ±d) | c − d/x is c + (−d)/x, exactly |
+| a^c, c fixed | powc(a; c) | `raise` both ways |
+
+  So Arrhenius' A·exp(−E/(R·T)) is one operation on the slot of R·T, which
+  every such term shares, and an equilibrium constant's exp(30.42 −
+  27106 K/T) is one operation on T's.
+- **Pruning:** what no output uses is dropped. Then the constants go
+  first, the inputs used next, and the operations after, in order.
+
+**Evaluating** writes each slot's value into a buffer the caller owns,
+whose constants were put in place once when it was made. Nothing is
+allocated. The tape's value is eval's, to the bit.
+
+**The gradient** comes from one reverse sweep after an evaluation, carrying
+an adjoint per output in each slot, so every output's derivative with
+respect to every input comes at once. Each operation adds its adjoint times
+its local derivatives to its operands':
+
+| Operation, v its value | ∂v/∂a | ∂v/∂b |
+|---|---|---|
+| a + b, a − b | 1 | 1, −1 |
+| a·b | b | a |
+| a/b | 1/b | −v/b |
+| a^b | b·v/a (b·a^(b−1) at a = 0) | v·ln a (0 where v = 0) |
+| −a | −1 | |
+| exp(a), ln(a), log10(a) | v, 1/a, 1/(a·ln 10) | |
+| √a, \|a\| | 1/(2v), sign(a) | |
+| a^c | c·v/a (c·a^(c−1) at a = 0) | |
+| a + c, c − a, c·a, a/c, c/a | 1, −1, c, 1/c, −v/a | |
+| c·exp(d/a), exp(c + d/a) | −v·d/a² | |
+
+An input no output uses has a derivative of 0.
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

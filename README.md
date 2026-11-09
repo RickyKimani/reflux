@@ -139,6 +139,9 @@ expr/               the expression language (M9): every equation a user gives
   render.v          plain text that reads back, Unicode and LaTeX
   expr.v            nodes, contexts, built-in constants, definitions
   eval.v, lint.v    the tree's value; numbers that look like a constant
+  tape.v            expressions compiled to a tape: folded, merged, fused;
+                    evaluation into the caller's buffer, and the gradient by
+                    one reverse sweep
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
@@ -195,7 +198,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     API's answers, for those tests to match bit for bit),
                     gen_m10a_bench.py (the cost of a call from Python),
                     gen_m9_fixtures.py and expr_render.v (expressions against
-                    SymPy, and the constants against NIST's),
+                    SymPy, and the constants against NIST's), tape_bench.v
+                    (the tape against rates written in V),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)
