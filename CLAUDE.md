@@ -50,7 +50,7 @@ Keep this section current: update it whenever a step is committed.
   bytes live after a full collection (heap size less free bytes), which
   changes what `reflux_collect` reports, or adds an output, so the header
   and `docs/python.md` say so.
-- **M9 (equations, kinetics and reactors) is planned** on branch
+- **M9 (equations, kinetics and reactors) is in progress** on branch
   `m9-reactors`. Its plan, `docs/m9-plan.md`, was approved on 2026-11-08:
   exit criteria 1–11, decisions D1–D16 and steps 0–13, ending in v0.3.0.
   - The owner's principle drives it: no equation is ever taken as text, not
@@ -60,7 +60,15 @@ Keep this section current: update it whenever a step is committed.
   - Its benchmark is the owner's reforming PFR (see the memory), whose DWSIM
     file gives the three reactions three different denominators.
   - Heat exchangers (G2) moved out of M9 to a later milestone (D14).
-  - Next is step 0: spikes on DWSIM's PFR and on the tape's speed.
+  - **Step 0 is done:** the spikes on DWSIM's PFR
+    (`docs/spike-dwsim-pfr.md`) and on the tape (`spike/tape/spike.v`).
+    It amended D5 (the tape kept, with fused operations: 3 to 5 times
+    hand-written V, under 2 µs for three rates and their gradients), D10
+    (Ergun needs a gas viscosity, so ChemSep's correlations mixed by Wilke's
+    rule come forward from M5, and the PFR takes a viscosity through an
+    interface) and D13, and set criterion 8's targets. The owner approved
+    the amendments on 2026-11-09.
+  - Next is step 1: the units algebra.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -247,6 +255,18 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     wrong mixing entropy moves a two-phase isentropic outlet: 0.42 K in
     step 8's expander. "What step 8 found" in
     `docs/spike-dwsim-flowsheet.md` has the rest.
+  - `spike/dwsim_pfr/run.py` is M9 step 0's spike: DWSIM's PFR on the
+    owner's reforming case (`docs/spike-dwsim-pfr.md`). `REFLUX_TUTORIAL`
+    names the owner's file, to check the script's case against it; the file
+    stays out of the repository.
+  - DWSIM's PFR holds each section's volumetric flow, Z and pressure at the
+    section's start, so its error is first order in dV, and its integrators
+    run at 1e-3 relative, which nothing sets. A rate names a reaction's
+    species R1, R2, P1, … by their order in its compound list.
+  - Ergun's drop needs the gas viscosity. DWSIM's is the mole-fraction mean
+    of ChemSep's eq. 102 with Jossi–Stiel–Thodos' correction, 30% below
+    Wilke's in hydrogen-rich gas. A PFR's failure is silent too, and a
+    reaction above its Tmax is skipped with no error.
 
 ## Architecture
 

@@ -189,7 +189,8 @@ tolerance.
 ### M5 — Water, steam and transport properties
 - IAPWS-IF97 natively. IAPWS-95 is itself a Helmholtz equation, so it fits
   the `Model` contract directly (C6).
-- Viscosity, thermal conductivity, surface tension (C7).
+- Viscosity, thermal conductivity, surface tension (C7). M9 brings a gas's
+  viscosity at low pressure, for Ergun's pressure drop.
 - CoolProp behind a flag, as a reference oracle in tests (B-table).
 
 **Exit:** IF97 passes the verification tables published with the standard;
@@ -231,10 +232,13 @@ One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
 of that is in one reactor.
 
 ### M9 — Equations, kinetics and reactors
-**Planned.** The plan, approved on 2026-11-08, is in [m9-plan.md](m9-plan.md).
+**In progress.** The plan, approved on 2026-11-08, is in [m9-plan.md](m9-plan.md),
+and its step 0's spike of DWSIM's PFR in [spike-dwsim-pfr.md](spike-dwsim-pfr.md).
 Heat exchangers, here at first, move to a milestone after M9 (its D14):
 nothing in M9's exit needs them, and a cooled PFR wants a coolant stream,
-which belongs with them.
+which belongs with them. A gas's viscosity at low pressure comes the other
+way, from M5, since Ergun's pressure drop needs it (D10, as step 0 amended
+it).
 
 - **Equations as data** (A9). DWSIM takes every equation as a string it
   evaluates: a rate, an equilibrium constant, a specification. reflux parses
@@ -396,7 +400,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - C5 Activity models: Wilson, NRTL, UNIQUAC, UNIFAC; γ–φ. **M6**
 - C6 Reference equations: IAPWS-IF97/95 natively; GERG-2008 through CoolProp
   first, natively later. **M5**
-- C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**
+- C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**,
+  except a gas's viscosity at low pressure, which Ergun's pressure drop needs: **M9**
 - C8 Electrolytes (eNRTL, e-CPA). **after M12**
 - C9 Property packages: phase models + transport + data, chosen per
   flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and

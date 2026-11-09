@@ -830,6 +830,24 @@ m := {
   the same a(T, n) on every step. One change there made every flash
   2.3–5.7 times faster ([docs/benchmarks.md](benchmarks.md)). Allocation,
   the usual suspect, wasn't near the top.
+- **"Allocates nothing" can be tested.** `gc_heap_usage().total_bytes`
+  counts every byte allocated since the program started, so its change
+  across a loop is what the loop allocated, as Go's `testing.AllocsPerRun`
+  tells you. A probe gave 0 for a loop that only writes into an existing
+  array and 211,264 bytes for 1,000 arrays of ten `f64`s. M9's tape spike
+  ([spike/tape/spike.v](../spike/tape/spike.v)) uses it to show that its
+  evaluations allocate nothing in 1,800,000 calls.
+- **`@[direct_array_access]` turns off a function's bounds checks.** Each
+  `v[i]` is normally a call to `array_get`, which panics out of range. With
+  the attribute it's a bare pointer read, and an index past the end reads
+  garbage without a word: a probe read element 200 of a 100-long array and
+  got 30.0. Go has no such switch; its compiler drops a check only where it
+  can prove the index in range. Keep it for hot loops whose indices are
+  right by construction, such as the tape spike's interpreter.
+- **A `match` on an enum is an if-else chain in the C,** tested arm by arm,
+  not a `switch`. In the tape spike, putting the commonest arms first
+  changed nothing measurable, so gcc's optimiser seems to cope, but don't
+  count on a jump table.
 
 ---
 

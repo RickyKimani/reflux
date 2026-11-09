@@ -54,7 +54,9 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
 - [docs/spike-dwsim.md](docs/spike-dwsim.md) is what we learned driving
   DWSIM 9 from Python, and how M3 compares reflux with it.
   [docs/spike-dwsim-flowsheet.md](docs/spike-dwsim-flowsheet.md) does the
-  same for its flowsheets, for M4.
+  same for its flowsheets, for M4, and
+  [docs/spike-dwsim-pfr.md](docs/spike-dwsim-pfr.md) for its plug-flow
+  reactor, for M9.
 - [docs/v-for-go.md](docs/v-for-go.md) is V for Go programmers. It points
   back into this code for every feature.
 
@@ -194,6 +196,8 @@ data/components/    the same, converted: one TOML file per compound
 spike/data_format/  the TOML component-file trial (M2 step 1)
 spike/dwsim/        driving DWSIM 9 from Python, headless (M3 step 0)
 spike/dwsim_flowsheet/  DWSIM 9's flowsheets and recycle, headless (M4 step 0)
+spike/dwsim_pfr/    DWSIM 9's plug-flow reactor on the owner's case (M9 step 0)
+spike/tape/         a tape of rates against the same written in V (M9 step 0)
 .v-version          the V commit CI builds
 ```
 

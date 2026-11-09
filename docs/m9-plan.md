@@ -16,7 +16,9 @@ exit criteria, decisions and steps. The roadmap entry is in
 Status: **approved** on 2026-11-08, after a revision from discussing it:
 equations users type themselves, with named definitions; built-in
 constants; reaction types as properties, with restricted equilibrium; and
-stoichiometry checked by counting elements. Step 0 is next.
+stoichiometry checked by counting elements. Step 0 is done, and amended D5,
+D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1 is
+next.
 
 ## Goal
 
@@ -182,7 +184,11 @@ All checked by tests in CI, as in M1 to M4.
 8. **The owner's case matches DWSIM 9.** On DWSIM's own setup, its three
    denominators included, the outlet agrees with DWSIM's within targets that
    step 0 sets. Every difference over them is explained, as in M3 and M4. The
-   published model, one shared site, is solved beside it.
+   published model, one shared site, is solved beside it. **Step 0's
+   targets:** each outlet flow within 1e-8 (relative) of the exact answer of
+   DWSIM's equations, isobaric and with Ergun; and within 3e-4 of DWSIM's
+   own at dV = 0.001, with the methane conversion within 5e-5 and ΔP within
+   1 Pa.
 9. **Speed is measured.** A solve of the owner's case, and the 50-point study
    as 50 solves, against DWSIM 9's 15 to 18 s and 30 minutes, with gcc
    `-prod`. There's no target, as in M3 and M4.
@@ -199,15 +205,15 @@ All checked by tests in CI, as in M1 to M4.
 | D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. |
 | D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. | One source of truth for units, now able to say why a dimension is wrong. |
 | D4 | One representation | Parsed expressions and the structured forms (Arrhenius centred on T_ref, van 't Hoff, a site's monomials, LHHW) build the same tree. The structured forms keep their structure, for site sharing and their own checks, and render, evaluate and differentiate through the tree. | Every check, rendering and derivative is written once, and a structured rate and the same rate typed as an expression give the same bits. |
-| D5 | Evaluation and derivatives | A tree compiles to a tape: a flat array of operations on slots, with constants folded and shared subexpressions merged. Evaluation walks the tape into a buffer the caller owns. Derivatives come from a reverse sweep over the same tape, giving the gradient with respect to every variable in one pass. No closures, no allocation per evaluation. Step 0 measures the tape against hand-written V. | A rate needs its gradient with respect to every species and T at once, and reverse mode gives that for about the cost of the rate. A tape is data, which V handles without closures. |
+| D5 | Evaluation and derivatives | A tree compiles to a tape: a flat array of operations on slots, with constants folded and shared subexpressions merged. Evaluation walks the tape into a buffer the caller owns. Derivatives come from a reverse sweep over the same tape, giving the gradient with respect to every variable in one pass. No closures, no allocation per evaluation. **Amended in step 0:** operations are fused where it pays, a constant operand held in the operation (x + c, c·x, c/x) and a·exp(b/T), the form of every Arrhenius and van 't Hoff term, as one operation. The constants go into the caller's buffer once, and one reverse sweep carries every output's adjoints together. | A rate needs its gradient with respect to every species and T at once, and reverse mode gives that for about the cost of the rate. A tape is data, which V handles without closures. **Step 0 measured it** on Xu and Froment's three rates, with gcc `-prod`: written out in V, 130 to 220 ns for the rates and 210 to 330 ns with their gradients, as the laptop's clock varied; the plain tape about 4.5 and 6 times that, the fused tape 3 and 4 to 5 times. That's under 2 µs for three rates and every derivative, which puts a PFR solve of the owner's case at a few milliseconds even at a thousand integrator steps, against DWSIM's 9 to 29 s. Evaluators written out for the structured forms, the risk's fallback, would win the factor back at the cost of D4: two derivative codes per form, and a rate typed as an expression no longer giving the structured form's bits. Step 11 profiles the PFR, and fuses more if the tape dominates. |
 | D6 | Kinetics | As [kinetics.md](kinetics.md): a site's adsorption term defined once and shared by every reaction on it, with a per-reaction override marked as one; each reaction's activity basis (partial pressure, fugacity or concentration) and rate basis (per catalyst mass or per volume) stated, with units. **Reaction types are properties, not one label:** a reaction is its equation and phase. A rate law, where it has one, states its form (power law, LHHW, Eley–Rideal or an expression), its basis and its activity, and any reactor may use a reaction as far as its data go. DWSIM's "heterogeneous catalytic" is a per-mass rate on a site, the reactor giving the catalyst's loading and void fraction. Every reaction has its K(T) (D7), so one with a rate law can also be equilibrated. | The owner's case shows why the term belongs to the site: DWSIM's per-reaction denominators silently lose terms. In DWSIM a reaction's type decides which reactor can use it, so the same reaction is entered again for another reactor. |
 | D7 | Equilibrium constants | By default K(T) = exp(−ΔG°(T)/RT) at a standard state of 1 bar, from each species' ideal-gas H and S along Cp. A correlation may be given instead, and `check` reports how far it is from the thermodynamic K. | Consistent with the flowsheet's own thermodynamics by construction, and honest when a paper fitted its own. |
 | D8 | Integrators | Rosenbrock's RODAS4 (Hairer and Wanner), L-stable with an embedded error estimate, on the exact Jacobian from D5, for stiff problems. Dormand and Prince's 5(4) for the rest. Both take what they integrate as an interface, never a closure. A PFR's state is its molar flows, with T and P where they vary. | A Rosenbrock method needs no Newton iteration, only an LU per step, and exact Jacobians make it reliable. Near equilibrium, reforming kinetics is stiff. |
 | D9 | Gibbs minimisation | One phase for now (M6 adds more), ideal gas or a cubic. Minimise G over the species amounts subject to the element balance, by Newton on the element potentials (the RAND method, White, Johnson and Dantzig, 1958), with the fugacity coefficients updated outside it for a cubic. Species that vanish are handled in log space. | The standard method. It extends to the second phase M6 brings. |
-| D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. |
+| D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. **Amended in step 0:** Ergun's viscosity is the gas mixture's at low pressure: each compound's from its component file's vapour-viscosity correlation (ChemSep's eq. 102, already imported), mixed by Wilke's rule and checked against `chemicals`. That's the first piece of M5's C7, brought forward. The PFR takes its viscosity through an interface, so a test can give it another, as step 10 gives it DWSIM's. A catalyst's loading is the bed's density, kg per m³ of reactor, and its void fraction enters Ergun alone, as in DWSIM. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. Step 0 found Ergun's drop 89% viscous in the owner's case, moving its methane conversion by 3.4e-3, and reflux had no viscosity. DWSIM's, a mole-fraction mean with Jossi, Stiel and Thodos' correction, is 30% below Wilke's in the hydrogen-rich gas. |
 | D11 | The file | `[[site]]`, `[[reaction]]` and the reactor units in the flowsheet file. Their equations and expressions are strings that `expr` parses; their numbers carry units as M4's do. A file that uses them is format 2. Format 1 files read exactly as before. The report gains each PFR's profile, as report format 2. | One file per process, as now. A new section is a new format by the CHANGELOG's rules, but nothing old changes meaning. |
 | D12 | The CLI | `reflux kinetics check <file>` runs every check on a file's reactions. `reflux kinetics explain <file> [T P composition]` prints each rate as reflux read it, and the factor table at a state. | kinetics.md's design. |
-| D13 | Comparing with DWSIM | The owner's case as a reflux file, with DWSIM's three denominators as marked overrides, compared at DWSIM's tightest useful dV, which step 0 finds. The published model, one site shared by all three, is solved beside it and reported. Each unit alone (conversion, Gibbs, CSTR, PFR) is compared with DWSIM's from the same inlet. | The comparison measures the solvers, not two different models, and the published model is the one users should run. |
+| D13 | Comparing with DWSIM | The owner's case as a reflux file, with DWSIM's three denominators as marked overrides, compared at DWSIM's tightest useful dV, which step 0 finds. The published model, one site shared by all three, is solved beside it and reported. Each unit alone (conversion, Gibbs, CSTR, PFR) is compared with DWSIM's from the same inlet. **Amended in step 0:** the case is compared with three answers: DWSIM's at dV = 0.001, its tightest useful one, and at the file's 0.05; and the exact answer of DWSIM's equations without its sections, which the fixture integrates with SciPy. Isobaric first, then with Ergun, the test giving reflux's PFR DWSIM's viscosity. | The comparison measures the solvers, not two different models, and the published model is the one users should run. |
 | D14 | Heat exchangers | Out of M9, into a milestone of their own after it. | The roadmap put G2 in M9, but nothing in M9's exit needs it, and M9 is large. A cooled PFR wants a coolant stream, which belongs with the exchangers. |
 | D15 | Versions | M9 ends with v0.3.0: format 2 is an addition, a minor release before 1.0. | The CHANGELOG's rules. |
 | D16 | Who writes what | As before, I write it all unless you claim a step. | |
@@ -233,18 +239,92 @@ flowchart LR
   S12 --> S13[13 Docs, exit review]
 ```
 
-### 0. Spikes: DWSIM's PFR, and the tape
-- **DWSIM's PFR,** headless, as M4's step 0 drove its flowsheets:
-  - the owner's case at dV from 0.05 down until the outlet stops moving, with
-    each of its solvers, to find how accurate DWSIM's answer is;
-  - how catalyst loading, void fraction and Ergun's ΔP enter, from the
-    profiles it reports;
-  - whether a failed solve is silent, as M4 found its units are;
-  - the time of one solve, and of the study.
-- **The tape,** in a scratch program: Xu and Froment's three rates and their
-  gradients, by a tape interpreter and written out by hand in V, at many
-  states. If the tape is far slower, D5 changes before any code.
-- **Write-up:** `docs/spike-dwsim-pfr.md`, and the targets for criterion 8.
+### 0. Spikes: DWSIM's PFR, and the tape — done: go, with D5, D10 and D13 amended
+- **DWSIM's PFR:** [spike/dwsim_pfr/run.py](../spike/dwsim_pfr/run.py) builds
+  the owner's case in DWSIM 9.0.5 headless and answers this step's
+  questions. [spike-dwsim-pfr.md](spike-dwsim-pfr.md) has every number and
+  the conditions for step 10.
+  - **Every number DWSIM's PFR gives is explained.** The case built by the
+    script matches the owner's file to 7.6e-9. Its sections, reproduced in
+    Python from DWSIM 9.0.5's source with DWSIM's own integrator, match
+    every profile point to 4.9e-11; Ergun's drop matches each section's to
+    2.9e-14; and its gas viscosity is reproduced to 2.7e-7.
+  - **How accurate DWSIM's answer is.** Within a section DWSIM holds the
+    gas's volumetric flow, Z and pressure at the section's start, so its
+    error is first order in dV, and its integrators run at DotNumerics'
+    default tolerances (1e-3 relative), which the PFR can't change. Against
+    the exact answer of its own equations (SciPy's Radau at 1e-12, no
+    sections), isobaric, its methane conversion is 9.0e-4 low at the file's
+    dV = 0.05 (4.9e-3 in the worst flow), halving with dV to 1.6e-5
+    (8.4e-5) at dV = 0.001, four minutes a solve. Extrapolated, DWSIM's own
+    answers land within 2e-7 of the exact one. Its four integrators agree to
+    1.6e-4, and its default, Radau, is 7 times slower than its explicit
+    Runge–Kutta for the same answer.
+  - **How the inputs enter.** The catalyst loading is the bed's density, kg
+    per m³ of reactor, multiplying the per-mass rate; the void fraction
+    enters Ergun's drop alone; and Ergun is the standard form, applied after
+    each section at its outlet's state. The drop is 89% viscous, and moves
+    the methane conversion by 3.4e-3. **reflux has no viscosity** (M5's C7),
+    and DWSIM's, a mole-fraction mean of ChemSep's correlations with Jossi,
+    Stiel and Thodos' correction, is 30% below Wilke's rule in the
+    hydrogen-rich gas: D10 amended.
+  - **Failures are silent,** as M4 found: the flowsheet's error list stays
+    empty, and only the PFR's `Calculated` and `ErrorMessage` say why. A
+    reaction whose Tmax is below the gas's T is skipped with no error at
+    all, and DWSIM's expressions can't read `1E+3`.
+  - **Time.** A solve took 9.4 to 29 s as the laptop's clock varied, and
+    the 50-point study 12.4 minutes headless: 9.6 s a point at 700 °C,
+    25.9 s at 1000 °C, where the conversion is the course's 98.66%. Nearly
+    all of it is DWSIM recompiling the six rate expressions, in three new
+    Flee contexts, on every call of its ODE function: about 12 ms a call,
+    about 955 calls a solve. Step 11 must time both programs in one
+    session, taking turns.
+- **The tape:** [spike/tape/spike.v](../spike/tape/spike.v) builds Xu and
+  Froment's three rates, as published with one shared adsorption term, into
+  a tape (constants folded, repeats merged: 161 nodes asked for, 95 kept),
+  evaluates it into a caller's buffer, and differentiates it by one reverse
+  sweep for all three rates. It checks the tape against the same rates and
+  gradients written out in V, and those against central differences, at
+  1,000 reforming states, 0.5 to 40 bar and 800 to 1300 K.
+  - **Right:** the plain tape's rates agree within 2.6e-15 and its
+    gradients within 2.3e-14 of their row's largest term; the fused tape's
+    within 9.2e-14 and 5.8e-14, folding exp(a)·exp(b/T) where the rates
+    computed exp(a + b/T), with the driving force cancelling near
+    equilibrium. The gradients written out agree with central differences
+    within 1.7e-7, their truncation. None allocates: 0 bytes in 1,800,000
+    calls.
+  - **Speed** (gcc `-prod`, Ryzen 5 PRO 3500U, the best of nine rounds in
+    which the variants take turns, three runs): written out, 131 to 146 ns
+    for the rates and 209 to 220 ns with gradients, and about 1.5 times that
+    in runs at a lower clock. The plain tape takes 4.5 to 4.8 and 5.8 to 6.4
+    times as long. Loading its constants once brings that to 3.9 to 4.1 and
+    5.6 to 5.9; fusing operations (a constant operand in the operation, and
+    a·exp(b/T) as one, 52 nodes in all) to 2.8 to 3.1 and 4.0 to 4.6.
+  - **Where the time goes:** 6 to 9 ns of dispatch per operation, against
+    nearly nothing for the same arithmetic written out. Putting the
+    commonest operations first in V's `match`, which compiles to an if-else
+    chain, changed nothing.
+  - **D5 amended, and kept:** fused operations, the constants loaded once,
+    and one sweep for every output. At under 2 µs for three rates and their
+    gradients, a RODAS4 step (one gradient and six evaluations) costs 3 to
+    5 µs, so even a thousand steps is 3 to 5 ms a solve, against DWSIM's 9
+    to 29 s.
+    Evaluators written out for the structured forms would win the factor
+    back at the cost of D4's one representation. Step 11 profiles it.
+- **Targets for criterion 8** (in [spike-dwsim-pfr.md](spike-dwsim-pfr.md)):
+  each outlet flow within 1e-8 of the exact answer of DWSIM's equations,
+  isobaric and with Ergun; within 3e-4 of DWSIM's at dV = 0.001, its
+  tightest useful dV, with the conversion within 5e-5 and ΔP within 1 Pa;
+  and at the file's dV = 0.05 the difference recorded, explained by DWSIM's
+  sections.
+- **Amended:** D5 (fused operations), D10 (Ergun's viscosity from the
+  component files by Wilke's rule, the first piece of M5's C7, with the PFR
+  taking it through an interface), and D13 (the answers to compare with).
+  Criterion 8 has its targets, and step 9 the viscosity.
+- No simulator code changed, so no planted mistakes. Each spike's checks
+  are its own: every DWSIM number reproduced from DWSIM's equations, and the
+  tape held against code written out by hand and against central
+  differences.
 
 ### 1. Units algebra
 - Dimension vectors and compound units in `quantity` (D3), with M4's tests
@@ -301,6 +381,9 @@ flowchart LR
 ### 9. Reactors and the file format
 - The five reactors (D10), each balance checked, as units with makers in
   `reactors`. Format 2 and report format 2 (D11).
+- The gas viscosity Ergun needs (D10, as amended in step 0): ChemSep's
+  correlations from the component files, mixed by Wilke's rule, against
+  `chemicals`.
 
 ### 10. DWSIM references
 - The owner's case and each reactor alone, against DWSIM 9 (D13), with every
@@ -308,7 +391,8 @@ flowchart LR
 
 ### 11. Speed
 - The owner's case and the 50-point study, timed against DWSIM 9 (criterion
-  9), in `docs/benchmarks.md`.
+  9), in `docs/benchmarks.md`. Both programs in one session, taking turns:
+  in step 0 the laptop's clock moved DWSIM's solve between 9.4 and 29 s.
 
 ### 12. Release v0.3.0
 - The CHANGELOG entry, v.mod's version, and the release gate, as for v0.2.0.
@@ -321,8 +405,8 @@ flowchart LR
 
 | Risk | Effect | Fallback |
 |---|---|---|
-| A tape interpreter is much slower than compiled V | a slow PFR, where every step evaluates every rate several times | measured in step 0, before any code: the structured forms get evaluators of their own, and only free-form expressions use the tape |
-| DWSIM's PFR is coarse at dV = 0.05, or reads its catalyst inputs in a way the docs don't say | no clean comparison | step 0 finds the dV where it settles and compares there, and reproduces DWSIM's reading of its inputs in a fixture, as M4 did for its pump |
+| A tape interpreter is much slower than compiled V | a slow PFR, where every step evaluates every rate several times | measured in step 0, before any code: the structured forms get evaluators of their own, and only free-form expressions use the tape. **Step 0:** 3 to 5 times slower once fused, but under 2 µs for three rates and their gradients, so the tape stays (D5) and step 11 profiles it |
+| DWSIM's PFR is coarse at dV = 0.05, or reads its catalyst inputs in a way the docs don't say | no clean comparison | step 0 finds the dV where it settles and compares there, and reproduces DWSIM's reading of its inputs in a fixture, as M4 did for its pump. **Step 0:** coarse, first order in dV with no floor down to 0.001; its inputs read as its source says, and every number reproduced; the comparison is against the exact answer of its equations as well as its own (D13) |
 | The Gibbs minimisation fails with trace species or near a phase boundary | no equilibrium reactor | log variables for vanishing species; one phase only in M9, with a second phase refused rather than hidden |
 | The stiff integrator struggles where rates are huge and equilibrium near, as in reforming at 1000 °C | slow or failed PFRs | exact Jacobians, step control from the embedded estimate, and Hairer's test problems first, so the integrator is proven before the reactor uses it |
 | ChemSep's formulas or formation data are wrong for some compound | a wrong element balance or K(T) | each formula checked against its SMILES and molar mass, and ΔG°f against ΔH°f and S°, with failures listed in the data-quality report |
