@@ -131,6 +131,14 @@ quantity/           numbers with units ("30 bar", "100 kmol/h") read into SI,
                     by NIST SP 811's definitions, and the dimension algebra
                     (M9): compound units such as kmol/(kg*h) and bar^0.5,
                     each with its dimension in exact rational exponents
+expr/               the expression language (M9): every equation a user gives
+                    parsed into a tree, its names bound, its units checked,
+                    written back as plain text, Unicode and LaTeX
+  parse.v           the grammar, numbers with units, names and members
+  check.v           every node's dimension, and fixed powers as fractions
+  render.v          plain text that reads back, Unicode and LaTeX
+  expr.v            nodes, contexts, built-in constants, definitions
+  eval.v, lint.v    the tree's value; numbers that look like a constant
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
@@ -186,6 +194,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     library, and the Python tests), capi_reference.v (the V
                     API's answers, for those tests to match bit for bit),
                     gen_m10a_bench.py (the cost of a call from Python),
+                    gen_m9_fixtures.py and expr_render.v (expressions against
+                    SymPy, and the constants against NIST's),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)

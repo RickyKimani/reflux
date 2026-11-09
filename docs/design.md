@@ -917,6 +917,110 @@ of: a named dimension, a common one (energy, viscosity, molar entropy, …),
 or else its base units, as in "kmol/(kg*h) is a unit of mol/(kg·s), not
 molar flow". A unit that doesn't parse says why and at which character.
 
+## Expressions
+
+`expr` is reflux's one expression language (M9's D1, D2 and A9): a rate
+law, a rate constant, an adsorption term, later a pressure drop or a design
+specification. An expression is parsed into a tree and never evaluated as
+text. Every name in it is bound, every node has a dimension, and the tree
+writes itself back.
+
+**The grammar,** loosest first:
+
+    expr   := term (("+" | "-") term)*
+    term   := factor (("*" | "·" | "×" | "/") factor)*
+    factor := ("-" | "+") factor | power
+    power  := atom ["^" factor]
+    atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
+              | "(" expr ")"
+
+So ^ binds tighter than a minus sign and to the right, and · and / go left
+to right, as in Python and SymPy: −x^2 is −(x²), x^-2 is x⁻², a^b^c is
+a^(b^c), and a/b·c is (a/b)·c. − (U+2212) is a minus too. Whitespace,
+line breaks included, goes anywhere between tokens.
+
+**A number's unit** follows it after a space and runs to the next space, or
+to a ) or , that isn't its own: `exp(-240.1 kJ/mol / (R*T))`. Or it's in
+brackets, `240.1 [kJ/mol]`. The number becomes its SI value as it's read,
+by `quantity`'s scale, and its node has the unit's dimension. A word after a
+number that is also a name here is refused rather than guessed: "2 R" could
+be two rankines or twice the gas constant, so it asks for 2*R or 2 [R]. A
+unit with an offset (°C, °F, barg, psig) is refused, since in arithmetic
+its offset would be wrong; in a compound, °C is a kelvin of difference and
+reads. Two values side by side, with no operator, are refused: "2T", "2 T",
+"T (P)".
+
+**Names** are letters, digits and _, starting with a letter, and bind to:
+- the context's variables, such as T and P, and its families' members, by
+  any key the context gives a member, so p[CH4], p[Methane] and
+  p['74-82-8'] are the same input. A key with other characters is quoted;
+- a definition, by name;
+- a built-in constant, at the 2019 SI's exact value:
+
+| Name | Value | Unit |
+|---|---|---|
+| R | N_A·k_B = 8.31446261815324, exactly | J/(mol·K) |
+| N_A | 6.02214076e23 | 1/mol |
+| k_B | 1.380649e-23 | J/K |
+| h | 6.62607015e-34 | J·s |
+| F | N_A·e = 96485.3321233100184…, exactly | C/mol |
+| c | 299792458 | m/s |
+| g_n | 9.80665, standard gravity | m/s² |
+| p_std | 1e5, the standard pressure, 1 bar | Pa |
+| pi | π | |
+
+- the functions exp, ln, log10, sqrt and abs, each of one argument. log is
+  refused as ambiguous, with ln and log10 offered.
+
+A name that binds to nothing is refused, with the closest names within two
+edits.
+
+**Definitions** name expressions for reuse, in any order. Each may use the
+others but not itself through any chain, found by a depth-first walk that
+reports the chain: "u uses itself: u → v → w → u". A definition can't take
+the name of a function, a constant, a variable or a family. Definitions are
+checked in an order where each follows what it uses.
+
+**Dimensions,** node by node, in the tree's order, where every operand
+comes before its use:
+
+| Node | Dimension |
+|---|---|
+| number | its unit's, or none |
+| a + b, a − b | a's, which must be b's |
+| a·b, a/b | a's times or over b's |
+| −a, abs(a) | a's |
+| sqrt(a) | a's to the ½ |
+| exp(a), ln(a), log10(a) | none, and a must have none |
+| a^b | b must have none. If a has none, none. If a has one, b must be a fixed value, folded from numbers, constants and fixed definitions, and a fraction p/q with q ≤ 10⁶ within 1e-12 (by continued fractions: 1/3, 2.5, 1.37), and the result is a's to the p/q |
+
+A place that needs a dimension asks with `must_be`: "a rate per mass of
+catalyst must be a mol/(kg·s), but this is a mol/(m³·s)". DWSIM's
+`exp(-240100/8.314/T)` is refused here: its argument is in 1/K.
+
+**A number that looks like a constant** is flagged, not refused: one with a
+constant's dimension within 1% of it but not equal, such as 8.314
+J/(mol·K) for R, with how far it is. A paper fitted with 8.314 may still
+write it (D2). The standard pressure is left out, since a pressure near
+1 bar, 1 atm say, usually means what it says.
+
+**Writing back.** Three styles from one walk, with the same precedence:
+- **plain,** in the language's own syntax, which reads back to the same
+  tree, node for node. So it keeps the tree's grouping, not just its value:
+  a + (b + c) and a·(b/c) keep their parentheses, being other trees than
+  a + b + c and a·b/c;
+- **Unicode,** for a terminal: · for a product, superscripts for a whole
+  power (x², x⁻¹), a trailing number in a name as a subscript (k₁), a
+  formula's digits as subscripts (p_CH₄), Greek names as letters (θ), π, p°
+  and gₙ. 4.22e15 is 4.22·10¹⁵, so it binds as a product and keeps its
+  parentheses as a divisor or a base. A number with a unit keeps its
+  parentheses as an operand of ·, / or a minus sign, so that its unit never
+  runs into the operator after it: (4.22·10¹⁵ kmol/(kg·h))·exp(−(240.1
+  kJ/mol)/(R·T));
+- **LaTeX,** for a notebook: \frac, \cdot, ^{}, \left( \right), \exp, \ln,
+  \log_{10}, \sqrt, \left| \right|, 4.22 \times 10^{15}, units in
+  \mathrm{}, species as p_{\mathrm{CH_{4}}}.
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

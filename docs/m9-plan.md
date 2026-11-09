@@ -17,8 +17,8 @@ Status: **approved** on 2026-11-08, after a revision from discussing it:
 equations users type themselves, with named definitions; built-in
 constants; reaction types as properties, with restricted equilibrium; and
 stoichiometry checked by counting elements. Step 0 is done, and amended D5,
-D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1 is
-next.
+D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1
+amended D3. Step 2 is done and amended D2. Step 3 is next.
 
 ## Goal
 
@@ -202,7 +202,7 @@ All checked by tests in CI, as in M1 to M4.
 | # | Decision | Choice | Why |
 |---|---|---|---|
 | D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. |
-| D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. |
+| D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. **Amended in step 2:** a number's unit follows it after a space and runs to the next space, or to a ) or , that isn't its own, or it's in brackets, `2 [K]`; a word after a number that is also a name here is refused as ambiguous (`2 R`: two rankines, or twice the gas constant?). A unit with an offset (°C, °F, barg, psig) is refused in an expression. `log` is refused as ambiguous, with `ln` and `log10` offered. `·`, `×` and `−` are operators too. A definition can't take a variable's, a family's or a function's name either. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. A unit after a number is how papers write it, but a name after a number would be read silently as a unit where they collide (R, h, P), so that is refused; brackets say which. An offset in arithmetic is wrong as often as right (T − 25 °C). |
 | D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. **Amended in step 1:** the bases include electric current, for the coulomb and so for D2's Faraday constant. The exponents are exact rationals, for bar^0.5. Compound units are built from symbols with SI prefixes rather than from M4's whole names, and each of M4's units reads through them to M4's bits. A * after a / is refused as ambiguous. | One source of truth for units, now able to say why a dimension is wrong. A rate's units hold half powers (√(K·p_H₂)), and a ratio squared must be the unit again exactly. Symbols with prefixes cover the units kinetics papers use (cm³, mol/(g·s), kJ/mol) without listing every combination. |
 | D4 | One representation | Parsed expressions and the structured forms (Arrhenius centred on T_ref, van 't Hoff, a site's monomials, LHHW) build the same tree. The structured forms keep their structure, for site sharing and their own checks, and render, evaluate and differentiate through the tree. | Every check, rendering and derivative is written once, and a structured rate and the same rate typed as an expression give the same bits. |
 | D5 | Evaluation and derivatives | A tree compiles to a tape: a flat array of operations on slots, with constants folded and shared subexpressions merged. Evaluation walks the tape into a buffer the caller owns. Derivatives come from a reverse sweep over the same tape, giving the gradient with respect to every variable in one pass. No closures, no allocation per evaluation. **Amended in step 0:** operations are fused where it pays, a constant operand held in the operation (x + c, c·x, c/x) and a·exp(b/T), the form of every Arrhenius and van 't Hoff term, as one operation. The constants go into the caller's buffer once, and one reverse sweep carries every output's adjoints together. | A rate needs its gradient with respect to every species and T at once, and reverse mode gives that for about the cost of the rate. A tape is data, which V handles without closures. **Step 0 measured it** on Xu and Froment's three rates, with gcc `-prod`: written out in V, 130 to 220 ns for the rates and 210 to 330 ns with their gradients, as the laptop's clock varied; the plain tape about 4.5 and 6 times that, the fused tape 3 and 4 to 5 times. That's under 2 µs for three rates and every derivative, which puts a PFR solve of the owner's case at a few milliseconds even at a thousand integrator steps, against DWSIM's 9 to 29 s. Evaluators written out for the structured forms, the risk's fallback, would win the factor back at the cost of D4: two derivative codes per form, and a rate typed as an expression no longer giving the structured form's bits. Step 11 profiles the PFR, and fuses more if the tape dominates. |
@@ -408,12 +408,87 @@ flowchart LR
   has no name; and a unit that doesn't parse says why and where. Every file
   that read before reads the same numbers, to the bit.
 
-### 2. The expression language
-- Lexer and parser, every error with its line, column and a suggestion, and
-  no panic on any input (fuzzed). Name binding against a context, a file's
-  definitions (a cycle refused) and the built-in constants, unit checking,
-  and rendering to Unicode and LaTeX, held against SymPy's. The constants'
-  values checked against NIST's.
+### 2. The expression language — done
+- **[expr/](../expr/)** is the expression language (D1, D2 as amended):
+  - **[parse.v](../expr/parse.v):** a recursive-descent parser over the
+    grammar in [design.md](design.md#expressions), building an arena of
+    nodes, each operand before its use. Numbers carry units after a space
+    or in brackets, converted to SI by `quantity`. Names bind to the
+    context's variables, its families' members by any key (p[CH4],
+    p[Methane], p['74-82-8']), definitions and the built-in constants.
+  - **[check.v](../expr/check.v):** every node's dimension, in one pass in
+    order: sums of one dimension, functions of pure numbers, sqrt halving,
+    and a quantity with units raised only to a fixed fraction, folded from
+    numbers, constants and fixed definitions and found by continued
+    fractions (p/q, q ≤ 10⁶, within 1e-12). `must_be` asks for a place's
+    dimension.
+  - **[render.v](../expr/render.v):** plain text that reads back to the same
+    tree, Unicode and LaTeX, from one walk with style-aware precedence.
+  - **[expr.v](../expr/expr.v):** nodes, contexts, the nine built-in
+    constants at the 2019 SI's exact values (R = N_A·k_B, F = N_A·e, the
+    doubles nearest the exact products), and definitions, ordered so each
+    follows what it uses, a cycle refused with its chain.
+  - **[eval.v](../expr/eval.v)** walks the tree, the reference for step 3's
+    tape; **[lint.v](../expr/lint.v)** flags a number within 1% of a constant
+    of its dimension, as 8.314 J/(mol·K) for R (criterion 2).
+- **Every refusal is an `ExprError`** with the line, the column and a
+  suggestion: in the reason for syntax ("write 2*T to multiply", "put a
+  space between a number and its unit"), and the closest names, keys or
+  functions for a name that binds to nothing.
+- **Tests,** 27 in five files:
+  - **[parse_test.v](../expr/parse_test.v):** precedence and association,
+    names and members, every form of number and unit, 35 syntax refusals
+    and 18 name refusals with their places, and two fuzzers: 20,000 seeded
+    strings of the language's pieces and stray ones, refused with a place
+    and a reason or round-tripped, and 10,000 seeded well-formed expressions,
+    every one read and round-tripped, node for node.
+  - **[units_test.v](../expr/units_test.v):** Xu and Froment's steam
+    reforming rate is a rate per mass of catalyst; every function and
+    operator's dimension; every constant's unit; SI values; ten refusals of
+    a wrong dimension, DWSIM's `exp(-240100/8.314/T)` among them; `must_be`;
+    and the look-alikes, flagged and not.
+  - **[definitions_test.v](../expr/definitions_test.v):** Xu and Froment's
+    constants as definitions listed out of order, the rate through them equal
+    to the rate written out, to the bit; cycles with their chains; reserved
+    and duplicate names; an error inside a definition naming it; fixed
+    definitions as powers.
+  - **[render_test.v](../expr/render_test.v):** 38 renderings to the exact
+    string, in all three styles, and Xu and Froment's rate as published.
+  - **[sympy_test.v](../expr/sympy_test.v),** against
+    [testdata/m9_expressions.json](../testdata/m9_expressions.json) from
+    [tools/gen_m9_fixtures.py](../tools/gen_m9_fixtures.py): 258 expressions
+    (52 by hand, 206 seeded) as SymPy 1.13.3 reads them, valued by mpmath at
+    50 digits at four points; reflux within 1e-12 of each point's scale,
+    8.3e-15 at worst. Every rendering is the one the generator decoded and
+    found, by SymPy, to mean the text at every point; every plain form reads
+    back to the same tree; and the constants are the doubles nearest the SI
+    Brochure's exact values, checked against SciPy's CODATA 2018. The
+    generator reproduces the fixture byte for byte.
+- **How the renderings are held against SymPy:** SymPy's own LaTeX readers
+  can't judge, since in 1.13.3 the ANTLR one reads
+  `\log_{10}{\left(x\right)} \cdot y` as log(x·y) and the Lark one returns
+  ambiguous trees for a function followed by an operator. So the generator
+  decodes reflux's LaTeX and Unicode with readers for exactly what reflux
+  writes, and SymPy values the results.
+- **Bugs found:**
+  - by the generator's decoding: Unicode's 2.5·10⁻¹ as a divisor,
+    `x/2.5·10⁻¹`, read as (x/2.5)·10⁻¹. A number in scientific notation now
+    binds as a product, or 10ⁿ as a power, in Unicode and LaTeX;
+  - by the round-trip fuzzer: a·(b/c) written as a·b/c, and a + (b + c) as
+    a + b + c, equal in value but other trees, which SymPy's values couldn't
+    see. The right operand now keeps its parentheses;
+  - writing the goldens: a unit running into the operator after it under a
+    minus sign, `−240.1 kJ/mol/(R·T)`, now `−(240.1 kJ/mol)/(R·T)`.
+- **Planted mistakes: 54,** none failing to build; 47 caught at once.
+  - Six survivors got tests: the nesting limit (201 levels refused), a
+    unit's end at a comma, a fixed power's sign (`P^-0.5`), the standard
+    pressure left out of the look-alikes (1.005 bar), a number equal to its
+    constant not flagged, and a two-digit subscript (k₁₂).
+  - One is explained: the continued fraction's denominator check, which
+    `quantity.ratio`'s own bound makes equivalent; it stays to keep the next
+    step's product inside an i64. A dead second check for `log` was deleted
+    before the run.
+- **V's notes:** `none` is a keyword, so it can't name a variable.
 
 ### 3. Evaluation and derivatives
 - The tape, constant folding and shared subexpressions, evaluation into the

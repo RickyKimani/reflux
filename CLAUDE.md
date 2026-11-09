@@ -75,7 +75,17 @@ Keep this section current: update it whenever a step is committed.
     and the new units match SP 811 (`testdata/m9_units.json`). D3 amended:
     current as a base, rational exponents, symbols rather than M4's whole
     names, and a * after a / refused as ambiguous.
-  - Next is step 2: the expression language.
+  - **Step 2 is done:** the `expr` module, the expression language
+    (`docs/design.md`, "Expressions"). Expressions parse to arena trees,
+    names bind to the context, definitions and the SI-exact constants, every
+    node's dimension is checked, and each writes back as plain text (which
+    reads back to the same tree), Unicode and LaTeX. Held against SymPy by
+    `testdata/m9_expressions.json` from `tools/gen_m9_fixtures.py`, which
+    needs V on the PATH (it runs `tools/expr_render.v`) and decodes reflux's
+    renderings itself: SymPy's LaTeX readers misread function calls. D2
+    amended: units after a space or in brackets, "2 R" refused as
+    ambiguous, offset units and `log` refused, `·` `×` `−` accepted.
+  - Next is step 3: the tape, evaluation and derivatives.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -454,7 +464,9 @@ or a test:
 - **Strings:** `'${x}'` and `"${x}"` both interpolate, so V source built as
   text needs raw strings, `r'...'`.
 - **Writing files from the shell:** bash heredocs mangle backslashes, so
-  write such files with the Write tool or a Python script.
+  write such files with the Write tool or a Python script. On Windows,
+  Python's `write_text` writes CRLF: use `write_bytes`, or
+  `newline='\n'`, and keep a script's own `\r` out of non-raw strings.
 - **Formatting:** printf-style formats round ties differently under tcc
   and gcc, so round with `math.round` before formatting anything compared
   byte for byte.

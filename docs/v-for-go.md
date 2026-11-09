@@ -332,6 +332,10 @@ p := thermo.saturation_pressure(eos, 350.0) or {       // handle it; `err` is in
   `a, b := f()!` unpacks it. `overlapping_split` in
   [sweep/sweep_internal_test.v](../sweep/sweep_internal_test.v) returns
   `!(Point, thermo.Model, flash.FlashResult)`.
+- **`none` is a keyword,** so it can't name a variable: `none :=
+  quantity.Dim{}` is "non-name `none` on left side of `:=`". Go's `nil` is
+  only predeclared, and can be shadowed; V's `none` can't. M9 hit it twice,
+  naming a pure number's dimension, and calls it `pure`.
 - **`?T` is an Option**: a value or `none`, with no error message. Use it
   when "nothing here" is a normal answer, not a failure. `liquid_volume` in
   [thermo/model.v](../thermo/model.v) returns `?f64`, and `none` there
