@@ -68,6 +68,12 @@ bar gets read as pascals.
 A fraction, such as an efficiency, can be a plain number or a percentage: `0.75`
 or `"75 %"`.
 
+These are each kind's common units. Any unit of the right dimension reads too,
+prefixed or compound, such as `"10 lbmol/min"`, `"3 kJ/s"` or `"5 m^3/h"`, with
+no space inside the unit. A unit of another dimension is refused with what it's
+a unit of. [design.md](design.md#units-of-measure) lists the symbols and
+prefixes, and how a compound unit is written.
+
 ## `format`
 
 Required, and 1. A later format will come with a way to migrate.

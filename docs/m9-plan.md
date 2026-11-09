@@ -203,7 +203,7 @@ All checked by tests in CI, as in M1 to M4.
 |---|---|---|---|
 | D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. |
 | D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. |
-| D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. | One source of truth for units, now able to say why a dimension is wrong. |
+| D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. **Amended in step 1:** the bases include electric current, for the coulomb and so for D2's Faraday constant. The exponents are exact rationals, for bar^0.5. Compound units are built from symbols with SI prefixes rather than from M4's whole names, and each of M4's units reads through them to M4's bits. A * after a / is refused as ambiguous. | One source of truth for units, now able to say why a dimension is wrong. A rate's units hold half powers (√(K·p_H₂)), and a ratio squared must be the unit again exactly. Symbols with prefixes cover the units kinetics papers use (cm³, mol/(g·s), kJ/mol) without listing every combination. |
 | D4 | One representation | Parsed expressions and the structured forms (Arrhenius centred on T_ref, van 't Hoff, a site's monomials, LHHW) build the same tree. The structured forms keep their structure, for site sharing and their own checks, and render, evaluate and differentiate through the tree. | Every check, rendering and derivative is written once, and a structured rate and the same rate typed as an expression give the same bits. |
 | D5 | Evaluation and derivatives | A tree compiles to a tape: a flat array of operations on slots, with constants folded and shared subexpressions merged. Evaluation walks the tape into a buffer the caller owns. Derivatives come from a reverse sweep over the same tape, giving the gradient with respect to every variable in one pass. No closures, no allocation per evaluation. **Amended in step 0:** operations are fused where it pays, a constant operand held in the operation (x + c, c·x, c/x) and a·exp(b/T), the form of every Arrhenius and van 't Hoff term, as one operation. The constants go into the caller's buffer once, and one reverse sweep carries every output's adjoints together. | A rate needs its gradient with respect to every species and T at once, and reverse mode gives that for about the cost of the rate. A tape is data, which V handles without closures. **Step 0 measured it** on Xu and Froment's three rates, with gcc `-prod`: written out in V, 130 to 220 ns for the rates and 210 to 330 ns with their gradients, as the laptop's clock varied; the plain tape about 4.5 and 6 times that, the fused tape 3 and 4 to 5 times. That's under 2 µs for three rates and every derivative, which puts a PFR solve of the owner's case at a few milliseconds even at a thousand integrator steps, against DWSIM's 9 to 29 s. Evaluators written out for the structured forms, the risk's fallback, would win the factor back at the cost of D4: two derivative codes per form, and a rate typed as an expression no longer giving the structured form's bits. Step 11 profiles the PFR, and fuses more if the tape dominates. |
 | D6 | Kinetics | As [kinetics.md](kinetics.md): a site's adsorption term defined once and shared by every reaction on it, with a per-reaction override marked as one; each reaction's activity basis (partial pressure, fugacity or concentration) and rate basis (per catalyst mass or per volume) stated, with units. **Reaction types are properties, not one label:** a reaction is its equation and phase. A rate law, where it has one, states its form (power law, LHHW, Eley–Rideal or an expression), its basis and its activity, and any reactor may use a reaction as far as its data go. DWSIM's "heterogeneous catalytic" is a per-mass rate on a site, the reactor giving the catalyst's loading and void fraction. Every reaction has its K(T) (D7), so one with a rate law can also be equilibrated. | The owner's case shows why the term belongs to the site: DWSIM's per-reaction denominators silently lose terms. In DWSIM a reaction's type decides which reactor can use it, so the same reaction is entered again for another reactor. |
@@ -326,9 +326,87 @@ flowchart LR
   tape held against code written out by hand and against central
   differences.
 
-### 1. Units algebra
-- Dimension vectors and compound units in `quantity` (D3), with M4's tests
-  unchanged and SP 811's factors for every new unit.
+### 1. Units algebra — done
+- **[quantity/quantity.v](../quantity/quantity.v)** has the dimension algebra
+  (D3, amended):
+  - **`Dim`** is the exponents of kg, m, s, K, mol and A, each an exact
+    `Ratio` in lowest terms with |p| and q at most 10⁶, so that no sum or
+    product of two in range overflows. It has `mul`, `div`, `pow`, `eq`,
+    `str`, which writes base units (kg/(m·s²), kg^(1/2)/(m^(1/2)·s)), and
+    `name`: one of M4's named dimensions, a common one (energy, viscosity,
+    molar entropy, …), or else `str`. `Dimension.dim()` gives each of M4's
+    named dimensions its own.
+  - **`unit(text)`** reads a unit into `Unit{scale, dim, pre, post, gauge}`:
+    41 symbols; the prefixes G, M, k, h, d, c, m, µ (or μ, or u) and n on the
+    14 that take them; and compounds of them by `*`, `·`, `/`, parentheses
+    and exponents (m3, m³, s⁻¹, bar^-2, bar^0.5, bar^(1/2)). Its scale is the
+    numerator's product over the denominator's, in one division, and a whole
+    power a repeated product, so every M4 unit reads to M4's bits.
+  - **`parse(text, d)`** reads any unit of d's dimension, M4's or not, and
+    keeps M4's messages; `units(d)` is still M4's lists, for messages and
+    suggestions. °C, °F, barg and psig keep their offsets only standing
+    alone; in a compound °C is a kelvin of difference and a gauge pressure
+    is refused.
+- **Every refusal is a `UnitError`** with the column, the reason and, for an
+  unknown name, the closest symbols and prefixed symbols. Through `parse`
+  it's a `QuantityError` saying the unit, the reason and the character. The
+  reasons: empty; a * after a / (ambiguous); [ ] for grouping, as DWSIM
+  writes kmol/[kg.h]; a . between units; an unclosed ( or an unopened );
+  a unit missing before an operator or at the end; an exponent with nothing
+  to raise, with no digits, with too many, or two in a row; a fraction that
+  isn't p/q, or over zero; an exponent out of range; a number that isn't an
+  exponent or the 1 of 1/s; a scale that isn't finite (km^400); a gauge
+  pressure in a compound; more than 16 nested parentheses; an unknown name,
+  including a prefix on a symbol that takes none (katm) and pico (ps).
+  Through `parse`, a unit of another dimension says what it is a unit of:
+  "kmol/(kg*h) is a unit of mol/(kg·s), not molar flow".
+- **Tests in [quantity/quantity_test.v](../quantity/quantity_test.v):** M4's
+  seven, unchanged, and nine new:
+  - **M4's bits:** a frozen copy of M4's 75-row table, and each unit's scale,
+    and each value read and written back, to the bit; `units(d)` is still
+    M4's lists, in M4's order.
+  - **SP 811:** [testdata/m9_units.json](../testdata/m9_units.json), written
+    by hand: 101 factors, every symbol alone, one unit for each prefix, and
+    compounds (kmol/(kg*h), J/(mol*K), Btu/(lb*degF), lb/ft^3, bar^0.5, …),
+    the compound factors computed exactly with Python's `fractions`. Exact
+    ones to 4 ulps, SP 811's 7-figure ones (gal, Btu, hp, psi, mmHg, torr)
+    to their figures, and every dimension as `str` writes it. No symbol or
+    prefix is left out.
+  - **The algebra:** ratios exact, reduced and bounded; an energy over a
+    volume is a pressure; a square root squared is exact; every base counts.
+  - **Compound units:** 20 pairs written two ways read alike (J/mol/K and
+    J/(mol*K), s⁻¹ and 1/s, (bar^(1/3))^3 and bar, Btu/(lb*degF) and
+    kcal/(kg*K)); cm³ is three centimetres to the bit; every dimension as
+    written reads back as itself with scale 1; offsets only standing alone.
+  - **35 refusals,** each with its reason and its column.
+  - **`parse`** with compound units, the new messages, and a value whose
+    scale is finite but whose product overflows.
+  - **Fuzzing:** 30,000 seeded strings of unit syntax. Each is refused with
+    a `UnitError`, or has a finite scale above zero and a dimension that
+    reads back as itself.
+- **Found by the fuzzing:** in "Pa999999" the time exponent, −1,999,998,
+  overflowed the bound inside the dimension's arithmetic, and that error
+  escaped as a plain one, without a column. Each operator's errors now
+  carry its column.
+- **Found by probes, for V's notes:** a fixed array of structs inside
+  another struct's zero value skips the element type's field defaults (so
+  `Dim` has named fields), and `T{...err, …}` on a smart-cast `err` copies
+  nothing, not even the fields set beside it.
+- **Planted mistakes: 56,** none failing to build; 51 caught at once.
+  - Three survivors got tests: `eq` ignoring the current's exponent (now a
+    coulomb isn't a second), a fraction's sign lost (`bar^(-1/2)`), and
+    whole powers by `math.pow`. That last showed `math.pow` an ulp nearer
+    the exact value from the fourth power on (1e-8 for cm⁴), but the C
+    library's, which differs between Windows and Linux. So the repeated
+    product stays, for its same bits everywhere, and a test pins cm⁴ to it.
+  - Two had their code deleted: a branch writing a negative superscript,
+    which nothing reaches since `str` writes negative powers below the line,
+    and a length check on a prefix that the empty rest already made.
+- **For 0.3.0's CHANGELOG entry:** a flowsheet file's numbers read any unit
+  of their dimension, prefixed or compound ("10 lbmol/min", "5 m^3/h"); a
+  unit of another dimension is named by what it is, in base units where it
+  has no name; and a unit that doesn't parse says why and where. Every file
+  that read before reads the same numbers, to the bit.
 
 ### 2. The expression language
 - Lexer and parser, every error with its line, column and a suggestion, and

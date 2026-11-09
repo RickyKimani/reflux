@@ -816,8 +816,22 @@ flash found first and refused. One of its phases must have a tpd below
 
 ## Units of measure
 
-`quantity` is where numbers with units come in (M4's D10). Each unit is a
-row of one table, and
+`quantity` is where numbers with units come in (M4's D10). Since M9 (its
+D3) it has a dimension algebra, so a unit can be compound and every unit
+knows its dimension.
+
+**A dimension** is the exponent of each SI base unit, kg, m, s, K, mol and
+A: a pressure is kg·m⁻¹·s⁻². The exponents are exact rationals p/q in
+lowest terms, with |p| and q at most 10⁶, so that bar^0.5 squared is bar
+again exactly, and no sum or product of two in range overflows 64 bits; one
+out of range is refused. The ampere is there for the coulomb, and so for the
+Faraday constant. Each of M4's named dimensions is one of these, and a
+difference has its absolute quantity's: ΔT is K, ΔP is kg·m⁻¹·s⁻². A
+dimension is written in base units, its positive powers over its negative
+ones, as kg/(m·s²), mol/(kg·s), kg^(1/2)/(m^(1/2)·s) or 1, and that text
+reads back as the same dimension with scale 1.
+
+**A unit** is a scale on a dimension. Each symbol is a row of one table,
 
     SI = (x + pre)·scale + post,        x = (SI − post)/scale − pre
 
@@ -850,9 +864,45 @@ number typed in:
 | US gallon | 231 in³ |
 | horsepower | 550 ft·lbf/s = 745.699871… W |
 | pound-mole | 453.59237 mol: a pound's worth of moles |
+| IT calorie | 4.1868 J |
+| metric ton (t) | 1000 kg |
+| day (d) | 86400 s |
+| poise (P) | 0.1 Pa·s, for the centipoise |
 
-SP 811 prints seven of the factors built from them (psi, mmHg, torr, lb/h,
-gal/min, Btu/h, hp) to 7 figures, and reflux's values round to them.
+SP 811 prints some of the factors built from them (psi, mmHg, torr, lb/h,
+gal/min, Btu, Btu/h, hp) to 7 figures, and reflux's values round to them.
+
+The symbols are the SI units m, kg and g, s, K, mol, A, C, L, N, J, W, Pa
+and P; in, ft, t, lb, min, h, d, lbmol, gal, cal, kcal, Btu, hp, bar, atm,
+psi, psia, mmHg and torr; the temperatures degC, °C, degF, °F and R; the
+gauge pressures barg and psig; and %. Of these, m, g, s, K, mol, A, C, L,
+N, J, W, Pa, bar and P take the prefixes G, M, k, h, d, c, m, µ (or μ, or
+u) and n. The kilogram is a symbol of its own, so that it is exactly 1. Pico and smaller are left out, so
+that "ps" can't read as a picosecond where psi was meant.
+
+**A compound unit** is read by
+
+    unit     := factor (("*" | "·") factor | "/" factor)*
+    factor   := ("1" | symbol | "(" unit ")") [exponent]
+    exponent := digits right after a symbol (m3), superscripts (m³, s⁻¹),
+                or "^" and an integer, a decimal or "(p/q)" (bar^-2, bar^0.5)
+
+- **Its scale** is the product of its numerator's scales over the product of
+  its denominator's, in one division at the end, as M4's table computed
+  kmol/h = 1e3/3600. A whole power is a repeated product, so cm³ is
+  0.01·0.01·0.01, the same bits on every platform; a fractional one is
+  `math.pow`, the C library's. (From the fourth power, `math.pow` is
+  sometimes an ulp nearer the exact value, but Windows' and Linux's
+  libraries differ.) So every unit M4 read, read now through the algebra,
+  gives M4's bits.
+- **Division goes left to right,** so J/mol/K is J/(mol·K). A * after a / is
+  refused as ambiguous: kmol/kg*h might mean kmol/(kg·h) or kmol·h/kg.
+- **Offsets only standing alone.** °C, °F, barg and psig keep their offsets
+  only as a whole unit of an absolute temperature or pressure. In a compound
+  unit °C is a kelvin of difference and °F 5/9 K, as in kJ/(kg·°C), and a
+  gauge pressure is refused.
+- A scale must be finite and above zero, and parentheses nest at most 16
+  deep.
 
 Reading is strict:
 - the text is a number, whitespace and one unit;
@@ -860,9 +910,12 @@ Reading is strict:
 - only a fraction may be a bare number;
 - an absolute T or P must be above zero.
 
-A unit that isn't the dimension's gets the closest of its units: those
-within two edits (Levenshtein, ignoring case), nearest first, at most
-three. A unit of another dimension is named as one.
+A unit that isn't one gets the closest of the dimension's common units
+(M4's): those within two edits (Levenshtein, ignoring case), nearest first,
+at most three. A unit of another dimension is named by what it is a unit
+of: a named dimension, a common one (energy, viscosity, molar entropy, …),
+or else its base units, as in "kmol/(kg*h) is a unit of mol/(kg·s), not
+molar flow". A unit that doesn't parse says why and at which character.
 
 ## Streams and units
 

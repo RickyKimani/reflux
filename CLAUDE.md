@@ -68,7 +68,14 @@ Keep this section current: update it whenever a step is committed.
     rule come forward from M5, and the PFR takes a viscosity through an
     interface) and D13, and set criterion 8's targets. The owner approved
     the amendments on 2026-11-09.
-  - Next is step 1: the units algebra.
+  - **Step 1 is done:** `quantity`'s dimension algebra. `Dim` (exact
+    rational exponents of kg, m, s, K, mol, A), `unit(text)` for compound
+    units with SI prefixes, and `parse` reading any unit of a dimension.
+    Every M4 unit reads to M4's bits, against a frozen copy of M4's table,
+    and the new units match SP 811 (`testdata/m9_units.json`). D3 amended:
+    current as a base, rational exponents, symbols rather than M4's whole
+    names, and a * after a / refused as ambiguous.
+  - Next is step 2: the expression language.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -272,7 +279,9 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
 
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
-`components`. `quantity`, units of measure (M4), depends on nothing, and
+`components`. `quantity`, units of measure (M4) and M9's dimension algebra
+(compound units, exact rational exponents of kg, m, s, K, mol, A), depends
+on nothing, and
 so does `release`, the release gate's logic. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
@@ -470,7 +479,10 @@ or a test:
   error into a `V panic` with no FAIL line, so a panic in a test's output
   isn't always a panic in the code.
 - **Inside `or {}`, `err` is the error,** even where a parameter is called
-  `err`: name a C buffer parameter `buf`.
+  `err`: name a C buffer parameter `buf`. And `T{...err, …}` on a smart-cast
+  `err` copies nothing: cast with `as` first, or name the fields.
+- **A fixed array of structs inside another struct's zero value** skips the
+  element type's field defaults. Named struct fields keep theirs.
 - **`v fmt -w` rewrites a file that doesn't parse,** and can drop lines.
   Compile first; mind an apostrophe in a single-quoted string.
 - **`@[has_globals]`** allows `__global` in the file it heads, not its whole

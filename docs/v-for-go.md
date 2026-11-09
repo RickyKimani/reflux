@@ -393,6 +393,13 @@ rec := db.find('watr') or {
 }
 ```
 
+- **But don't spread that `err` into a copy.** Inside `if err is UnitError`,
+  `UnitError{...err, suggestions: s}` compiles and copies nothing: in a
+  probe the copy came out empty, and even `suggestions`, set beside the
+  spread, was lost. Cast first, `e := err as UnitError`, and `...e` works;
+  or name the fields, as `unit` in [quantity/quantity.v](../quantity/quantity.v)
+  does.
+
 - **Wrapping** (Go's `fmt.Errorf("…: %w", err)`):
   `f() or { return error('loading ${path}: ${err}') }`. See `number` in
   [demo.v](../demo.v). V doesn't keep an error chain the way `%w` does.
@@ -551,6 +558,14 @@ tells V which enum `.pr` belongs to, so the elements fall back to ints.
   Go would give you `Tc = 0` without complaint. Every field of `Component`
   is required. See [thermo/component.v](../thermo/component.v).
 - **Defaults:** `tol f64 = 1e-10` in the struct definition.
+- **A fixed array of structs can miss its defaults.** With `struct Ratio {
+  num i64 den i64 = 1 }` and `struct Dim { e [6]Ratio }`, `Dim{}` gets
+  `den = 1` in every element, and so does `[]Part{len: 2}`. But `Part{}`,
+  a struct holding a `Dim`, gets `den = 0`: the array inside another
+  struct's zero value is left zeroed. Named fields of struct type keep their
+  defaults at any depth, so `quantity`'s `Dim` has six named `Ratio` fields,
+  not an array ([quantity/quantity.v](../quantity/quantity.v); a probe, V
+  0.5.2).
 - **`@[params]` structs** give you named, optional arguments, which Go
   doesn't have. `new_cubic` takes a `CubicOptions`:
 

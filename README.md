@@ -128,7 +128,9 @@ flash/
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
 quantity/           numbers with units ("30 bar", "100 kmol/h") read into SI,
-                    by NIST SP 811's definitions
+                    by NIST SP 811's definitions, and the dimension algebra
+                    (M9): compound units such as kmol/(kg*h) and bar^0.5,
+                    each with its dimension in exact rational exponents
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
