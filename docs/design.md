@@ -1222,6 +1222,79 @@ reflux takes the files as they are, so reforming's K is about 4% below
 what consistent 1-bar data would give. The differences from thermo's data
 are recorded in the tests.
 
+### Rate laws and sites
+
+M9 step 5 ([kinetics/law.v](../kinetics/law.v),
+[kinetics/kinetics.v](../kinetics/kinetics.v)), as
+[kinetics.md](kinetics.md) designs it (D4, D6).
+
+**A rate's context** has T and P; each species' partial pressure p,
+fugacity f, concentration c and mole fraction y; and each reaction's K at
+1 bar from its Gibbs energies (D7), `Keq[reforming]`, a pure number. Not
+`K`, which would make every number in kelvins ambiguous by D2's rule. A
+species is a member by the name it's written with in the equations, so
+methanol written CH3OH renders as p_CH₃OH, and answers to that, its name,
+its aliases, its CAS number and its formula in Hill's order where no other
+species shares it.
+
+**Structured forms write text.** Each form keeps its structure, for its
+checks and for a site every reaction on it shares, and writes the
+expression a user would type for it, which `expr` parses. So a structured
+rate and the same rate typed are the same tree (D4), and the constants keep
+the numbers and units as written, rendering as the paper prints them. Each
+constant becomes a definition:
+
+| Form | Text |
+|---|---|
+| Arrhenius | A·exp(−Eₐ/(R·T)), or centred: k_ref·exp(−Eₐ/R·(1/T − 1/T_ref)) |
+| van 't Hoff | A·exp(−ΔH/(R·T)), or centred; a ΔH below zero written as exp(\|ΔH\|/(R·T)) |
+| fixed, written | the number, or the expression, as given |
+| a site's term | K·Π aᵢ^eᵢ, a negative power divided: K_H2O·p_H2O/p_H2 |
+| a site | θ = 1 + Σ terms, defined once (`theta_` and its name, or its symbol) |
+
+**The driving force,** with orders α and coefficients ν:
+
+| Form | k·(driving force) |
+|---|---|
+| irreversible | k·Π aᵢ^αᵢ |
+| approach (Vanden Bussche and Froment) | k·Π aᵢ^αᵢ·(1 − Q/K), Q = Π aᵢ^νᵢ |
+| difference (Xu and Froment) | k·Π_{αᵢ<0} aᵢ^αᵢ·(Π_{αᵢ>0} aᵢ^αᵢ − Π aᵢ^(αᵢ⁺+νᵢ)/K) |
+
+The two reversible forms are the same function: the difference's backward
+term is its forward one times Q. **K in the rate's activities** is
+K°·p°^Δn on partial pressures or fugacities, K°·(p°/RT)^Δn on
+concentrations and K°·(p°/P)^Δn on mole fractions, with K° = Keq[...] and
+p° = `p_std`; or a correlation the paper fitted, refused unless its
+dimension is the activity's to the Δn (bar² for steam reforming).
+
+**The forms:**
+- **power law:** k·(driving force);
+- **LHHW:** k·(driving force)/θⁿ. A reaction may override its site's term
+  with terms of its own, defined as its own θ (`DEN_2`), sharing the site's
+  constants where their texts are the same and refused where a name would
+  mean two;
+- **Eley–Rideal:** k·K_A·a_A·a_B·(1 − Q/K)/θ, K_A the adsorbed species' own
+  term on the site, K_A·a_A¹;
+- **expression:** any expression in the context.
+
+Every rate must be a mol/(kg·s), per mass of catalyst, or a mol/(m³·s),
+per volume, as its law says.
+
+**Evaluating.** A point holds a state's inputs, made once and filled at
+each state ([kinetics/evaluate.v](../kinetics/evaluate.v)):
+
+    pᵢ = yᵢP,   fᵢ = φᵢyᵢP,   cᵢ = yᵢP/(ZRT),   yᵢ,   Keq_r = exp(ln K_r(T)),
+
+K only for the reactions some rate uses. The rates are the tape's outputs,
+into the caller's buffer. Their derivatives with respect to T, P and each
+yⱼ, with φ and Z held fixed (exact for the ideal gas; a reactor that knows
+their derivatives adds their terms), follow from the tape's gradient g by
+the chain rule:
+
+    dr/dT  = g_T − Σᵢ g_cᵢ cᵢ/T + Σ_r g_Keq_r Keq_r ΔH°_r/(RT²)
+    dr/dP  = g_P + Σᵢ (g_pᵢ + g_fᵢ φᵢ) yᵢ + g_cᵢ yᵢ/(ZRT)
+    dr/dyⱼ = (g_pⱼ + g_fⱼ φⱼ) P + g_cⱼ P/(ZRT) + g_yⱼ
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

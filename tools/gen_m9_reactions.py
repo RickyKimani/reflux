@@ -31,8 +31,10 @@ m9_reactions.json
     with R = N_A·k_B exactly. Beside them, Σν ΔG°f from the files, and ln K
     from thermo's own data: chemicals' ΔH°f and S° (at 1 bar) and thermo's
     choice of ideal-gas Cp, which reflux's ChemSep data are measured against.
-    And the equilibrium constants the owner's DWSIM case types in, in atm,
-    with ln K's distance from reflux's at 700 to 1300 K.
+    And equilibrium constants that others fit, with ln K's distance from
+    reflux's at 700 to 1300 K: those the owner's DWSIM case types in, on
+    pressures in atm, and those later papers use with Xu and Froment's
+    kinetics, on pressures in bar (Xu and Froment's own paper gives none).
 
 The output is the same, byte for byte, for the same versions.
 """
@@ -87,12 +89,18 @@ REACTIONS = [
                                                                      ("1333-74-0", 1)]),
 ]
 
-# The equilibrium constants the owner's DWSIM case types into its rates
-# (spike/dwsim_pfr/run.py): ln K = a + b/T, on partial pressures in atm.
+# Equilibrium constants others fit, ln K = a + b/T: the owner's DWSIM case's,
+# as it types them into its rates (spike/dwsim_pfr/run.py), on partial
+# pressures in atm; and those later papers use with Xu and Froment's
+# kinetics, on pressures in bar, their paper giving K1, K2 and K3 units but
+# no values (K3 is K1·K2).
 CORRELATIONS = [
-    ("steam reforming", "30.42", "-27106"),
-    ("water-gas shift", "-3.798", "4160"),
-    ("overall reforming", "34.218", "-31266"),
+    ("DWSIM", "steam reforming", "30.42", "-27106", "atm"),
+    ("DWSIM", "water-gas shift", "-3.798", "4160", "atm"),
+    ("DWSIM", "overall reforming", "34.218", "-31266", "atm"),
+    ("literature", "steam reforming", "30.114", "-26830", "bar"),
+    ("literature", "water-gas shift", "-4.036", "4400", "bar"),
+    ("literature", "overall reforming", "26.078", "-22430", "bar"),
 ]
 CORRELATION_TEMPERATURES = ["700", "800", "900", "1000", "1100", "1200", "1300"]
 
@@ -257,7 +265,7 @@ def reactions():
             "gap": float(dgf - (dh0 - T0 * ds0)),
         })
     correlations = []
-    for name, a, b in CORRELATIONS:
+    for source, name, a, b, unit in CORRELATIONS:
         species = by_name[name]
         dn = sum(nu for _, nu in species)
         diffs = []
@@ -266,9 +274,10 @@ def reactions():
             dh, ds = standard(species, t)
             ln_k = -(dh - t * ds) / (R * t)
             # K on pressures in bar is K on pressures in atm times (1.01325)^Δn.
-            file_ln_k = mp.mpf(a) + mp.mpf(b) / t + dn * mp.log(ATM)
+            file_ln_k = mp.mpf(a) + mp.mpf(b) / t + (dn * mp.log(ATM) if unit == "atm" else 0)
             diffs.append(float(ln_k - file_ln_k))
-        correlations.append({"reaction": name, "a": float(a), "b": float(b), "dn": dn,
+        correlations.append({"source": source, "reaction": name, "a": float(a), "b": float(b), "unit": unit,
+                             "dn": dn,
                              "temperatures": [float(t) for t in CORRELATION_TEMPERATURES], "diffs": diffs})
     return {
         "source": {
@@ -281,9 +290,11 @@ def reactions():
             "thermo_ln_k": "ln K at 1 bar from chemicals' ΔH°f and S° (Hfg, S0g) and thermo's ideal-gas Cp "
                            "(HeatCapacityGas's default method, named in thermo_cp), integrated by thermo; "
                            "null where chemicals lacks a value",
-            "correlations": "the owner's DWSIM case's equilibrium constants, ln K = a + b/T on partial "
-                            "pressures in atm (spike/dwsim_pfr/run.py); diffs are reflux's ln K at 1 bar "
-                            "less the correlation's, converted to bar by Δn·ln(1.01325)",
+            "correlations": "equilibrium constants others fit, ln K = a + b/T: the owner's DWSIM case's on "
+                            "partial pressures in atm (spike/dwsim_pfr/run.py), and the literature's for Xu and "
+                            "Froment's kinetics on pressures in bar, the overall reaction's the sum of the other "
+                            "two; diffs are reflux's ln K at 1 bar less the correlation's, converted to bar by "
+                            "Δn·ln(1.01325) where it's in atm",
         },
         "reactions": out,
         "correlations": correlations,

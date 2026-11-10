@@ -35,9 +35,11 @@ struct FixtureReaction {
 }
 
 struct FixtureCorrelation {
+	source       string
 	reaction     string
 	a            f64
 	b            f64
+	unit         string
 	dn           f64
 	temperatures []f64
 	diffs        []f64
@@ -179,12 +181,16 @@ fn test_k_against_thermos_data() {
 	}
 }
 
-// The equilibrium constants the owner's DWSIM case types into its rates,
-// against reflux's from ChemSep's data, as the fixture records them: steam
-// reforming's and the shift's within 0.1 of ln K from 700 to 1300 K, but the
-// overall reaction's isn't steam reforming's times the shift's, and is off
-// by 4.45 at 700 K, a factor of 86, and by −1.21 at 1300 K.
-fn test_the_owners_correlations() {
+// Equilibrium constants others fit, against reflux's from ChemSep's data
+// (criterion 5), as the fixture records them, from 700 to 1300 K:
+// - the owner's DWSIM case's, on pressures in atm: steam reforming's and the
+//   shift's within 0.1 of ln K, but its overall reaction's isn't steam
+//   reforming's times the shift's, and is off by 4.45 at 700 K, a factor of
+//   86, and by −1.21 at 1300 K;
+// - those later papers use with Xu and Froment's kinetics, on pressures in
+//   bar (their paper names K1, K2 and K3 but gives no values): within 0.083
+//   for steam reforming and the shift, and 0.16 for their sum.
+fn test_correlations_against_gibbs() {
 	f := load()!
 	mut by_name := map[string]FixtureReaction{}
 	for fr in f.reactions {
@@ -193,19 +199,27 @@ fn test_the_owners_correlations() {
 	mut far := map[string]f64{}
 	for c in f.correlations {
 		r, species := fixture_reaction(by_name[c.reaction])!
+		key := '${c.source} ${c.reaction}'
 		for i, t in c.temperatures {
 			st := r.standard(species, t)!
-			file := c.a + c.b / t + c.dn * math.log(1.01325)
-			d := st.ln_k - file
-			assert math.abs(d - c.diffs[i]) <= 1e-9, '${c.reaction} at ${t} K: ${d} vs ${c.diffs[i]}'
-			far[c.reaction] = math.max(far[c.reaction], math.abs(d))
+			to_bar := if c.unit == 'atm' { c.dn * math.log(1.01325) } else { 0.0 }
+			d := st.ln_k - (c.a + c.b / t + to_bar)
+			assert math.abs(d - c.diffs[i]) <= 1e-9, '${key} at ${t} K: ${d} vs ${c.diffs[i]}'
+			far[key] = math.max(far[key], math.abs(d))
 		}
 	}
-	assert far['steam reforming'] < 0.07
-	assert far['water-gas shift'] < 0.1
-	assert far['overall reforming'] > 4.4
+	assert far['DWSIM steam reforming'] < 0.07
+	assert far['DWSIM water-gas shift'] < 0.1
+	assert far['DWSIM overall reforming'] > 4.4
+	assert far['literature steam reforming'] < 0.08
+	assert far['literature water-gas shift'] < 0.085
+	assert far['literature overall reforming'] < 0.17
 	sr, wgs, overall := f.correlations[0], f.correlations[1], f.correlations[2]
 	assert overall.a != sr.a + wgs.a && overall.b != sr.b + wgs.b
+	lsr, lwgs, lov := f.correlations[3], f.correlations[4], f.correlations[5]
+	// The overall reaction's is the sum of the other two, as K3 = K1·K2: to
+	// rounding, the constants being decimals.
+	assert math.abs(lov.a - (lsr.a + lwgs.a)) <= 1e-12 && lov.b == lsr.b + lwgs.b
 }
 
 // K is a reaction's: a combination's ln K is its parts' combined, to

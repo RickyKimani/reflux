@@ -155,6 +155,11 @@ kinetics/           reactions (M9)
                     the balanced equation suggested
   dependence.v      which reactions of a set combine others
   standard.v        ΔH°, ΔS°, ΔG° and K(T) from the ideal gas
+  law.v             rate laws and sites: Arrhenius, van 't Hoff, monomials,
+                    power law, LHHW, Eley–Rideal, expressions, as data
+  kinetics.v        rate laws to definitions and expressions, bound, checked
+                    and compiled onto one tape
+  evaluate.v        rates at a state, and their derivatives by the chain rule
   exact.v           exact arithmetic: null spaces, whole coefficients
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
@@ -215,7 +220,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     SymPy, and the constants against NIST's), tape_bench.v
                     (the tape against rates written in V), gen_m9_reactions.py
                     (formulas against RDKit and chemicals, and K(T) against
-                    mpmath and thermo),
+                    mpmath and thermo), gen_m9_kinetics.py (two papers'
+                    kinetics by mpmath),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)

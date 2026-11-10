@@ -19,7 +19,8 @@ constants; reaction types as properties, with restricted equilibrium; and
 stoichiometry checked by counting elements. Step 0 is done, and amended D5,
 D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1
 amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is done and
-amended D1, approved on 2026-11-10. Step 5 is next.
+amended D1, approved on 2026-11-10. Step 5 is done and amended criterion
+5, approved on 2026-11-10. Step 6 is next.
 
 ## Goal
 
@@ -175,6 +176,11 @@ All checked by tests in CI, as in M1 to M4.
    equilibrium over chosen reactions, match an independent calculation in
    mpmath, for ideal gas and for PR. Elements balance to rounding. K(T) from Gibbs energies of formation is
    compared with Xu and Froment's correlations, and the differences recorded.
+   **Amended in step 5:** Xu and Froment's paper names its K₁, K₂ and K₃ and
+   gives their units, but no values, so K(T) is compared with the
+   correlations used with their kinetics instead: the literature's, ln K₁ =
+   30.114 − 26830 K/T and ln K₂ = −4.036 + 4400 K/T, and the owner's DWSIM
+   case's (step 4).
 6. **The integrator is right.** Stiff and non-stiff test problems reach their
    reference solutions within the tolerance asked, and closed-form cases
    within it too. Its step counts are recorded, and can't grow.
@@ -609,7 +615,8 @@ flowchart LR
     exp(34.218 − 31266/T), isn't their product, exp(26.622 − 22946/T): it is
     86 times too small at 700 K and 3.4 times too large at 1300 K. The
     comparison with Xu and Froment's own correlations (criterion 5) comes
-    with the paper's constants in step 5.
+    with the paper's constants in step 5, which found that the paper gives
+    none, and compared the literature's instead.
 - **Tests,** 29 in six files:
   - [chem/chem_test.v](../chem/chem_test.v), five: formulas as ChemSep
     writes them and as a user types them, fourteen refused with their
@@ -663,12 +670,103 @@ flowchart LR
   alone; `.sort(a.x < b.x)` can read nothing but `a` and `b`; `index` gives
   −1 on an array and an Option on a string; and a `rune` has no `is_digit`.
 
-### 5. Rate laws and sites
+### 5. Rate laws and sites — done, with criterion 5 amended
 - Arrhenius, van 't Hoff, monomials and sites, LHHW, power law, Eley–Rideal and
   free-form expressions, on any activity basis (D6). Xu and Froment's and
   Vanden Bussche and Froment's kinetics as fixtures from mpmath, the
   constants taken from the papers' tables and checked against a second
   source.
+- **[kinetics/law.v](../kinetics/law.v),** the forms as data, as
+  [design.md](design.md#rate-laws-and-sites) sets out: constants by
+  Arrhenius, van 't Hoff, fixed or written, each a number with its unit as
+  the paper writes it; a site's monomials and its term θ = 1 + Σ terms; a
+  rate's orders, its basis (p, f, c or y) and what it's per (catalyst mass
+  or volume); its equilibrium (irreversible, K from the Gibbs energies by
+  D7, or a fitted correlation); and the power law, LHHW (with a reaction's
+  own terms overriding its site's, marked as such), Eley–Rideal and the
+  expression.
+- **[kinetics/kinetics.v](../kinetics/kinetics.v)** builds them (D4): each
+  form writes the expression a user would type for it, which `expr` parses,
+  so a structured rate and the same rate typed are the same tree; every
+  constant is a definition; a fitted K is checked to be in its rate's
+  activities to the Δn, and every rate per mass or per volume as its law
+  says; and the rates go onto one tape. The two reversible forms render as
+  their papers print them: Xu and Froment's as a difference,
+  `k₁/p_H₂^2.5·(p_CH₄·p_H₂O − p_CO·p_H₂³/K₁)/DEN²`, Vanden Bussche and
+  Froment's as an approach to equilibrium, `k1 * p[CO2] * p[H2] * (1 -
+  p[CH3OH] * p[H2O] / (p[CO2] * p[H2]^3) / K1) / theta_Cu^3`.
+- **A rate's context** gained each reaction's K at 1 bar from the Gibbs
+  energies, `Keq[reforming]`, times p°^Δn, (p°/RT)^Δn or (p°/P)^Δn for the
+  rate's basis. The first test found that the obvious name, `K`, makes
+  every number in kelvins ambiguous (D2's rule refused `26830 K / T`).
+- **[kinetics/evaluate.v](../kinetics/evaluate.v):** a point made once and
+  filled at each state (p, f with φ, c with Z, y, and K from step 4); the
+  rates into the caller's buffer, allocating nothing; and their
+  derivatives with respect to T, P and each mole fraction by the chain rule
+  through every family and each K's d ln K/dT.
+- **Tests in [kinetics/law_test.v](../kinetics/law_test.v),** eleven:
+  - **the papers:** Xu and Froment's three rates at 45 states and Vanden
+    Bussche and Froment's two at 24, from the structured forms, against
+    mpmath from the papers' own formulas: every rate to 1e-13 of its
+    largest term (9.4e-15 at worst), every derivative with respect to T and
+    each partial pressure to 1e-12 (1.1e-14);
+  - each rendered as its paper prints it, and Xu and Froment's typed as a
+    user would type them giving the structured forms' bits;
+  - **the chain rule:** the jacobian against central differences, with K
+    from the Gibbs energies, on Xu and Froment's kinetics and on one rate on
+    each family (φ ≠ 1, Z ≠ 1);
+  - **equilibrium:** reforming's rate (Δn = 2) zero at its equilibrium on
+    every basis, and the shift's on fugacities with φ ≠ 1;
+  - the power law on concentrations and on mole fractions with a centred
+    constant, and Eley–Rideal, against the same rates by hand; an override
+    sharing its site's constants, and one that would redefine one refused;
+    nothing allocated in 100,000 evaluations; and nine refusals (a rate in
+    the wrong basis, a species or site that isn't there, a fitted K in the
+    wrong units, an Eley–Rideal species with no term of its own, a name
+    not bound, two laws for one reaction, a reaction that isn't there, a
+    name defined twice).
+- **References:** [tools/gen_m9_kinetics.py](../tools/gen_m9_kinetics.py)
+  writes [testdata/m9_kinetics.json](../testdata/m9_kinetics.json), and
+  reproduces it byte for byte.
+- **The constants against the papers,** which the owner supplied (kept out
+  of the repository), read from their scans:
+  - **Every rate and adsorption constant was the papers' own:** Xu and
+    Froment's A from their Table 6 and E and ΔH from Table 5, Vanden Bussche
+    and Froment's from their Table 2, and Graaf's equilibrium constants as
+    Vanden Bussche and Froment print them. The rate equations are each
+    paper's Eq. 3. The fixture's rates didn't move by a bit.
+  - **Each paper gives its constants twice,** centred on reference
+    temperatures (Xu and Froment's Table 5, at 648 and 823 K; Vanden Bussche
+    and Froment's Table 1, at 501.57 K) and as pre-exponential factors, and
+    the generator now checks one against the other and records each ratio in
+    the fixture. Vanden Bussche and Froment's agree within their rounding
+    (0.34% at worst, against 0.47%). **Xu and Froment's don't,** for k₁, k₂,
+    k₃, K_CO and K_H₂: Table 6 puts k₁ and k₃ 1.55% and 1.72% above Table 5
+    at 648 K, as if from activation energies of 240.18 and 243.99 kJ/mol
+    rather than the 240.1 and 243.9 printed, and no other R reconciles them.
+    The fixture keeps Table 6 and Table 5's energies, the form every user of
+    these kinetics takes, the owner's DWSIM case included.
+  - **Xu and Froment give no equilibrium constants,** only their units. The
+    correlations quoted with their kinetics, ln K₁ = 30.114 − 26830 K/T and
+    ln K₂ = −4.036 + 4400 K/T (one source prints 30.11 and −4.063), come
+    from later work. Criterion 5 is amended to compare with those (above):
+    from 700 to 1300 K they're within 0.083 of ln K from ChemSep's data for
+    steam reforming and the shift, and 0.16 for their sum, recorded in
+    [testdata/m9_reactions.json](../testdata/m9_reactions.json) and held by
+    `kinetics/standard_test.v`.
+  - **Two notes for users:** Xu and Froment's constants are for their
+    catalyst at its reference activity, after deactivation; their text
+    multiplies the rate coefficients by 2.246 for fresh catalyst. And their
+    text gives A(K_H₂) as 6.13·10⁻⁹ where Table 6 has 6.12·10⁻⁹.
+- **Planted mistakes:** 24, one at a time in a scratch copy, all caught.
+  Seven were refused by `expr`'s units before any value was compared: a
+  power on the wrong side of a fraction, a missing parenthesis in Q's
+  denominator, the wrong standard state on concentrations, a backward
+  term's exponents negated, K_A squared, every rate taken as per mass, and
+  a site's term with its powers inverted. The dimension algebra of steps 1
+  and 2 checks the structure as well as the units.
+- **V's notes:** a test file's function can hide its module's constant of
+  the same name, in the module's own code, where a function value fits.
 
 ### 6. `reflux kinetics check` and `explain`
 - Rendering, element balance, units, physical-sanity warnings and the factor

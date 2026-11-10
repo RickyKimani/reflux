@@ -4,7 +4,7 @@
   "values": "from ChemSep's data in data/components/ (ΔH°f, S°, ΔG°f, and the ideal-gas Cp correlation, evaluated and integrated by mpmath at 50 digits), in J/mol, J/(mol·K), and ln K at 1 bar; R = 8.31446261815324 J/(mol·K)",
   "gap": "Σν ΔG°f from the files, less ΔG° at 298.15 K from their ΔH°f and S°, J/mol",
   "thermo_ln_k": "ln K at 1 bar from chemicals' ΔH°f and S° (Hfg, S0g) and thermo's ideal-gas Cp (HeatCapacityGas's default method, named in thermo_cp), integrated by thermo; null where chemicals lacks a value",
-  "correlations": "the owner's DWSIM case's equilibrium constants, ln K = a + b/T on partial pressures in atm (spike/dwsim_pfr/run.py); diffs are reflux's ln K at 1 bar less the correlation's, converted to bar by Δn·ln(1.01325)"
+  "correlations": "equilibrium constants others fit, ln K = a + b/T: the owner's DWSIM case's on partial pressures in atm (spike/dwsim_pfr/run.py), and the literature's for Xu and Froment's kinetics on pressures in bar, the overall reaction's the sum of the other two; diffs are reflux's ln K at 1 bar less the correlation's, converted to bar by Δn·ln(1.01325) where it's in atm"
  },
  "reactions": [
   {
@@ -1758,9 +1758,11 @@
  ],
  "correlations": [
   {
+   "source": "DWSIM",
    "reaction": "steam reforming",
    "a": 30.42,
    "b": -27106.0,
+   "unit": "atm",
    "dn": 2,
    "temperatures": [
     700.0,
@@ -1782,9 +1784,11 @@
    ]
   },
   {
+   "source": "DWSIM",
    "reaction": "water-gas shift",
    "a": -3.798,
    "b": 4160.0,
+   "unit": "atm",
    "dn": 0,
    "temperatures": [
     700.0,
@@ -1806,9 +1810,11 @@
    ]
   },
   {
+   "source": "DWSIM",
    "reaction": "overall reforming",
    "a": 34.218,
    "b": -31266.0,
+   "unit": "atm",
    "dn": 2,
    "temperatures": [
     700.0,
@@ -1827,6 +1833,84 @@
     -0.09128114491108506,
     -0.7018603294477577,
     -1.209184771798067
+   ]
+  },
+  {
+   "source": "literature",
+   "reaction": "steam reforming",
+   "a": 30.114,
+   "b": -26830.0,
+   "unit": "bar",
+   "dn": 2,
+   "temperatures": [
+    700.0,
+    800.0,
+    900.0,
+    1000.0,
+    1100.0,
+    1200.0,
+    1300.0
+   ],
+   "diffs": [
+    0.0034978618132637364,
+    -0.032393869042775955,
+    -0.02867563941009753,
+    -0.006998425835192073,
+    0.021337126437137796,
+    0.05043798745939047,
+    0.07734400394917229
+   ]
+  },
+  {
+   "source": "literature",
+   "reaction": "water-gas shift",
+   "a": -4.036,
+   "b": 4400.0,
+   "unit": "bar",
+   "dn": 0,
+   "temperatures": [
+    700.0,
+    800.0,
+    900.0,
+    1000.0,
+    1100.0,
+    1200.0,
+    1300.0
+   ],
+   "diffs": [
+    -0.010281348791867302,
+    -0.026784245271083546,
+    -0.02195178575770296,
+    -0.004301069469027511,
+    0.020980428977066163,
+    0.050694322812080334,
+    0.08287412038224552
+   ]
+  },
+  {
+   "source": "literature",
+   "reaction": "overall reforming",
+   "a": 26.078,
+   "b": -22430.0,
+   "unit": "bar",
+   "dn": 2,
+   "temperatures": [
+    700.0,
+    800.0,
+    900.0,
+    1000.0,
+    1100.0,
+    1200.0,
+    1300.0
+   ],
+   "diffs": [
+    -0.006783486978603565,
+    -0.059178114313859505,
+    -0.05062742516780049,
+    -0.011299495304219583,
+    0.042317555414203956,
+    0.1011323102714708,
+    0.16021812433141783
    ]
   }
  ]

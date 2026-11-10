@@ -747,6 +747,17 @@ can read constants as any function can. Go's `slices.SortFunc` takes a
 closure either way. [chem/chem.v](../chem/chem.v) sorts a formula's
 elements by symbol so.
 
+**Gotcha: a test file's function can hide its module's constant.** A
+test file is compiled into its module, as Go's internal tests are, so its
+names share the module's scope. In [kinetics](../kinetics/exact.v),
+`const one = Ratio{1, 1}` is the number 1, and a test defined a helper
+`fn one(...)`. `one + one` in the module still meant the constant, but
+`mut coeff := one`, where a function value fits too, took the test's
+function, and the error landed in the module's file: "cannot assign to
+`coeff`: expected `fn (...)`, not `kinetics.Ratio`". The module builds
+alone; only its tests broke. Go refuses the second declaration outright.
+Keep a test's helpers' names apart from the module's.
+
 **`index` on an array gives −1; on a string, an Option.** `[3, 4, 5].index(9)`
 is `-1`, as Go's `slices.Index` is, but `'hello'.index('z')` is `?int`,
 taken with `or {}`. So `if p := a.index(x) { … }` doesn't compile for an

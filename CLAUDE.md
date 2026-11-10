@@ -105,7 +105,19 @@ Keep this section current: update it whenever a step is committed.
     with their ΔH°f and S° by over 1 kJ/mol (data-quality.md); and the
     owner's DWSIM case types an overall-reaction K that isn't the product
     of the other two (86 times too small at 700 K).
-  - Next is step 5: rate laws and sites.
+  - **Step 5 is done,** and amended criterion 5 (approved on 2026-11-10):
+    `kinetics/law.v` (the forms as data), `kinetics.v` (each form writes the
+    expression a user would type, parsed by `expr`: D4's same tree) and
+    `evaluate.v` (rates at a state, allocating nothing, and the jacobian by
+    the chain rule). A rate's context has `Keq[...]`, each reaction's K at
+    1 bar (not `K`, which clashes with kelvins). Xu and Froment's and Vanden
+    Bussche and Froment's rates match mpmath (`tools/gen_m9_kinetics.py`)
+    to 9.4e-15, every constant checked against the papers' tables (the
+    owner's copies, kept out of the repository). Xu and Froment's Table 5
+    and Table 6 disagree by up to 1.7% (k₃); their paper gives no
+    equilibrium constants, so criterion 5 compares Gibbs K with the
+    literature's correlations instead.
+  - Next is step 6: `reflux kinetics check` and `explain`.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
