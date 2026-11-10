@@ -1,0 +1,5240 @@
+{
+ "source": {
+  "by": "tools/gen_m9_reactions.py, with rdkit 2024.09.6 and chemicals 1.5.2",
+  "rdkit": "each component file's SMILES read by RDKit: every atom's element, its hydrogens (GetTotalNumHs) and formal charge, summed; sanitized where RDKit allows, and read by its valence model alone where it doesn't (rdkit_sanitized false)",
+  "chemicals": "chemicals.identifiers.search_chemical(cas).formula, from chemicals' database (PubChem's formulas), or null where it has no such CAS number",
+  "weights": "chemicals.elements.periodic_table[z].MW, g/mol, for z from 1 to 92"
+ },
+ "weights": {
+  "H": 1.00794,
+  "He": 4.002602,
+  "Li": 6.941,
+  "Be": 9.012182,
+  "B": 10.811,
+  "C": 12.0107,
+  "N": 14.0067,
+  "O": 15.9994,
+  "F": 18.9984032,
+  "Ne": 20.1797,
+  "Na": 22.98977,
+  "Mg": 24.305,
+  "Al": 26.981538,
+  "Si": 28.0855,
+  "P": 30.973761,
+  "S": 32.065,
+  "Cl": 35.453,
+  "Ar": 39.948,
+  "K": 39.0983,
+  "Ca": 40.078,
+  "Sc": 44.95591,
+  "Ti": 47.867,
+  "V": 50.9415,
+  "Cr": 51.9961,
+  "Mn": 54.938049,
+  "Fe": 55.845,
+  "Co": 58.9332,
+  "Ni": 58.6934,
+  "Cu": 63.546,
+  "Zn": 65.38,
+  "Ga": 69.723,
+  "Ge": 72.64,
+  "As": 74.9216,
+  "Se": 78.96,
+  "Br": 79.904,
+  "Kr": 83.798,
+  "Rb": 85.4678,
+  "Sr": 87.62,
+  "Y": 88.90585,
+  "Zr": 91.224,
+  "Nb": 92.90638,
+  "Mo": 95.96,
+  "Tc": 98.0,
+  "Ru": 101.07,
+  "Rh": 102.9055,
+  "Pd": 106.42,
+  "Ag": 107.8682,
+  "Cd": 112.411,
+  "In": 114.818,
+  "Sn": 118.701,
+  "Sb": 121.76,
+  "Te": 127.6,
+  "I": 126.90447,
+  "Xe": 131.293,
+  "Cs": 132.90545,
+  "Ba": 137.327,
+  "La": 138.9055,
+  "Ce": 140.116,
+  "Pr": 140.90765,
+  "Nd": 144.24,
+  "Pm": 145.0,
+  "Sm": 150.36,
+  "Eu": 151.964,
+  "Gd": 157.25,
+  "Tb": 158.92534,
+  "Dy": 162.5,
+  "Ho": 164.93032,
+  "Er": 167.259,
+  "Tm": 168.93421,
+  "Yb": 173.054,
+  "Lu": 174.9668,
+  "Hf": 178.49,
+  "Ta": 180.9479,
+  "W": 183.84,
+  "Re": 186.207,
+  "Os": 190.23,
+  "Ir": 192.217,
+  "Pt": 195.078,
+  "Au": 196.96655,
+  "Hg": 200.59,
+  "Tl": 204.3833,
+  "Pb": 207.2,
+  "Bi": 208.9804,
+  "Po": 209.0,
+  "At": 210.0,
+  "Rn": 222.0,
+  "Fr": 223.0,
+  "Ra": 226.0,
+  "Ac": 227.0,
+  "Th": 232.0381,
+  "Pa": 231.03588,
+  "U": 238.02891
+ },
+ "compounds": [
+  {
+   "cas": "100-18-5",
+   "name": "P-diisopropylbenzene",
+   "rdkit": "C12H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H18"
+  },
+  {
+   "cas": "100-21-0",
+   "name": "Terephthalic acid",
+   "rdkit": "C8H6O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H6O4"
+  },
+  {
+   "cas": "100-37-8",
+   "name": "Diethylethanolamine",
+   "rdkit": "C6H15NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H15NO"
+  },
+  {
+   "cas": "100-41-4",
+   "name": "Ethylbenzene",
+   "rdkit": "C8H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10"
+  },
+  {
+   "cas": "100-42-5",
+   "name": "Styrene",
+   "rdkit": "C8H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8"
+  },
+  {
+   "cas": "100-51-6",
+   "name": "Benzyl alcohol",
+   "rdkit": "C7H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H8O"
+  },
+  {
+   "cas": "100-52-7",
+   "name": "Benzaldehyde",
+   "rdkit": "C7H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6O"
+  },
+  {
+   "cas": "100-66-3",
+   "name": "Anisole",
+   "rdkit": "C7H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H8O"
+  },
+  {
+   "cas": "10024-97-2",
+   "name": "Nitrous oxide",
+   "rdkit": "N2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "N2O"
+  },
+  {
+   "cas": "10028-15-6",
+   "name": "Ozone",
+   "rdkit": "O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "O3"
+  },
+  {
+   "cas": "10034-85-2",
+   "name": "Hydrogen iodide",
+   "rdkit": "HI",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "HI"
+  },
+  {
+   "cas": "1004-66-6",
+   "name": "2,6-Dimethylanisole",
+   "rdkit": "C9H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12O"
+  },
+  {
+   "cas": "10061-01-5",
+   "name": "Cis-1,3-dichloropropene",
+   "rdkit": "C3H4Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4Cl2"
+  },
+  {
+   "cas": "101-84-8",
+   "name": "Diphenyl ether",
+   "rdkit": "C12H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H10O"
+  },
+  {
+   "cas": "10102-43-9",
+   "name": "Nitric oxide",
+   "rdkit": "NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "NO"
+  },
+  {
+   "cas": "10102-44-0",
+   "name": "Nitrogen dioxide",
+   "rdkit": "NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": false,
+   "chemicals": "NO2"
+  },
+  {
+   "cas": "102-09-0",
+   "name": "DiPhenyl Carbonate",
+   "rdkit": "C13H10O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C13H10O3"
+  },
+  {
+   "cas": "102-71-6",
+   "name": "Triethanolamine",
+   "rdkit": "C6H15NO3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H15NO3"
+  },
+  {
+   "cas": "103-65-1",
+   "name": "N-propylbenzene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "103-73-1",
+   "name": "Phenetole",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "104-51-8",
+   "name": "N-butylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "104-76-7",
+   "name": "2-Ethyl-1-Hexanol",
+   "rdkit": "C8H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O"
+  },
+  {
+   "cas": "10486-19-8",
+   "name": "Tridecanal",
+   "rdkit": "C13H26O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C13H26O"
+  },
+  {
+   "cas": "105-05-5",
+   "name": "P-diethylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "105-46-4",
+   "name": "Sec-butyl acetate",
+   "rdkit": "C6H12O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O2"
+  },
+  {
+   "cas": "105-58-8",
+   "name": "DiEthyl Carbonate",
+   "rdkit": "C5H10O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O3"
+  },
+  {
+   "cas": "105-59-9",
+   "name": "Methyl DiEthanolAmine",
+   "rdkit": "C5H13NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H13NO2"
+  },
+  {
+   "cas": "105-67-9",
+   "name": "2,4-Xylenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "10544-72-6",
+   "name": "Nitrogen tetroxide",
+   "rdkit": "N2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "N2O4"
+  },
+  {
+   "cas": "10544-73-7",
+   "name": "Nitrogen trioxide",
+   "rdkit": "N2O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "N2O3"
+  },
+  {
+   "cas": "106-35-4",
+   "name": "3-Heptanone",
+   "rdkit": "C7H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O"
+  },
+  {
+   "cas": "106-42-3",
+   "name": "P-xylene",
+   "rdkit": "C8H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10"
+  },
+  {
+   "cas": "106-44-5",
+   "name": "P-cresol",
+   "rdkit": "C7H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H8O"
+  },
+  {
+   "cas": "106-46-7",
+   "name": "P-dichlorobenzene",
+   "rdkit": "C6H4Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H4Cl2"
+  },
+  {
+   "cas": "106-50-3",
+   "name": "P-phenylenediamine",
+   "rdkit": "C6H8N2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H8N2"
+  },
+  {
+   "cas": "106-70-7",
+   "name": "Methyl caproate",
+   "rdkit": "C7H14O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O2"
+  },
+  {
+   "cas": "106-88-7",
+   "name": "1,2-Epoxybutane",
+   "rdkit": "C4H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O"
+  },
+  {
+   "cas": "106-89-8",
+   "name": "Alpha-epichlorohydrin",
+   "rdkit": "C3H5ClO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H5ClO"
+  },
+  {
+   "cas": "106-97-8",
+   "name": "N-butane",
+   "rdkit": "C4H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10"
+  },
+  {
+   "cas": "106-98-9",
+   "name": "1-Butene",
+   "rdkit": "C4H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8"
+  },
+  {
+   "cas": "106-99-0",
+   "name": "1,3-Butadiene",
+   "rdkit": "C4H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6"
+  },
+  {
+   "cas": "1067-08-9",
+   "name": "3-Methyl-3-ethylpentane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "1067-20-5",
+   "name": "3,3-Diethylpentane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "107-00-6",
+   "name": "Ethylacetylene",
+   "rdkit": "C4H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6"
+  },
+  {
+   "cas": "107-02-8",
+   "name": "Acrolein",
+   "rdkit": "C3H4O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4O"
+  },
+  {
+   "cas": "107-03-9",
+   "name": "N-propyl mercaptan",
+   "rdkit": "C3H8S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8S"
+  },
+  {
+   "cas": "107-05-1",
+   "name": "3-Chloropropene",
+   "rdkit": "C3H5Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H5Cl"
+  },
+  {
+   "cas": "107-06-2",
+   "name": "1,2-Dichloroethane",
+   "rdkit": "C2H4Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4Cl2"
+  },
+  {
+   "cas": "107-07-3",
+   "name": "2-Chloroethanol",
+   "rdkit": "C2H5ClO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H5ClO"
+  },
+  {
+   "cas": "107-12-0",
+   "name": "Propionitrile",
+   "rdkit": "C3H5N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H5N"
+  },
+  {
+   "cas": "107-13-1",
+   "name": "Acrylonitrile",
+   "rdkit": "C3H3N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H3N"
+  },
+  {
+   "cas": "107-15-3",
+   "name": "Ethylenediamine",
+   "rdkit": "C2H8N2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H8N2"
+  },
+  {
+   "cas": "107-18-6",
+   "name": "Allyl alcohol",
+   "rdkit": "C3H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O"
+  },
+  {
+   "cas": "107-19-7",
+   "name": "Propargyl alcohol",
+   "rdkit": "C3H4O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4O"
+  },
+  {
+   "cas": "107-21-1",
+   "name": "Ethylene glycol",
+   "rdkit": "C2H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6O2"
+  },
+  {
+   "cas": "107-31-3",
+   "name": "Methyl formate",
+   "rdkit": "C2H4O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4O2"
+  },
+  {
+   "cas": "107-83-5",
+   "name": "2-Methylpentane",
+   "rdkit": "C6H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14"
+  },
+  {
+   "cas": "107-87-9",
+   "name": "2-Pentanone",
+   "rdkit": "C5H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O"
+  },
+  {
+   "cas": "107-92-6",
+   "name": "N-butyric acid",
+   "rdkit": "C4H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O2"
+  },
+  {
+   "cas": "107-98-2",
+   "name": "Propylene glycol monomethyl ether",
+   "rdkit": "C4H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O2"
+  },
+  {
+   "cas": "1070-87-7",
+   "name": "2,2,4,4-Tetramethylpentane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "1071-26-7",
+   "name": "2,2-Dimethylheptane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "1074-43-7",
+   "name": "1-Methyl-3-n-propylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "1074-55-1",
+   "name": "1-Methyl-4-n-propylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "108-01-0",
+   "name": "Dimethylethanolamine",
+   "rdkit": "C4H11NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H11NO"
+  },
+  {
+   "cas": "108-03-2",
+   "name": "1-Nitropropane",
+   "rdkit": "C3H7NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H7NO2"
+  },
+  {
+   "cas": "108-05-4",
+   "name": "Vinyl acetate",
+   "rdkit": "C4H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6O2"
+  },
+  {
+   "cas": "108-08-7",
+   "name": "2,4-Dimethylpentane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "108-10-1",
+   "name": "Methyl isobutyl ketone",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "108-18-9",
+   "name": "Diisopropylamine",
+   "rdkit": "C6H15N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H15N"
+  },
+  {
+   "cas": "108-20-3",
+   "name": "Diisopropyl ether",
+   "rdkit": "C6H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O"
+  },
+  {
+   "cas": "108-21-4",
+   "name": "Isopropyl acetate",
+   "rdkit": "C5H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O2"
+  },
+  {
+   "cas": "108-24-7",
+   "name": "Acetic anhydride",
+   "rdkit": "C4H6O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6O3"
+  },
+  {
+   "cas": "108-31-6",
+   "name": "Maleic anhydride",
+   "rdkit": "C4H2O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H2O3"
+  },
+  {
+   "cas": "108-32-7",
+   "name": "Propylene carbonate",
+   "rdkit": "C4H6O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6O3"
+  },
+  {
+   "cas": "108-38-3",
+   "name": "M-xylene",
+   "rdkit": "C8H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10"
+  },
+  {
+   "cas": "108-39-4",
+   "name": "M-cresol",
+   "rdkit": "C7H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H8O"
+  },
+  {
+   "cas": "108-48-5",
+   "name": "2,6-Dimethylpyridine",
+   "rdkit": "C7H9N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H9N"
+  },
+  {
+   "cas": "108-59-8",
+   "name": "Dimethylmalonate",
+   "rdkit": "C5H8O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H8O4"
+  },
+  {
+   "cas": "108-65-6",
+   "name": "Propylene glycol monomethyl ether acetate",
+   "rdkit": "C6H12O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O3"
+  },
+  {
+   "cas": "108-67-8",
+   "name": "Mesitylene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "108-68-9",
+   "name": "3,5-Xylenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "108-70-3",
+   "name": "1,3,5-Trichlorobenzene",
+   "rdkit": "C6H3Cl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H3Cl3"
+  },
+  {
+   "cas": "108-83-8",
+   "name": "Diisobutyl ketone",
+   "rdkit": "C9H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18O"
+  },
+  {
+   "cas": "108-86-1",
+   "name": "Bromobenzene",
+   "rdkit": "C6H5Br",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H5Br"
+  },
+  {
+   "cas": "108-87-2",
+   "name": "Methylcyclohexane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "108-88-3",
+   "name": "Toluene",
+   "rdkit": "C7H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H8"
+  },
+  {
+   "cas": "108-89-4",
+   "name": "4-Methylpyridine",
+   "rdkit": "C6H7N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H7N"
+  },
+  {
+   "cas": "108-90-7",
+   "name": "Monochlorobenzene",
+   "rdkit": "C6H5Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H5Cl"
+  },
+  {
+   "cas": "108-93-0",
+   "name": "Cyclohexanol",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "108-94-1",
+   "name": "Cyclohexanone",
+   "rdkit": "C6H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H10O"
+  },
+  {
+   "cas": "108-95-2",
+   "name": "Phenol",
+   "rdkit": "C6H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H6O"
+  },
+  {
+   "cas": "108-98-5",
+   "name": "Phenyl mercaptan",
+   "rdkit": "C8H6S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H6S"
+  },
+  {
+   "cas": "108-99-6",
+   "name": "3-Methylpyridine",
+   "rdkit": "C6H7N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H7N"
+  },
+  {
+   "cas": "109-06-8",
+   "name": "2-Methylpyridine",
+   "rdkit": "C6H7N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H7N"
+  },
+  {
+   "cas": "109-60-4",
+   "name": "N-propyl acetate",
+   "rdkit": "C5H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O2"
+  },
+  {
+   "cas": "109-66-0",
+   "name": "N-pentane",
+   "rdkit": "C5H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12"
+  },
+  {
+   "cas": "109-67-1",
+   "name": "1-Pentene",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "109-83-1",
+   "name": "Methylethanolamine",
+   "rdkit": "C3H9NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H9NO"
+  },
+  {
+   "cas": "109-86-4",
+   "name": "2-Methoxyethanol",
+   "rdkit": "C3H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O2"
+  },
+  {
+   "cas": "109-87-5",
+   "name": "Methylal",
+   "rdkit": "C3H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O2"
+  },
+  {
+   "cas": "109-89-7",
+   "name": "Diethylamine",
+   "rdkit": "C4H11N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H11N"
+  },
+  {
+   "cas": "109-94-4",
+   "name": "Ethyl formate",
+   "rdkit": "C3H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O2"
+  },
+  {
+   "cas": "109-99-9",
+   "name": "Tetrahydrofuran",
+   "rdkit": "C4H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O"
+  },
+  {
+   "cas": "110-02-1",
+   "name": "Thiophene",
+   "rdkit": "C4H4S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H4S"
+  },
+  {
+   "cas": "110-06-5",
+   "name": "Di-tert-butyl disulfide",
+   "rdkit": "C8H18S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18S2"
+  },
+  {
+   "cas": "110-12-3",
+   "name": "5-Methyl-2-hexanone",
+   "rdkit": "C7H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O"
+  },
+  {
+   "cas": "110-16-7",
+   "name": "Maleic acid",
+   "rdkit": "C4H4O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H4O4"
+  },
+  {
+   "cas": "110-19-0",
+   "name": "Isobutyl acetate",
+   "rdkit": "C6H12O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O2"
+  },
+  {
+   "cas": "110-42-9",
+   "name": "Methyl caprate",
+   "rdkit": "C11H22O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H22O2"
+  },
+  {
+   "cas": "110-43-0",
+   "name": "2-Heptanone",
+   "rdkit": "C7H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O"
+  },
+  {
+   "cas": "110-54-3",
+   "name": "N-hexane",
+   "rdkit": "C6H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14"
+  },
+  {
+   "cas": "110-62-3",
+   "name": "Pentanal",
+   "rdkit": "C5H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O"
+  },
+  {
+   "cas": "110-63-4",
+   "name": "1,4-Butanediol",
+   "rdkit": "C4H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O2"
+  },
+  {
+   "cas": "110-65-6",
+   "name": "2-Butyne-1,4-diol",
+   "rdkit": "C4H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6O2"
+  },
+  {
+   "cas": "110-71-4",
+   "name": "1,2-Dimethoxyethane",
+   "rdkit": "C4H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O2"
+  },
+  {
+   "cas": "110-74-7",
+   "name": "N-propyl formate",
+   "rdkit": "C4H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O2"
+  },
+  {
+   "cas": "110-80-5",
+   "name": "2-Ethoxyethanol",
+   "rdkit": "C4H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O2"
+  },
+  {
+   "cas": "110-81-6",
+   "name": "Diethyl disulfide",
+   "rdkit": "C4H10S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10S2"
+  },
+  {
+   "cas": "110-82-7",
+   "name": "Cyclohexane",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "110-83-8",
+   "name": "Cyclohexene",
+   "rdkit": "C6H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H10"
+  },
+  {
+   "cas": "110-85-0",
+   "name": "Piperazine",
+   "rdkit": "C4H10N2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10N2"
+  },
+  {
+   "cas": "110-86-1",
+   "name": "Pyridine",
+   "rdkit": "C5H5N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H5N"
+  },
+  {
+   "cas": "110-97-4",
+   "name": "Diisopropanolamine",
+   "rdkit": "C6H15NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H15NO2"
+  },
+  {
+   "cas": "110-98-5",
+   "name": "DiPropylene Glycol",
+   "rdkit": "C6H14O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O3"
+  },
+  {
+   "cas": "111-01-3",
+   "name": "Squalane",
+   "rdkit": "C30H62",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C30H62"
+  },
+  {
+   "cas": "111-11-5",
+   "name": "Methyl caprylate",
+   "rdkit": "C9H18O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18O2"
+  },
+  {
+   "cas": "111-27-3",
+   "name": "1-Hexanol",
+   "rdkit": "C6H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O"
+  },
+  {
+   "cas": "111-31-9",
+   "name": "N-hexyl mercaptan",
+   "rdkit": "C6H14S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14S"
+  },
+  {
+   "cas": "111-34-2",
+   "name": "Butyl vinyl ether",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "111-40-0",
+   "name": "Diethylenetriamine",
+   "rdkit": "C4H13N3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H13N3"
+  },
+  {
+   "cas": "111-41-1",
+   "name": "N-aminoethyl ethanolamine",
+   "rdkit": "C4H12N2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H12N2O"
+  },
+  {
+   "cas": "111-42-2",
+   "name": "Diethanolamine",
+   "rdkit": "C4H11NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H11NO2"
+  },
+  {
+   "cas": "111-46-6",
+   "name": "Diethylene glycol",
+   "rdkit": "C4H10O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O3"
+  },
+  {
+   "cas": "111-47-7",
+   "name": "Di-n-propyl sulfide",
+   "rdkit": "C6H14S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14S"
+  },
+  {
+   "cas": "111-65-9",
+   "name": "N-octane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "111-66-0",
+   "name": "1-Octene",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "111-70-6",
+   "name": "1-Heptanol",
+   "rdkit": "C7H16O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16O"
+  },
+  {
+   "cas": "111-71-7",
+   "name": "Heptanal",
+   "rdkit": "C7H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O"
+  },
+  {
+   "cas": "111-76-2",
+   "name": "2-Butoxyethanol",
+   "rdkit": "C6H14O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O2"
+  },
+  {
+   "cas": "111-82-0",
+   "name": "Methyl laurate",
+   "rdkit": "C13H26O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C13H26O2"
+  },
+  {
+   "cas": "111-84-2",
+   "name": "N-nonane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "111-87-5",
+   "name": "1-Octanol",
+   "rdkit": "C8H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O"
+  },
+  {
+   "cas": "111-96-6",
+   "name": "Diethylene glycol dimethyl ether",
+   "rdkit": "C6H14O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O3"
+  },
+  {
+   "cas": "112-27-6",
+   "name": "Triethylene glycol",
+   "rdkit": "C6H14O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O4"
+  },
+  {
+   "cas": "112-30-1",
+   "name": "1-Decanol",
+   "rdkit": "C10H22O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22O"
+  },
+  {
+   "cas": "112-31-2",
+   "name": "Decanal",
+   "rdkit": "C10H20O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H20O"
+  },
+  {
+   "cas": "112-36-7",
+   "name": "Diethylene glycol diethyl ether",
+   "rdkit": "C8H18O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O3"
+  },
+  {
+   "cas": "112-39-0",
+   "name": "Methyl palmitate",
+   "rdkit": "C17H34O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C17H34O2"
+  },
+  {
+   "cas": "112-40-3",
+   "name": "N-dodecane",
+   "rdkit": "C12H26",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H26"
+  },
+  {
+   "cas": "112-41-4",
+   "name": "1-Dodecene",
+   "rdkit": "C12H24",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H24"
+  },
+  {
+   "cas": "112-42-5",
+   "name": "1-Undecanol",
+   "rdkit": "C11H24O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H24O"
+  },
+  {
+   "cas": "112-44-7",
+   "name": "Undecanal",
+   "rdkit": "C11H22O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H22O"
+  },
+  {
+   "cas": "112-49-2",
+   "name": "Triethylene glycol dimethyl ether",
+   "rdkit": "C8H18O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O4"
+  },
+  {
+   "cas": "112-53-8",
+   "name": "1-Dodecanol",
+   "rdkit": "C12H26O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H26O"
+  },
+  {
+   "cas": "112-54-9",
+   "name": "Dodecanal",
+   "rdkit": "C12H24O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H24O"
+  },
+  {
+   "cas": "112-60-7",
+   "name": "Tetraethylene glycol",
+   "rdkit": "C8H18O5",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O5"
+  },
+  {
+   "cas": "112-61-8",
+   "name": "Methyl stearate",
+   "rdkit": "C19H38O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H38O2"
+  },
+  {
+   "cas": "112-62-9",
+   "name": "Methyl oleate",
+   "rdkit": "C19H36O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H36O2"
+  },
+  {
+   "cas": "112-63-0",
+   "name": "Methyl linoleate",
+   "rdkit": "C19H34O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H34O2"
+  },
+  {
+   "cas": "112-70-9",
+   "name": "1-Tridecanol",
+   "rdkit": "C13H28O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C13H28O"
+  },
+  {
+   "cas": "112-72-1",
+   "name": "1-Tetradecanol",
+   "rdkit": "C14H30O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H30O"
+  },
+  {
+   "cas": "112-80-1",
+   "name": "Oleic acid",
+   "rdkit": "C18H34O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H34O2"
+  },
+  {
+   "cas": "112-88-9",
+   "name": "1-Octadecene",
+   "rdkit": "C18H36",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H36"
+  },
+  {
+   "cas": "112-92-5",
+   "name": "1-Octadecanol",
+   "rdkit": "C18H38O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H38O"
+  },
+  {
+   "cas": "112-95-8",
+   "name": "N-eicosane",
+   "rdkit": "C20H42",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H42"
+  },
+  {
+   "cas": "1120-21-4",
+   "name": "N-undecane",
+   "rdkit": "C11H24",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H24"
+  },
+  {
+   "cas": "1120-36-1",
+   "name": "1-Tetradecene",
+   "rdkit": "C14H28",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H28"
+  },
+  {
+   "cas": "115-07-1",
+   "name": "Propylene",
+   "rdkit": "C3H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6"
+  },
+  {
+   "cas": "115-10-6",
+   "name": "Dimethyl ether",
+   "rdkit": "C2H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6O"
+  },
+  {
+   "cas": "115-11-7",
+   "name": "Isobutene",
+   "rdkit": "C4H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8"
+  },
+  {
+   "cas": "118-90-1",
+   "name": "O-toluic acid",
+   "rdkit": "C8H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O2"
+  },
+  {
+   "cas": "118-96-7",
+   "name": "2,4,6-Trinitrotoluene",
+   "rdkit": "C7H5N3O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H5N3O6"
+  },
+  {
+   "cas": "1186-53-4",
+   "name": "2,2,3,4-Tetramethylpentane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "119-36-8",
+   "name": "Methyl salicylate",
+   "rdkit": "C8H8O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O3"
+  },
+  {
+   "cas": "119-64-2",
+   "name": "1,2,3,4-Tetrahydronaphthalene",
+   "rdkit": "C10H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H12"
+  },
+  {
+   "cas": "1191-87-3",
+   "name": "Pentaethylene glycol dimethyl ether",
+   "rdkit": "C12H26O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H26O6"
+  },
+  {
+   "cas": "1192-18-3",
+   "name": "Cis-1,2-dimethylcyclopentane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "120-61-6",
+   "name": "Dimethyl terephthalate",
+   "rdkit": "C10H10O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H10O4"
+  },
+  {
+   "cas": "120-82-1",
+   "name": "1,2,4-Trichlorobenzene",
+   "rdkit": "C6H3Cl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H3Cl3"
+  },
+  {
+   "cas": "121-14-2",
+   "name": "2,4-Dinitrotoluene",
+   "rdkit": "C7H6N2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6N2O4"
+  },
+  {
+   "cas": "121-44-8",
+   "name": "Triethylamine",
+   "rdkit": "C6H15N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H15N"
+  },
+  {
+   "cas": "122-32-7",
+   "name": "Triolein",
+   "rdkit": "C57H104O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C57H104O6"
+  },
+  {
+   "cas": "122-39-4",
+   "name": "Diphenylamine",
+   "rdkit": "C12H11N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H11N"
+  },
+  {
+   "cas": "122-79-2",
+   "name": "Phenyl acetate",
+   "rdkit": "C8H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O2"
+  },
+  {
+   "cas": "122-97-4",
+   "name": "3-Phenyl-1-propanol",
+   "rdkit": "C9H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12O"
+  },
+  {
+   "cas": "123-19-3",
+   "name": "4-Heptanone",
+   "rdkit": "C7H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O"
+  },
+  {
+   "cas": "123-38-6",
+   "name": "Propanal",
+   "rdkit": "C3H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O"
+  },
+  {
+   "cas": "123-42-2",
+   "name": "Diacetone alcohol",
+   "rdkit": "C6H12O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O2"
+  },
+  {
+   "cas": "123-51-3",
+   "name": "3-Methyl-1-butanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "123-63-7",
+   "name": "Paraldehyde",
+   "rdkit": "C6H12O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O3"
+  },
+  {
+   "cas": "123-72-8",
+   "name": "Butanal",
+   "rdkit": "C4H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O"
+  },
+  {
+   "cas": "123-86-4",
+   "name": "N-butyl acetate",
+   "rdkit": "C6H12O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O2"
+  },
+  {
+   "cas": "123-91-1",
+   "name": "1,4-Dioxane",
+   "rdkit": "C4H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O2"
+  },
+  {
+   "cas": "124-04-9",
+   "name": "Adipic acid",
+   "rdkit": "C6H10O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H10O4"
+  },
+  {
+   "cas": "124-07-2",
+   "name": "Caprylic acid",
+   "rdkit": "C8H16O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16O2"
+  },
+  {
+   "cas": "124-10-7",
+   "name": "Methyl myristate",
+   "rdkit": "C15H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H30O2"
+  },
+  {
+   "cas": "124-11-8",
+   "name": "1-Nonene",
+   "rdkit": "C9H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18"
+  },
+  {
+   "cas": "124-13-0",
+   "name": "Octanal",
+   "rdkit": "C8H16O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16O"
+  },
+  {
+   "cas": "124-18-5",
+   "name": "N-decane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "124-19-6",
+   "name": "Nonanal",
+   "rdkit": "C9H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18O"
+  },
+  {
+   "cas": "124-25-4",
+   "name": "Tetradecanal",
+   "rdkit": "C14H28O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H28O"
+  },
+  {
+   "cas": "124-38-9",
+   "name": "Carbon dioxide",
+   "rdkit": "CO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CO2"
+  },
+  {
+   "cas": "126-33-0",
+   "name": "Sulfolane",
+   "rdkit": "C4H8O2S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O2S"
+  },
+  {
+   "cas": "126-98-7",
+   "name": "Methacrylonitrile",
+   "rdkit": "C4H5N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H5N"
+  },
+  {
+   "cas": "127-00-4",
+   "name": "1-Chloro-2-propanol",
+   "rdkit": "C3H7ClO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H7ClO"
+  },
+  {
+   "cas": "127-19-5",
+   "name": "N,n-dimethylacetamide",
+   "rdkit": "C4H9NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H9NO"
+  },
+  {
+   "cas": "127-27-5",
+   "name": "Pimaric acid",
+   "rdkit": "C20H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H30O2"
+  },
+  {
+   "cas": "129-00-0",
+   "name": "Pyrene",
+   "rdkit": "C16H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H10"
+  },
+  {
+   "cas": "132259-10-0",
+   "name": "Air",
+   "rdkit": null,
+   "rdkit_charge": null,
+   "rdkit_sanitized": false,
+   "chemicals": null
+  },
+  {
+   "cas": "13286-92-5",
+   "name": "Methyl t-pentyl sulfide",
+   "rdkit": "C6H14S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14S"
+  },
+  {
+   "cas": "1333-74-0",
+   "name": "Hydrogen",
+   "rdkit": "H2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "H2"
+  },
+  {
+   "cas": "1333-74-0o",
+   "name": "Ortho-Hydrogen",
+   "rdkit": "H3O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": false,
+   "chemicals": "H2"
+  },
+  {
+   "cas": "1333-74-0p",
+   "name": "Para-Hydrogen",
+   "rdkit": "H4P",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": false,
+   "chemicals": "H2"
+  },
+  {
+   "cas": "135-01-3",
+   "name": "O-diethylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "135-98-8",
+   "name": "Sec-butylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "13509-27-8",
+   "name": "Methyl Phenyl Carbonate",
+   "rdkit": "C8H8O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O3"
+  },
+  {
+   "cas": "137-32-6",
+   "name": "2-Methyl-1-butanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "140-10-3",
+   "name": "T-Cinnamic acid",
+   "rdkit": "C9H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H8O2"
+  },
+  {
+   "cas": "140-31-8",
+   "name": "N-aminoethyl piperazine",
+   "rdkit": "C6H15N3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H15N3"
+  },
+  {
+   "cas": "141-43-5",
+   "name": "Monoethanolamine",
+   "rdkit": "C2H7NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H7NO"
+  },
+  {
+   "cas": "141-78-6",
+   "name": "Ethyl acetate",
+   "rdkit": "C4H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O2"
+  },
+  {
+   "cas": "141-79-7",
+   "name": "Mesityl oxide",
+   "rdkit": "C6H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H10O"
+  },
+  {
+   "cas": "141-82-2",
+   "name": "Malonic acid",
+   "rdkit": "C3H4O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4O4"
+  },
+  {
+   "cas": "141-93-5",
+   "name": "M-diethylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "142-28-9",
+   "name": "1,3-Dichloropropane",
+   "rdkit": "C3H6Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6Cl2"
+  },
+  {
+   "cas": "142-62-1",
+   "name": "Caproic acid",
+   "rdkit": "C6H12O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O2"
+  },
+  {
+   "cas": "142-82-5",
+   "name": "N-heptane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "142-92-7",
+   "name": "N-hexyl acetate",
+   "rdkit": "C8H16O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16O2"
+  },
+  {
+   "cas": "142-96-1",
+   "name": "Di-n-butyl ether",
+   "rdkit": "C8H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O"
+  },
+  {
+   "cas": "143-07-7",
+   "name": "Lauric acid",
+   "rdkit": "C12H24O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H24O2"
+  },
+  {
+   "cas": "143-08-8",
+   "name": "1-Nonanol",
+   "rdkit": "C9H20O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20O"
+  },
+  {
+   "cas": "143-24-8",
+   "name": "Tetraethylene glycol dimethyl ether",
+   "rdkit": "C10H22O5",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22O5"
+  },
+  {
+   "cas": "143-28-2",
+   "name": "Oleyl alcohol",
+   "rdkit": "C18H36O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H36O"
+  },
+  {
+   "cas": "14371-10-9",
+   "name": "T-Cinnamaldehyde",
+   "rdkit": "C9H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H8O"
+  },
+  {
+   "cas": "144-62-7",
+   "name": "Oxalic acid",
+   "rdkit": "C2H2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H2O4"
+  },
+  {
+   "cas": "14465-68-0",
+   "name": "Trilenollenin",
+   "rdkit": "C57H92O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C57H92O6"
+  },
+  {
+   "cas": "1454-84-8",
+   "name": "1-Nonadecanol",
+   "rdkit": "C19H40O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H40O"
+  },
+  {
+   "cas": "1454-85-9",
+   "name": "1-Heptadecanol",
+   "rdkit": "C17H36O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C17H36O"
+  },
+  {
+   "cas": "15869-80-4",
+   "name": "3-Ethylheptane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "15869-85-9",
+   "name": "5-Methylnonane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "15869-87-1",
+   "name": "2,2-Dimethyloctane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "15870-10-7",
+   "name": "2-Methyl-1-heptene",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "1634-04-4",
+   "name": "Methyl tert-butyl ether",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "1638-16-0",
+   "name": "TriPropylene Glycol",
+   "rdkit": "C9H20O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20O4"
+  },
+  {
+   "cas": "1638-26-2",
+   "name": "1,1-Dimethylcyclopentane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "1640-89-7",
+   "name": "Ethylcyclopentane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "16747-30-1",
+   "name": "2,4,4-Trimethylhexane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "16747-38-9",
+   "name": "2,3,3,4-Tetramethylpentane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "16747-50-5",
+   "name": "1-Methyl-1-ethylcyclopentane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "1678-91-7",
+   "name": "Ethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "1678-92-8",
+   "name": "N-propylcyclohexane",
+   "rdkit": "C9H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18"
+  },
+  {
+   "cas": "1678-93-9",
+   "name": "N-butylcyclohexane",
+   "rdkit": "C10H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H20"
+  },
+  {
+   "cas": "17301-94-9",
+   "name": "4-Methylnonane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "17352-32-8",
+   "name": "Nonadecanal",
+   "rdkit": "C19H38O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H38O"
+  },
+  {
+   "cas": "1740-19-8",
+   "name": "Dehydroabietic acid",
+   "rdkit": "C20H28O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H28O2"
+  },
+  {
+   "cas": "1758-88-9",
+   "name": "2-Ethyl-p-xylene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "1759-58-6",
+   "name": "Trans-1,3-dimethylcyclopentane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "18094-01-4",
+   "name": "2-Methyl-1-tridecene",
+   "rdkit": "C14H28",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H28"
+  },
+  {
+   "cas": "18516-37-5",
+   "name": "2-Methyl-1-undecene",
+   "rdkit": "C12H24",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H24"
+  },
+  {
+   "cas": "1860-27-1",
+   "name": "Isopropyl butyl ether",
+   "rdkit": "C7H16O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16O"
+  },
+  {
+   "cas": "1945-53-5",
+   "name": "Palustric acid",
+   "rdkit": "C20H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H30O2"
+  },
+  {
+   "cas": "20333-39-5",
+   "name": "Ethyl methyl disulfide",
+   "rdkit": "C3H8S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8S2"
+  },
+  {
+   "cas": "2040-95-1",
+   "name": "N-butylcyclopentane",
+   "rdkit": "C9H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18"
+  },
+  {
+   "cas": "2040-96-2",
+   "name": "N-propylcyclopentane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "206-44-0",
+   "name": "Fluoranthene",
+   "rdkit": "C16H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H10"
+  },
+  {
+   "cas": "21482-12-2",
+   "name": "PentaPropylene Glycol",
+   "rdkit": "C15H32O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H32O6"
+  },
+  {
+   "cas": "2177-47-1",
+   "name": "2-Methylindene",
+   "rdkit": "C10H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H10"
+  },
+  {
+   "cas": "218-01-9",
+   "name": "Chrysene",
+   "rdkit": "C18H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H12"
+  },
+  {
+   "cas": "2207-01-4",
+   "name": "Cis-1,2-dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "2207-03-6",
+   "name": "Trans-1,3-dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "2207-04-7",
+   "name": "Trans-1,4-dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "2216-33-3",
+   "name": "3-Methyloctane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "2216-34-4",
+   "name": "4-Methyloctane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "24800-25-7",
+   "name": "TetraPropylene Glycol",
+   "rdkit": "C12H26O5",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H26O5"
+  },
+  {
+   "cas": "2532-58-3",
+   "name": "Cis-1,3-dimethylcyclopentane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "2551-62-4",
+   "name": "Sulfur hexafluoride",
+   "rdkit": "F6S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "F6S"
+  },
+  {
+   "cas": "2615-15-8",
+   "name": "HexaEthylene Glycol",
+   "rdkit": "C12H26O7",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H26O7"
+  },
+  {
+   "cas": "2765-11-9",
+   "name": "Pentadecanal",
+   "rdkit": "C15H30O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H30O"
+  },
+  {
+   "cas": "287-23-0",
+   "name": "Cyclobutane",
+   "rdkit": "C4H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8"
+  },
+  {
+   "cas": "287-92-3",
+   "name": "Cyclopentane",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "2870-04-4",
+   "name": "2-Ethyl-m-xylene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "2980-71-4",
+   "name": "2-Methyl-1-nonene",
+   "rdkit": "C10H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H20"
+  },
+  {
+   "cas": "29833-69-0",
+   "name": "2-Methyl-1-pentadecene",
+   "rdkit": "C16H32",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H32"
+  },
+  {
+   "cas": "301-00-8",
+   "name": "Methyl linolenate",
+   "rdkit": "C19H32O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H32O2"
+  },
+  {
+   "cas": "30453-31-7",
+   "name": "Ethyl propyl disulfide",
+   "rdkit": "C5H12S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12S2"
+  },
+  {
+   "cas": "3071-32-7",
+   "name": "Ethylbenzene hydroperoxide",
+   "rdkit": "C8H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O2"
+  },
+  {
+   "cas": "3178-22-1",
+   "name": "Tert-butylcyclohexane",
+   "rdkit": "C10H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H20"
+  },
+  {
+   "cas": "3221-61-2",
+   "name": "2-Methyloctane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "334-48-5",
+   "name": "Capric acid",
+   "rdkit": "C10H20O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H20O2"
+  },
+  {
+   "cas": "3452-07-1",
+   "name": "1-Eicosene",
+   "rdkit": "C20H40",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H40"
+  },
+  {
+   "cas": "352-93-2",
+   "name": "Diethyl sulfide",
+   "rdkit": "C4H10S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10S"
+  },
+  {
+   "cas": "3522-94-9",
+   "name": "2,2,5-Trimethylhexane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "353-36-6",
+   "name": "Ethyl fluoride",
+   "rdkit": "C2H5F",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H5F"
+  },
+  {
+   "cas": "355-25-9",
+   "name": "Decafluorobutane",
+   "rdkit": "C4F10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4F10"
+  },
+  {
+   "cas": "36653-82-4",
+   "name": "1-Hexadecanol",
+   "rdkit": "C16H34O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H34O"
+  },
+  {
+   "cas": "3875-51-2",
+   "name": "Isopropylcyclopentane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "3877-15-4",
+   "name": "Methyl n-propyl sulfide",
+   "rdkit": "C4H10S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10S"
+  },
+  {
+   "cas": "3878-46-4",
+   "name": "Ethyl Phenyl Carbonate",
+   "rdkit": "C9H10O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H10O3"
+  },
+  {
+   "cas": "3967-55-3",
+   "name": "1,2-Dichloroethylene Carbonate",
+   "rdkit": "C3H2Cl2O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H2Cl2O3"
+  },
+  {
+   "cas": "4028-66-4",
+   "name": "2,4,6-Trimethylanisole",
+   "rdkit": "C10H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14O"
+  },
+  {
+   "cas": "4050-45-7",
+   "name": "Trans-2-hexene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "406-58-6",
+   "name": "1,1,1,3,3-Pentafluorbutane",
+   "rdkit": "C4H5F5",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H5F5"
+  },
+  {
+   "cas": "420-46-2",
+   "name": "1,1,1-Trifluoroethane",
+   "rdkit": "C2H3F3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H3F3"
+  },
+  {
+   "cas": "42764-74-9",
+   "name": "2-Methyl-1-heptadecene",
+   "rdkit": "C18H36",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": null
+  },
+  {
+   "cas": "4286-23-1",
+   "name": "P-isopropenyl phenol",
+   "rdkit": "C9H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H10O"
+  },
+  {
+   "cas": "4394-85-8",
+   "name": "4-Formylmorpholine",
+   "rdkit": "C5H9NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H9NO2"
+  },
+  {
+   "cas": "4433-56-1",
+   "name": "Ethane-1,1-diol",
+   "rdkit": "C2H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6O2"
+  },
+  {
+   "cas": "463-40-1",
+   "name": "Linolenic acid",
+   "rdkit": "C18H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H30O2"
+  },
+  {
+   "cas": "463-49-0",
+   "name": "Propadiene",
+   "rdkit": "C3H4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4"
+  },
+  {
+   "cas": "463-51-4",
+   "name": "Ketene",
+   "rdkit": "C2H2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H2O"
+  },
+  {
+   "cas": "463-57-0",
+   "name": "Methane-diol",
+   "rdkit": "CH4O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH4O2"
+  },
+  {
+   "cas": "463-58-1",
+   "name": "Carbonyl sulfide",
+   "rdkit": "COS",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "COS"
+  },
+  {
+   "cas": "463-82-1",
+   "name": "Neopentane",
+   "rdkit": "C5H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12"
+  },
+  {
+   "cas": "464-06-2",
+   "name": "2,2,3-Trimethylbutane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "471-77-2",
+   "name": "Neoabietic acid",
+   "rdkit": "C20H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H30O2"
+  },
+  {
+   "cas": "4780-79-4",
+   "name": "1-Naphthalenemethanol",
+   "rdkit": "C11H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H10O"
+  },
+  {
+   "cas": "4792-15-8",
+   "name": "PentaEthylene Glycol",
+   "rdkit": "C10H22O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22O6"
+  },
+  {
+   "cas": "488-23-3",
+   "name": "1,2,3,4-Tetramethylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "493-01-6",
+   "name": "Cis-decahydronaphthalene",
+   "rdkit": "C10H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H18"
+  },
+  {
+   "cas": "493-02-7",
+   "name": "Trans-decahydronaphthalene",
+   "rdkit": "C10H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H18"
+  },
+  {
+   "cas": "496-11-7",
+   "name": "Indane",
+   "rdkit": "C9H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H10"
+  },
+  {
+   "cas": "496-16-2",
+   "name": "2,3-Dihydrobenzofuran",
+   "rdkit": "C8H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O"
+  },
+  {
+   "cas": "50-00-0",
+   "name": "Formaldehyde",
+   "rdkit": "CH2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH2O"
+  },
+  {
+   "cas": "50-21-5",
+   "name": "Lactic acid",
+   "rdkit": "C3H6O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O3"
+  },
+  {
+   "cas": "503-17-3",
+   "name": "Dimethylacetylene",
+   "rdkit": "C4H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6"
+  },
+  {
+   "cas": "506-30-9",
+   "name": "Arachidic acid",
+   "rdkit": "C20H40O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H40O2"
+  },
+  {
+   "cas": "513-35-9",
+   "name": "2-Methyl-2-butene",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "513-44-0",
+   "name": "Isobutyl mercaptan",
+   "rdkit": "C4H10S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10S"
+  },
+  {
+   "cas": "513-53-1",
+   "name": "Sec-butyl mercaptan",
+   "rdkit": "C4H10S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10S"
+  },
+  {
+   "cas": "514-10-3",
+   "name": "Abietic acid",
+   "rdkit": "C20H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H30O2"
+  },
+  {
+   "cas": "52254-50-9",
+   "name": "2-Methyl-1-nonadecene",
+   "rdkit": "C20H40",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H40"
+  },
+  {
+   "cas": "526-73-8",
+   "name": "1,2,3-Trimethylbenzene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "526-75-0",
+   "name": "2,3-Xylenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "527-53-7",
+   "name": "1,2,3,5-Tetramethylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "527-60-6",
+   "name": "Mesitol",
+   "rdkit": "C9H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12O"
+  },
+  {
+   "cas": "527-84-4",
+   "name": "O-cymene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "535-77-3",
+   "name": "M-cymene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "537-40-6",
+   "name": "Trilinolein",
+   "rdkit": "C57H98O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C57H98O6"
+  },
+  {
+   "cas": "53716-82-8",
+   "name": "Cyrene",
+   "rdkit": "C6H8O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H8O3"
+  },
+  {
+   "cas": "538-23-8",
+   "name": "Tricaprylin",
+   "rdkit": "C27H50O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C27H50O6"
+  },
+  {
+   "cas": "538-24-9",
+   "name": "Trilaurin",
+   "rdkit": "C39H74O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C39H74O6"
+  },
+  {
+   "cas": "538-93-2",
+   "name": "Isobutylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "540-67-0",
+   "name": "Methyl ethyl ether",
+   "rdkit": "C3H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O"
+  },
+  {
+   "cas": "540-84-1",
+   "name": "2,2,4-Trimethylpentane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "540-97-6",
+   "name": "Dodecamethylcyclohexasiloxane",
+   "rdkit": "C12H36O6Si6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H36O6Si6"
+  },
+  {
+   "cas": "541-02-6",
+   "name": "Decamethylcyclopentasiloxane",
+   "rdkit": "C10H30O5Si5",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H30O5Si5"
+  },
+  {
+   "cas": "541-05-9",
+   "name": "Hexamethylcyclotrisiloxane",
+   "rdkit": "C6H18O3Si3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H18O3Si3"
+  },
+  {
+   "cas": "541-73-1",
+   "name": "M-dichlorobenzene",
+   "rdkit": "C6H4Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H4Cl2"
+  },
+  {
+   "cas": "542-52-9",
+   "name": "DiButyl Carbonate",
+   "rdkit": "C9H18O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H18O3"
+  },
+  {
+   "cas": "544-63-8",
+   "name": "Myristic acid",
+   "rdkit": "C14H28O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H28O2"
+  },
+  {
+   "cas": "544-76-3",
+   "name": "N-hexadecane",
+   "rdkit": "C16H34",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H34"
+  },
+  {
+   "cas": "544-85-4",
+   "name": "N-dotriacontane",
+   "rdkit": "C32H66",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C32H66"
+  },
+  {
+   "cas": "547-64-8",
+   "name": "Methyl lactate",
+   "rdkit": "C4H8O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O3"
+  },
+  {
+   "cas": "554-12-1",
+   "name": "Methyl propionate",
+   "rdkit": "C4H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O2"
+  },
+  {
+   "cas": "555-43-1",
+   "name": "Tristearin",
+   "rdkit": "C57H110O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C57H110O6"
+  },
+  {
+   "cas": "555-44-2",
+   "name": "Tripalmitin",
+   "rdkit": "C51H98O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C51H98O6"
+  },
+  {
+   "cas": "555-45-3",
+   "name": "Trimyristin",
+   "rdkit": "C45H86O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C45H86O6"
+  },
+  {
+   "cas": "556-67-2",
+   "name": "Octamethylcyclotetrasiloxane",
+   "rdkit": "C8H24O4Si4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H24O4Si4"
+  },
+  {
+   "cas": "557-17-5",
+   "name": "Methyl n-propyl ether",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "557-98-2",
+   "name": "2-Chloropropene",
+   "rdkit": "C3H5Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H5Cl"
+  },
+  {
+   "cas": "56-23-5",
+   "name": "Carbon tetrachloride",
+   "rdkit": "CCl4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CCl4"
+  },
+  {
+   "cas": "56-81-5",
+   "name": "Glycerol",
+   "rdkit": "C3H8O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O3"
+  },
+  {
+   "cas": "560-21-4",
+   "name": "2,3,3-Trimethylpentane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "562-49-2",
+   "name": "3,3-Dimethylpentane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "563-16-6",
+   "name": "3,3-Dimethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "563-45-1",
+   "name": "3-Methyl-1-butene",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "563-46-2",
+   "name": "2-Methyl-1-butene",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "563-80-4",
+   "name": "Methyl isopropyl ketone",
+   "rdkit": "C5H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O"
+  },
+  {
+   "cas": "564-02-3",
+   "name": "2,2,3-Trimethylpentane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "565-59-3",
+   "name": "2,3-Dimethylpentane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "565-75-3",
+   "name": "2,3,4-Trimethylpentane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "565-80-0",
+   "name": "Diisopropyl ketone",
+   "rdkit": "C7H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O"
+  },
+  {
+   "cas": "57-10-3",
+   "name": "Palmitic acid",
+   "rdkit": "C16H32O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H32O2"
+  },
+  {
+   "cas": "57-11-4",
+   "name": "Stearic acid",
+   "rdkit": "C18H36O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H36O2"
+  },
+  {
+   "cas": "57-55-6",
+   "name": "1,2-Propylene glycol",
+   "rdkit": "C3H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O2"
+  },
+  {
+   "cas": "576-26-1",
+   "name": "2,6-Xylenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "578-58-5",
+   "name": "2-Methylanisole",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "583-48-2",
+   "name": "3,4-Dimethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "5835-26-7",
+   "name": "Isopimaric acid",
+   "rdkit": "C20H30O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H30O2"
+  },
+  {
+   "cas": "584-02-1",
+   "name": "3-Pentanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "584-94-1",
+   "name": "2,3-Dimethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "589-34-4",
+   "name": "3-Methylhexane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "589-38-8",
+   "name": "3-Hexanone",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "589-43-5",
+   "name": "2,4-Dimethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "589-53-7",
+   "name": "4-Methylheptane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "589-81-1",
+   "name": "3-Methylheptane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "589-93-5",
+   "name": "2,5-Dimethylpyridine",
+   "rdkit": "C7H9N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H9N"
+  },
+  {
+   "cas": "590-18-1",
+   "name": "Cis-2-butene",
+   "rdkit": "C4H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8"
+  },
+  {
+   "cas": "590-19-2",
+   "name": "1,2-Butadiene",
+   "rdkit": "C4H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6"
+  },
+  {
+   "cas": "590-35-2",
+   "name": "2,2-Dimethylpentane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "590-66-9",
+   "name": "1,1-Dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "590-73-8",
+   "name": "2,2-Dimethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "591-50-4",
+   "name": "Iodobenzene",
+   "rdkit": "C6H5I",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H5I"
+  },
+  {
+   "cas": "591-76-4",
+   "name": "2-Methylhexane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "591-78-6",
+   "name": "2-Hexanone",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "5911-04-6",
+   "name": "3-Methylnonane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "592-13-2",
+   "name": "2,5-Dimethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "592-27-8",
+   "name": "2-Methylheptane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "592-41-6",
+   "name": "1-Hexene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "592-76-7",
+   "name": "1-Heptene",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "593-45-3",
+   "name": "N-octadecane",
+   "rdkit": "C18H38",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H38"
+  },
+  {
+   "cas": "593-49-7",
+   "name": "N-heptacosane",
+   "rdkit": "C27H56",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C27H56"
+  },
+  {
+   "cas": "594-82-1",
+   "name": "2,2,3,3-Tetramethylbutane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "598-53-8",
+   "name": "Methyl isopropyl ether",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "598-75-4",
+   "name": "3-Methyl-2-butanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "599-64-4",
+   "name": "P-cumylphenol",
+   "rdkit": "C15H16O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H16O"
+  },
+  {
+   "cas": "60-29-7",
+   "name": "Diethyl ether",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "60-33-3",
+   "name": "Linoleic acid",
+   "rdkit": "C18H32O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H32O2"
+  },
+  {
+   "cas": "6032-29-7",
+   "name": "2-Pentanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "605-02-7",
+   "name": "1-Phenylnaphthalene",
+   "rdkit": "C16H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H12"
+  },
+  {
+   "cas": "606-20-2",
+   "name": "2,6-Dinitrotoluene",
+   "rdkit": "C7H6N2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6N2O4"
+  },
+  {
+   "cas": "609-26-7",
+   "name": "2-Methyl-3-ethylpentane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "610-39-9",
+   "name": "3,4-Dinitrotoluene",
+   "rdkit": "C7H6N2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6N2O4"
+  },
+  {
+   "cas": "611-14-3",
+   "name": "O-ethyltoluene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "616-23-9",
+   "name": "2,3-Dichloro-1-propanol",
+   "rdkit": "C3H6Cl2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6Cl2O"
+  },
+  {
+   "cas": "616-38-6",
+   "name": "Dimethyl carbonate",
+   "rdkit": "C3H6O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O3"
+  },
+  {
+   "cas": "6163-64-0",
+   "name": "Methyl t-butyl sulfide",
+   "rdkit": "C5H12S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12S"
+  },
+  {
+   "cas": "617-78-7",
+   "name": "3-Ethylpentane",
+   "rdkit": "C7H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16"
+  },
+  {
+   "cas": "617-94-7",
+   "name": "2-Phenyl-2-propanol",
+   "rdkit": "C9H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12O"
+  },
+  {
+   "cas": "618-85-9",
+   "name": "3,5-Dinitrotoluene",
+   "rdkit": "C7H6N2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6N2O4"
+  },
+  {
+   "cas": "619-15-8",
+   "name": "2,5-Dinitrotoluene",
+   "rdkit": "C7H6N2O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6N2O4"
+  },
+  {
+   "cas": "619-99-8",
+   "name": "3-Ethylhexane",
+   "rdkit": "C8H18",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18"
+  },
+  {
+   "cas": "62-53-3",
+   "name": "Aniline",
+   "rdkit": "C6H7N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H7N"
+  },
+  {
+   "cas": "620-14-4",
+   "name": "M-ethyltoluene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "621-71-6",
+   "name": "Tricaprin",
+   "rdkit": "C33H62O6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C33H62O6"
+  },
+  {
+   "cas": "622-96-8",
+   "name": "P-ethyltoluene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "623-36-9",
+   "name": "2-Methyl-2-pentenal",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H10O"
+  },
+  {
+   "cas": "623-53-0",
+   "name": "Methyl Ethyl Carbonate",
+   "rdkit": "C4H8O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O3"
+  },
+  {
+   "cas": "624-29-3",
+   "name": "Cis-1,4-dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "624-64-6",
+   "name": "Trans-2-butene",
+   "rdkit": "C4H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8"
+  },
+  {
+   "cas": "624-72-6",
+   "name": "1,2-Difluoroethane",
+   "rdkit": "C2H4F2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4F2"
+  },
+  {
+   "cas": "624-89-5",
+   "name": "Methyl ethyl sulfide",
+   "rdkit": "C3H8S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8S"
+  },
+  {
+   "cas": "624-92-0",
+   "name": "Dimethyl disulfide",
+   "rdkit": "C2H6S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6S2"
+  },
+  {
+   "cas": "625-25-2",
+   "name": "2-Methyl-2-Heptanol",
+   "rdkit": "C8H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O"
+  },
+  {
+   "cas": "625-44-5",
+   "name": "Methyl isobutyl ether",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "627-05-4",
+   "name": "1-Nitrobutane",
+   "rdkit": "C4H9NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H9NO2"
+  },
+  {
+   "cas": "627-20-3",
+   "name": "Cis-2-pentene",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "628-63-7",
+   "name": "N-pentyl acetate",
+   "rdkit": "C7H14O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14O2"
+  },
+  {
+   "cas": "628-71-7",
+   "name": "1-Heptyne",
+   "rdkit": "C7H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H12"
+  },
+  {
+   "cas": "629-19-6",
+   "name": "Di-n-propyl disulfide",
+   "rdkit": "C6H14S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14S2"
+  },
+  {
+   "cas": "629-50-5",
+   "name": "N-tridecane",
+   "rdkit": "C13H28",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C13H28"
+  },
+  {
+   "cas": "629-59-4",
+   "name": "N-tetradecane",
+   "rdkit": "C14H30",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H30"
+  },
+  {
+   "cas": "629-62-9",
+   "name": "N-pentadecane",
+   "rdkit": "C15H32",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H32"
+  },
+  {
+   "cas": "629-73-2",
+   "name": "1-Hexadecene",
+   "rdkit": "C16H32",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H32"
+  },
+  {
+   "cas": "629-76-5",
+   "name": "1-Pentadecanol",
+   "rdkit": "C15H32O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H32O"
+  },
+  {
+   "cas": "629-78-7",
+   "name": "N-heptadecane",
+   "rdkit": "C17H36",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C17H36"
+  },
+  {
+   "cas": "629-80-1",
+   "name": "Hexadecanal",
+   "rdkit": "C16H32O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C16H32O"
+  },
+  {
+   "cas": "629-90-3",
+   "name": "Heptadecanal",
+   "rdkit": "C17H34O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C17H34O"
+  },
+  {
+   "cas": "629-92-5",
+   "name": "N-nonadecane",
+   "rdkit": "C19H40",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C19H40"
+  },
+  {
+   "cas": "629-94-7",
+   "name": "N-heneicosane",
+   "rdkit": "C21H44",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C21H44"
+  },
+  {
+   "cas": "629-96-9",
+   "name": "1-Eicosanol",
+   "rdkit": "C20H42O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C20H42O"
+  },
+  {
+   "cas": "629-97-0",
+   "name": "N-docosane",
+   "rdkit": "C22H46",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C22H46"
+  },
+  {
+   "cas": "629-99-2",
+   "name": "N-pentacosane",
+   "rdkit": "C25H52",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C25H52"
+  },
+  {
+   "cas": "630-01-3",
+   "name": "N-hexacosane",
+   "rdkit": "C26H54",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C26H54"
+  },
+  {
+   "cas": "630-02-4",
+   "name": "N-octacosane",
+   "rdkit": "C28H58",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C28H58"
+  },
+  {
+   "cas": "630-03-5",
+   "name": "N-nonacosane",
+   "rdkit": "C29H60",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C29H60"
+  },
+  {
+   "cas": "630-06-8",
+   "name": "N-hexatriacontane",
+   "rdkit": "C36H74",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C36H74"
+  },
+  {
+   "cas": "630-08-0",
+   "name": "Carbon monoxide",
+   "rdkit": "CO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": false,
+   "chemicals": "CO"
+  },
+  {
+   "cas": "637-92-3",
+   "name": "Tert-butyl ethyl ether",
+   "rdkit": "C6H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O"
+  },
+  {
+   "cas": "638-04-0",
+   "name": "Cis-1,3-dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "638-66-4",
+   "name": "Octadecanal",
+   "rdkit": "C18H36O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H36O"
+  },
+  {
+   "cas": "638-67-5",
+   "name": "N-tricosane",
+   "rdkit": "C23H48",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C23H48"
+  },
+  {
+   "cas": "64-17-5",
+   "name": "Ethanol",
+   "rdkit": "C2H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6O"
+  },
+  {
+   "cas": "64-18-6",
+   "name": "Formic acid",
+   "rdkit": "CH2O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH2O2"
+  },
+  {
+   "cas": "64-19-7",
+   "name": "Acetic acid",
+   "rdkit": "C2H4O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4O2"
+  },
+  {
+   "cas": "646-04-8",
+   "name": "Trans-2-pentene",
+   "rdkit": "C5H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10"
+  },
+  {
+   "cas": "646-31-1",
+   "name": "N-tetracosane",
+   "rdkit": "C24H50",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C24H50"
+  },
+  {
+   "cas": "65-85-0",
+   "name": "Benzoic acid",
+   "rdkit": "C7H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6O2"
+  },
+  {
+   "cas": "66-25-1",
+   "name": "Hexanal",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "67-56-1",
+   "name": "Methanol",
+   "rdkit": "CH4O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH4O"
+  },
+  {
+   "cas": "67-63-0",
+   "name": "Isopropanol",
+   "rdkit": "C3H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O"
+  },
+  {
+   "cas": "67-64-1",
+   "name": "Acetone",
+   "rdkit": "C3H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O"
+  },
+  {
+   "cas": "67-66-3",
+   "name": "Chloroform",
+   "rdkit": "CHCl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CHCl3"
+  },
+  {
+   "cas": "67-68-5",
+   "name": "Dimethyl sulfoxide",
+   "rdkit": "C2H6OS",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6OS"
+  },
+  {
+   "cas": "674-76-0",
+   "name": "4-Methyl-trans-2-pentene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "68-12-2",
+   "name": "N,n-dimethylformamide",
+   "rdkit": "C3H7NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H7NO"
+  },
+  {
+   "cas": "6863-58-7",
+   "name": "Di-sec-butyl ether",
+   "rdkit": "C8H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H18O"
+  },
+  {
+   "cas": "6876-23-9",
+   "name": "Trans-1,2-dimethylcyclohexane",
+   "rdkit": "C8H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H16"
+  },
+  {
+   "cas": "689-97-4",
+   "name": "Vinylacetylene",
+   "rdkit": "C4H4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H4"
+  },
+  {
+   "cas": "69-72-7",
+   "name": "Salicylic acid",
+   "rdkit": "C7H6O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H6O3"
+  },
+  {
+   "cas": "690-39-1",
+   "name": "1,1,1,3,3,3-Hexafluoropropane",
+   "rdkit": "C3H2F6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H2F6"
+  },
+  {
+   "cas": "691-38-3",
+   "name": "4-Methyl-cis-2-pentene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "71-23-8",
+   "name": "1-Propanol",
+   "rdkit": "C3H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8O"
+  },
+  {
+   "cas": "71-36-3",
+   "name": "1-Butanol",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "71-41-0",
+   "name": "1-Pentanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "71-43-2",
+   "name": "Benzene",
+   "rdkit": "C6H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H6"
+  },
+  {
+   "cas": "7154-79-2",
+   "name": "2,2,3,3-Tetramethylpentane",
+   "rdkit": "C9H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20"
+  },
+  {
+   "cas": "7154-80-5",
+   "name": "3,3,5-Trimethylheptane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "74-82-8",
+   "name": "Methane",
+   "rdkit": "CH4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH4"
+  },
+  {
+   "cas": "74-84-0",
+   "name": "Ethane",
+   "rdkit": "C2H6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6"
+  },
+  {
+   "cas": "74-85-1",
+   "name": "Ethylene",
+   "rdkit": "C2H4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4"
+  },
+  {
+   "cas": "74-86-2",
+   "name": "Acetylene",
+   "rdkit": "C2H2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H2"
+  },
+  {
+   "cas": "74-87-3",
+   "name": "Methyl chloride",
+   "rdkit": "CH3Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH3Cl"
+  },
+  {
+   "cas": "74-88-4",
+   "name": "Methyl iodide",
+   "rdkit": "CH3I",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH3I"
+  },
+  {
+   "cas": "74-89-5",
+   "name": "Methylamine",
+   "rdkit": "CH5N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH5N"
+  },
+  {
+   "cas": "74-90-8",
+   "name": "Hydrogen cyanide",
+   "rdkit": "CHN",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CHN"
+  },
+  {
+   "cas": "74-93-1",
+   "name": "Methyl mercaptan",
+   "rdkit": "CH4S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH4S"
+  },
+  {
+   "cas": "74-98-6",
+   "name": "Propane",
+   "rdkit": "C3H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8"
+  },
+  {
+   "cas": "74-99-7",
+   "name": "Methylacetylene",
+   "rdkit": "C3H4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4"
+  },
+  {
+   "cas": "74388-92-4",
+   "name": "HexaPropylene Glycol",
+   "rdkit": "C18H38O7",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": null
+  },
+  {
+   "cas": "7439-90-9",
+   "name": "Krypton",
+   "rdkit": "Kr",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Kr"
+  },
+  {
+   "cas": "7439-97-6",
+   "name": "Mercury",
+   "rdkit": "Hg",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Hg"
+  },
+  {
+   "cas": "7440-01-9",
+   "name": "Neon",
+   "rdkit": "Ne",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Ne"
+  },
+  {
+   "cas": "7440-37-1",
+   "name": "Argon",
+   "rdkit": "Ar",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Ar"
+  },
+  {
+   "cas": "7440-59-7",
+   "name": "Helium-4",
+   "rdkit": "He",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "He"
+  },
+  {
+   "cas": "7440-63-3",
+   "name": "Xenon",
+   "rdkit": "Xe",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Xe"
+  },
+  {
+   "cas": "7446-09-5",
+   "name": "Sulfur dioxide",
+   "rdkit": "O2S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "O2S"
+  },
+  {
+   "cas": "7446-11-9",
+   "name": "Sulfur trioxide",
+   "rdkit": "O3S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "O3S"
+  },
+  {
+   "cas": "75-00-3",
+   "name": "Ethyl chloride",
+   "rdkit": "C2H5Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H5Cl"
+  },
+  {
+   "cas": "75-01-4",
+   "name": "Vinyl chloride",
+   "rdkit": "C2H3Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H3Cl"
+  },
+  {
+   "cas": "75-04-7",
+   "name": "Ethylamine",
+   "rdkit": "C2H7N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H7N"
+  },
+  {
+   "cas": "75-05-8",
+   "name": "Acetonitrile",
+   "rdkit": "C2H3N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H3N"
+  },
+  {
+   "cas": "75-07-0",
+   "name": "Acetaldehyde",
+   "rdkit": "C2H4O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4O"
+  },
+  {
+   "cas": "75-08-1",
+   "name": "Ethyl mercaptan",
+   "rdkit": "C2H6S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6S"
+  },
+  {
+   "cas": "75-09-2",
+   "name": "Dichloromethane",
+   "rdkit": "CH2Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH2Cl2"
+  },
+  {
+   "cas": "75-15-0",
+   "name": "Carbon disulfide",
+   "rdkit": "CS2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CS2"
+  },
+  {
+   "cas": "75-18-3",
+   "name": "Dimethyl sulfide",
+   "rdkit": "C2H6S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H6S"
+  },
+  {
+   "cas": "75-21-8",
+   "name": "Ethylene oxide",
+   "rdkit": "C2H4O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4O"
+  },
+  {
+   "cas": "75-28-5",
+   "name": "Isobutane",
+   "rdkit": "C4H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10"
+  },
+  {
+   "cas": "75-29-6",
+   "name": "Isopropyl chloride",
+   "rdkit": "C3H7Cl",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H7Cl"
+  },
+  {
+   "cas": "75-31-0",
+   "name": "Isopropylamine",
+   "rdkit": "C3H9N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H9N"
+  },
+  {
+   "cas": "75-33-2",
+   "name": "Isopropyl mercaptan",
+   "rdkit": "C3H8S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H8S"
+  },
+  {
+   "cas": "75-34-3",
+   "name": "1,1-Dichloroethane",
+   "rdkit": "C2H4Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4Cl2"
+  },
+  {
+   "cas": "75-36-5",
+   "name": "Acetyl chloride",
+   "rdkit": "C2H3ClO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H3ClO"
+  },
+  {
+   "cas": "75-37-6",
+   "name": "1,1-Difluoroethane",
+   "rdkit": "C2H4F2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H4F2"
+  },
+  {
+   "cas": "75-44-5",
+   "name": "Phosgene",
+   "rdkit": "CCl2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CCl2O"
+  },
+  {
+   "cas": "75-46-7",
+   "name": "Trifluoromethane",
+   "rdkit": "CHF3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CHF3"
+  },
+  {
+   "cas": "75-50-3",
+   "name": "Trimethylamine",
+   "rdkit": "C3H9N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H9N"
+  },
+  {
+   "cas": "75-52-5",
+   "name": "Nitromethane",
+   "rdkit": "CH3NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CH3NO2"
+  },
+  {
+   "cas": "75-56-9",
+   "name": "1,2-Propylene oxide",
+   "rdkit": "C3H6O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O"
+  },
+  {
+   "cas": "75-65-0",
+   "name": "2-Methyl-2-propanol",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "75-66-1",
+   "name": "Tert-butyl mercaptan",
+   "rdkit": "C4H10S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10S"
+  },
+  {
+   "cas": "75-71-8",
+   "name": "Dichlorodifluoromethane",
+   "rdkit": "CCl2F2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CCl2F2"
+  },
+  {
+   "cas": "75-73-0",
+   "name": "Carbon tetrafluoride",
+   "rdkit": "CF4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "CF4"
+  },
+  {
+   "cas": "75-83-2",
+   "name": "2,2-Dimethylbutane",
+   "rdkit": "C6H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14"
+  },
+  {
+   "cas": "75-84-3",
+   "name": "2,2-Dimethyl-1-propanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "75-85-4",
+   "name": "2-Methyl-2-butanol",
+   "rdkit": "C5H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12O"
+  },
+  {
+   "cas": "75-87-6",
+   "name": "Trichloroacetaldehyde",
+   "rdkit": "C2HCl3O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2HCl3O"
+  },
+  {
+   "cas": "75-97-8",
+   "name": "3,3-Dimethyl-2-butanone",
+   "rdkit": "C6H12O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12O"
+  },
+  {
+   "cas": "754-12-1",
+   "name": "2,3,3,3-TetrafluoroPropene",
+   "rdkit": "C3H2F4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H2F4"
+  },
+  {
+   "cas": "76-02-8",
+   "name": "Trichloroacetyl chloride",
+   "rdkit": "C2Cl4O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2Cl4O"
+  },
+  {
+   "cas": "76-16-4",
+   "name": "Hexafluoroethane",
+   "rdkit": "C2F6",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2F6"
+  },
+  {
+   "cas": "763-29-1",
+   "name": "2-Methyl-1-pentene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "7642-09-3",
+   "name": "Cis-3-hexene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "7647-01-0",
+   "name": "Hydrogen chloride",
+   "rdkit": "ClH",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "ClH"
+  },
+  {
+   "cas": "76589-16-7",
+   "name": "2-Methoxy-2-Methyl-Heptane",
+   "rdkit": "C9H20O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H20O"
+  },
+  {
+   "cas": "7664-41-7",
+   "name": "Ammonia",
+   "rdkit": "H3N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "H3N"
+  },
+  {
+   "cas": "767-59-9",
+   "name": "1-Methylindene",
+   "rdkit": "C10H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H10"
+  },
+  {
+   "cas": "7688-21-3",
+   "name": "Cis-2-hexene",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "7697-37-2",
+   "name": "Nitric acid",
+   "rdkit": "HNO3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "HNO3"
+  },
+  {
+   "cas": "77-73-6",
+   "name": "Dicyclopentadiene",
+   "rdkit": "C10H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H12"
+  },
+  {
+   "cas": "7722-84-1",
+   "name": "Hydrogen peroxide",
+   "rdkit": "H2O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "H2O2"
+  },
+  {
+   "cas": "7726-95-6",
+   "name": "Bromine",
+   "rdkit": "Br2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Br2"
+  },
+  {
+   "cas": "7727-37-9",
+   "name": "Nitrogen",
+   "rdkit": "N2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "N2"
+  },
+  {
+   "cas": "7732-18-5",
+   "name": "Water",
+   "rdkit": "H2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "H2O"
+  },
+  {
+   "cas": "7782-41-4",
+   "name": "Fluorine",
+   "rdkit": "F2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "F2"
+  },
+  {
+   "cas": "7782-44-7",
+   "name": "Oxygen",
+   "rdkit": "O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "O2"
+  },
+  {
+   "cas": "7782-50-5",
+   "name": "Chlorine",
+   "rdkit": "Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "Cl2"
+  },
+  {
+   "cas": "7783-06-4",
+   "name": "Hydrogen sulfide",
+   "rdkit": "H2S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "H2S"
+  },
+  {
+   "cas": "78-78-4",
+   "name": "Isopentane",
+   "rdkit": "C5H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H12"
+  },
+  {
+   "cas": "78-79-5",
+   "name": "Isoprene",
+   "rdkit": "C5H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H8"
+  },
+  {
+   "cas": "78-83-1",
+   "name": "2-Methyl-1-propanol",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "78-84-2",
+   "name": "2-Methylpropanal",
+   "rdkit": "C4H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O"
+  },
+  {
+   "cas": "78-87-5",
+   "name": "1,2-Dichloropropane",
+   "rdkit": "C3H6Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6Cl2"
+  },
+  {
+   "cas": "78-92-2",
+   "name": "2-Butanol",
+   "rdkit": "C4H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H10O"
+  },
+  {
+   "cas": "78-93-3",
+   "name": "Methyl ethyl ketone",
+   "rdkit": "C4H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H8O"
+  },
+  {
+   "cas": "79-00-5",
+   "name": "1,1,2-Trichloroethane",
+   "rdkit": "C2H3Cl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H3Cl3"
+  },
+  {
+   "cas": "79-01-6",
+   "name": "Trichloroethylene",
+   "rdkit": "C2HCl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2HCl3"
+  },
+  {
+   "cas": "79-02-7",
+   "name": "Dichloroacetaldehyde",
+   "rdkit": "C2H2Cl2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H2Cl2O"
+  },
+  {
+   "cas": "79-09-4",
+   "name": "Propionic acid",
+   "rdkit": "C3H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O2"
+  },
+  {
+   "cas": "79-10-7",
+   "name": "Acrylic acid",
+   "rdkit": "C3H4O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4O2"
+  },
+  {
+   "cas": "79-20-9",
+   "name": "Methyl acetate",
+   "rdkit": "C3H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6O2"
+  },
+  {
+   "cas": "79-24-3",
+   "name": "Nitroethane",
+   "rdkit": "C2H5NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H5NO2"
+  },
+  {
+   "cas": "79-29-8",
+   "name": "2,3-Dimethylbutane",
+   "rdkit": "C6H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14"
+  },
+  {
+   "cas": "79-36-7",
+   "name": "Dichloroacetyl chloride",
+   "rdkit": "C2HCl3O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2HCl3O"
+  },
+  {
+   "cas": "79-41-4",
+   "name": "Methacrylic acid",
+   "rdkit": "C4H6O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C4H6O2"
+  },
+  {
+   "cas": "79-46-9",
+   "name": "2-Nitropropane",
+   "rdkit": "C3H7NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H7NO2"
+  },
+  {
+   "cas": "80-05-7",
+   "name": "Bisphenol a",
+   "rdkit": "C15H16O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H16O2"
+  },
+  {
+   "cas": "80-15-9",
+   "name": "Cumene hydroperoxide",
+   "rdkit": "C9H12O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12O2"
+  },
+  {
+   "cas": "80-43-3",
+   "name": "Dicumyl peroxide",
+   "rdkit": "C18H22O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C18H22O2"
+  },
+  {
+   "cas": "80-56-8",
+   "name": "Alpha-pinene",
+   "rdkit": "C10H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H16"
+  },
+  {
+   "cas": "80-62-6",
+   "name": "Methyl methacrylate",
+   "rdkit": "C5H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H8O2"
+  },
+  {
+   "cas": "8004-13-5",
+   "name": "Dowtherm A",
+   "rdkit": "C12H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C24H20O"
+  },
+  {
+   "cas": "811-97-2",
+   "name": "1,1,1,2-Tetrafluoroethane",
+   "rdkit": "C2H2F4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C2H2F4"
+  },
+  {
+   "cas": "821-95-4",
+   "name": "1-Undecene",
+   "rdkit": "C11H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H22"
+  },
+  {
+   "cas": "822-50-4",
+   "name": "Trans-1,2-dimethylcyclopentane",
+   "rdkit": "C7H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H14"
+  },
+  {
+   "cas": "83-32-9",
+   "name": "Acenaphthene",
+   "rdkit": "C12H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H10"
+  },
+  {
+   "cas": "83-46-5",
+   "name": "Sitosterol",
+   "rdkit": "C29H50O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C29H50O"
+  },
+  {
+   "cas": "837-08-1",
+   "name": "O,p-bisphenol a",
+   "rdkit": "C15H16O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C15H16O2"
+  },
+  {
+   "cas": "85-01-8",
+   "name": "Phenanthrene",
+   "rdkit": "C14H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H10"
+  },
+  {
+   "cas": "86-73-7",
+   "name": "Fluorene",
+   "rdkit": "C13H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C13H10"
+  },
+  {
+   "cas": "87-61-6",
+   "name": "1,2,3-Trichlorobenzene",
+   "rdkit": "C6H3Cl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H3Cl3"
+  },
+  {
+   "cas": "871-83-0",
+   "name": "2-Methylnonane",
+   "rdkit": "C10H22",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H22"
+  },
+  {
+   "cas": "872-05-9",
+   "name": "1-Decene",
+   "rdkit": "C10H20",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H20"
+  },
+  {
+   "cas": "872-50-4",
+   "name": "N-methyl-2-pyrrolidone",
+   "rdkit": "C5H9NO",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H9NO"
+  },
+  {
+   "cas": "874-41-9",
+   "name": "4-Ethyl-m-xylene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "88-72-2",
+   "name": "O-nitrotoluene",
+   "rdkit": "C7H7NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H7NO2"
+  },
+  {
+   "cas": "88-99-3",
+   "name": "Phthalic acid",
+   "rdkit": "C8H6O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H6O4"
+  },
+  {
+   "cas": "882-33-7",
+   "name": "Diphenyl disulfide",
+   "rdkit": "C12H10S2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H10S2"
+  },
+  {
+   "cas": "90-00-6",
+   "name": "O-ethylphenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "90-12-0",
+   "name": "1-Methylnaphthalene",
+   "rdkit": "C11H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H10"
+  },
+  {
+   "cas": "91-20-3",
+   "name": "Naphthalene",
+   "rdkit": "C10H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H8"
+  },
+  {
+   "cas": "91-22-5",
+   "name": "Quinoline",
+   "rdkit": "C9H7N",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H7N"
+  },
+  {
+   "cas": "91-57-6",
+   "name": "2-Methylnaphthalene",
+   "rdkit": "C11H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C11H10"
+  },
+  {
+   "cas": "919-94-8",
+   "name": "Ethyl tert-pentyl ether",
+   "rdkit": "C7H16O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H16O"
+  },
+  {
+   "cas": "92-52-4",
+   "name": "Biphenyl",
+   "rdkit": "C12H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H10"
+  },
+  {
+   "cas": "93-89-0",
+   "name": "Ethyl benzoate",
+   "rdkit": "C9H10O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H10O2"
+  },
+  {
+   "cas": "934-80-5",
+   "name": "4-Ethyl-o-xylene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "94-36-0",
+   "name": "Benzoyl peroxide",
+   "rdkit": "C14H10O4",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C14H10O4"
+  },
+  {
+   "cas": "95-13-6",
+   "name": "Indene",
+   "rdkit": "C9H8",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H8"
+  },
+  {
+   "cas": "95-15-8",
+   "name": "Benzothiophene",
+   "rdkit": "C8H6S",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H6S"
+  },
+  {
+   "cas": "95-47-6",
+   "name": "O-xylene",
+   "rdkit": "C8H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10"
+  },
+  {
+   "cas": "95-48-7",
+   "name": "O-cresol",
+   "rdkit": "C7H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H8O"
+  },
+  {
+   "cas": "95-50-1",
+   "name": "O-dichlorobenzene",
+   "rdkit": "C6H4Cl2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H4Cl2"
+  },
+  {
+   "cas": "95-63-6",
+   "name": "1,2,4-Trimethylbenzene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "95-65-8",
+   "name": "3,4-Xylenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "95-87-4",
+   "name": "2,5-Xylenol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "95-93-2",
+   "name": "1,2,4,5-Tetramethylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "96-14-0",
+   "name": "3-Methylpentane",
+   "rdkit": "C6H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14"
+  },
+  {
+   "cas": "96-18-4",
+   "name": "1,2,3-Trichloropropane",
+   "rdkit": "C3H5Cl3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H5Cl3"
+  },
+  {
+   "cas": "96-22-0",
+   "name": "3-Pentanone",
+   "rdkit": "C5H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O"
+  },
+  {
+   "cas": "96-23-1",
+   "name": "1,3-Dichloro-2-propanol",
+   "rdkit": "C3H6Cl2O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H6Cl2O"
+  },
+  {
+   "cas": "96-24-2",
+   "name": "3-Chloro-1,2-propanediol",
+   "rdkit": "C3H7ClO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H7ClO2"
+  },
+  {
+   "cas": "96-37-7",
+   "name": "Methylcyclopentane",
+   "rdkit": "C6H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H12"
+  },
+  {
+   "cas": "96-49-1",
+   "name": "Ethylene carbonate",
+   "rdkit": "C3H4O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C3H4O3"
+  },
+  {
+   "cas": "97-64-3",
+   "name": "Ethyl lactate",
+   "rdkit": "C5H10O3",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H10O3"
+  },
+  {
+   "cas": "98-01-1",
+   "name": "Furfural",
+   "rdkit": "C5H4O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C5H4O2"
+  },
+  {
+   "cas": "98-06-6",
+   "name": "Tert-butylbenzene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "98-49-7",
+   "name": "P-diisopropylbenzene hydroperoxide",
+   "rdkit": "C12H18O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C12H18O2"
+  },
+  {
+   "cas": "98-55-5",
+   "name": "Alpha-terpineol",
+   "rdkit": "C10H18O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H18O"
+  },
+  {
+   "cas": "98-82-8",
+   "name": "Cumene",
+   "rdkit": "C9H12",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H12"
+  },
+  {
+   "cas": "98-83-9",
+   "name": "Alpha-methylstyrene",
+   "rdkit": "C9H10",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C9H10"
+  },
+  {
+   "cas": "98-85-1",
+   "name": "Alpha-methylbenzyl alcohol",
+   "rdkit": "C8H10O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H10O"
+  },
+  {
+   "cas": "98-86-2",
+   "name": "Acetophenone",
+   "rdkit": "C8H8O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O"
+  },
+  {
+   "cas": "98-95-3",
+   "name": "Nitrobenzene",
+   "rdkit": "C6H5NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H5NO2"
+  },
+  {
+   "cas": "99-08-1",
+   "name": "M-nitrotoluene",
+   "rdkit": "C7H7NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H7NO2"
+  },
+  {
+   "cas": "99-86-5",
+   "name": "Alpha-terpinene",
+   "rdkit": "C10H16",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H16"
+  },
+  {
+   "cas": "99-87-6",
+   "name": "P-cymene",
+   "rdkit": "C10H14",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C10H14"
+  },
+  {
+   "cas": "99-94-5",
+   "name": "P-toluic acid",
+   "rdkit": "C8H8O2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C8H8O2"
+  },
+  {
+   "cas": "99-99-0",
+   "name": "P-nitrotoluene",
+   "rdkit": "C7H7NO2",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C7H7NO2"
+  },
+  {
+   "cas": "994-05-8",
+   "name": "Methyl tert-pentyl ether",
+   "rdkit": "C6H14O",
+   "rdkit_charge": 0,
+   "rdkit_sanitized": true,
+   "chemicals": "C6H14O"
+  }
+ ]
+}

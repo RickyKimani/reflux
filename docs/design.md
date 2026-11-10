@@ -1085,6 +1085,143 @@ its local derivatives to its operands':
 
 An input no output uses has a derivative of 0.
 
+## Reactions
+
+M9 step 4: a compound's formula, equations read and balanced, a set's
+independence, and each reaction's standard properties and K(T).
+
+### Formulas
+
+[chem/](../chem/chem.v) knows the elements: their symbols, and CIAAW's
+standard atomic weights of 2021, abridged, with the conventional value for
+an element whose weight is an interval. A formula is element counts, by
+atomic number, read from:
+
+- **a formula,** element symbols each with a whole count after it if not 1,
+  and groups in ( ) or [ ] with a count after them: CH3OH, C2H5OH,
+  CH3(CH2)2CH3. Case matters, so Co is cobalt and CO carbon monoxide. A
+  fractional count is refused: no compound has a fraction of an atom.
+- **a SMILES string** ([chem/smiles.v](../chem/smiles.v)): atoms in the
+  organic subset (B C N O P S F Cl Br I, aromatic b c n o p s) and in
+  brackets (isotope, element, chirality, hydrogens, charge, class), bonds,
+  branches, ring bonds (`1`, `%12`) and dots. An organic-subset atom takes
+  OpenSMILES' implicit hydrogens: enough to bring the sum of its bond orders
+  v to its lowest normal valence that holds them (B 3; C 4; N 3, 5; O 2;
+  P 3, 5; S 2, 4, 6; halogens 1), and none if none does. An aromatic atom
+  gives one bond to its ring, so it takes max(0, V₀ − v − 1), V₀ its lowest
+  valence: benzene's c one, pyridine's n none, furan's o and thiophene's s
+  none. A bracket atom has the hydrogens it says. The net charge is the
+  bracket atoms' charges summed.
+
+A formula is written in Hill's order: carbon, then hydrogen, then the rest
+by symbol; without carbon, every element by symbol, hydrogen among them.
+
+**A compound's formula** ([components/formula.v](../components/formula.v))
+comes from its file's three sources: its structure (ChemSep's, with the -
+that marks a ring's ends and the spaces between groups dropped), its SMILES
+string, and its molar mass. It's the formula two of them agree on: the
+structure's and the SMILES's if they're equal, otherwise whichever of them
+weighs the file's molar mass, to
+
+    |Σ nₑ Aₑ − M| ≤ 2·10⁻⁴ M,
+
+which is the most ChemSep's older atomic weights move a mass (sulfur's
+32.065 against 32.06). A hydrogen more or less is beyond that below
+5,000 g/mol. A compound with no formula two agree on, a mixture's
+pseudo-compound, can't react.
+
+### Equations
+
+[kinetics/equation.v](../kinetics/equation.v) reads an equation, `CH4 +
+H2O = CO + 3 H2`: terms joined by + on each side of one =, each a species
+with a coefficient before it if not 1. An arrow is refused: whether a
+reaction runs both ways is its rate law's to say.
+
+- **A coefficient** is a whole number, a decimal or a fraction, read
+  exactly, and may touch its species (3H2) unless the whole term is a
+  species' name (1-butene).
+- **A species** is found ([kinetics/species.v](../kinetics/species.v)) by
+  its name or an alias, ignoring case, by its CAS number, or by its
+  formula, read as above, so CH3OH, CH4O and HOCH3 are methanol. A name
+  that two species answer to, or a formula two share (ethanol's and
+  dimethyl ether's), is refused, and so is a name not found, with the
+  closest names and formulas. Quotes hold a name with a + or an = in it.
+- Each species appears once: twice on one side, or on both sides, is
+  refused.
+
+The coefficients ν are signed, below zero on the left, and exact.
+
+**Balance.** For each element e, and for the charge z where any species
+has one,
+
+    Σ_left |νᵢ| nₑᵢ = Σ_right νᵢ nₑᵢ,
+
+exactly. An equation that doesn't balance is refused with each element's
+counts on each side, and a suggestion from the element matrix's null
+space. With A the matrix of counts (an element per row, the charge last, a
+species per column), the balanced coefficients are the vectors ν with
+A·ν = 0, found by exact elimination to reduced row echelon form:
+
+- **one direction:** scaled to the smallest whole numbers, signed so that
+  the first species keeps its side, and suggested. A species with 0 is left
+  out, and one whose sign changed is moved, each said;
+- **none:** no coefficients would balance it. An element on one side only
+  is named;
+- **more than one:** the species balance in that many independent ways, so
+  there's no one equation to suggest.
+
+### Independence
+
+A set of reactions is independent if its stoichiometric matrix (a reaction
+per row) has full rank. [kinetics/dependence.v](../kinetics/dependence.v)
+eliminates one reaction at a time, exactly, against the independent ones
+before it, carrying each row's makeup, the combination of reactions it is.
+A reaction reduced to nothing is a combination of earlier ones:
+
+    0 = Σⱼ mⱼ νⱼ,  mₖ = 1   ⇒   νₖ = Σ_{j<k} (−mⱼ) νⱼ
+
+so the owner's overall reforming reaction is steam reforming plus the
+shift. That's fine for kinetics, each reaction having its own rate, and
+refused for an equilibrium over reactions (step 7).
+
+### Standard properties and K(T)
+
+At a standard state of the ideal gas at 1 bar (D7),
+[kinetics/standard.v](../kinetics/standard.v) takes each species' H and S
+as thermo's `Fluid` does,
+
+    H°ᵢ(T) = ΔH°f,i + ∫_T°^T Cp,i dT,    S°ᵢ(T) = S°ᵢ + ∫_T°^T Cp,i/T dT,
+
+with T° = 298.15 K, and
+
+    ΔH° = Σ νᵢ H°ᵢ,   ΔS° = Σ νᵢ S°ᵢ,   ΔG° = ΔH° − TΔS°,
+    ln K = −ΔG°/RT,   d ln K/dT = ΔH°/RT²,
+
+with R = N_A·k_B = 8.31446261815324 J/(mol·K), expr's built-in constant,
+since K appears in rates that use it. K is on activities p/1 bar.
+
+**The check against ΔG°f.** In a balanced equation the elements' entropies
+cancel, so a data set whose ΔG°f agrees with its ΔH°f and S° gives
+
+    Σ νᵢ ΔG°f,i = ΔH°(T°) − T°ΔS°(T°),
+
+and `formation_gap` is the difference. For a compound alone
+([components/formation.v](../components/formation.v)) the gap is
+
+    ΔG°f − [ΔH°f − T°(S° − Σₑ nₑ S°ₑ)],
+
+with the elements' entropies in their reference states from CODATA's key
+values (H₂, N₂, O₂, F₂ and Cl₂ gases, Br₂ liquid, I₂ solid, each per atom;
+graphite, rhombic sulfur, silicon, liquid mercury, and the noble gases).
+The data-quality report lists every compound over 1 kJ/mol.
+
+**ChemSep's standard states are mixed.** Its S° for H₂, H₂O, CO, CO₂, N₂ and
+NH₃ are 0.10 to 0.11 J/(mol·K) below thermo's 1-bar values, as 1-atm values
+are (R ln 1.01325 = 0.109), while methane's and methanol's are at 1 bar.
+reflux takes the files as they are, so reforming's K is about 4% below
+what consistent 1-bar data would give. The differences from thermo's data
+are recorded in the tests.
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

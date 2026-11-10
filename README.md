@@ -106,6 +106,9 @@ components/
                     correlations in SI per mol
   params.v, kij.v   ChemSep's kᵢⱼ (PR, SRK) and Mathias–Copeman (PR) files,
                     and kᵢⱼ matrices with a report of where each value came from
+  formula.v         a compound's formula, where two of its structure, SMILES
+                    and molar mass agree (M9)
+  formation.v       ΔG°f against ΔH°f and S°, with the elements' entropies
   quality/          the sweep behind docs/data-quality.md
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
@@ -127,6 +130,9 @@ flash/
   tv.v              TV and UV flashes, in the model's own variables (T, V, n)
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
+chem/               the elements (M9): symbols and standard atomic weights,
+                    formulas (CH3(CH2)2CH3) and SMILES strings read to
+                    element counts, Hill's order
 quantity/           numbers with units ("30 bar", "100 kmol/h") read into SI,
                     by NIST SP 811's definitions, and the dimension algebra
                     (M9): compound units such as kmol/(kg*h) and bar^0.5,
@@ -142,6 +148,14 @@ expr/               the expression language (M9): every equation a user gives
   tape.v            expressions compiled to a tape: folded, merged, fused;
                     evaluation into the caller's buffer, and the gradient by
                     one reverse sweep
+kinetics/           reactions (M9)
+  species.v         a compound as reactions know it, found by name, CAS
+                    number or formula
+  equation.v        equations read and balanced by elements and charge, with
+                    the balanced equation suggested
+  dependence.v      which reactions of a set combine others
+  standard.v        ΔH°, ΔS°, ΔG° and K(T) from the ideal gas
+  exact.v           exact arithmetic: null spaces, whole coefficients
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
@@ -199,12 +213,14 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m10a_bench.py (the cost of a call from Python),
                     gen_m9_fixtures.py and expr_render.v (expressions against
                     SymPy, and the constants against NIST's), tape_bench.v
-                    (the tape against rates written in V),
+                    (the tape against rates written in V), gen_m9_reactions.py
+                    (formulas against RDKit and chemicals, and K(T) against
+                    mpmath and thermo),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)
-testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath
-                    and DWSIM 9, with provenance, and flowsheets/ (TOML files,
+testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
+                    RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results)
 data/vendor/        the ChemSep 8.50 database, verbatim, with its licence
 data/components/    the same, converted: one TOML file per compound

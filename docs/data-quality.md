@@ -21,6 +21,8 @@ everything it noticed record by record, are in
 | Own vapour-pressure correlation usable | 642 compounds | 26 use Antoine |
 | InChIKey unique | 642 compounds | 1 shared |
 | Eq.-106 ranges within Tc | | 99 run past it |
+| A formula two of structure, SMILES and molar mass agree on | 642 compounds | 2 have none; 5 where structure and SMILES disagree |
+| ΔG°f within 1 kJ/mol of ΔH°f − T°ΔS°f | 638 compounds | 142 |
 
 ## Correlations: finite, and positive where they must be
 
@@ -592,6 +594,193 @@ vaporization and surface tensions.
 | 98-86-2 | Acetophenone | heat_of_vaporization: Tmax 709.6 K, Tc 701.0 K |
 | 98-86-2 | Acetophenone | surface_tension: Tmax 709.6 K, Tc 701.0 K |
 | 99-87-6 | P-cymene | heat_of_vaporization: Tmax 653.15 K, Tc 652.0 K |
+
+## Formulas
+
+A compound's formula is read from its structure, CH3(CH2)2CH3, and from
+its SMILES string, and each checked against its molar mass by the
+standard atomic weights. It takes the formula two of the three agree
+on (M9 step 4); reactions are balanced by it. A compound with none can't
+react.
+
+### No formula (2)
+
+| CAS | Compound | Problem |
+|---|---|---|
+| 132259-10-0 | Air | its structure, (N2)0.781 (O2)0.209 (Ar)0.01, is a mixture's; it has no SMILES; its molar mass is 28.96 g/mol |
+| 8004-13-5 | Dowtherm A | its structure, ((C6H5)2O)0.735((C6H5)2)0.265, is a mixture's; its SMILES gives C12H10O (170.211 g/mol); its molar mass is 165.967 g/mol |
+
+### Structure and SMILES disagree (5)
+
+| CAS | Compound | Problem |
+|---|---|---|
+| 108-98-5 | Phenyl mercaptan | structure C6H6S, SMILES C8H6S (C1=CC=C2C(=C1)C=CS2): the structure's, as the molar mass agrees |
+| 1333-74-0o | Ortho-Hydrogen | structure H2, SMILES H2O (o[H][H]): the structure's, as the molar mass agrees |
+| 1333-74-0p | Para-Hydrogen | structure H2, SMILES H3P (p[H][H]): the structure's, as the molar mass agrees |
+| 1740-19-8 | Dehydroabietic acid | structure C20H30O2, SMILES C20H28O2 (CC(C)C1=CC2=C(C=C1)C3(CCCC(C3CC2)(C)C(=O)O)C): the SMILES string's, as the molar mass agrees |
+| 623-36-9 | 2-Methyl-2-pentenal | structure C6H10O, SMILES C6H12O (CCC=C(C)CO): the structure's, as the molar mass agrees |
+
+### A SMILES string's charge that isn't the file's (0)
+
+None.
+
+## Gibbs energies of formation
+
+ΔG°f against ΔH°f − T°(S° − Σ nₑS°ₑ), with T° = 298.15 K and the
+elements' entropies in their reference states from CODATA's key values.
+A K from ΔG°f differs from one from ΔH°f and S° by a factor of
+exp(gap/RT°) for every mole of such a compound in the reaction. reflux
+takes K from ΔH°f, S° and Cp (M9 decision D7), so a gap here means that
+ΔG°f or one of the other two is wrong, and K may be. Listed when
+over 1 kJ/mol, largest first. Below that, rounding and the files'
+mixed standard pressures account for it: some of their S° are at 1 atm,
+0.11 J/(mol·K) below the 1-bar value, which is 33 J/mol in ΔG°f for a
+mole of gas.
+
+| CAS | Compound | ΔG°f (kJ/mol) | From ΔH°f and S° | Gap (kJ/mol) |
+|---|---|---|---|---|
+| 122-32-7 | Triolein | -421.65 | 2044 | -2465.69 |
+| 14465-68-0 | Trilenollenin | 50.231 | 2291.5 | -2241.25 |
+| 537-40-6 | Trilinolein | -185.71 | -20.75 | -164.96 |
+| 538-23-8 | Tricaprylin | -914.7 | -755.78 | -158.92 |
+| 621-71-6 | Tricaprin | -863.28 | -704.97 | -158.30 |
+| 538-24-9 | Trilaurin | -811.86 | -654.17 | -157.68 |
+| 555-45-3 | Trimyristin | -760.43 | -603.37 | -157.06 |
+| 555-44-2 | Tripalmitin | -709.01 | -552.56 | -156.44 |
+| 555-43-1 | Tristearin | -657.59 | -501.76 | -155.82 |
+| 123-42-2 | Diacetone alcohol | -288.6 | -368.43 | +79.83 |
+| 110-98-5 | DiPropylene Glycol | -406 | -340.13 | -65.87 |
+| 3878-46-4 | Ethyl Phenyl Carbonate | -317.6 | -253.35 | -64.25 |
+| 1638-16-0 | TriPropylene Glycol | -503.5 | -441.67 | -61.83 |
+| 112-80-1 | Oleic acid | -227.8 | -166.72 | -61.08 |
+| 76589-16-7 | 2-Methoxy-2-Methyl-Heptane | -6.0293e-06 | -59.976 | +59.98 |
+| 53716-82-8 | Cyrene | -183.28 | -243.08 | +59.80 |
+| 301-00-8 | Methyl linolenate | -18.249 | 40.164 | -58.41 |
+| 112-63-0 | Methyl linoleate | -96.896 | -40.005 | -56.89 |
+| 143-28-2 | Oleyl alcohol | 87.12 | 143.92 | -56.80 |
+| 21482-12-2 | PentaPropylene Glycol | -687.8 | -631.31 | -56.49 |
+| 540-97-6 | Dodecamethylcyclohexasiloxane | -2215 | -2159.3 | -55.73 |
+| 106-70-7 | Methyl caproate | -357.03 | -301.95 | -55.09 |
+| 111-11-5 | Methyl caprylate | -339.89 | -285.01 | -54.88 |
+| 80-05-7 | Bisphenol a | 44.2 | -9.6589 | +53.86 |
+| 104-76-7 | 2-Ethyl-1-Hexanol | -122.78 | -68.958 | -53.82 |
+| 24800-25-7 | TetraPropylene Glycol | -592.9 | -539.56 | -53.34 |
+| 541-02-6 | Decamethylcyclopentasiloxane | -2029 | -1977.5 | -51.49 |
+| 141-82-2 | Malonic acid | -670 | -716.92 | +46.92 |
+| 556-67-2 | Octamethylcyclotetrasiloxane | -1680 | -1635.3 | -44.72 |
+| 541-05-9 | Hexamethylcyclotrisiloxane | -1179 | -1221.4 | +42.37 |
+| 463-57-0 | Methane-diol | -301.8 | -342.3 | +40.50 |
+| 4394-85-8 | 4-Formylmorpholine | -133.3 | -93.894 | -39.41 |
+| 610-39-9 | 3,4-Dinitrotoluene | 259 | 220.69 | +38.31 |
+| 111-42-2 | Diethanolamine | -225.74 | -190.04 | -35.70 |
+| 13509-27-8 | Methyl Phenyl Carbonate | -311.53 | -340.33 | +28.80 |
+| 623-53-0 | Methyl Ethyl Carbonate | -457.62 | -486.41 | +28.79 |
+| 95-15-8 | Benzothiophene | 243 | 214.23 | +28.77 |
+| 102-09-0 | DiPhenyl Carbonate | -157.02 | -185.77 | +28.75 |
+| 542-52-9 | DiButyl Carbonate | -415.52 | -444.08 | +28.56 |
+| 1740-19-8 | Dehydroabietic acid | -80.739 | -107.65 | +26.91 |
+| 118-96-7 | 2,4,6-Trinitrotoluene | 284.4 | 257.62 | +26.78 |
+| 67-68-5 | Dimethyl sulfoxide | -115.7 | -140.07 | +24.37 |
+| 619-15-8 | 2,5-Dinitrotoluene | 236 | 211.99 | +24.01 |
+| 60-33-3 | Linoleic acid | -117.2 | -93.405 | -23.80 |
+| 94-36-0 | Benzoyl peroxide | -108.8 | -132.59 | +23.79 |
+| 618-85-9 | 3,5-Dinitrotoluene | 234 | 211.99 | +22.01 |
+| 108-31-6 | Maleic anhydride | -355 | -373.66 | +18.66 |
+| 108-32-7 | Propylene carbonate | -455.5 | -474.02 | +18.52 |
+| 606-20-2 | 2,6-Dinitrotoluene | 232 | 213.49 | +18.51 |
+| 122-39-4 | Diphenylamine | 362.6 | 345.54 | +17.06 |
+| 624-72-6 | 1,2-Difluoroethane | -391.9 | -375.12 | -16.78 |
+| 110-85-0 | Piperazine | 170 | 185.68 | -15.68 |
+| 123-63-7 | Paraldehyde | -396.9 | -410.13 | +13.23 |
+| 111-47-7 | Di-n-propyl sulfide | 21.5 | 33.888 | -12.39 |
+| 101-84-8 | Diphenyl ether | 175 | 163.31 | +11.69 |
+| 420-46-2 | 1,1,1-Trifluoroethane | -667.3 | -678.68 | +11.38 |
+| 141-43-5 | Monoethanolamine | -103.3 | -92.47 | -10.83 |
+| 144-62-7 | Oxalic acid | -661.4 | -671.44 | +10.04 |
+| 124-10-7 | Methyl myristate | -219.89 | -229.09 | +9.20 |
+| 100-52-7 | Benzaldehyde | 22.39 | 30.279 | -7.89 |
+| 102-71-6 | Triethanolamine | -299.4 | -291.61 | -7.79 |
+| 763-29-1 | 2-Methyl-1-pentene | 72.969 | 80.276 | -7.31 |
+| 120-61-6 | Dimethyl terephthalate | -474 | -466.73 | -7.27 |
+| 75-37-6 | 1,1-Difluoroethane | -436.22 | -443.22 | +7.00 |
+| 355-25-9 | Decafluorobutane | -1981 | -1974.3 | -6.75 |
+| 112-31-2 | Decanal | -67.39 | -61.235 | -6.15 |
+| 96-23-1 | 1,3-Dichloro-2-propanol | -225.4 | -219.35 | -6.05 |
+| 108-18-9 | Diisopropylamine | 64.2 | 58.211 | +5.99 |
+| 124-19-6 | Nonanal | -75.53 | -69.58 | -5.95 |
+| 142-96-1 | Di-n-butyl ether | -88.27 | -82.436 | -5.83 |
+| 106-88-7 | 1,2-Epoxybutane | -18.273 | -12.727 | -5.55 |
+| 674-76-0 | 4-Methyl-trans-2-pentene | 74.35 | 79.856 | -5.51 |
+| 108-20-3 | Diisopropyl ether | -124.8 | -119.29 | -5.51 |
+| 691-38-3 | 4-Methyl-cis-2-pentene | 76.986 | 82.398 | -5.41 |
+| 1454-84-8 | 1-Nonadecanol | -21.827 | -26.772 | +4.95 |
+| 109-86-4 | 2-Methoxyethanol | -255.4 | -250.59 | -4.81 |
+| 111-70-6 | 1-Heptanol | -125.3 | -120.85 | -4.45 |
+| 565-80-0 | Diisopropyl ketone | -123.7 | -128.01 | +4.31 |
+| 123-51-3 | 3-Methyl-1-butanol | -146 | -150.31 | +4.31 |
+| 17352-32-8 | Nonadecanal | 14.624 | 10.481 | +4.14 |
+| 638-66-4 | Octadecanal | 6.053 | 2.0136 | +4.04 |
+| 65-85-0 | Benzoic acid | -214.2 | -210.18 | -4.02 |
+| 629-90-3 | Heptadecanal | -2.5175 | -6.4536 | +3.94 |
+| 629-80-1 | Hexadecanal | -11.088 | -14.921 | +3.83 |
+| 112-70-9 | 1-Tridecanol | -75.2 | -71.385 | -3.81 |
+| 135-98-8 | Sec-butylbenzene | 145.23 | 141.48 | +3.75 |
+| 2765-11-9 | Pentadecanal | -19.659 | -23.388 | +3.73 |
+| 107-07-3 | 2-Chloroethanol | -193 | -189.34 | -3.66 |
+| 463-58-1 | Carbonyl sulfide | -169.2 | -165.57 | -3.63 |
+| 124-25-4 | Tetradecanal | -28.229 | -31.855 | +3.63 |
+| 137-32-6 | 2-Methyl-1-butanol | -141 | -144.53 | +3.53 |
+| 111-01-3 | Squalane | 186.8 | 190.32 | -3.52 |
+| 96-18-4 | 1,2,3-Trichloropropane | -97.78 | -94.754 | -3.03 |
+| 110-19-0 | Isobutyl acetate | -322.2 | -319.28 | -2.92 |
+| 535-77-3 | M-cymene | 130.1 | 133 | -2.90 |
+| 544-63-8 | Myristic acid | -278 | -275.21 | -2.79 |
+| 78-87-5 | 1,2-Dichloropropane | -80.18 | -82.951 | +2.77 |
+| 119-36-8 | Methyl salicylate | -339 | -341.67 | +2.67 |
+| 112-95-8 | N-eicosane | 115.7 | 118.17 | -2.47 |
+| 1067-08-9 | 3-Methyl-3-ethylpentane | 22.88 | 20.414 | +2.47 |
+| 108-24-7 | Acetic anhydride | -476.7 | -474.27 | -2.43 |
+| 98-06-6 | Tert-butylbenzene | 149.95 | 147.57 | +2.38 |
+| 10486-19-8 | Tridecanal | -42.98 | -40.769 | -2.21 |
+| 112-41-4 | 1-Dodecene | 136.1 | 138.28 | -2.18 |
+| 95-93-2 | 1,2,4,5-Tetramethylbenzene | 117.7 | 119.8 | -2.10 |
+| 609-26-7 | 2-Methyl-3-ethylpentane | 18.786 | 20.836 | -2.05 |
+| 112-62-9 | Methyl oleate | -117 | -119.03 | +2.03 |
+| 69-72-7 | Salicylic acid | -395.4 | -393.38 | -2.02 |
+| 110-42-9 | Methyl caprate | -256.27 | -254.27 | -2.00 |
+| 406-58-6 | 1,1,1,3,3-Pentafluorbutane | -1019 | -1020.8 | +1.84 |
+| 108-05-4 | Vinyl acetate | -228.7 | -230.5 | +1.80 |
+| 109-06-8 | 2-Methylpyridine | 177.07 | 178.84 | -1.77 |
+| 526-73-8 | 1,2,3-Trimethylbenzene | 124.4 | 126.16 | -1.76 |
+| 108-89-4 | 4-Methylpyridine | 182.08 | 183.75 | -1.67 |
+| 50-21-5 | Lactic acid | -496 | -494.36 | -1.64 |
+| 557-98-2 | 2-Chloropropene | 26.3 | 24.754 | +1.55 |
+| 7154-80-5 | 3,3,5-Trimethylheptane | 32.3 | 33.822 | -1.52 |
+| 79-09-4 | Propionic acid | -356.8 | -358.24 | +1.44 |
+| 79-46-9 | 2-Nitropropane | -12.803 | -11.435 | -1.37 |
+| 1067-20-5 | 3,3-Diethylpentane | 41.7 | 43.047 | -1.35 |
+| 15870-10-7 | 2-Methyl-1-heptene | 93.2 | 91.906 | +1.29 |
+| 75-29-6 | Isopropyl chloride | -62.51 | -61.228 | -1.28 |
+| 629-94-7 | N-heneicosane | 122.9 | 121.63 | +1.27 |
+| 629-96-9 | 1-Eicosanol | -15.94 | -17.202 | +1.26 |
+| 83-46-5 | Sitosterol | 533.35 | 534.6 | -1.25 |
+| 123-38-6 | Propanal | -124.4 | -125.64 | +1.24 |
+| 71-41-0 | 1-Pentanol | -146.02 | -147.25 | +1.23 |
+| 630-06-8 | N-hexatriacontane | 245.4 | 246.62 | -1.22 |
+| 99-87-6 | P-cymene | 133.52 | 134.73 | -1.21 |
+| 111-27-3 | 1-Hexanol | -134.4 | -135.6 | +1.20 |
+| 123-72-8 | Butanal | -115.39 | -116.55 | +1.16 |
+| 112-92-5 | 1-Octadecanol | -32.79 | -33.944 | +1.15 |
+| 629-78-7 | N-heptadecane | 90.83 | 91.962 | -1.13 |
+| 629-92-5 | N-nonadecane | 107.5 | 108.61 | -1.11 |
+| 112-44-7 | Undecanal | -58.96 | -57.86 | -1.10 |
+| 616-23-9 | 2,3-Dichloro-1-propanol | -216.2 | -215.1 | -1.10 |
+| 108-98-5 | Phenyl mercaptan | 147.6 | 148.67 | -1.07 |
+| 593-45-3 | N-octadecane | 99.21 | 100.27 | -1.06 |
+| 598-75-4 | 3-Methyl-2-butanol | -153.7 | -154.76 | +1.06 |
+| 56-81-5 | Glycerol | -447.1 | -448.14 | +1.04 |
+| 544-85-4 | N-dotriacontane | 221 | 222.03 | -1.03 |
+| 112-54-9 | Dodecanal | -51.11 | -52.114 | +1.00 |
 
 ## ChemSep against CoolProp: the outliers
 

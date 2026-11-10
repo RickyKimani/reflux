@@ -107,6 +107,16 @@ became a label and a stray name, and three lines after it, a comment and a
 declaration, were gone. Compile before formatting, or format with `-verify`
 first.
 
+**Gotcha: `v fmt` adds an import for a name that's a module's.** Like
+`goimports`, it imports a module that a file uses without importing: write
+`math.sqrt(2.0)` and `import math` appears. It goes by the name alone, so a
+test that called `builtin.find(...)` on a constant defined in another test
+file (and not this one) got `import builtin`, V's own built-in module, and
+the build then failed with "module 'builtin' is imported but never used",
+which says nothing about the missing constant. Name a constant so that it
+can't be taken for a module, and read an error about an import you never
+wrote as a name that isn't defined.
+
 A `.vsh` script inside the project can import the project's own modules,
 just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
 is a 30-line script around `import components.chemsep`. Go would need a
@@ -727,6 +737,26 @@ which they are by name. In V:
 Go's has no edit distance. It counts bytes, not runes, so dropping the
 two-byte `°` from `°C` is two edits. `quantity` and `components` use it
 for their suggestions.
+
+**Gotcha: `.sort(a.x < b.x)` sees only `a` and `b`.** The comparison is
+compiled inline, so it can't read anything else, not even a module
+constant: `ps.sort(names[a.k] < names[b.k])` is refused with "can not access
+external variable `names`". Write a function and pass it,
+`ps.sort_with_compare(by_name)`, with `fn by_name(a &P, b &P) int`, which
+can read constants as any function can. Go's `slices.SortFunc` takes a
+closure either way. [chem/chem.v](../chem/chem.v) sorts a formula's
+elements by symbol so.
+
+**`index` on an array gives −1; on a string, an Option.** `[3, 4, 5].index(9)`
+is `-1`, as Go's `slices.Index` is, but `'hello'.index('z')` is `?int`,
+taken with `or {}`. So `if p := a.index(x) { … }` doesn't compile for an
+array, and `if p := s.index(t)` is the way for a string.
+
+**Gotcha: a `rune` has no `is_digit`.** `u8` has `is_digit()`,
+`is_letter()` and `is_space()`, as Go's `unicode` package has for runes,
+but V's `rune` has none of them: `r.is_digit()` is "unknown function".
+Compare with literals, `` r >= `0` && r <= `9` ``, as
+[chem/smiles.v](../chem/smiles.v) does in a small `digit(r rune) bool`.
 
 **Gotcha: `toml.Any` converts without complaint.** `doc.value('name').f64()`
 on a string returns `0.0`, and a missing key gives a `Null` that also

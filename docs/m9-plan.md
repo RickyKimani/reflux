@@ -18,7 +18,8 @@ equations users type themselves, with named definitions; built-in
 constants; reaction types as properties, with restricted equilibrium; and
 stoichiometry checked by counting elements. Step 0 is done, and amended D5,
 D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1
-amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is next.
+amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is done and
+amended D1, approved on 2026-11-10. Step 5 is next.
 
 ## Goal
 
@@ -201,7 +202,7 @@ All checked by tests in CI, as in M1 to M4.
 
 | # | Decision | Choice | Why |
 |---|---|---|---|
-| D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. |
+| D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. **Amended in step 4:** a further module, `chem`, holds the elements, formulas and SMILES strings. It depends on nothing, and sits below both `components`, which takes a compound's formula from its file with it, and `kinetics`, which reads a formula in an equation with it. `kinetics` doesn't import `components`: a reaction's species are plain data, which the reactors (step 9) build from component records. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. |
 | D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. **Amended in step 2:** a number's unit follows it after a space and runs to the next space, or to a ) or , that isn't its own, or it's in brackets, `2 [K]`; a word after a number that is also a name here is refused as ambiguous (`2 R`: two rankines, or twice the gas constant?). A unit with an offset (°C, °F, barg, psig) is refused in an expression. `log` is refused as ambiguous, with `ln` and `log10` offered. `·`, `×` and `−` are operators too. A definition can't take a variable's, a family's or a function's name either. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. A unit after a number is how papers write it, but a name after a number would be read silently as a unit where they collide (R, h, P), so that is refused; brackets say which. An offset in arithmetic is wrong as often as right (T − 25 °C). |
 | D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. **Amended in step 1:** the bases include electric current, for the coulomb and so for D2's Faraday constant. The exponents are exact rationals, for bar^0.5. Compound units are built from symbols with SI prefixes rather than from M4's whole names, and each of M4's units reads through them to M4's bits. A * after a / is refused as ambiguous. | One source of truth for units, now able to say why a dimension is wrong. A rate's units hold half powers (√(K·p_H₂)), and a ratio squared must be the unit again exactly. Symbols with prefixes cover the units kinetics papers use (cm³, mol/(g·s), kJ/mol) without listing every combination. |
 | D4 | One representation | Parsed expressions and the structured forms (Arrhenius centred on T_ref, van 't Hoff, a site's monomials, LHHW) build the same tree. The structured forms keep their structure, for site sharing and their own checks, and render, evaluate and differentiate through the tree. | Every check, rendering and derivative is written once, and a structured rate and the same rate typed as an expression give the same bits. |
@@ -545,19 +546,122 @@ flowchart LR
   `unsafe` or `@[heap]`, where Go's escape analysis would move it to the
   heap.
 
-### 4. Reactions and equilibrium constants
-- Equations parsed, with species by name, formula or CAS number.
-- Balanced by counting elements, from each compound's formula, checked against
-  its SMILES and molar mass, and by charge. An unbalanced equation is refused
-  with each element's imbalance ("O: 2 on the left, 1 on the right"), and
-  balanced coefficients suggested from the element matrix's null space where
-  the species allow.
-- A set's rank says whether its reactions are independent. The owner's set
-  isn't, since the overall reaction is steam reforming plus the shift: fine
-  for kinetics, reported for an equilibrium over reactions, with which
-  combines which.
-- ΔH°(T), ΔG°(T) and K(T) from the ideal gas (D7), against `thermo` and
-  against ΔG°f at 298.15 K.
+### 4. Reactions and equilibrium constants — done, with D1 amended
+- **[chem/](../chem/chem.v),** a module below both `components` and
+  `kinetics` (D1, as amended here), as
+  [design.md](design.md#reactions) sets out: the elements' symbols and
+  CIAAW's standard atomic weights of 2021; formulas read to element counts,
+  CH3(CH2)2CH3 as C4H10, and written in Hill's order; and SMILES strings
+  read to their composition, with OpenSMILES' implicit hydrogens, and their
+  net charge.
+- **A compound's formula** ([components/formula.v](../components/formula.v))
+  is the one two of its structure, its SMILES string and its molar mass
+  agree on. 640 of the 642 compounds have one. The two without are mixtures,
+  air and Dowtherm A. Five files disagree with themselves, and two of three
+  settle each: ChemSep gives thiophenol benzothiophene's SMILES, ortho- and
+  para-hydrogen SMILES that spell their names (`o[H][H]`, `p[H][H]`, read as
+  water and phosphine), 2-methyl-2-pentenal its alcohol's, and dehydroabietic
+  acid a structure with two hydrogens too many. Hydrogen sulfide's SMILES
+  ends in a space, which the data's edge trims.
+- **[kinetics/](../kinetics/species.v),** the module D1 planned, its first
+  part:
+  - **species** found by name or alias, ignoring case, by CAS number, or by
+    formula, so CH3OH and C2H5OH are methanol and ethanol, where a name two
+    species answer to, or a formula two share, is refused;
+  - **equations**, `CH4 + H2O = CO + 3 H2`, with coefficients whole,
+    decimal or fractional, read exactly; an arrow is refused, since whether
+    a reaction runs both ways is its rate law's to say;
+  - **balance** by elements and charge, exactly, with each imbalance and
+    the equation balanced where the species allow just one way: `CH4 + O2 =
+    CO2 + H2O doesn't balance: H: 4 on the left, 2 on the right; O: 2 on the
+    left, 3 on the right; balanced, it would be CH4 + 2 O2 = CO2 + 2 H2O`. A
+    species the elements leave no part for is left out, and one on the wrong
+    side moved, each said; with no way, an element on one side only is
+    named, and with several, how many;
+  - **independence**, by exact elimination one reaction at a time, which
+    finds the owner's set to be `overall = reforming + shift`;
+  - **ΔH°, ΔS°, ΔG°, ln K and d ln K/dT** at 1 bar from each species'
+    ideal-gas H and S along Cp, as thermo's `Fluid` takes them (D7), with
+    expr's exact R.
+- **ΔG°f, two ways:** a reaction's Σν ΔG°f against its ΔG° at 298.15 K from
+  ΔH°f and S°, within 0.2 kJ/mol for all twelve test reactions, and each
+  compound's ΔG°f against ΔH°f − T°(S° − Σ nₑS°ₑ), with CODATA's entropies
+  of the elements, in [data-quality.md](data-quality.md): 142 of the 638
+  compounds with all three are more than 1 kJ/mol out, triolein by
+  2.5 MJ/mol.
+- **What the data say:**
+  - **ChemSep's standard pressure is mixed.** Its S° for H₂, H₂O, CO, CO₂,
+    N₂ and NH₃ are 1-atm values, 0.10 to 0.11 J/(mol·K) below thermo's
+    1-bar ones, while methane's and methanol's are at 1 bar. D7's K takes
+    the files as they are, so reforming's is about 4% below what consistent
+    1-bar data give.
+  - **ln K against thermo's own data** (chemicals' ΔH°f and S°, thermo's
+    Cp), the largest distance over 298.15 to 1500 K: the shift 0.016,
+    overall reforming 0.050, steam reforming 0.065, combustion 0.083,
+    SO₂ oxidation 0.10, propane dehydrogenation 0.11, ethylene hydration
+    0.11, methanol 0.13 and 0.14, ammonia 0.30, ethylbenzene dehydrogenation
+    0.48 (thermo estimates one species by Joback's groups) and butane
+    isomerisation 0.77 (the butanes' formation data differ by 1.9 kJ/mol).
+    Recorded so that they can't grow.
+  - **The owner's DWSIM case types a wrong K for the overall reaction.** Its
+    steam-reforming and shift constants are within 0.065 and 0.095 of
+    reflux's ln K from 700 to 1300 K, but its overall one,
+    exp(34.218 − 31266/T), isn't their product, exp(26.622 − 22946/T): it is
+    86 times too small at 700 K and 3.4 times too large at 1300 K. The
+    comparison with Xu and Froment's own correlations (criterion 5) comes
+    with the paper's constants in step 5.
+- **Tests,** 29 in six files:
+  - [chem/chem_test.v](../chem/chem_test.v), five: formulas as ChemSep
+    writes them and as a user types them, fourteen refused with their
+    columns, the weights, 67 SMILES strings each read as RDKit reads it
+    (CO's `[C+]#[O-]` as RDKit reads it unsanitized, since it won't
+    sanitize it), and 31 refused or at an edge;
+  - [chem/fuzz_test.v](../chem/fuzz_test.v), two: 20,000 seeded formulas
+    and 20,000 SMILES strings, each refused with a place and a reason or
+    read, and every formula read back from its Hill form;
+  - [components/formula_test.v](../components/formula_test.v), six:
+    every SMILES string RDKit's composition and charge (639, ortho- and
+    para-hydrogen's apart), every formula chemicals' for the 638 compounds
+    chemicals has, the five disagreements exactly, structure and SMILES
+    outvoting a wrong molar mass and the mass tolerance's edges, the 84
+    standard atomic weights within 2e-4 of chemicals' (sulfur's 1.6e-4 the
+    most), and two compounds' formation gaps by hand;
+  - [kinetics/equation_test.v](../kinetics/equation_test.v), four: reading
+    (13CO the species, where there is one, not 13 CO), thirteen imbalances with their suggestions or reasons, seventeen
+    refusals, and 20,000 seeded equations, each refused with a column or
+    balanced and read back from its writing;
+  - [kinetics/dependence_test.v](../kinetics/dependence_test.v), five: the
+    owner's set in two orders, factors (2 ×, −, 1/3 ×), charge balance,
+    finding species, and too few species for a set refused;
+  - [kinetics/standard_test.v](../kinetics/standard_test.v), seven: twelve
+    reactions at thirteen temperatures against mpmath, every property to
+    1e-13 of its terms' magnitudes (tdep's QAG tolerance; 1.3e-16 at worst),
+    the ΔG°f gaps, the distances from thermo's data, the owner's
+    correlations, a combination's K its parts', missing data refused, and
+    R expr's.
+- **References** from [tools/gen_m9_reactions.py](../tools/gen_m9_reactions.py),
+  which reproduces both byte for byte:
+  [testdata/m9_formulas.json](../testdata/m9_formulas.json), RDKit's and
+  chemicals' formulas for every compound, and
+  [testdata/m9_reactions.json](../testdata/m9_reactions.json), mpmath's
+  standard properties on ChemSep's data, at 50 digits, with thermo's and the
+  owner's beside them.
+- **Planted mistakes:** 42, one at a time in a scratch copy, each file
+  compared back with the original after. 35 were caught at once. Six
+  survived until a test was written for each: a negative charge written with
+  digits (`[O-2]` read as +2), potassium let into SMILES' organic subset, the
+  structure and SMILES no longer outvoting a wrong molar mass, the mass
+  tolerance ten times wider, a ring bond's order written only where the ring
+  opens, and a coefficient touching a name preferred to a species named
+  like that (13CO). Each is caught now. The seventh, dividing a suggestion
+  by the common factor of its whole numbers, survived because that factor
+  is always 1: the null-space vector has a 1 in its free column, so scaling
+  by its denominators' least common multiple leaves no common factor. The
+  code is gone, and its comment says why. One planted mistake changed
+  nothing and was replaced by one that did.
+- **V's notes:** `v fmt` imports a module a file seems to use, by name
+  alone; `.sort(a.x < b.x)` can read nothing but `a` and `b`; `index` gives
+  −1 on an array and an Option on a string; and a `rune` has no `is_digit`.
 
 ### 5. Rate laws and sites
 - Arrhenius, van 't Hoff, monomials and sites, LHHW, power law, Eley–Rideal and

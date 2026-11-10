@@ -93,7 +93,19 @@ Keep this section current: update it whenever a step is committed.
     `testdata/m9_expressions.json`) to 6.5e-16. Xu and Froment's three
     rates: 55 operations, 3.2 times hand-written V for the rates and 6.7
     with gradients, about 1 µs in all (`tools/tape_bench.v`).
-  - Next is step 4: reactions and equilibrium constants.
+  - **Step 4 is done:** a new `chem` module (elements, formulas, SMILES;
+    D1 amended, approved on 2026-11-10) and `kinetics`' first part:
+    species by name, CAS number or formula; equations balanced by elements
+    and charge, with the balanced equation suggested; a set's dependence; ΔH°, ΔS°, ΔG° and K(T)
+    from the ideal gas (D7). A compound's formula is the one two of its
+    structure, SMILES and molar mass agree on (640 of 642; five files
+    disagree with themselves). Held against RDKit, chemicals, thermo and
+    mpmath (`tools/gen_m9_reactions.py`). Found: ChemSep's S° mixes 1 atm
+    and 1 bar (reforming's K about 4% low); 142 compounds' ΔG°f disagree
+    with their ΔH°f and S° by over 1 kJ/mol (data-quality.md); and the
+    owner's DWSIM case types an overall-reaction K that isn't the product
+    of the other two (86 times too small at 700 K).
+  - Next is step 5: rate laws and sites.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -299,8 +311,11 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
 `components`. `quantity`, units of measure (M4) and M9's dimension algebra
 (compound units, exact rational exponents of kg, m, s, K, mol, A), depends
-on nothing, and
-so does `release`, the release gate's logic. `capi` (M10a) is the C API
+on nothing, and so do `release`, the release gate's logic, and `chem`
+(M9), the elements, formulas and SMILES strings. `expr` (M9), the
+expression language, uses `quantity`; `kinetics` (M9), reactions, uses
+`chem`, `quantity` and `thermo`, and its tests `components` and `expr`.
+`components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
