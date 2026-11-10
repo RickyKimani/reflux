@@ -35,12 +35,16 @@ fn expect(cmd []string, want int) {
 
 // smoke runs a built reflux as someone would: the demo, the reference
 // flowsheet with both its reports, and a flowsheet that isn't there, which must
-// fail with exit status 1 (criterion 8).
+// fail with exit status 1 (criterion 8); and M9's kinetics check and explain
+// on Xu and Froment's kinetics.
 fn smoke(exe string, reports string) {
 	run([exe, 'demo'])
 	run([exe, 'solve', 'testdata/flowsheets/reference.toml', '--json', '${reports}.json', '--csv',
 		'${reports}.csv'])
 	expect([exe, 'solve', 'testdata/flowsheets/no such file.toml'], 1)
+	run([exe, 'kinetics', 'check', 'testdata/kinetics/xu_froment.toml'])
+	run([exe, 'kinetics', 'explain', 'testdata/kinetics/xu_froment.toml', '900 K', '15 bar', 'CH4=0.2',
+		'H2O=0.45', 'H2=0.2', 'CO=0.1', 'CO2=0.05'])
 	rm('${reports}.json') or {}
 	rm('${reports}.csv') or {}
 }

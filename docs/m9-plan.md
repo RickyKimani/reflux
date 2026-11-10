@@ -20,7 +20,8 @@ stoichiometry checked by counting elements. Step 0 is done, and amended D5,
 D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1
 amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is done and
 amended D1, approved on 2026-11-10. Step 5 is done and amended criterion
-5, approved on 2026-11-10. Step 6 is next.
+5, approved on 2026-11-10. Step 6 is done and amended D11,
+approved on 2026-11-10. Step 7 is next.
 
 ## Goal
 
@@ -218,7 +219,7 @@ All checked by tests in CI, as in M1 to M4.
 | D8 | Integrators | Rosenbrock's RODAS4 (Hairer and Wanner), L-stable with an embedded error estimate, on the exact Jacobian from D5, for stiff problems. Dormand and Prince's 5(4) for the rest. Both take what they integrate as an interface, never a closure. A PFR's state is its molar flows, with T and P where they vary. | A Rosenbrock method needs no Newton iteration, only an LU per step, and exact Jacobians make it reliable. Near equilibrium, reforming kinetics is stiff. |
 | D9 | Gibbs minimisation | One phase for now (M6 adds more), ideal gas or a cubic. Minimise G over the species amounts subject to the element balance, by Newton on the element potentials (the RAND method, White, Johnson and Dantzig, 1958), with the fugacity coefficients updated outside it for a cubic. Species that vanish are handled in log space. | The standard method. It extends to the second phase M6 brings. |
 | D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. **Amended in step 0:** Ergun's viscosity is the gas mixture's at low pressure: each compound's from its component file's vapour-viscosity correlation (ChemSep's eq. 102, already imported), mixed by Wilke's rule and checked against `chemicals`. That's the first piece of M5's C7, brought forward. The PFR takes its viscosity through an interface, so a test can give it another, as step 10 gives it DWSIM's. A catalyst's loading is the bed's density, kg per m³ of reactor, and its void fraction enters Ergun alone, as in DWSIM. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. Step 0 found Ergun's drop 89% viscous in the owner's case, moving its methane conversion by 3.4e-3, and reflux had no viscosity. DWSIM's, a mole-fraction mean with Jossi, Stiel and Thodos' correction, is 30% below Wilke's in the hydrogen-rich gas. |
-| D11 | The file | `[[site]]`, `[[reaction]]` and the reactor units in the flowsheet file. Their equations and expressions are strings that `expr` parses; their numbers carry units as M4's do. A file that uses them is format 2. Format 1 files read exactly as before. The report gains each PFR's profile, as report format 2. | One file per process, as now. A new section is a new format by the CHANGELOG's rules, but nothing old changes meaning. |
+| D11 | The file | `[[site]]`, `[[reaction]]` and the reactor units in the flowsheet file. Their equations and expressions are strings that `expr` parses; their numbers carry units as M4's do. A file that uses them is format 2. Format 1 files read exactly as before. The report gains each PFR's profile, as report format 2. **Amended in step 6:** sites and reactions are tables by name, `[site.NAME]` and `[reaction.NAME]`, as feeds and units are, rather than arrays of tables: a name is unique by the table's key, and a failure's key reads `reaction.reforming.law`. `reflux kinetics check` reads a file's reactions without the flowsheet's other sections, so a file of reactions alone can be checked; `reflux solve` reads them with the reactors, in step 9. | One file per process, as now. A new section is a new format by the CHANGELOG's rules, but nothing old changes meaning. |
 | D12 | The CLI | `reflux kinetics check <file>` runs every check on a file's reactions. `reflux kinetics explain <file> [T P composition]` prints each rate as reflux read it, and the factor table at a state. | kinetics.md's design. |
 | D13 | Comparing with DWSIM | The owner's case as a reflux file, with DWSIM's three denominators as marked overrides, compared at DWSIM's tightest useful dV, which step 0 finds. The published model, one site shared by all three, is solved beside it and reported. Each unit alone (conversion, Gibbs, CSTR, PFR) is compared with DWSIM's from the same inlet. **Amended in step 0:** the case is compared with three answers: DWSIM's at dV = 0.001, its tightest useful one, and at the file's 0.05; and the exact answer of DWSIM's equations without its sections, which the fixture integrates with SciPy. Isobaric first, then with Ergun, the test giving reflux's PFR DWSIM's viscosity. | The comparison measures the solvers, not two different models, and the published model is the one users should run. |
 | D14 | Heat exchangers | Out of M9, into a milestone of their own after it. | The roadmap put G2 in M9, but nothing in M9's exit needs it, and M9 is large. A cooled PFR wants a coolant stream, which belongs with the exchangers. |
@@ -768,11 +769,81 @@ flowchart LR
 - **V's notes:** a test file's function can hide its module's constant of
   the same name, in the module's own code, where a function value fits.
 
-### 6. `reflux kinetics check` and `explain`
+### 6. `reflux kinetics check` and `explain` — done, with D11 amended
 - Rendering, element balance, units, physical-sanity warnings and the factor
   table (D12), in the CLI and its report. A typed number with a constant's
   dimension that isn't the constant is flagged, with how far it moves the
   rate.
+- **[flowsheet/reactions.v](../flowsheet/reactions.v)** reads a file's
+  reactions, format 2, as
+  [flowsheet-format.md](flowsheet-format.md#reactions-format-2) sets out:
+  `[definitions]`, `[site.NAME]` and `[reaction.NAME]` beside `[components]`,
+  in a whole flowsheet file (whose other sections it leaves to the
+  flowsheet's reader) or a file of reactions alone. Every key is checked, as
+  M4's are, and every failure is at its line: an equation that doesn't
+  balance at its `equation`, with its column, and what `kinetics.build`
+  refuses at its reaction's, site's or definition's line, which
+  `KineticsError` now carries.
+- **[kinetics/check.v](../kinetics/check.v)** runs the checks, each a note or
+  a warning, as [design.md](design.md#checks-and-the-factor-table) lists
+  them: reactions that combine others; a reaction's ΔG°f against its ΔH°f
+  and S°; a fitted K against the Gibbs energies', at the state's T if there
+  is one; a negative activation energy; an adsorption enthalpy above zero; a
+  constant at or below zero; a reaction's own adsorption term, with what it
+  lacks or adds; and a number typed where a built-in constant was meant,
+  with, at a state, how far it moves each rate (the trees evaluated with the
+  number swapped).
+- **[kinetics/explain.v](../kinetics/explain.v)** is the factor table: each
+  rate as reflux read it, its parts at the state (its constant; K, Q and
+  Q/K; its site's term and each of its terms) and every definition it uses,
+  with values in SI written over Pa, mol·Pa^0.5/(kg·s) rather than base
+  units, and numbers to five figures from whole digits, the same on every
+  compiler.
+- **The CLI** ([kinetics_command.v](../kinetics_command.v)): `reflux kinetics
+  check FILE [T P NAME=y ...]` and `reflux kinetics explain FILE T P NAME=y
+  ...`, exiting 0 when the file is read, 1 when it or the state isn't, 2 for
+  a wrong command; `tools/check.vsh` runs both on the built program.
+- **Three files** in [testdata/kinetics/](../testdata/kinetics/xu_froment.toml):
+  Xu and Froment's kinetics as their paper gives them, with K from the Gibbs
+  energies; Vanden Bussche and Froment's with Graaf's K; and the owner's
+  DWSIM case's rates as DWSIM has them typed, 8.314, atm, three
+  denominators and its own K's. `testdata/m9_kinetics.json` gained DWSIM's
+  rates, evaluated by mpmath from the spike's own expressions.
+- **What the checks say of them:**
+  - Xu and Froment: their overall reaction is reforming plus the shift, and
+    K_H₂O rises with T, its ΔH +88.68 kJ/mol: steam's adsorption
+    endothermic, which an ECN review of reforming catalysts (ECN-I--04-003,
+    2004) calls unlikely.
+  - Vanden Bussche and Froment: the methanol rate's lumped constant has a
+    negative apparent activation energy; Graaf's K is a factor of 0.77 of
+    the Gibbs energies' for methanol at 513 K, and 1.045 for the reverse
+    shift.
+  - The DWSIM case: seven typed 8.314s, moving reforming's rate by −0.18%
+    and the overall's by −0.18% at 900 K, through their k's, and every rate
+    by up to +0.09% through K_H₂O's; the shift's denominator without K_CH₄
+    and the overall's without K_CO, each noted; and its overall K a factor
+    of 0.20 of the Gibbs energies' at 900 K, warned of, where reforming's
+    and the shift's are within 6%.
+- **Tests,** sixteen in four files: [flowsheet/reactions_test.v](../flowsheet/reactions_test.v),
+  eight (the three files' rates against the fixture to 1e-13 of their
+  scales and against kinetics' own forms bit for bit; every law, basis and
+  kind of constant from a file; the checks and the factor table; fourteen
+  refusals at their lines and keys; 500 seeded files with values replaced,
+  none panicking); [kinetics/check_test.v](../kinetics/check_test.v), four
+  (constants below zero and at zero, ΔG°f gaps either way, a fitted K
+  without data and without a state, a look-alike in a rate and an override
+  with an extra term); [kinetics/sig_test.v](../kinetics/sig_test.v), one (19 numbers);
+  and [main_test.v](../main_test.v), three (check, explain, and every
+  failure's exit status).
+- **Fixed on the way:** `expr`'s message said "a amount of substance"; it
+  now picks its article.
+- **Planted mistakes:** 29, one at a time in a scratch copy, 27 caught at
+  once, five of them by a rate's units refusing what a misread key made of
+  it. Two survived until a test was written for each, and are caught now: a
+  ΔG°f gap below −1 kJ/mol going unwarned (the test had only a gap above),
+  and a constant of exactly zero (only one below).
+- **V's notes:** `f() or { none }` into an Option field passes V's checker
+  and writes C that no compiler takes.
 
 ### 7. Equilibrium
 - The RAND method for ideal gas and a cubic (D9), and the equilibrium over

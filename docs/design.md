@@ -1295,6 +1295,36 @@ the chain rule:
     dr/dP  = g_P + Σᵢ (g_pᵢ + g_fᵢ φᵢ) yᵢ + g_cᵢ yᵢ/(ZRT)
     dr/dyⱼ = (g_pⱼ + g_fⱼ φⱼ) P + g_cⱼ P/(ZRT) + g_yⱼ
 
+### Checks and the factor table
+
+M9 step 6 ([kinetics/check.v](../kinetics/check.v),
+[kinetics/explain.v](../kinetics/explain.v)), `reflux kinetics check` and
+`explain` (D12). Reading a file refuses what's wrong: an equation that
+doesn't balance, a rate or a constant in the wrong units, a name that isn't
+there. The checks are on what's legal but worth a look, each a note or a
+warning:
+
+| Finding | When |
+|---|---|
+| a reaction that combines others (note) | `dependence`: fine for kinetics, not for an equilibrium over reactions |
+| ΔG°f against ΔH°f and S° (warning) | a reaction's Σν ΔG°f more than 1 kJ/mol from ΔH°(T°) − T°ΔS°(T°) |
+| a fitted K against the Gibbs energies' | ln K_fit − (ln K° + Δn ln a°), a° the basis's standard state (p°, p°/RT or 1), at the state's T if there is one, else from 300 to 1500 K; a warning past a factor of 2 |
+| a negative activation energy (warning) | Eₐ < 0 in an Arrhenius constant: an apparent one can be, from lumped constants |
+| an adsorption enthalpy above zero (warning) | ΔH > 0 in a site term's van 't Hoff constant: K rising with T |
+| a constant at or below zero (warning) | A, or a fixed value, ≤ 0 |
+| a reaction's own adsorption term (note) | an override, with the terms it lacks or adds |
+| a look-alike constant (warning) | a number within 1% of a built-in constant of its dimension (expr's lint), and, at a state, how far it moves each rate: the trees evaluated with the number swapped for the constant, r_typed/r_constant − 1 |
+
+**The factor table** evaluates each rate's parts at a state, as the rate
+law recorded them when it was built: its constant; K in its activities, Q
+and Q/K for a reversible rate; its site's term and each of that term's
+terms. Then every definition the rate uses, directly or through others,
+with its value, and the rate. Values are in SI, a part's unit written over
+the rate's bases (mol/(kg·s), mol/(m³·s), or none) times Pa or mol/m³ to a
+power, mol·Pa^0.5/(kg·s) rather than its base units. Numbers are written to
+five significant figures from their digits rounded to a whole number by
+`math.round`, so the text is the same whichever compiler built reflux.
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

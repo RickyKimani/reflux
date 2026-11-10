@@ -206,6 +206,116 @@ expander finds its isentropic outlet, then applies the efficiency.
 | `fractions` | A table by component: how much of each goes to the first outlet. A component left out all goes to the second. |
 | `T`, `P` | Both outlets' state. |
 
+## Reactions (format 2)
+
+A file with reactions is format 2: `[definitions]`, `[site.NAME]` and
+`[reaction.NAME]`, beside `[components]`. `reflux kinetics check` and
+`reflux kinetics explain` read them (M9 step 6); the reactors that use them
+in a flowsheet come with M9 step 9. A file of reactions alone has `format`,
+`[components]` and its reactions, and a whole flowsheet's other sections
+are left to `reflux solve`.
+[testdata/kinetics/](../testdata/kinetics/xu_froment.toml) has three whole
+files: Xu and Froment's reforming kinetics, Vanden Bussche and Froment's
+methanol kinetics, and a DWSIM case's rates as DWSIM has them typed.
+
+```toml
+format = 2
+
+[components]
+names = ["methane", "water", "hydrogen", "carbon monoxide", "carbon dioxide"]
+
+[site.Ni]
+symbol = "DEN"
+terms = [
+  { name = "K_CO", K = { A = "8.23e-5 bar^-1", dH = "-70.65 kJ/mol" }, a = { CO = 1 } },
+  { name = "K_H2O", K = { A = "1.77e5", dH = "88.68 kJ/mol" }, a = { H2O = 1, H2 = -1 } },
+]
+
+[reaction.reforming]
+equation = "CH4 + H2O = CO + 3 H2"
+law = "lhhw"
+k = { A = "4.225e15 kmol*bar^0.5/(kg*h)", Ea = "240.1 kJ/mol" }
+orders = { CH4 = 1, H2O = 1, H2 = -2.5 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2
+```
+
+Every number has its unit, and every expression is reflux's expression
+language ([design.md](design.md#expressions)): parsed, its names bound and
+its units checked, never evaluated as text.
+
+### Constants
+
+A constant is an expression, as a string, or a table:
+
+| Table | Constant |
+|---|---|
+| `{ A, Ea }` | a rate constant, A·exp(−Eₐ/RT) |
+| `{ k_ref, Ea, T_ref }` | the same, centred: k_ref·exp(−Eₐ/R·(1/T − 1/T_ref)) |
+| `{ A, dH }` | an adsorption constant, A·exp(−ΔH/RT) |
+| `{ K_ref, dH, T_ref }` | the same, centred |
+
+### `[definitions]`
+
+Named expressions, `name = "text"`, which rates and constants may use. They
+may use one another, in any order, but not themselves.
+
+### `[site.NAME]`
+
+A catalyst's site: its adsorption term, θ = 1 + Σ K·Π aᵢ^eᵢ, which every
+reaction on it shares.
+
+| Key | |
+|---|---|
+| `terms` | Required. A list of terms, each `{ name, K, a }`: `K` a constant, `a` a table of species and their exponents, and `name` what the constant is called (K_ and the first species' name if not given). |
+| `symbol` | What θ is called in a rate: `theta_` and the site's name if not given. |
+
+### `[reaction.NAME]`
+
+| Key | |
+|---|---|
+| `equation` | Required. `CH4 + H2O = CO + 3 H2`: species by name, formula or CAS number, a coefficient whole, decimal or a fraction, written with `=` (an arrow is refused: whether a reaction runs both ways is its rate law's to say). It must balance every element, and the charge; one that doesn't is refused with each imbalance, and the balanced equation where its species allow just one. |
+| `law` | `"power_law"`, `"lhhw"`, `"eley_rideal"` or `"expression"`. A reaction without one has no rate, and none of the keys below. |
+| `k` | The rate constant: a constant, as above. |
+| `k_name` | What it's called: k and the reaction's number if not given. |
+| `orders` | Each species' order, a table: `{ CH4 = 1, H2 = -2.5 }`. Not for `eley_rideal`. |
+| `K` | Required with a law but `expression`: `"gibbs"`, K at 1 bar from the Gibbs energies of the component data (each species' ideal-gas H and S along Cp); `"none"`, an irreversible rate; or the paper's correlation, in the rate's activities (bar² for steam reforming on partial pressures in bar). |
+| `K_name` | What a correlation is called: K and the reaction's number if not given. |
+| `basis` | `"partial_pressure"` by default, `"fugacity"`, `"concentration"` or `"mole_fraction"`. |
+| `per` | `"catalyst_mass"` by default, or `"volume"`: the rate must be in mol/(kg·s) or mol/(m³·s), in whatever units it's written. |
+| `driving` | `"approach"` by default, k·Π aᵢ^αᵢ·(1 − Q/K), or `"difference"`, k·(Π aᵢ^αᵢ − Π aᵢ^(αᵢ+νᵢ)/K): the same function, each written as its paper prints it. |
+| `site`, `site_power` | `lhhw` and `eley_rideal`: the site, and its term's power, 1 by default. |
+| `terms`, `symbol` | `lhhw`: the reaction's own adsorption term in place of its site's, as the site's `terms`, and what it's called. A site's term belongs to every reaction on it, so `check` notes one. |
+| `adsorbed`, `gas` | `eley_rideal`: the adsorbed species, which has a term of its own on the site, K·a¹, and the one that comes from the gas. |
+| `rate` | `expression`: the rate, in T, P, each species' `p[...]`, `f[...]`, `c[...]` and `y[...]`, each reaction's `Keq[...]` (K at 1 bar from the Gibbs energies), the definitions and the built-in constants. |
+
+### `reflux kinetics check` and `explain`
+
+```
+reflux kinetics check FILE [T P NAME=y ...]
+reflux kinetics explain FILE T P NAME=y ...
+```
+
+`check` reads the file, which refuses what's wrong (an equation that
+doesn't balance, a rate in the wrong units, a name that isn't there), and
+prints what else it finds, each a note or a warning: reactions that combine
+others, a reaction whose ΔG°f disagree with its ΔH°f and S°, a fitted K's
+distance from the Gibbs energies', a negative activation energy, an
+adsorption enthalpy above zero, a constant at or below zero, a reaction's
+own adsorption term, and a number typed where a built-in constant was
+meant, 8.314 J/(mol·K) for R. Given a state, a fitted K is judged at its T,
+and each typed constant says how far it moves the rates there. `explain`
+prints each rate as reflux read it, and its factor table at the state:
+every constant, each term of its site's, Q, K and Q/K, with their values,
+and the rate. A state is a temperature and a pressure with their units,
+then each species' mole fraction, summing to 1:
+
+```
+reflux kinetics explain plant.toml "900 K" "15 bar" CH4=0.2 H2O=0.45 H2=0.2 CO=0.1 CO2=0.05
+```
+
 ## What it refuses that TOML allows
 
 - **A `\u` escape.** Write the character itself. V 0.5.2's TOML reader can crash

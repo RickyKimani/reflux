@@ -1,0 +1,49 @@
+# Xu and Froment's methane steam reforming kinetics (AIChE J. 35, 88, 1989),
+# as their paper gives them: the rate equations their Eq. 3, A from Table 6
+# and E and ΔH from Table 5, at the catalyst's reference activity. Their
+# paper gives no equilibrium constants, so these take K from the Gibbs
+# energies of the component data (M9 decision D7).
+format = 2
+
+[components]
+names = ["methane", "water", "hydrogen", "carbon monoxide", "carbon dioxide"]
+
+# One site: its adsorption term is every reaction's, squared.
+[site.Ni]
+symbol = "DEN"
+terms = [
+  { name = "K_CO", K = { A = "8.23e-5 bar^-1", dH = "-70.65 kJ/mol" }, a = { CO = 1 } },
+  { name = "K_H2", K = { A = "6.12e-9 bar^-1", dH = "-82.90 kJ/mol" }, a = { H2 = 1 } },
+  { name = "K_CH4", K = { A = "6.65e-4 bar^-1", dH = "-38.28 kJ/mol" }, a = { CH4 = 1 } },
+  { name = "K_H2O", K = { A = "1.77e5", dH = "88.68 kJ/mol" }, a = { H2O = 1, H2 = -1 } },
+]
+
+[reaction.reforming]
+equation = "CH4 + H2O = CO + 3 H2"
+law = "lhhw"
+k = { A = "4.225e15 kmol*bar^0.5/(kg*h)", Ea = "240.1 kJ/mol" }
+orders = { CH4 = 1, H2O = 1, H2 = -2.5 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2
+
+[reaction.shift]
+equation = "CO + H2O = CO2 + H2"
+law = "lhhw"
+k = { A = "1.955e6 kmol/(kg*h*bar)", Ea = "67.13 kJ/mol" }
+orders = { CO = 1, H2O = 1, H2 = -1 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2
+
+[reaction.overall]
+equation = "CH4 + 2 H2O = CO2 + 4 H2"
+law = "lhhw"
+k = { A = "1.020e15 kmol*bar^0.5/(kg*h)", Ea = "243.9 kJ/mol" }
+orders = { CH4 = 1, H2O = 2, H2 = -3.5 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2

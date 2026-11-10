@@ -117,7 +117,16 @@ Keep this section current: update it whenever a step is committed.
     and Table 6 disagree by up to 1.7% (k₃); their paper gives no
     equilibrium constants, so criterion 5 compares Gibbs K with the
     literature's correlations instead.
-  - Next is step 6: `reflux kinetics check` and `explain`.
+  - **Step 6 is done,** and amended D11 (sites and reactions as tables by
+    name, `[site.NAME]` and `[reaction.NAME]`, approved on 2026-11-10):
+    `flowsheet/reactions.v` reads a file's reactions (format 2, alone or in a
+    flowsheet file), `kinetics/check.v` the checks (notes and warnings),
+    `kinetics/explain.v` the factor table, and `reflux kinetics check` and
+    `explain` (`kinetics_command.v`). Three files in `testdata/kinetics/`: the two
+    papers' kinetics and the owner's DWSIM case's rates as typed, whose
+    check finds its seven 8.314s, its two cut denominators and its overall
+    K a factor of 0.20 off at 900 K.
+  - Next is step 7: equilibrium (the RAND method, and over chosen reactions).
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -326,7 +335,8 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 on nothing, and so do `release`, the release gate's logic, and `chem`
 (M9), the elements, formulas and SMILES strings. `expr` (M9), the
 expression language, uses `quantity`; `kinetics` (M9), reactions, uses
-`chem`, `quantity` and `thermo`, and its tests `components` and `expr`.
+`chem`, `expr`, `quantity` and `thermo`, and its tests `components`.
+`flowsheet` reads a file's reactions into `kinetics` (step 6).
 `components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.

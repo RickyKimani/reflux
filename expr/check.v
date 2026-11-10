@@ -178,7 +178,8 @@ fn describe(d Dim) string {
 	if name == d.str() {
 		return 'in ${name}'
 	}
-	return 'a ${name}, ${d.str()}'
+	article := if name[0] in [`a`, `e`, `i`, `o`, `u`] { 'an' } else { 'a' }
+	return '${article} ${name}, ${d.str()}'
 }
 
 // leftmost is where a subtree begins in the text: its leftmost operand's

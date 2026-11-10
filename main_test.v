@@ -190,3 +190,77 @@ fn test_help_and_version() {
 	code2, out2, _ := quiet(['--version'])
 	assert code2 == 0 && out2 == out
 }
+
+const kinetics_dir = os.join_path(@VMODROOT, 'testdata', 'kinetics')
+
+// `reflux kinetics check` prints a file's findings and exits 0; given a
+// state, a fitted K is judged at its T and each typed constant says how far
+// it moves the rates.
+fn test_kinetics_check() {
+	file := os.join_path(kinetics_dir, 'xu_froment.toml')
+	code, out, err := quiet(['kinetics', 'check', file])
+	assert code == 0 && err == '', err
+	lines := out.trim_space().split_into_lines()
+	assert lines[0] == '${file}: 3 reactions, 3 rates, 2 findings'
+	assert lines[1].starts_with('note: overall = reforming + shift')
+	assert lines[2].starts_with('warning: K_H2O rises with T')
+	dwsim := os.join_path(kinetics_dir, 'dwsim_reforming.toml')
+	code2, out2, _ := quiet(['kinetics', 'check', dwsim, '900 K', '15 bar', 'CH4=0.2', 'H2O=0.45',
+		'H2=0.2', 'CO=0.1', 'CO2=0.05'])
+	assert code2 == 0
+	assert out2.contains("warning: k1 has 8.314 J/(mol*K), 5.564e-5 below R, the molar gas constant, N_A·k_B: write R unless the paper fitted with this number; at 900 K it moves reforming's rate by -0.17838% from what R gives")
+}
+
+// `reflux kinetics explain` prints each rate and its factor table.
+fn test_kinetics_explain() {
+	file := os.join_path(kinetics_dir, 'vanden_bussche_froment.toml')
+	code, out, err := quiet(['kinetics', 'explain', file, '513.15 K', '50 bar', 'CO2=0.08',
+		'hydrogen=0.65', 'CH3OH=0.04', 'H2O=0.03', 'CO=0.08', '124-38-9=0'])
+	assert code == 1, out
+	assert err.contains('Carbon dioxide is given twice')
+	code2, out2, err2 := quiet(['kinetics', 'explain', file, '513.15 K', '50 bar', 'CO2=0.2',
+		'hydrogen=0.65', 'CH3OH=0.04', 'H2O=0.03', 'CO=0.08'])
+	assert code2 == 0 && err2 == '', err2
+	assert out2.starts_with("methanol: CO2 + 3 H2 = CH3OH + H2O\n  LHHW over site Cu's adsorption term cubed on partial pressures, per mass of catalyst, reversible, K fitted\n  r = k₁·p_CO₂·p_H₂·(1 − p_CH₃OH·p_H₂O/(p_CO₂·p_H₂³)/K₁)/θ_Cu³")
+	assert out2.contains('\n\nRWGS: CO2 + H2 = CO + H2O\n')
+}
+
+// A file that doesn't read, or a state that's wrong, exits 1 with why; a
+// wrong command exits 2.
+fn test_kinetics_failures() {
+	file := os.join_path(kinetics_dir, 'xu_froment.toml')
+	missing := os.join_path(kinetics_dir, 'no such file.toml')
+	code, _, err := quiet(['kinetics', 'check', missing])
+	assert code == 1 && err.starts_with('${missing}: '), err
+	bad := scratch('bad_kinetics.toml')
+	os.write_file(bad, os.read_file(file)!.replace('law = "lhhw"', 'law = "lhw"'))!
+	code2, _, err2 := quiet(['kinetics', 'check', bad])
+	assert code2 == 1
+	assert err2.trim_space() == '${bad}:23: reaction.reforming.law: no law lhw: one of power_law, lhhw, eley_rideal, expression (did you mean lhhw?)'
+	for args in [
+		['kinetics', 'explain', file, '900 K', '15 bar', 'CH5=1'],
+		['kinetics', 'explain', file, '900 K', '15 bar', 'CH4=0.5'],
+		['kinetics', 'explain', file, '900 C', '15 bar', 'CH4=1'],
+		['kinetics', 'explain', file, '900 K', '15 bar', 'CH4'],
+		['kinetics', 'explain', file, '900 K', '15 bar', 'CH4=x'],
+	] {
+		c, _, e := quiet(args)
+		assert c == 1 && e != '', args.str()
+	}
+	_, _, e1 := quiet(['kinetics', 'explain', file, '900 K', '15 bar', 'CH4=0.5'])
+	assert e1.trim_space() == 'reflux kinetics explain: the mole fractions sum to 0.5, not 1'
+	for args in [
+		['kinetics'],
+		['kinetics', 'chek', file],
+		['kinetics', 'check'],
+		['kinetics', 'explain', file],
+		['kinetics', 'check', file, '900 K'],
+	] {
+		c, _, _ := quiet(args)
+		assert c == 2, args.str()
+	}
+	_, _, e2 := quiet(['kinetics', 'chek', file])
+	assert e2.starts_with('reflux kinetics: no kinetics command chek (did you mean check?)')
+	c3, out3, _ := quiet(['kinetics', 'help'])
+	assert c3 == 0 && out3.starts_with('usage:\n  reflux kinetics check FILE')
+}

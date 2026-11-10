@@ -1,6 +1,8 @@
-// reflux's command line (M4, D11):
+// reflux's command line (M4, D11; M9, D12):
 //
 //     reflux solve plant.toml [--json results.json] [--csv streams.csv] [--trace]
+//     reflux kinetics check FILE [T P NAME=y ...]
+//     reflux kinetics explain FILE T P NAME=y ...
 //     reflux demo [T P]
 //
 // From the source, `v run . solve testdata/flowsheets/reference.toml`.
@@ -16,6 +18,10 @@ const usage = 'usage:
       Solve a flowsheet file (docs/flowsheet-format.md) and print its stream
       table. --json writes the results (docs/report-format.md), --csv the
       streams, and --trace prints every pass of every loop.
+  reflux kinetics check FILE [T P NAME=y ...]
+  reflux kinetics explain FILE T P NAME=y ...
+      Check the reactions in a file, or explain its rates at a state:
+      reflux kinetics help says more.
   reflux demo [T P]
       The thermodynamics and the flash, on compounds from the database:
       n-butane at T in K and P in bar, by default 350 K and 9.4573 bar.
@@ -67,6 +73,9 @@ fn run(args []string, mut c Console) int {
 		'demo' {
 			return demo(args[1..], mut c)
 		}
+		'kinetics' {
+			return kinetics_command(args[1..], mut c)
+		}
 		'version', '--version' {
 			c.say('reflux ${flowsheet.version()}')
 			return 0
@@ -80,7 +89,7 @@ fn run(args []string, mut c Console) int {
 			return 2
 		}
 		else {
-			hint := did_you_mean(command, ['solve', 'demo', 'version', 'help'])
+			hint := did_you_mean(command, ['solve', 'kinetics', 'demo', 'version', 'help'])
 			c.complain('reflux: no command ${command}${hint}\n\n${usage}')
 			return 2
 		}

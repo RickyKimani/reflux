@@ -20,6 +20,27 @@ pub:
 	rates     []expr.Expr
 	tape      expr.Tape
 	k_used    []int // the reactions whose Keq[...] some rate uses
+	// parts are each rate's parts, for explain: its constant, its K and Q,
+	// its site's term and each of that term's terms, as expression text.
+	parts [][]Part
+	// owners say what each definition is for: a reaction's, a site's, or
+	// the user's own.
+	owners map[string]Owner
+}
+
+// Part is a named piece of a rate, as expression text in its context.
+pub struct Part {
+pub:
+	label string
+	text  string
+}
+
+// Owner is what a definition belongs to: a reaction (by its index), a site
+// (by name), or neither, the user's own.
+pub struct Owner {
+pub:
+	reaction int = -1
+	site     string
 }
 
 // Rated is a reaction's rate law, for build.
@@ -109,17 +130,42 @@ pub fn rate_context(species []Species, reactions []Reaction) expr.Context {
 	}
 }
 
-// KineticsError is a failure to build kinetics: which reaction or site, and
-// why, with an expression's own error inside where one failed.
+// KineticsError is a failure to build kinetics: what failed, and why, with
+// an expression's own error inside where one failed. reaction (its index),
+// site and definition say where, as far as they're known, for a file to
+// point at its line.
 pub struct KineticsError {
 	Error
 pub:
-	what   string
-	reason string
+	what       string
+	reason     string
+	reaction   int = -1
+	site       string
+	definition string
+}
+
+// placed gives an error a place, keeping any it has.
+fn placed(err IError, o Owner, definition string) IError {
+	if err is KineticsError {
+		return KineticsError{
+			what:       err.what
+			reason:     err.reason
+			reaction:   if err.reaction >= 0 { err.reaction } else { o.reaction }
+			site:       if err.site != '' { err.site } else { o.site }
+			definition: if err.definition != '' { err.definition } else { definition }
+		}
+	}
+	return KineticsError{
+		what:       ''
+		reason:     err.msg()
+		reaction:   o.reaction
+		site:       o.site
+		definition: definition
+	}
 }
 
 pub fn (e KineticsError) msg() string {
-	return '${e.what}: ${e.reason}'
+	return if e.what == '' { e.reason } else { '${e.what}: ${e.reason}' }
 }
 
 fn refuse(what string, reason string) IError {
@@ -138,6 +184,10 @@ mut:
 	sources []expr.Source
 	names   map[string]string // a definition's name, to what it's for
 	texts   map[string]string // and its text
+	owner   Owner             // whose definitions are being written
+	owners  map[string]Owner
+	parts   map[int][]Part      // each reaction's rate's parts
+	terms   map[string][]string // each θ's terms, by its symbol
 }
 
 fn (mut b Builder) define(name string, text string, what string) ! {
@@ -146,6 +196,7 @@ fn (mut b Builder) define(name string, text string, what string) ! {
 	}
 	b.names[name] = what
 	b.texts[name] = text
+	b.owners[name] = b.owner
 	b.sources << expr.Source{name, text}
 }
 
@@ -183,17 +234,23 @@ pub fn build(species []Species, reactions []Reaction, sites []Site, laws []Rated
 		ctx:       ctx
 	}
 	for s in own {
-		b.define(s.name, s.text, 'a definition of your own')!
+		b.define(s.name, s.text, 'a definition of your own') or { return placed(err, Owner{}, s.name) }
 	}
 	mut site_symbols := map[string]string{}
 	for site in sites {
+		b.owner = Owner{
+			site: site.name
+		}
 		symbol := if site.symbol != '' { site.symbol } else { 'theta_${site.name}' }
 		if site.name in site_symbols {
-			return refuse('site ${site.name}', 'two sites are called ${site.name}')
+			return placed(refuse('site ${site.name}', 'two sites are called ${site.name}'), b.owner,
+				'')
 		}
 		site_symbols[site.name] = symbol
-		theta := b.terms(site.terms, 'site ${site.name}')!
-		b.define(symbol, theta, "site ${site.name}'s adsorption term")!
+		theta := b.terms(site.terms, symbol, 'site ${site.name}') or { return placed(err, b.owner, '') }
+		b.define(symbol, theta, "site ${site.name}'s adsorption term") or {
+			return placed(err, b.owner, '')
+		}
 	}
 	mut texts := []string{}
 	mut rated := []int{}
@@ -202,16 +259,20 @@ pub fn build(species []Species, reactions []Reaction, sites []Site, laws []Rated
 		if l.reaction < 0 || l.reaction >= reactions.len {
 			return refuse('a rate law', 'no reaction ${l.reaction + 1}')
 		}
-		if l.reaction in rated {
-			return refuse(reaction_name(reactions, l.reaction), 'two rate laws')
+		b.owner = Owner{
+			reaction: l.reaction
 		}
-		texts << b.rate(l.reaction, l.law, site_symbols, sites)!
+		if l.reaction in rated {
+			return placed(refuse(reaction_name(reactions, l.reaction), 'two rate laws'), b.owner, '')
+		}
+		texts << b.rate(l.reaction, l.law, site_symbols, sites) or { return placed(err, b.owner, '') }
 		rated << l.reaction
 		kept << l.law
 	}
 	defs := expr.define(ctx, b.sources) or {
 		e := err as expr.ExprError
-		return refuse('definition ${e.definition}', '${b.names[e.definition]}: ${e.msg()}')
+		return placed(refuse('definition ${e.definition}', '${b.names[e.definition]}: ${e.msg()}'),
+			b.owners[e.definition] or { Owner{} }, e.definition)
 	}
 	// The fitted K of each reaction must be in its rate's activities,
 	// checked before the rates, which would otherwise refuse it less clearly.
@@ -223,21 +284,29 @@ pub fn build(species []Species, reactions []Reaction, sites []Site, laws []Rated
 		name := b.k_eq_name(rated[i], eq)
 		k := defs.find(name)
 		r := reactions[rated[i]]
+		o := Owner{
+			reaction: rated[i]
+		}
 		want := activity_dim(basis_of(l)).pow(r.dn()) or {
-			return refuse(reaction_name(reactions, rated[i]), err.msg())
+			return placed(refuse(reaction_name(reactions, rated[i]), err.msg()), o, '')
 		}
 		defs.exprs[k].must_be(want, "its K, in its rate's activities,") or {
-			return refuse("${reaction_name(reactions, rated[i])}'s K", err.msg())
+			return placed(refuse("${reaction_name(reactions, rated[i])}'s K", err.msg()), o, name)
 		}
 	}
 	mut rates := []expr.Expr{}
 	for i, text in texts {
 		what := reaction_name(reactions, rated[i])
-		e := expr.parse(ctx, &defs, text) or { return refuse("${what}'s rate", err.msg()) }
+		o := Owner{
+			reaction: rated[i]
+		}
+		e := expr.parse(ctx, &defs, text) or {
+			return placed(refuse("${what}'s rate", err.msg()), o, '')
+		}
 		per := per_of(kept[i])
 		d := if per == .mass { per_mass } else { per_volume }
 		e.must_be(d, if per == .mass { 'a rate per mass of catalyst' } else { 'a rate per volume' }) or {
-			return refuse("${what}'s rate", err.msg())
+			return placed(refuse("${what}'s rate", err.msg()), o, '')
 		}
 		rates << e
 	}
@@ -260,6 +329,8 @@ pub fn build(species []Species, reactions []Reaction, sites []Site, laws []Rated
 		rates:     rates
 		tape:      tape
 		k_used:    k_used
+		parts:     rated.map(b.parts[it] or { []Part{} })
+		owners:    b.owners
 	}
 }
 
@@ -312,8 +383,9 @@ fn equilibrium_of(l RateLaw) ?Equilibrium {
 	}
 }
 
-// terms writes a site's adsorption term, 1 + Σ K·Π a^e, defining each K.
-fn (mut b Builder) terms(terms []Monomial, what string) !string {
+// terms writes a site's adsorption term, 1 + Σ K·Π a^e, defining each K,
+// and records each term under the term's symbol.
+fn (mut b Builder) terms(terms []Monomial, symbol string, what string) !string {
 	mut parts := ['1']
 	for t in terms {
 		if t.powers.len == 0 {
@@ -335,6 +407,7 @@ fn (mut b Builder) terms(terms []Monomial, what string) !string {
 		up, down := product(factors)
 		parts << ratio(if up == '' { name } else { '${name}*${up}' }, down)
 	}
+	b.terms[symbol] = parts[1..]
 	return parts.join(' + ')
 }
 
@@ -401,9 +474,12 @@ fn (mut b Builder) driving(i int, k string, family string, orders []Power, eq Eq
 	}
 	keq := b.k_eq(i, eq, basis)!
 	q := b.quotient(family, i)!
+	qu, qd := product(q)
+	b.parts[i] << Part{"its K, in its rate's activities", keq}
+	b.parts[i] << Part{'Q, the reaction quotient', ratio(qu, qd)}
+	b.parts[i] << Part{'Q/K, its approach to equilibrium', '(${ratio(qu, qd)})/${keq}'}
 	if form == .approach {
 		up, down := product(ord)
-		qu, qd := product(q)
 		pre := if up == '' { ratio(k, down) } else { ratio('${k}*${up}', down) }
 		return '${pre}*(1 - ${ratio(qu, qd)}/${keq})'
 	}
@@ -441,6 +517,14 @@ fn (mut b Builder) driving(i int, k string, family string, orders []Power, eq Eq
 	return '${prefix}*(${ratio(fu, fd)} - ${ratio(bu, bd)}/${keq})'
 }
 
+// site_parts records a site's term and each of its terms as a rate's parts.
+fn (mut b Builder) site_parts(i int, theta string) {
+	b.parts[i] << Part{"its site's adsorption term", theta}
+	for t in b.terms[theta] or { []string{} } {
+		b.parts[i] << Part{'a term of it', t}
+	}
+}
+
 // rate writes reaction i's rate law as expression text, defining its k.
 fn (mut b Builder) rate(i int, law RateLaw, symbols map[string]string, sites []Site) !string {
 	what := reaction_name(b.reactions, i)
@@ -451,20 +535,23 @@ fn (mut b Builder) rate(i int, law RateLaw, symbols map[string]string, sites []S
 		PowerLaw {
 			k := if law.k_name != '' { law.k_name } else { 'k${i + 1}' }
 			b.define(k, law.k.text(), "${what}'s rate constant")!
+			b.parts[i] << Part{'its rate constant', k}
 			return b.driving(i, k, law.basis.family(), law.orders, law.equilibrium, law.form,
 				law.basis, what)!
 		}
 		Lhhw {
 			k := if law.k_name != '' { law.k_name } else { 'k${i + 1}' }
 			b.define(k, law.k.text(), "${what}'s rate constant")!
+			b.parts[i] << Part{'its rate constant', k}
 			mut theta := symbols[law.site] or {
 				return refuse(what, 'no site ${law.site}')
 			}
 			if terms := law.terms {
 				theta = if law.symbol != '' { law.symbol } else { '${theta}_${i + 1}' }
-				text := b.terms(terms, "${what}'s own adsorption term")!
+				text := b.terms(terms, theta, "${what}'s own adsorption term")!
 				b.define(theta, text, "${what}'s own adsorption term, overriding site ${law.site}'s")!
 			}
+			b.site_parts(i, theta)
 			d := b.driving(i, k, law.basis.family(), law.orders, law.equilibrium, law.form,
 				law.basis, what)!
 			n := if law.power == 1 { theta } else { '${theta}^${exponent_text(law.power)}' }
@@ -473,7 +560,9 @@ fn (mut b Builder) rate(i int, law RateLaw, symbols map[string]string, sites []S
 		EleyRideal {
 			k := if law.k_name != '' { law.k_name } else { 'k${i + 1}' }
 			b.define(k, law.k.text(), "${what}'s rate constant")!
+			b.parts[i] << Part{'its rate constant', k}
 			theta := symbols[law.site] or { return refuse(what, 'no site ${law.site}') }
+			b.site_parts(i, theta)
 			site := sites.filter(it.name == law.site)[0]
 			a := find(b.species, law.adsorbed) or { return refuse(what, err.msg()) }
 			mut ka := ''

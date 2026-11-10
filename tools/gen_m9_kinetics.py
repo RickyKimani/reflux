@@ -21,6 +21,11 @@ bar. Their paper names the equilibrium constants K1, K2 and K3 and gives
 their units, but no values: the correlations here are the ones later
 papers use with these kinetics.
 
+DWSIM: the owner's reforming case's rates as DWSIM has them typed, from
+spike/dwsim_pfr/run.py: Xu and Froment's constants rounded, R typed as
+8.314, partial pressures in atm, each reaction's own denominator and its own
+equilibrium constants. Rates in kmol/(kg·h).
+
 Vanden Bussche and Froment (J. Catal. 161, 1, 1996): methanol from CO2
 and the reverse water-gas shift on Cu/ZnO/Al2O3, over one site's term,
 cubed for methanol (their Eq. 3). Rates in mol/(kg·s), pressures in bar,
@@ -239,9 +244,46 @@ def model(name, species, rates, sts):
     return {"name": name, "species": species, "cases": cases}
 
 
+ATM = mp.mpf(101325)
+
+
+def dwsim_rates(t, p, forward_only=False):
+    """The owner's DWSIM case's three rates as DWSIM has them typed
+    (spike/dwsim_pfr/run.py): partial pressures in atm, R typed as 8.314,
+    rates in kmol/(kg·h), each reaction's own denominator, and its own
+    equilibrium constants. A reaction's R1, R2, P1 and P2 are its reactants
+    and products in the order of its compound list. Returned as steam
+    reforming, the shift and the overall reaction, in mol/(kg·s)."""
+    a = {k: v / ATM for k, v in p.items()}
+    e = lambda x: mp.exp(x)
+    r8 = M("8.314")
+    big = M("1e300") if forward_only else M(0)
+    k_sr = e(M("30.42") - M(27106) / t + big)
+    k_wgs = e(M("-3.798") + M(4160) / t + big)
+    k_ov = e(M("34.218") - M(31266) / t + big)
+    # Steam reforming: R1 CH4, R2 H2O, P1 H2, P2 CO.
+    num = M("4.22e15") * e(M(-240100) / r8 / t) / a["H2"] ** M("2.5") * (a["CH4"] * a["H2O"] - a["H2"] ** 3 * a["CO"] / k_sr)
+    den = (1 + M("8.23e-5") * e(M(70650) / r8 / t) * a["CO"] + M("6.65e-4") * e(M(38280) / r8 / t) * a["CH4"]
+           + M("1.77e5") * e(M(-88680) / r8 / t) * a["H2O"] / a["H2"] + M("6.12e-9") * e(M(82900) / r8 / t) * a["H2"]) ** 2
+    sr = num / den
+    # The shift: R1 H2O, R2 CO, P1 H2, P2 CO2.
+    num = M("1.96e6") * e(M(-67130) / r8 / t) / a["H2"] * (a["H2O"] * a["CO"] - a["H2"] * a["CO2"] / k_wgs)
+    den = (1 + M("1.77e5") * e(M(-88680) / r8 / t) * a["H2O"] / a["H2"] + M("6.12e-9") * e(M(82900) / r8 / t) * a["H2"]
+           + M("8.23e-5") * e(M(70650) / r8 / t) * a["CO"]) ** 2
+    wgs = num / den
+    # The overall reaction: R1 CH4, R2 H2O, P1 H2, P2 CO2.
+    num = M("1.02e15") * e(M(-243900) / r8 / t) / a["H2"] ** M("3.5") * (a["CH4"] * a["H2O"] ** 2 - a["H2"] ** 4 * a["CO2"] / k_ov)
+    den = (1 + M("6.65e-4") * e(M(38280) / r8 / t) * a["CH4"] + M("1.77e5") * e(M(-88680) / r8 / t) * a["H2O"] / a["H2"]
+           + M("6.12e-9") * e(M(82900) / r8 / t) * a["H2"]) ** 2
+    ov = num / den
+    return [r * KMOL_PER_H for r in (sr, wgs, ov)]
+
+
 def scale_terms(name, t, p):
     """Each rate's forward and backward terms, the magnitudes its rounding is
     measured against where the two nearly cancel."""
+    if name == "DWSIM":
+        return [[a, b] for a, b in zip(dwsim_rates(t, p), dwsim_rates(t, p, True))]
     if name == "Xu and Froment":
         sp = dict(p)
         fwd = xf_rates(t, sp)
@@ -296,6 +338,7 @@ def main():
         "models": [
             model("Xu and Froment", xf_species, xf_rates, xf_states),
             model("Vanden Bussche and Froment", vbf_species, vbf_rates, vbf_states),
+            model("DWSIM", xf_species, dwsim_rates, xf_states),
         ],
     }
     OUT.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")

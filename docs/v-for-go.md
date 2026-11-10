@@ -747,6 +747,16 @@ can read constants as any function can. Go's `slices.SortFunc` takes a
 closure either way. [chem/chem.v](../chem/chem.v) sorts a formula's
 elements by symbol so.
 
+**Gotcha (a V bug): `f() or { none }` into an Option field.** A struct
+field of type `?T` set from a function returning `!T`, as
+`S{ p: get() or { none } }`, passes V's checker, and V 0.5.2 then writes C
+that assigns an option to a plain struct, which neither tcc nor gcc
+compiles ("incompatible types when assigning to type 'main__P' from type
+'__v_option'"). Go has no Options to trip on. Make the Option first and
+fill it: `mut p := ?P(none)` then `if x := get() { p = x }`, as
+[flowsheet/reactions.v](../flowsheet/reactions.v) does for a species'
+formula and gas data.
+
 **Gotcha: a test file's function can hide its module's constant.** A
 test file is compiled into its module, as Go's internal tests are, so its
 names share the module's scope. In [kinetics](../kinetics/exact.v),

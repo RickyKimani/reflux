@@ -81,39 +81,40 @@ from the thermodynamic value.
 
 ## Input format
 
-TOML, like flowsheets. The numbers below are placeholders, not the
-published parameters.
+TOML, in the flowsheet file or a file of its own
+([flowsheet-format.md](flowsheet-format.md#reactions-format-2) has every
+key). Vanden Bussche and Froment's methanol kinetics, as their paper gives
+them ([testdata/kinetics/](../testdata/kinetics/vanden_bussche_froment.toml)):
 
 ```toml
-[[site]]
-name = "Cu"
+format = 2
+
+[components]
+names = ["carbon dioxide", "hydrogen", "methanol", "water", "carbon monoxide"]
+
+[site.Cu]
 terms = [
-  { k = { k_ref = 1.0, dh = -40e3, t_ref = 500.0 }, a = { H2O = 1.0, H2 = -1.0 } },
-  { k = { k_ref = 1.0, dh = -20e3, t_ref = 500.0 }, a = { H2 = 0.5 } },
-  { k = { k_ref = 1.0, dh = -60e3, t_ref = 500.0 }, a = { H2O = 1.0 } },
+  { name = "K_a", K = "3453.38", a = { H2O = 1, H2 = -1 } },
+  { name = "K_b", K = { A = "0.499 bar^-0.5", dH = "-17197 J/mol" }, a = { H2 = 0.5 } },
+  { name = "K_c", K = { A = "6.62e-11 bar^-1", dH = "-124119 J/mol" }, a = { H2O = 1 } },
 ]
 
-[[reaction]]
-name = "methanol"
+[reaction.methanol]
 equation = "CO2 + 3 H2 = CH3OH + H2O"    # parsed; element balance checked
-basis = "partial_pressure"
-units = { rate = "mol/(kg_cat*s)", pressure = "bar" }
-k = { k_ref = 1.0, ea = 36e3, t_ref = 500.0 }
-orders = { CO2 = 1.0, H2 = 1.0 }
-reversible = "thermo"                      # K from ΔG°f
+law = "lhhw"
+k = { A = "1.07 mol/(kg*s*bar^2)", Ea = "-36696 J/mol" }
+orders = { CO2 = 1, H2 = 1 }
+K = "10^(3066 K / T - 10.592) * 1 bar^-2"  # or "gibbs", K from the component data
 site = "Cu"
 site_power = 3
 
-[[reaction]]
-name = "rwgs"
+[reaction.RWGS]
 equation = "CO2 + H2 = CO + H2O"
-basis = "partial_pressure"
-units = { rate = "mol/(kg_cat*s)", pressure = "bar" }
-k = { k_ref = 1.0, ea = 90e3, t_ref = 500.0 }
-orders = { CO2 = 1.0 }
-reversible = "thermo"
+law = "lhhw"
+k = { A = "1.22e10 mol/(kg*s*bar)", Ea = "94765 J/mol" }
+orders = { CO2 = 1 }
+K = "10^(2.029 - 2073 K / T)"
 site = "Cu"
-site_power = 1
 ```
 
 Power-law and Eley–Rideal rates use the same building blocks. A free-form
