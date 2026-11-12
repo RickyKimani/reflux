@@ -209,6 +209,15 @@ scale(mut volumes, 1e6)
 for iterations: the caller owns `x`, says `mut` at the call, and the solve
 writes into it instead of allocating a new slice on every Newton step.
 
+**Only arrays, maps, structs, interfaces and pointers can be `mut`
+arguments.** `fn set(mut s string)` is refused ("mutable arguments are only
+allowed for arrays, interfaces, maps, pointers, structs or their aliases"),
+and so is a `mut` f64 or int. Go has no `mut` at all, and would pass a
+`*string`; V's message says to return the value instead. The integrators'
+stage helper, which says why an evaluation failed, returns the reason as a
+string, '' where it's fine (`ode_stage` in
+[numeric/dopri5.v](../numeric/dopri5.v)).
+
 `for mut x in arr` changes the elements in place. In Go, `for _, x := range arr`
 gives you a **copy**, which is a classic bug. V's `for mut` does what it
 looks like it does. See `cubic_real_roots` in [numeric/cubic.v](../numeric/cubic.v).
@@ -483,6 +492,13 @@ implements `Model` itself, by evaluating `inner` at a shifted volume. So
 `thermo.translate(thermo.translate(eos, c1)!, c2)!` is a valid model, and
 `solve_tp` can't tell it from a cubic. It's the same decorator pattern as
 wrapping an `io.Reader` in Go.
+
+**An interface can embed another, `mut` methods and all,** as Go's can, and
+a value of the bigger one passes where the smaller is asked: probed, a
+`mut o Ode` parameter took a `StiffOde`, and the calls made through it
+reached the caller's struct. `numeric.StiffOde` is `Ode` with a Jacobian,
+so `rodas4` hands its problem to the first-step code it shares with
+`dopri5` ([numeric/ode.v](../numeric/ode.v)).
 
 **Sum types** are what Go lacks: a *closed* set of variants, checked by the
 compiler. `Alpha` in [thermo/alpha.v](../thermo/alpha.v) is one, because the

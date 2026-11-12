@@ -143,7 +143,22 @@ Keep this section current: update it whenever a step is committed.
     overall rate stops at Q/K = 0.20. Found: an equilibrium over reactions
     from a feed without an element was a singular matrix, fixed by looking
     at the element rows too.
-  - Next is step 8: the integrators (RODAS4, Dormand–Prince 5(4)).
+  - **Step 8 is done,** and amended criterion 6, approved on 2026-11-12:
+    `numeric`'s integrators, `dopri5` (Dormand and Prince's 5(4) pair,
+    with Hairer's stiffness detection, which refuses a stiff problem) and
+    `rodas4` (Hairer and Wanner's L-stable Rosenbrock method, on the
+    problem's own Jacobian), both as Hairer's codes step and control them,
+    taking the problem as an interface (`Ode`, `StiffOde`). Measured: each
+    solution's order, RODAS4's |R(z)| ≤ 1, closed forms, and the Test Set for
+    IVP Solvers' stiff problems (`tools/gen_m9_odes.py`) within 0.13
+    tolerance units, the Oregonator's within 2.9, steps recorded.
+  - Found in step 8: E5's y₂ and y₃ are beyond RODAS4 in double precision
+    (51% off under tcc, 20 times under gcc; a Rosenbrock stage's rounding is
+    relative to f's terms, which cancel there), so its test holds its decay
+    and its invariant's drift instead; and
+    an orbit's error grows to many tolerances, so criterion 6's "within the
+    tolerance asked" is read as errors in tolerance units, recorded.
+  - Next is step 9: the reactors and the file format.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -406,7 +421,9 @@ over the rest, built into a shared library for the Python package in
   for systems (line search or dogleg), `broyden` for systems with no Jacobian,
   and `minimize` (a Levenberg–Marquardt-shifted Newton that knows f's rounding
   through `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
-  QAG integration and bisection. They take what they solve as an interface
+  QAG integration and bisection, and M9's integrators, `dopri5` and `rodas4`
+  (`Ode`, `StiffOde`), which return an answer only once every step has met
+  the tolerance. They take what they solve as an interface
   (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
   a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,

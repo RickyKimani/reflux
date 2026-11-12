@@ -99,6 +99,11 @@ numeric/
   broyden.v         Broyden's quasi-Newton method, with no Jacobian
   minimize.v        Newton minimisation with a Levenberg–Marquardt shift
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
+  ode.v             initial-value problems (M9): the interfaces, Hairer's
+                    error norm and first step
+  dopri5.v          Dormand and Prince's 5(4) pair, with stiffness detection
+  rodas4.v          RODAS4, Hairer and Wanner's L-stable Rosenbrock method,
+                    on the problem's own Jacobian
 tdep/
   tdep.v            temperature-dependent correlations (ChemSep and DIPPR
                     forms): value, derivative and both integrals
@@ -238,7 +243,9 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (formulas against RDKit and chemicals, and K(T) against
                     mpmath and thermo), gen_m9_kinetics.py (two papers'
                     kinetics by mpmath), gen_m9_equilibrium.py (equilibria
-                    by mpmath, ideal gas and Peng–Robinson),
+                    by mpmath, ideal gas and Peng–Robinson), gen_m9_odes.py
+                    (stiff test problems from the Test Set for IVP Solvers,
+                    checked by SciPy),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)

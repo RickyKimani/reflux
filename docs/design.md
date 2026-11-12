@@ -1429,6 +1429,94 @@ and a note for an expression, irreversible as written. A reaction whose
 species the state can't make isn't judged, with a note saying so.
 `reflux kinetics check` runs it in the ideal gas when given a state.
 
+## The integrators
+
+M9 step 8 ([numeric/ode.v](../numeric/ode.v),
+[numeric/dopri5.v](../numeric/dopri5.v),
+[numeric/rodas4.v](../numeric/rodas4.v)), D8: `dopri5` for what isn't stiff,
+`rodas4` for what is. Both follow Hairer's codes, DOPRI5 and RODAS, in
+their steps, error norm and step control, and take the problem as an
+interface: `Ode`, y' = f(t, y), and `StiffOde`, with ∂f/∂y and ∂f/∂t.
+
+**The error norm** is Hairer's: a step is accepted when
+
+    ‖e‖ = √(Σᵢ (eᵢ/sᵢ)²/n) ≤ 1,   sᵢ = atolᵢ + rtol·max(|y₀ᵢ|, |y₁ᵢ|),
+
+e the error estimate, y₀ and y₁ the step's ends. rtol must be above 10
+units of roundoff and every atol above zero, as Hairer's codes ask.
+
+**The first step** is Hairer's HINIT: with d₀ = ‖y₀‖ and d₁ = ‖f(t₀, y₀)‖
+in the norm above, h₀ = 0.01·d₀/d₁ (1e-6 where either is below 1e-5), one
+Euler step of h₀ estimates d₂ = ‖f(t₀ + h₀, y₀ + h₀f₀) − f₀‖/h₀, and
+
+    h = min(100·h₀, (0.01/max(d₁, d₂))^(1/p), hmax),
+
+p the method's order, 5 or 4.
+
+**Dormand and Prince's 5(4) pair** (Hairer's CDOPRI coefficients, SciPy's
+RK45's too): seven stages, the last f at the new point and the next step's
+first (FSAL). The fifth-order solution goes on; the error estimate is its
+difference from the fourth-order one, e = h·Σ eᵢkᵢ. The step control is
+Hairer's PI controller, with β = 0.04:
+
+    h_new = h / max(1/10, min(5, ‖e‖^(0.2 − 0.75β) / ‖e_prev‖^β / 0.9)),
+
+‖e_prev‖ the last accepted step's, at least 1e-4. A rejected step shrinks
+by min(5, ‖e‖^(0.2−0.75β)/0.9) and the step after a rejection can't grow.
+**Stiffness:** every 1000 accepted steps, and on each step while it
+suspects stiffness, |hλ| ≈ |h|·‖k₇ − k₆‖₂/‖y₁ − y₆‖₂, the last two stages
+at the same t. Above 3.25 for 15 steps in a row is stiff, and refused for
+rodas4; 6 steps below clear the suspicion.
+
+**RODAS4** (Hairer and Wanner II, §IV.7; the coefficients ROCOE's, METH =
+1): six stages of
+
+    (I/(hγ) − J)·kᵢ = f(t + cᵢh, y + Σⱼ<ᵢ aᵢⱼkⱼ) + Σⱼ<ᵢ (cᵢⱼ/h)kⱼ + h·dᵢ·∂f/∂t,
+
+γ = 1/4, J and ∂f/∂t at the step's start, one LU of I/(hγ) − J for all six.
+y₅ = y + Σ a₅ⱼkⱼ, y₆ = y₅ + k₅, y_new = y₆ + k₆: stiffly accurate, so
+L-stable, with y₆ the embedded solution of order 3 and k₆ the error
+estimate. The step control is Gustafsson's predictive controller, as
+RODAS's:
+
+    h_new = h / max(1/6, min(5, ‖e‖^(1/4)/0.9)),
+    and after the first step, h / max(that, (h_prev/h)·(‖e‖²/‖e_prev‖)^(1/4)/0.9),
+
+‖e_prev‖ at least 0.01. A singular I/(hγ) − J halves the step, five times
+in all at most, as RODAS counts them.
+
+**Failures:** an evaluation that fails, or isn't finite, rejects the step
+and halves it, so a problem can refuse a point outside its domain (a
+negative flow) and the integrator steps back. A step that falls to 10
+units of roundoff in t, or more than max_steps, is an `OdeError`, with
+the last accepted point.
+
+**What the tests show** ([numeric/ode_test.v](../numeric/ode_test.v),
+[numeric/stiff_test.v](../numeric/stiff_test.v)):
+- Each solution's order, by one step at halving sizes: RODAS4's 4 and its
+  embedded 3, Dormand–Prince's 5 and 4, within 0.35 (0.14 and 0.29 at
+  worst).
+- RODAS4's |R(z)| ≤ 1 over the left half-plane, and R(−1e12) = 8.8e-12.
+- Closed forms: a linear system with eigenvalues −1, −1e3 and −1e6, and
+  Prothero and Robinson's problem, within 0.16 tolerance units; Kepler's
+  orbit and Arenstorf's, whose errors grow along the orbit (730 to 24,000
+  units), each recorded.
+- The Test Set for IVP Solvers' HIRES, Robertson, van der Pol, Oregonator
+  and pollution problems within 0.13 tolerance units of the reference, the
+  Oregonator's within 2.9, at rtol 1e-4 to 1e-10, the steps recorded.
+- **E5 is beyond RODAS4 in double precision.** y₂ − y₃ − y₄ is conserved
+  exactly, and any Rosenbrock method keeps a linear invariant in exact
+  arithmetic. But a Rosenbrock stage solves for its whole increment from
+  f's values, so its rounding is relative to f's terms, where an implicit
+  method's Newton solves for small corrections. While E5's y₂ and y₃ are
+  1e-10 their rates' terms are 1e-7 and cancel, and the 1e-22 lost then
+  stays when they have fallen to 9e-23 at t = 1e13. RODAS4's y₂ and y₃ end
+  51% from the reference under tcc and a factor of 20 under gcc, whose last
+  bits differ, the drift 7.9e-23 and 1.9e-21; SciPy's Radau 3.4e-4; the
+  reference, in 128-bit arithmetic, keeps the invariant to 1.3e-25. The
+  test holds y₁'s and y₄'s decay and the drift below 1e-20. A PFR's flows
+  don't fall a dozen orders below their rates' terms.
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

@@ -22,7 +22,8 @@ amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is done and
 amended D1, approved on 2026-11-10. Step 5 is done and amended criterion
 5, approved on 2026-11-10. Step 6 is done and amended D11,
 approved on 2026-11-10. Step 7 is done and amended D1 and D10,
-approved on 2026-11-11. Step 8 is next.
+approved on 2026-11-11. Step 8 is done and amended criterion 6,
+approved on 2026-11-12. Step 9 is next.
 
 ## Goal
 
@@ -186,6 +187,15 @@ All checked by tests in CI, as in M1 to M4.
 6. **The integrator is right.** Stiff and non-stiff test problems reach their
    reference solutions within the tolerance asked, and closed-form cases
    within it too. Its step counts are recorded, and can't grow.
+   **Amended in step 8:** an integrator holds each step's error to the
+   tolerance, not the end's, so "within the tolerance asked" is read as each
+   end error in units of the tolerance, |y − ref|/(atol + rtol·|ref|),
+   recorded and unable to grow. Most stiff problems and closed forms end
+   within a unit; a problem that carries its errors on ends above, an
+   orbit's phase (Kepler's 730 to 4,400 units, Arenstorf's to 24,000) or
+   the Oregonator's fronts (2.9). E5's y₂ and y₃ are beyond a Rosenbrock
+   method in double precision (step 8), so E5 is held to what can be
+   claimed of it: its decay and its invariant's drift.
 7. **Each reactor is right.** Conversion, Gibbs, CSTR and PFR close their
    element and energy balances to 1e-10, and every outlet is a verified
    flash. The CSTR and an isothermal PFR match closed forms for simple
@@ -959,9 +969,104 @@ flowchart LR
 - **V's notes:** `clone` on an array of arrays is deep, where Go's
   `slices.Clone` isn't; and a function returns `!T` or `?T`, never both.
 
-### 8. Integrators
+### 8. Integrators — done, with criterion 6 amended
 - RODAS4 and Dormand–Prince 5(4) in `numeric` (D8), on Hairer's stiff test
   problems and closed forms, with step counts recorded.
+- **[numeric/ode.v](../numeric/ode.v)**: what both share. `Ode`, y' =
+  f(t, y), and `StiffOde`, which adds ∂f/∂y and ∂f/∂t, each with a `mut`
+  receiver, so a reactor can fill buffers it keeps; `OdeParams` (rtol, atol
+  or one per component, the first step, hmax, max_steps, and a profile of
+  every accepted step if asked); `OdeSolution`, with the counts; `OdeError`
+  and its kinds (bad input, too many steps, a step fallen to rounding, a
+  singular matrix, a stiff problem). Hairer's error norm and first step
+  ([design.md](design.md#the-integrators)).
+- **[numeric/dopri5.v](../numeric/dopri5.v)** is Dormand and Prince's 5(4)
+  pair as Hairer's DOPRI5 runs it: seven stages with the last the next
+  step's first, his PI controller (β = 0.04), and his stiffness detection,
+  which refuses a stiff problem for `rodas4`.
+- **[numeric/rodas4.v](../numeric/rodas4.v)** is RODAS4 as Hairer's RODAS
+  runs it: six stages on one LU of I/(hγ) − J, J the problem's own
+  Jacobian, stiffly accurate, with Gustafsson's predictive controller.
+  Each integrator's step is a method of a workspace made once (`attempt`),
+  which the tests call alone. A step whose evaluation fails, or isn't
+  finite, is rejected and halved, so a problem can refuse a point outside
+  its domain.
+- **The coefficients** are Hairer's, from his own Fortran as Assimulo
+  carries it (his university's server refuses scripts). Dormand and
+  Prince's agree with SciPy's exact fractions; RODAS4's with
+  OrdinaryDiffEq.jl's copy, which was transcribed from Hairer's, so the
+  tests check what they claim instead: each solution's order and RODAS4's
+  stability.
+- **The fixture,** [testdata/m9_odes.json](../testdata/m9_odes.json) from
+  [tools/gen_m9_odes.py](../tools/gen_m9_odes.py): HIRES, Robertson, van der
+  Pol, the Oregonator, E5 and the pollution problem as the Test Set for IVP
+  Solvers of the University of Bari gives them, with its reference
+  solutions, from RADAU5 at rtol 1.1e-18 in 128-bit arithmetic. Each is
+  written again in the generator, its Jacobian checked, and solved by
+  SciPy's Radau at rtol 1e-12, within 0.53 tolerance units of every
+  reference but E5's, which SciPy can't resolve (3.4e-4 relative). The
+  test writes each a third time, from the Fortran.
+- **Numbers:**
+  - Each solution's order, from one step at halving sizes, on a problem
+    with t in f and one without: RODAS4's 4 and its embedded 3,
+    Dormand–Prince's 5 and 4, within 0.14 and 0.29 of their claims.
+  - RODAS4's |R(z)| at most 0.9987 over 84 points of the left half-plane,
+    and R(−1e12) = 8.8e-12: L-stable.
+  - Closed forms: a linear system with eigenvalues −1, −1e3 and −1e6, and
+    Prothero and Robinson's problem, within 0.16 tolerance units at rtol
+    1e-4 to 1e-10, `dopri5` refusing the first as stiff. Kepler's orbit
+    (e = 0.5, three periods) ends 0.44 to 7.3e-8 off, Arenstorf's 0.32 to
+    2.4e-6, each falling with the tolerance and recorded.
+  - The test set, at rtol 1e-4, 1e-7 and 1e-10: HIRES within 0.13
+    tolerance units, Robertson 0.046, van der Pol 0.095, the pollution
+    problem 0.094, the Oregonator 2.9, in 28 to 31,775 steps, recorded.
+    `dopri5` finds all six stiff, within 1,016 steps.
+- **Found:**
+  - E5's y₂ and y₃ are beyond RODAS4 in double precision: they end 51%
+    from the reference under tcc and a factor of 20 under gcc, SciPy's
+    Radau 3.4e-4. y₂ − y₃ − y₄ is conserved exactly,
+    and a Rosenbrock method keeps a linear invariant in exact arithmetic,
+    but its stages solve for their whole increments from f's values, so
+    its rounding is relative to f's terms, where an implicit method's
+    Newton solves for small corrections. While y₂ and y₃ are 1e-10, their
+    rates' terms are 1e-7 and cancel, and the 1e-22 lost then stays when
+    they have fallen to 9e-23. E5's test holds y₁'s and y₄'s decay below
+    atol and the invariant's drift below 1e-20: 7.9e-23 under tcc, 1.9e-21
+    under gcc, whose arithmetic differs from tcc's in the last bit, which E5
+    amplifies. The gcc check found that, a first bound of 8.7e-23 failing.
+    A PFR's flows don't fall a dozen orders below their rates' terms.
+  - Global errors many tolerances large, in orbits, so criterion 6 is
+    amended to say what's measured.
+- **Tests,** thirteen in two files: [numeric/ode_test.v](../numeric/ode_test.v),
+  nine (orders; the first step, against Hairer's formula by hand;
+  stability; stiff and non-stiff closed forms; an evaluation that fails and
+  is retried; backwards in t, the profile and the counts; hmax; thirteen
+  refusals); [numeric/stiff_test.v](../numeric/stiff_test.v),
+  four (each Jacobian against differences; RODAS4 against the test set;
+  E5; `dopri5` refusing all six).
+- **Planted mistakes:** 42, one at a time in a scratch copy, 34 caught at
+  once, seven changed coefficients among them, each caught by the orders'
+  test or the step budgets. Of the 8 survivors:
+  - three are caught by tests written for them: the check that f is
+    finite (a problem infinite at its start, and one with a NaN Jacobian,
+    are refused now), HINIT's exponent (the first step against Hairer's
+    formula, worked by hand), and Dormand–Prince's halving after a failed
+    evaluation (the retry's rejections recorded, 3).
+  - one is code deleted: `rodas4` reset its count of singular matrices
+    after each good step, which nothing tested and Hairer's RODAS doesn't
+    do. It counts them in all now, five at most, as RODAS's NSING does.
+  - four are explained. The end-of-interval rule's slack, 1% in
+    `dopri5` and 0.01% in `rodas4`, spares a sliver of a last step, and the
+    integration ends right without it. Setting t to t1 exactly at the last
+    step is a guarantee that rounding nearly always gives anyway: past t1/2,
+    t1 − t is exact (Sterbenz's lemma) and so t + (t1 − t) is t1. And
+    Dormand–Prince's rule that the step after a rejection can't grow is a
+    safeguard against swinging between the two, which none of these
+    problems' controllers asks for.
+- **V's notes:** only arrays, maps, structs, interfaces and pointers can be
+  `mut` arguments, so a reason comes back as the result; an interface can
+  embed another, `mut` methods and all, and the bigger one passes where
+  the smaller is asked.
 
 ### 9. Reactors and the file format
 - The five reactors (D10), each balance checked, as units with makers in
