@@ -180,6 +180,19 @@ equilibrium/        chemical equilibrium (M9), one phase, ideal gas or a cubic
                     equilibrium over chosen reactions, each shown right
   consistency.v     each reversible rate held to the equilibrium from a
                     state: where it stops along its reaction
+reactors/           the reactors (M9): flowsheet units with makers for the file
+  reactor.v         what every reactor shares: its elements, its errors, and
+                    the temperature an energy balance sets
+  gibbs.v           the Gibbs reactor
+  equilibrium_reactor.v  equilibrium over chosen reactions
+  conversion.v      the conversion reactor: its reactions in order
+  source.v          a reactor's rates as a source of each species, with
+                    their derivatives
+  cstr.v            the CSTR, by Newton
+  pfr.v             the PFR and packed bed: isothermal, adiabatic or with a
+                    duty, Ergun's drop, its profile
+  viscosity.v       the gas viscosity Ergun needs: Wilke's rule
+  makers.v          the reactors' tables in a flowsheet file (format 2)
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
@@ -245,7 +258,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     kinetics by mpmath), gen_m9_equilibrium.py (equilibria
                     by mpmath, ideal gas and Peng–Robinson), gen_m9_odes.py
                     (stiff test problems from the Test Set for IVP Solvers,
-                    checked by SciPy),
+                    checked by SciPy), gen_m9_viscosity.py (gas viscosities
+                    by chemicals),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)

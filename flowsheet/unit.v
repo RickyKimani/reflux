@@ -16,6 +16,29 @@ pub struct Outcome {
 pub:
 	outlets []Stream // in the order of outlet_ports
 	energy  []EnergyStream
+	// conserved is what a unit that reacts conserves, as rows over the
+	// components (its elements), on which its balance is checked: empty for
+	// a unit that conserves every component, as M4's do.
+	conserved [][]f64
+	// profile is a reactor's along its volume, if it has one.
+	profile ?Profile
+}
+
+// Profile is a reactor's state along it: the inlet, then each point its
+// integrator stepped to (M9's report format 2).
+pub struct Profile {
+pub:
+	points []ProfilePoint
+}
+
+// ProfilePoint is a reactor's state at one place along it.
+pub struct ProfilePoint {
+pub:
+	volume f64   // m³ from the inlet
+	length f64   // m from the inlet, for a reactor of known length; else 0
+	t      f64   // K
+	p      f64   // Pa
+	flows  []f64 // mol/s of each component
 }
 
 // Unit is one unit operation. It holds its specification and nothing about

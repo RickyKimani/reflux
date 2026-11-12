@@ -163,8 +163,27 @@ identification parameter of Venkatarathnam and Oellrich (2011):
     Π = V·[(∂²P/∂T∂V)/(∂P/∂T) − (∂²P/∂V²)/(∂P/∂V)]
 
 `phase_label` calls a single phase liquid when Π > 1 and vapour otherwise,
-as Caleb Bell's `thermo` does. It needs no saturation curve or critical
+as Caleb Bell's `thermo` does, but for a phase more than four covolumes
+large, less dense than its critical density, which is vapour whatever Π
+says (amended in M9 step 9). It needs no saturation curve or critical
 point, so it works for any mixture, supercritical ones included.
+
+**Why the covolumes.** At low density
+
+    Π ≈ 1 + (B − T·dB/dT)/V,
+
+B the second virial coefficient, and B − T·dB/dT is above zero for a gas
+above its Joule–Thomson inversion temperature at zero pressure: hydrogen's
+is about 200 K, nitrogen's 620 K, methane's 950 K. So Π alone calls such a
+gas liquid however dilute, and M9's reformer gas at 1000 K came out of the
+flash a liquid, which a drum would have sent out of its liquid port. A
+cubic's critical volume is 3 (van der Waals) to 3.95 (Peng–Robinson)
+covolumes, and Kay's rule on the components' is the mixture's covolume times
+the same ratio, so four covolumes is less dense than the pseudo-critical
+density on any cubic: no liquid is that dilute. Of M3's 1,327 fixture roots,
+17 supercritical ones, 1.3 to 2.5 times their Tc with Π from 1.004 to 1.17,
+are vapour where `thermo` calls them liquid; every other label is
+`thermo`'s.
 
 ∂P/∂V and ∂P/∂T are analytic. The second derivatives are third derivatives
 of F, which the `Model` contract doesn't have, so they're central
@@ -1516,6 +1535,94 @@ the last accepted point.
   reference, in 128-bit arithmetic, keeps the invariant to 1.3e-25. The
   test holds y₁'s and y₄'s decay and the drift below 1e-20. A PFR's flows
   don't fall a dozen orders below their rates' terms.
+
+## The reactors
+
+M9 step 9 ([reactors/](../reactors/pfr.v)), D10: five flowsheet units with
+makers for the file (D1), each with one inlet and one outlet, its outlet a
+flash at its state, in one phase.
+
+**Balances on the elements.** A unit that reacts reports what it conserves
+(`Outcome.conserved`): a row per element of the file's components, with a
+row of its own for a component without a formula, which can't react. The
+flowsheet's solver checks such a unit on those rows instead of each
+component, to 1e-10 of its flow, and the whole flowsheet too where it has a
+reactor, a tear's gap in one component allowed to move an element's
+balance by the most atoms a component has. The energy needs nothing new: H
+is referred to the elements (§ Ideal gas), so each stream's H holds its
+heats of formation.
+
+**Temperature.** Every reactor is isothermal (at its `T`, or its inlet's),
+adiabatic, or at a given duty. An isothermal reactor's duty is F·H out
+less F·H in. For an equilibrium, conversion or Gibbs reactor out of
+isothermal, the outlet's T solves F·H(T) = F·H_in + Q by Brent, bracketed
+outwards from the inlet's T by doubling steps from 50 K, between 0.5 and
+10,000 K, the outlet recomputed at each T; the CSTR and the PFR carry T
+themselves.
+
+**The reactors:**
+
+| Reactor | Its outlet |
+|---|---|
+| Gibbs | `equilibrium.gibbs` over every component (D9) |
+| equilibrium | `equilibrium.over_reactions`, K from the Gibbs energies, its reactions independent |
+| conversion | each step in order: extent ξ = X·n_key/(−ν_key), on the key as it enters the step; a reactant taken below zero beyond 1e-12 of the flow is refused, and within it is zero |
+| CSTR | Fᵢ,in − Fᵢ + V·Sᵢ = 0, and where T moves F·H(T, P, F) = F·H_in + Q, by `numeric.newton` from the inlet |
+| PFR | dFᵢ/dV = Sᵢ, with T and P where they move, by `rodas4` (or `dopri5`) |
+
+**A reactor's source of each species,** from the kinetics' rates
+([reactors/source.v](../reactors/source.v)):
+
+    Sᵢ = Σⱼ sⱼ νᵢⱼ rⱼ(T, P, y),   mol/(m³·s),
+
+sⱼ the catalyst loading (kg/m³) for a rate per mass of catalyst and 1 for
+one per volume. φ, Z and the phase's volume come from the fluid's model at
+each state. A flow that rounding takes below zero is read as zero in the
+rates, as DWSIM reads it. Its derivatives by the flows follow from the
+rates' by the chain rule through yₗ = Fₗ/ΣF:
+
+    ∂Sᵢ/∂Fₖ = Σⱼ sⱼνᵢⱼ [∂rⱼ/∂yₖ − Σₗ yₗ ∂rⱼ/∂yₗ]/ΣF,
+
+with φ and Z held fixed, as kinetics' `jacobian` holds them.
+
+**The PFR** ([reactors/pfr.v](../reactors/pfr.v)): the state is the flows,
+then T where it moves, then P under Ergun's drop; a given drop's P is a
+line in V. Where T moves, F·H rises by the duty per volume q, and with
+h̄ᵢ = H°ᵢ(T) − RT²(∂ln φᵢ/∂T) each species' partial molar enthalpy, and
+(∂H/∂P)_T = −Cp·μ_JT,
+
+    dT/dV = (q − Σᵢ h̄ᵢSᵢ + Cp·μ_JT·dP/dV)/Cp.
+
+Ergun's drop, with u = Q_v/A the superficial velocity, A = V/L, ρ the gas's
+density and μ its viscosity:
+
+    dP/dV = −[150 μ(1 − ε)²u/(ε³d²) + 1.75 ρ(1 − ε)u²/(ε³d)]/A.
+
+`rodas4` takes the flows' block of the Jacobian exactly, from the rates;
+the rows of T and P, and a given drop's ∂f/∂V, are central differences of
+the right-hand side, each column's step 6e-6 of its value (about ε^(1/3)).
+The absolute tolerances are 1e-6·rtol of the inlet's flow for each flow,
+rtol·T_in and rtol·P_in. At the outlet, an isothermal PFR is flashed at its
+T and P; otherwise the outlet is a PH flash on the energy balance, and the
+integrated T must agree with its T to 100·rtol of T (plus 1e-9 of it), or
+the energy equation and the fluid disagree and the PFR fails. The profile
+is the inlet and every accepted step.
+
+**The gas viscosity** ([reactors/viscosity.v](../reactors/viscosity.v)),
+for Ergun (D10, as amended in step 0): each component's from its file's
+vapour-viscosity correlation (ChemSep's equation 102) at T, mixed by
+Wilke's rule,
+
+    μ = Σᵢ yᵢμᵢ / Σⱼ yⱼΦᵢⱼ,   Φᵢⱼ = [1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼]² / [8(1 + Mᵢ/Mⱼ)]^½,
+
+pressure ignored. It matches `chemicals`' Wilke and EQ102 to 2.2e-16.
+
+**What the tests show:** an isomerisation's exp(−kPV/F) and 1/(1 + kPV/F)
+to 3.2e-11 and 1e-12, and a dehydrogenation's −X − 2 ln(1 − X) = kPV/F₀ to
+1e-11; the Gibbs and equilibrium reactors on mpmath's equilibria to 1e-11
+in ln y; Ergun's drop within 3.3e-4 of its ideal-gas closed form; a long
+PFR on fugacities within 2.8e-14 of the Gibbs reactor's equilibrium; and
+every reactor in a chain closing its elements to 1e-10.
 
 ## Streams and units
 

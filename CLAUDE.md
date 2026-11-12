@@ -158,7 +158,22 @@ Keep this section current: update it whenever a step is committed.
     and its invariant's drift instead; and
     an orbit's error grows to many tolerances, so criterion 6's "within the
     tolerance asked" is read as errors in tolerance units, recorded.
-  - Next is step 9: the reactors and the file format.
+  - **Step 9 is done,** and amended D11, approved on 2026-11-12: a new
+    `reactors` module (Gibbs, equilibrium, conversion, CSTR, PFR) with makers
+    for format 2 files, each reactor's `reactions` naming what it runs. Every
+    reactor is isothermal, adiabatic or at a duty; the PFR's energy equation
+    carries the real gas, Ergun's drop takes Wilke's viscosity (`chemicals`
+    to 2.2e-16), and its profile goes in report format 2. A unit that reacts
+    reports its elements (`Outcome.conserved`), and the solver checks it, and
+    the whole flowsheet, on them. A long PFR on fugacities reaches the Gibbs
+    reactor's equilibrium to 2.8e-14.
+  - Found and fixed in step 9, at the owner's word: M3's PT flash labelled a
+    hot gas liquid (Π − 1 ≈ (B − T·dB/dT)/V > 0 above the Joule–Thomson
+    inversion temperature). M3's D6 is amended, approved on 2026-11-12: a
+    single phase more than four covolumes large is vapour. 17 supercritical fixture roots now
+    differ from `thermo`'s labels.
+  - Next is step 10: the DWSIM references, the owner's case and each reactor
+    alone.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -372,6 +387,9 @@ expression language, uses `quantity`; `kinetics` (M9), reactions, uses
 `equilibrium` (M9), chemical equilibrium and the rates' consistency with
 it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `components` and `flowsheet`; `main` uses it for `reflux kinetics check`.
+`reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
+`equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
+`main` gives `flowsheet.load` its makers.
 `components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
@@ -490,6 +508,14 @@ over the rest, built into a shared library for the Python package in
   - `consistency` judges each reversible rate by where it stops along its
     reaction from the equilibrium a state reaches: ΔG/RT there, zero for a
     rate consistent with the Gibbs energies.
+- **`reactors`** is M9's (D10): Gibbs, equilibrium over chosen reactions,
+  conversion, CSTR and PFR, each a `flowsheet.Unit` with a maker (D1).
+  - A maker reads its table through a `Section` whose `context` holds the
+    file's format, species, component records and reactions (format 2).
+  - A reactor's `Outcome` gives its elements as `conserved`, and the solver
+    checks it on them; a PFR's gives its `profile`.
+  - Rates become each species' source through `Source`, with exact
+    derivatives; the PFR and CSTR use them in `rodas4` and `newton`.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

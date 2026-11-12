@@ -40,6 +40,24 @@ fn test_solve_prints_the_table_and_writes_its_reports() {
 	assert os.read_file(csv_path)! == r.csv()
 }
 
+// A flowsheet with a reactor (M9, format 2): `reflux solve` reads its
+// reactions and its PFR, and the report gives the PFR's profile, from the
+// feed's state to the product's. The product, hydrogen-rich at 1000 K, is
+// vapour (M3's D6, as amended in M9 step 9).
+fn test_solve_a_reactor() {
+	file := os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'reformer.toml')
+	json_path := scratch('reformer.json')
+	code, _, err := quiet(['solve', file, '--json', json_path])
+	assert code == 0 && err == '', err
+	r := decode(json_path)!
+	assert r.format == 2 && r.units.len == 1 && r.units[0].kind == 'pfr'
+	profile := r.units[0].profile or { panic('no profile') }
+	product := r.streams.filter(it.name == 'product')[0]
+	assert profile[0].volume == 0 && profile.last().volume == 1 && profile.last().length == 1
+	assert profile.last().p == product.p && profile.last().molar_flows == product.molar_flows
+	assert product.vapour_fraction == 1 && product.phases[0].phase == 'vapour'
+}
+
 fn test_trace_prints_every_pass_after_the_table() {
 	code, out, _ := quiet(['solve', reference, '--trace'])
 	assert code == 0

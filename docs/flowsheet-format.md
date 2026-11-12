@@ -1,6 +1,8 @@
 # The flowsheet file format
 
-A flowsheet is a [TOML](https://toml.io) file. This is format 1.
+A flowsheet is a [TOML](https://toml.io) file, format 1 or 2: format 2 (M9)
+adds reactions and reactors, and reads every format-1 file's sections as
+format 1 does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
 
@@ -76,7 +78,8 @@ prefixes, and how a compound unit is written.
 
 ## `format`
 
-Required, and 1. A later format will come with a way to migrate.
+Required: 1, or 2 for a file with reactions or reactors. A later format will
+come with a way to migrate.
 
 ## `[components]`
 
@@ -206,12 +209,91 @@ expander finds its isentropic outlet, then applies the efficiency.
 | `fractions` | A table by component: how much of each goes to the first outlet. A component left out all goes to the second. |
 | `T`, `P` | Both outlets' state. |
 
+### Reactors (format 2)
+
+Five unit types run a file's reactions (M9, D10), each with one inlet `in`
+and one outlet `out`, its outlet a flash at its state, and its balance
+checked on its elements, which is what a reaction conserves.
+[testdata/flowsheets/reformer.toml](../testdata/flowsheets/reformer.toml)
+is a whole file: a steam reformer as a packed bed, on Xu and Froment's
+kinetics.
+
+```toml
+[unit.reformer]
+type = "pfr"
+in = "feed"
+out = "product"
+volume = "1 m^3"
+length = "1 m"
+catalyst = { loading = "0.386 kg/m^3", void_fraction = 0.4, particle_diameter = "2 mm" }
+pressure_drop = "ergun"
+```
+
+Every reactor takes these, each optional:
+
+| Key | |
+|---|---|
+| `T`, `duty`, `adiabatic` | At most one. `T` keeps the outlet (a PFR, all of it) at that temperature; `duty` adds that heat; `adiabatic = true` adds none. With none of them the reactor is isothermal at its inlet's T. An isothermal reactor reports its duty. |
+| `pressure_drop` | The outlet's P below the inlet's. A PFR's may be `"ergun"` instead (below). |
+| `reactions` | The file's reactions it runs, by name. By default every one it can: every one with a rate law for a PFR or a CSTR, every one for an equilibrium reactor. Not for a Gibbs reactor or a conversion reactor. |
+
+A reactor's outlet is one phase: one that would split is refused, a second
+phase being M6's.
+
+#### `gibbs_reactor`
+
+Its outlet is the equilibrium over every component the feed's elements
+allow (D9), whatever reactions the file has, at its T or where its energy
+balance puts it.
+
+| Key | |
+|---|---|
+| `inert` | Components that pass through, by name. A component without a formula does anyway. |
+
+#### `equilibrium_reactor`
+
+Its reactions reach equilibrium, each one's Q its K from the Gibbs energies
+(D7), and nothing else reacts. The reactions must be independent.
+
+#### `conversion_reactor`
+
+| Key | |
+|---|---|
+| `conversions` | Its steps, in order: each a table with a `reaction`, a `key` reactant by name, and its `conversion`, from 0 to 1, of the key as it enters that step. A later step sees what earlier ones left. A step that needs more of a reactant than there is is refused. |
+
+#### `cstr`
+
+Its outlet is its contents: each component's flow in less its flow out,
+plus V times what its reactions make, is zero, solved by Newton.
+
+| Key | |
+|---|---|
+| `volume` | The reactor's volume, `"0.2 m^3"`. |
+| `catalyst_loading` | kg of catalyst per m³ of reactor, for rates per mass of catalyst. |
+
+#### `pfr`
+
+A plug-flow reactor or packed bed: the flows integrated along its volume
+(D8), isothermal, adiabatic or with its duty spread evenly over its volume.
+
+| Key | |
+|---|---|
+| `volume` | The reactor's volume. |
+| `length` | Its length, which Ergun's drop needs, and which the profile then gives. |
+| `catalyst` | `loading`, kg of catalyst per m³ of reactor, for rates per mass of catalyst; for Ergun's drop, `void_fraction` and `particle_diameter`. The void fraction enters Ergun alone, as in DWSIM. |
+| `pressure_drop` | A drop, spread evenly over the volume, or `"ergun"`: Ergun's equation, on the gas's viscosity at low pressure, each component's from its file's correlation mixed by Wilke's rule. |
+| `integrator` | `"rodas4"` (the default), stiff, or `"dopri5"`, which refuses a problem it finds stiff. |
+| `rtol` | The integrator's relative tolerance, 1e-8 by default. |
+
+The report gives a PFR's profile: its state at its inlet and at every point
+the integrator stepped to (report format 2).
+
 ## Reactions (format 2)
 
 A file with reactions is format 2: `[definitions]`, `[site.NAME]` and
 `[reaction.NAME]`, beside `[components]`. `reflux kinetics check` and
-`reflux kinetics explain` read them (M9 step 6); the reactors that use them
-in a flowsheet come with M9 step 9. A file of reactions alone has `format`,
+`reflux kinetics explain` read them (M9 step 6), and so does `reflux solve`,
+for its reactors. A file of reactions alone has `format`,
 `[components]` and its reactions, and a whole flowsheet's other sections
 are left to `reflux solve`.
 [testdata/kinetics/](../testdata/kinetics/xu_froment.toml) has three whole

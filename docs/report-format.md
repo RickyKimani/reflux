@@ -1,9 +1,11 @@
 # The report format
 
 `reflux solve plant.toml --json results.json` writes a flowsheet's results as
-JSON, and `--csv streams.csv` its streams as CSV. This is format 1 of both. It
-changes only with a new `format` number, so that what reads a report can rely
-on it.
+JSON, and `--csv streams.csv` its streams as CSV. This is format 2 of the
+JSON, and of the CSV, which is format 1's. It changes only with a new
+`format` number, so that what reads a report can rely on it. Format 2 (M9)
+adds a reactor's profile to its unit, an element balance where something
+reacts, and the failure `"reaction_failed"`.
 
 - **Every number is SI:** K, Pa, mol/s, kg/s, m³/s, J/mol, J/(mol·K), m³/mol
   and W.
@@ -32,7 +34,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 
 | Key | |
 |---|---|
-| `format` | 1. |
+| `format` | 2. |
 | `reflux` | The version of reflux that wrote it. |
 | `file` | The flowsheet file, as the command line named it. |
 | `status` | `"solved"` or `"failed"`. |
@@ -101,6 +103,7 @@ composition it was given. So it has fractions and a phase though its flows are
 | `outlets` | The same for its outlets. |
 | `energy` | Its duty or work. |
 | `balance` | How far it closes its balances, on the inlets it was calculated from. Where an inlet is a tear, those are a pass behind the stream in `streams`, by no more than `tol`. |
+| `profile` | A PFR's state along it, or `null` for a unit without one. |
 
 ### `units[].energy[]`
 
@@ -108,6 +111,18 @@ composition it was given. So it has fractions and a phase though its flows are
 |---|---|
 | `name` | `"duty"` for heat, `"work"` for shaft work. |
 | `rate` | W, into the unit's material: a cooler's duty is below 0, and a pump's work above. |
+
+### `units[].profile[]`
+
+The PFR's inlet, then each point its integrator stepped to.
+
+| Key | |
+|---|---|
+| `volume` | m³ from the inlet. |
+| `length` | m from the inlet, for a reactor whose length is given, or 0. |
+| `T` | K. |
+| `P` | Pa. |
+| `molar_flows` | mol/s. |
 
 ### `solver`
 
@@ -130,14 +145,14 @@ composition it was given. So it has fractions and a phase though its flows are
 
 | Key | |
 |---|---|
-| `component` | The worst component's imbalance, as a fraction of the flow in. |
+| `component` | The worst component's imbalance, as a fraction of the flow in. Where something reacts, the worst element's, in atoms: for a reactor, and for the whole flowsheet when it has one. |
 | `energy` | The energy's imbalance, as a fraction of F·RT, with F the flow in. For a unit, T is its hottest inlet's, and for the whole flowsheet, the feeds' mean, weighted by flow. |
 
 ### `error`
 
 | Key | |
 |---|---|
-| `kind` | `"bad_file"`, `"bad_flowsheet"`, `"bad_specification"`, `"flash_failed"`, `"no_convergence"` or `"unbalanced"`, and `"other"` for anything else. |
+| `kind` | `"bad_file"`, `"bad_flowsheet"`, `"bad_specification"`, `"flash_failed"`, `"no_convergence"`, `"unbalanced"` or `"reaction_failed"` (a reactor's equilibrium, integration or Newton), and `"other"` for anything else. |
 | `message` | All of it, as one line. |
 | `unit` | The unit at fault, or `""`. |
 | `reason` | Why, in words. |

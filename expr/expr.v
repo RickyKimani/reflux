@@ -357,7 +357,16 @@ pub fn (e Expr) must_be(d Dim, what string) ! {
 		text:   e.text
 		line:   root.line
 		column: root.column
-		reason: '${what} must be a ${d.name()}, but this is a ${e.dim.name()}'
+		reason: '${what} must be ${with_article(d.name())}, but this is ${with_article(e.dim.name())}'
+	}
+}
+
+// with_article puts a or an before a dimension's name: an area, a volume.
+fn with_article(name string) string {
+	return if name.len > 0 && name[0] in [`a`, `e`, `i`, `o`, `u`] {
+		'an ${name}'
+	} else {
+		'a ${name}'
 	}
 }
 

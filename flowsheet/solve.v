@@ -34,10 +34,12 @@ pub:
 // in Solution.streams.
 pub struct UnitResult {
 pub:
-	name    string
-	inlets  []Stream
-	outlets []Stream
-	energy  []EnergyStream
+	name      string
+	inlets    []Stream
+	outlets   []Stream
+	energy    []EnergyStream
+	conserved [][]f64 // what a unit that reacts conserves: see Outcome
+	profile   ?Profile
 }
 
 // TearHistory is how a block's tears converged.
@@ -51,6 +53,8 @@ pub:
 
 // Balance is how far a balance is from closing: the worst component's
 // imbalance as a fraction of the flow, and the energy's as a fraction of F·RT.
+// Where something reacts, the worst element's, in atoms, takes the
+// component's place.
 pub struct Balance {
 pub:
 	component f64
@@ -149,10 +153,12 @@ fn (mut s Solver) pass(b Block) ! {
 			s.streams[name] = o.outlets[k]
 		}
 		s.runs[i] = UnitResult{
-			name:    p.unit.name
-			inlets:  inlets
-			outlets: o.outlets
-			energy:  o.energy
+			name:      p.unit.name
+			inlets:    inlets
+			outlets:   o.outlets
+			energy:    o.energy
+			conserved: o.conserved
+			profile:   o.profile
 		}
 	}
 }
@@ -436,8 +442,9 @@ fn (f Flowsheet) products() []string {
 }
 
 // imbalance is the worst component's imbalance, and the energy's, from the
-// streams in and out and the energy added.
-fn imbalance(inlets []Stream, outlets []Stream, added f64, nc int) (f64, f64) {
+// streams in and out and the energy added. Given conserved rows, it's the
+// worst row's instead: an element's, in atoms, where something reacts.
+fn imbalance(inlets []Stream, outlets []Stream, added f64, nc int, conserved [][]f64) (f64, f64) {
 	mut comp := []f64{len: nc}
 	mut energy := added
 	for s in inlets {
@@ -453,10 +460,32 @@ fn imbalance(inlets []Stream, outlets []Stream, added f64, nc int) (f64, f64) {
 		}
 	}
 	mut worst := 0.0
-	for c in comp {
-		worst = math.max(worst, math.abs(c))
+	if conserved.len == 0 {
+		for c in comp {
+			worst = math.max(worst, math.abs(c))
+		}
+	} else {
+		for row in conserved {
+			mut x := 0.0
+			for i, c in row {
+				x += c * comp[i]
+			}
+			worst = math.max(worst, math.abs(x))
+		}
 	}
 	return worst, math.abs(energy)
+}
+
+// most_atoms is the most a component counts in any conserved row, which a
+// tear's gap in one component can move a row by: 1 with none.
+fn most_atoms(conserved [][]f64) f64 {
+	mut most := 1.0
+	for row in conserved {
+		for c in row {
+			most = math.max(most, math.abs(c))
+		}
+	}
+	return most
 }
 
 // added is the sum of some energy streams.
@@ -481,7 +510,8 @@ pub fn (r UnitResult) balance() Balance {
 	if flow == 0.0 {
 		return Balance{}
 	}
-	comp, energy := imbalance(r.inlets, r.outlets, added(r.energy), r.inlets[0].flows.len)
+	comp, energy := imbalance(r.inlets, r.outlets, added(r.energy), r.inlets[0].flows.len,
+		r.conserved)
 	return Balance{comp / flow, energy / (flow * thermo.r_gas * t)}
 }
 
@@ -513,13 +543,24 @@ fn (s Solver) solution(plan Plan) !Solution {
 		t_flow += x.total() * x.t
 	}
 	rt := thermo.r_gas * t_flow / flow
-	open_flow := s.gap_flow + round_off * flow * f64(s.runs.len)
+	// Where something reacts, the whole is checked on what every reactor
+	// conserves, its elements: each reactor gives the same rows, the
+	// elements of the file's components.
+	mut conserved := [][]f64{}
+	for r in s.runs {
+		if r.conserved.len > 0 {
+			conserved = r.conserved.clone()
+			break
+		}
+	}
+	atoms := most_atoms(conserved)
+	open_flow := atoms * (s.gap_flow + round_off * flow * f64(s.runs.len))
 	open_energy := s.gap_energy + unit_tolerance * flow * rt * f64(s.runs.len)
 	mut q := 0.0
 	for r in s.runs {
 		q += added(r.energy)
 	}
-	comp, energy := imbalance(feeds, outs, q, s.nc)
+	comp, energy := imbalance(feeds, outs, q, s.nc, conserved)
 	if comp > open_flow || energy > open_energy {
 		return FlowsheetError{
 			kind:    .unbalanced

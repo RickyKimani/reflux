@@ -11,6 +11,7 @@ module main
 import flowsheet
 import os
 import quantity
+import reactors
 import strings
 
 const usage = 'usage:
@@ -181,7 +182,9 @@ fn solve(args []string, mut c Console) int {
 		c.complain('reflux solve: ${err.msg()}\n\n${usage}')
 		return 2
 	}
-	loaded := flowsheet.load(o.file) or { return failed(o, flowsheet.load_failure(err), mut c) }
+	loaded := flowsheet.load(o.file, makers: reactors.makers()) or {
+		return failed(o, flowsheet.load_failure(err), mut c)
+	}
 	sol := loaded.solve() or { return failed(o, loaded.failure(err), mut c) }
 	r := flowsheet.Report{
 		...loaded.report(sol)

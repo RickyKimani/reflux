@@ -1,5 +1,7 @@
 module flowsheet
 
+import expr
+import math
 import quantity
 import toml.ast
 
@@ -15,6 +17,7 @@ pub mut:
 	name       string   // the unit's name, for a unit
 	components []string // the file's, for what goes by component
 	used       []string
+	context    Context // the file's species and reactions, for a unit's maker
 }
 
 // Sized is a quantity read as one of two dimensions.
@@ -178,6 +181,30 @@ fn (s Section) quantity_of(key string, v ast.Value, d quantity.Dimension) !f64 {
 	return s.fail(key, 'it needs a unit, as a string, such as "${quantity.units(d)[0]}"', [])
 }
 
+// measure is a number with a unit of any dimension, read as an expression
+// reads one (M9): a volume, a length or a density, which M4's named
+// dimensions haven't. what is what it's for, as a message says it.
+pub fn (mut s Section) measure(key string, d quantity.Dim, what string) !f64 {
+	text := s.text(key)!
+	defs := expr.Definitions{}
+	e := expr.parse(expr.Context{}, &defs, text) or { return s.fail(key, reason_of(err), []) }
+	e.must_be(d, what) or { return s.fail(key, reason_of(err), []) }
+	v := e.eval(&defs, []f64{})
+	if !math.is_finite(v) {
+		return s.fail(key, '${text} is ${v}', [])
+	}
+	return v
+}
+
+// reason_of is an expression's failure without its place in the string,
+// which the key's line already gives.
+fn reason_of(err IError) string {
+	if err is expr.ExprError {
+		return err.reason
+	}
+	return err.msg()
+}
+
 // quantity_either is a number with a unit of either dimension, such as a flow
 // by moles or by mass.
 pub fn (mut s Section) quantity_either(key string, a quantity.Dimension, b quantity.Dimension) !Sized {
@@ -262,7 +289,7 @@ pub fn (mut s Section) child(key string) !Section {
 }
 
 // tables is a list of tables, as sections.
-fn (mut s Section) tables(key string) ![]Section {
+pub fn (mut s Section) tables(key string) ![]Section {
 	v := s.require(key)!
 	if v is []ast.Value {
 		mut out := []Section{cap: v.len}

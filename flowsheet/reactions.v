@@ -84,6 +84,19 @@ pub fn load_kinetics_text(text string, params LoadParams) !KineticsFile {
 			top.used << s
 		}
 	}
+	k := read_reactions(mut top, species)!
+	top.finish()!
+	return KineticsFile{
+		kinetics: k
+		names:    component_names
+	}
+}
+
+// read_reactions reads a file's [definitions], [site.NAME] and
+// [reaction.NAME] over its species, and builds them: every equation
+// balanced, every name bound and every rate's units checked, each failure
+// at its line. The caller finishes the file's top table.
+fn read_reactions(mut top Section, species []kinetics.Species) !kinetics.Kinetics {
 	mut own := []expr.Source{}
 	if top.has('definitions') {
 		mut d := top.child('definitions')!
@@ -124,8 +137,7 @@ pub fn load_kinetics_text(text string, params LoadParams) !KineticsFile {
 	if reactions.len == 0 {
 		return all.fail('', 'a file needs at least one reaction', [])
 	}
-	top.finish()!
-	k := kinetics.build(species, reactions, sites, laws, own) or {
+	return kinetics.build(species, reactions, sites, laws, own) or {
 		if err is kinetics.KineticsError {
 			if err.reaction >= 0 {
 				return reaction_sections[err.reaction].fail('', err.msg(), [])
@@ -143,10 +155,6 @@ pub fn load_kinetics_text(text string, params LoadParams) !KineticsFile {
 			}
 		}
 		return top.fail('', err.msg(), [])
-	}
-	return KineticsFile{
-		kinetics: k
-		names:    component_names
 	}
 }
 

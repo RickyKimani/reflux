@@ -435,6 +435,12 @@ rec := db.find('watr') or {
   `remove(id) or { return fail(code, err, err_len, err.msg()) }`, and V took
   both `err`s for the error: "cannot use `IError` as `&char`". The parameter
   is `buf` now ([capi/capi.v](../capi/capi.v)).
+- **An `or` block can't follow a `match` whose arms are Results.**
+  `match which { true { half(x) } false { third(x) } } or { -1 }` is
+  refused, and oddly: "unexpected `or` block, expression of type `!int` is
+  not an Option or a Result". Each call takes its own `or`, as the PFR's
+  choice of integrator does ([reactors/pfr.v](../reactors/pfr.v)), or the
+  `match` yields plain values from calls that already handled theirs.
 - **A function returns `!T` or `?T`, never both.** Go's `(T, bool, error)`
   has no V spelling: `fn f() !?int` is refused ("the type must be Option or
   Result"). Pick the one the caller acts on. The consistency check's search
