@@ -306,7 +306,11 @@ distance from the Gibbs energies', a negative activation energy, an
 adsorption enthalpy above zero, a constant at or below zero, a reaction's
 own adsorption term, and a number typed where a built-in constant was
 meant, 8.314 J/(mol·K) for R. Given a state, a fitted K is judged at its T,
-and each typed constant says how far it moves the rates there. `explain`
+each typed constant says how far it moves the rates there, and each
+reversible rate is held to the equilibrium the reactions reach from it, in
+the ideal gas: where along its reaction it's zero, which is at equilibrium
+for a rate consistent with the Gibbs energies, and whether it runs towards
+equilibrium at the state. `explain`
 prints each rate as reflux read it, and its factor table at the state:
 every constant, each term of its site's, Q, K and Q/K, with their values,
 and the rate. A state is a temperature and a pressure with their units,

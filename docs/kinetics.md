@@ -141,7 +141,13 @@ the factor table.
    the stated rate unit. bar versus Pa errors are caught here.
 4. **Thermodynamic consistency.** At an equilibrium composition from Gibbs
    minimisation (roadmap E6), every reversible rate is zero, and its sign
-   always points toward equilibrium.
+   always points toward equilibrium. Given a state, reflux brings the
+   reactions to equilibrium from it and follows each rate along its own
+   reaction to where it's zero. A rate that stops elsewhere is reported
+   with where, as Q/K: a fitted K, a rate on partial pressures in a gas that
+   isn't ideal, or a typed mistake, such as mole fractions without
+   (p°/P)^Δn, each stops somewhere of its own. A reactor on such a rate
+   heads for that point, not the flowsheet's equilibrium.
 5. **Physical sanity (warnings).** Negative constants; an adsorption
    enthalpy that's positive (adsorption is normally exothermic, so K should
    fall with T); a negative activation energy; a species in an adsorption

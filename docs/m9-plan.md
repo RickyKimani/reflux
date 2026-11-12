@@ -21,7 +21,8 @@ D10 and D13 and set criterion 8's targets, approved on 2026-11-09. Step 1
 amended D3. Step 2 is done and amended D2. Step 3 is done. Step 4 is done and
 amended D1, approved on 2026-11-10. Step 5 is done and amended criterion
 5, approved on 2026-11-10. Step 6 is done and amended D11,
-approved on 2026-11-10. Step 7 is next.
+approved on 2026-11-10. Step 7 is done and amended D1 and D10,
+approved on 2026-11-11. Step 8 is next.
 
 ## Goal
 
@@ -209,7 +210,7 @@ All checked by tests in CI, as in M1 to M4.
 
 | # | Decision | Choice | Why |
 |---|---|---|---|
-| D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. **Amended in step 4:** a further module, `chem`, holds the elements, formulas and SMILES strings. It depends on nothing, and sits below both `components`, which takes a compound's formula from its file with it, and `kinetics`, which reads a formula in an equation with it. `kinetics` doesn't import `components`: a reaction's species are plain data, which the reactors (step 9) build from component records. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. |
+| D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. **Amended in step 4:** a further module, `chem`, holds the elements, formulas and SMILES strings. It depends on nothing, and sits below both `components`, which takes a compound's formula from its file with it, and `kinetics`, which reads a formula in an equation with it. `kinetics` doesn't import `components`: a reaction's species are plain data, which the reactors (step 9) build from component records. **Amended in step 7:** `equilibrium` imports `kinetics`, for its species, reactions, standard properties and independence check, and `flash`, for the stability test, as well as `thermo` and `numeric`. The consistency check (criterion 4) is there, needing rates and equilibrium both, which `kinetics` can't import; `reflux kinetics check` imports it. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. Step 7: an equilibrium's species and reactions are kinetics' own, so a reactor equilibrates the reactions it reacts by, and a cubic's answer is tested for a second phase before it's returned. |
 | D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. **Amended in step 2:** a number's unit follows it after a space and runs to the next space, or to a ) or , that isn't its own, or it's in brackets, `2 [K]`; a word after a number that is also a name here is refused as ambiguous (`2 R`: two rankines, or twice the gas constant?). A unit with an offset (°C, °F, barg, psig) is refused in an expression. `log` is refused as ambiguous, with `ln` and `log10` offered. `·`, `×` and `−` are operators too. A definition can't take a variable's, a family's or a function's name either. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. A unit after a number is how papers write it, but a name after a number would be read silently as a unit where they collide (R, h, P), so that is refused; brackets say which. An offset in arithmetic is wrong as often as right (T − 25 °C). |
 | D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. **Amended in step 1:** the bases include electric current, for the coulomb and so for D2's Faraday constant. The exponents are exact rationals, for bar^0.5. Compound units are built from symbols with SI prefixes rather than from M4's whole names, and each of M4's units reads through them to M4's bits. A * after a / is refused as ambiguous. | One source of truth for units, now able to say why a dimension is wrong. A rate's units hold half powers (√(K·p_H₂)), and a ratio squared must be the unit again exactly. Symbols with prefixes cover the units kinetics papers use (cm³, mol/(g·s), kJ/mol) without listing every combination. |
 | D4 | One representation | Parsed expressions and the structured forms (Arrhenius centred on T_ref, van 't Hoff, a site's monomials, LHHW) build the same tree. The structured forms keep their structure, for site sharing and their own checks, and render, evaluate and differentiate through the tree. | Every check, rendering and derivative is written once, and a structured rate and the same rate typed as an expression give the same bits. |
@@ -218,7 +219,7 @@ All checked by tests in CI, as in M1 to M4.
 | D7 | Equilibrium constants | By default K(T) = exp(−ΔG°(T)/RT) at a standard state of 1 bar, from each species' ideal-gas H and S along Cp. A correlation may be given instead, and `check` reports how far it is from the thermodynamic K. | Consistent with the flowsheet's own thermodynamics by construction, and honest when a paper fitted its own. |
 | D8 | Integrators | Rosenbrock's RODAS4 (Hairer and Wanner), L-stable with an embedded error estimate, on the exact Jacobian from D5, for stiff problems. Dormand and Prince's 5(4) for the rest. Both take what they integrate as an interface, never a closure. A PFR's state is its molar flows, with T and P where they vary. | A Rosenbrock method needs no Newton iteration, only an LU per step, and exact Jacobians make it reliable. Near equilibrium, reforming kinetics is stiff. |
 | D9 | Gibbs minimisation | One phase for now (M6 adds more), ideal gas or a cubic. Minimise G over the species amounts subject to the element balance, by Newton on the element potentials (the RAND method, White, Johnson and Dantzig, 1958), with the fugacity coefficients updated outside it for a cubic. Species that vanish are handled in log space. | The standard method. It extends to the second phase M6 brings. |
-| D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. **Amended in step 0:** Ergun's viscosity is the gas mixture's at low pressure: each compound's from its component file's vapour-viscosity correlation (ChemSep's eq. 102, already imported), mixed by Wilke's rule and checked against `chemicals`. That's the first piece of M5's C7, brought forward. The PFR takes its viscosity through an interface, so a test can give it another, as step 10 gives it DWSIM's. A catalyst's loading is the bed's density, kg per m³ of reactor, and its void fraction enters Ergun alone, as in DWSIM. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. Step 0 found Ergun's drop 89% viscous in the owner's case, moving its methane conversion by 3.4e-3, and reflux had no viscosity. DWSIM's, a mole-fraction mean with Jossi, Stiel and Thodos' correction, is 30% below Wilke's in the hydrogen-rich gas. |
+| D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. **Amended in step 7:** the equilibrium over chosen reactions isn't Newton on their extents but the Gibbs minimisation's own RAND method over what the reactions conserve (the null space of their coefficients), with stand-in potentials g = −νᵀ(ννᵀ)⁻¹ ln K, so that its stationary point has each Q its K. **Amended in step 0:** Ergun's viscosity is the gas mixture's at low pressure: each compound's from its component file's vapour-viscosity correlation (ChemSep's eq. 102, already imported), mixed by Wilke's rule and checked against `chemicals`. That's the first piece of M5's C7, brought forward. The PFR takes its viscosity through an interface, so a test can give it another, as step 10 gives it DWSIM's. A catalyst's loading is the bed's density, kg per m³ of reactor, and its void fraction enters Ergun alone, as in DWSIM. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. Step 0 found Ergun's drop 89% viscous in the owner's case, moving its methane conversion by 3.4e-3, and reflux had no viscosity. DWSIM's, a mole-fraction mean with Jossi, Stiel and Thodos' correction, is 30% below Wilke's in the hydrogen-rich gas. Step 7: an extent has bounds that a product the feed lacks sits on, where Newton's logarithms are infinite. In RAND's log space a vanishing species is no trouble, as in the Gibbs reactor, and one solver serves both, with the same checks. |
 | D11 | The file | `[[site]]`, `[[reaction]]` and the reactor units in the flowsheet file. Their equations and expressions are strings that `expr` parses; their numbers carry units as M4's do. A file that uses them is format 2. Format 1 files read exactly as before. The report gains each PFR's profile, as report format 2. **Amended in step 6:** sites and reactions are tables by name, `[site.NAME]` and `[reaction.NAME]`, as feeds and units are, rather than arrays of tables: a name is unique by the table's key, and a failure's key reads `reaction.reforming.law`. `reflux kinetics check` reads a file's reactions without the flowsheet's other sections, so a file of reactions alone can be checked; `reflux solve` reads them with the reactors, in step 9. | One file per process, as now. A new section is a new format by the CHANGELOG's rules, but nothing old changes meaning. |
 | D12 | The CLI | `reflux kinetics check <file>` runs every check on a file's reactions. `reflux kinetics explain <file> [T P composition]` prints each rate as reflux read it, and the factor table at a state. | kinetics.md's design. |
 | D13 | Comparing with DWSIM | The owner's case as a reflux file, with DWSIM's three denominators as marked overrides, compared at DWSIM's tightest useful dV, which step 0 finds. The published model, one site shared by all three, is solved beside it and reported. Each unit alone (conversion, Gibbs, CSTR, PFR) is compared with DWSIM's from the same inlet. **Amended in step 0:** the case is compared with three answers: DWSIM's at dV = 0.001, its tightest useful one, and at the file's 0.05; and the exact answer of DWSIM's equations without its sections, which the fixture integrates with SciPy. Isobaric first, then with Ergun, the test giving reflux's PFR DWSIM's viscosity. | The comparison measures the solvers, not two different models, and the published model is the one users should run. |
@@ -845,10 +846,118 @@ flowchart LR
 - **V's notes:** `f() or { none }` into an Option field passes V's checker
   and writes C that no compiler takes.
 
-### 7. Equilibrium
+### 7. Equilibrium — done, with D1 and D10 amended
 - The RAND method for ideal gas and a cubic (D9), and the equilibrium over
   chosen reactions by their extents (D10), against mpmath. Then kinetics.md's
   consistency check: every reversible rate zero at equilibrium.
+- **[equilibrium/rand.v](../equilibrium/rand.v)** is the RAND method (D9) in
+  the form NASA's CEA uses (Gordon and McBride, 1994): Newton on the
+  constraints' potentials and on ln n, every species in log space, damped by
+  CEA's control factor, so that no major species' ln n moves by more than 2
+  and no trace rises past 1e-4 of the total in one step. A full step that
+  moves no ln n by more than 1e-10 has converged, Newton's error after it
+  being of the order of its square
+  ([design.md](design.md#chemical-equilibrium)).
+- **[equilibrium/equilibrium.v](../equilibrium/equilibrium.v)**: `gibbs`,
+  over the elements of the feed's species, with inert species and those
+  without a formula held at their feed; and `over_reactions`, over what the
+  chosen reactions conserve, with stand-in potentials (D10 amended). What the
+  feed can't make goes first. For a cubic, φ from the model's stable root is
+  updated outside RAND until ln φ stops moving (1e-12), and the answer's
+  phase is tested by Michelsen's test: one that would split is refused, a
+  second phase being M6's. An answer is returned only once its conserved
+  quantities are the feed's to 1e-12, and each species' μ/RT is its
+  constraints' potentials' to 1e-9 (each reaction's ln Q its ln K, over
+  reactions). What's refused is a typed `EquilibriumError`: a state or an
+  amount that can't be, a species without the data, dependent reactions, no
+  convergence, two phases.
+- **[equilibrium/consistency.v](../equilibrium/consistency.v)** is
+  kinetics.md's check 4 (criterion 4): from a state, the equilibrium over the
+  kinetics' independent reactions, then each reversible rate followed along
+  its own reaction to where it's zero, its reaction's ΔG/RT there being where
+  it stops ([design.md](design.md#the-consistency-check)). A stop past 1e-10
+  is noted, past a factor of 2 in Q/K warned of, and a rate that runs away
+  from equilibrium at the state warned of. `reflux kinetics check FILE
+  state` runs it in the ideal gas.
+- **The fixture,** [testdata/m9_equilibrium.json](../testdata/m9_equilibrium.json)
+  from [tools/gen_m9_equilibrium.py](../tools/gen_m9_equilibrium.py): 21
+  equilibria at 50 digits by Newton in ln n, another method than RAND, in the
+  ideal gas and in PR with every kᵢⱼ zero. Reforming with the shift from 700
+  to 1100 K and 1 to 30 bar, reforming alone and with CO₂ inert, methanol (and
+  from CO₂ alone), ammonia at 100 and 300 bar, and lean methane combustion in
+  air at 1500 K, whose traces fall to 1e-29. `gen_m9_reactions.py` now runs
+  only as a script, so that this one imports its μ°.
+- **Numbers:**
+  - ln y within 6.0e-13 of mpmath's in every case, traces included. At most
+    36 RAND steps in all and 13 φ updates, both methanol's in PR at 80 bar,
+    recorded as numbers that can't grow. A first convergence test, asking
+    each species' amount to move by 1e-14 of the total, took 68 steps for
+    no better an answer.
+  - Xu and Froment's rates stop within ΔG/RT 2.7e-15 of equilibrium at 60
+    seeded states (600 to 1200 K, 1 to 40 bar), and run towards it at every
+    one. Rounding, since a consistent rate is zero where its own Q is K: the
+    tolerance is 1e-10, below a constant typed to five figures.
+  - In PR at 900 K and 30 bar, a reforming rate on fugacities stops at
+    equilibrium; on partial pressures at ΔG/RT = Σν ln φ = 0.052, and on
+    concentrations at Σν ln φ + 2 ln Z = 0.047, each to 1e-9 of the value
+    from scratch.
+- **What the check says of the three files,** Xu and Froment's and the DWSIM
+  case's at 900 K and 15 bar, Vanden Bussche and Froment's at 513.15 K and
+  50 bar:
+  - Xu and Froment's three rates are zero at the equilibrium and run towards
+    it.
+  - Every fitted K stops where its own Q is K, ln K_fit − ln K from
+    equilibrium to 1e-9: the DWSIM case's reforming at Q/K = 1.0558 and its
+    shift at 0.99331, noted, and its overall at 0.20173, warned of; Graaf's
+    methanol at 0.76987 and reverse shift at 1.0452, noted. A reactor on
+    those rates heads for those points, not the Gibbs reactor's.
+- **Found:** the equilibrium over reforming and the shift from a feed without
+  carbon was a singular matrix. What the reactions conserve is a basis that
+  mixes the elements, so no row of it showed carbon absent. The element
+  rows, which every balanced equation conserves, are looked at too now. The
+  consistency check found it, from a state of steam and hydrogen.
+- **Tests,** thirteen in three files:
+  [equilibrium/equilibrium_test.v](../equilibrium/equilibrium_test.v), five
+  (the 21 cases against mpmath, with the step budget; CO₂ held inert as
+  reforming alone; a feed without carbon; the checks refusing an answer a
+  little wrong, which no solver gives them; eight refusals);
+  [equilibrium/consistency_test.v](../equilibrium/consistency_test.v), seven
+  (Xu and Froment's at 60 states, and the CLI's note; fitted K's stopping
+  where their own Q is K; PR on fugacities, pressures and concentrations;
+  six typed rates, among them mole fractions without (p°/P)^Δn, stopping at
+  2 ln 15, a constant typed to five figures, stopping at 1e-5, and one with
+  its sign reversed, running away; the nearer of two zeros; a fitted K's
+  state between equilibrium and its stop, which isn't running away; what
+  can't be judged); and [main_test.v](../main_test.v)'s `kinetics check`
+  with a state.
+- **Planted mistakes:** 52, one at a time in a scratch copy, 36 caught at
+  once and two more once their patterns, which matched twice, were made
+  unique. Of the 14 survivors:
+  - five were the convergence test's three criteria, each implied by
+    another. It's one now, every species' ln n moved by no more than 1e-10,
+    which took the steps from 68 to 36. Planted in it, 1e-3 is caught, the
+    balance check refusing the answer; 1e-6 survives, Newton's error after
+    a step of 1e-6 being about 1e-12, inside the tests'. A test of ln n's
+    own step survived too, the answer being the species' amounts, and is
+    deleted.
+  - three were the answer's checks (balance, stationarity, ln Q = ln K)
+    loosened, which a right answer can't show. A test now hands each an
+    answer a little wrong, and all three are caught.
+  - three were the consistency check's: its tolerance (1e-2, and 1e-4),
+    its probes' first step (2⁻⁵ for 2⁻⁵⁰), and a fitted K's state between
+    equilibrium and its stop taken as running away. A test was written for
+    each: a constant typed to five figures, two zeros a band apart, and a
+    fitted K 1.5 times the Gibbs energies' at ΔG/RT = 0.2. All are caught.
+  - RAND's start, every species an equal share, survived a start at the
+    whole feed's amount within the first budget, 68 steps, and is caught by
+    the final one, 36.
+  - two are explained, and survive on the final code too. CEA's limit on a
+    rising trace, 1e-4 of the total loosened to e⁻², which none of the 21
+    cases needs, their traces falling; and pivoting by size in
+    `independent`, whose rows are small whole numbers and simple fractions,
+    so that any nonzero pivot is exact.
+- **V's notes:** `clone` on an array of arrays is deep, where Go's
+  `slices.Clone` isn't; and a function returns `!T` or `?T`, never both.
 
 ### 8. Integrators
 - RODAS4 and Dormand–Prince 5(4) in `numeric` (D8), on Hairer's stiff test
@@ -883,7 +992,7 @@ flowchart LR
 |---|---|---|
 | A tape interpreter is much slower than compiled V | a slow PFR, where every step evaluates every rate several times | measured in step 0, before any code: the structured forms get evaluators of their own, and only free-form expressions use the tape. **Step 0:** 3 to 5 times slower once fused, but under 2 µs for three rates and their gradients, so the tape stays (D5) and step 11 profiles it |
 | DWSIM's PFR is coarse at dV = 0.05, or reads its catalyst inputs in a way the docs don't say | no clean comparison | step 0 finds the dV where it settles and compares there, and reproduces DWSIM's reading of its inputs in a fixture, as M4 did for its pump. **Step 0:** coarse, first order in dV with no floor down to 0.001; its inputs read as its source says, and every number reproduced; the comparison is against the exact answer of its equations as well as its own (D13) |
-| The Gibbs minimisation fails with trace species or near a phase boundary | no equilibrium reactor | log variables for vanishing species; one phase only in M9, with a second phase refused rather than hidden |
+| The Gibbs minimisation fails with trace species or near a phase boundary | no equilibrium reactor | log variables for vanishing species; one phase only in M9, with a second phase refused rather than hidden. **Step 7:** combustion's traces at 1e-29 match mpmath's, and a mixture that would split is refused |
 | The stiff integrator struggles where rates are huge and equilibrium near, as in reforming at 1000 °C | slow or failed PFRs | exact Jacobians, step control from the embedded estimate, and Hairer's test problems first, so the integrator is proven before the reactor uses it |
 | ChemSep's formulas or formation data are wrong for some compound | a wrong element balance or K(T) | each formula checked against its SMILES and molar mass, and ΔG°f against ΔH°f and S°, with failures listed in the data-quality report |
 

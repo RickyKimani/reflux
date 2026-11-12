@@ -4,6 +4,7 @@
 //     reflux kinetics explain FILE T P NAME=y ...
 module main
 
+import equilibrium
 import flowsheet
 import kinetics
 import math
@@ -14,7 +15,9 @@ const kinetics_usage = "usage:
       Read a file's reactions (docs/flowsheet-format.md), which refuses an
       equation that does not balance or a rate in the wrong units, and print
       what every other check finds. Given a state, a fitted K is judged at its
-      T, and each typed constant says how far it moves the rates there.
+      T, each typed constant says how far it moves the rates there, and each
+      reversible rate is held to zero at the equilibrium the reactions reach
+      from it, in the ideal gas, and to running towards it at the state.
   reflux kinetics explain FILE T P NAME=y ...
       Print each rate as reflux read it, and its factor table at the state.
 
@@ -68,7 +71,10 @@ fn kinetics_command(args []string, mut c Console) int {
 		}
 	}
 	if sub == 'check' {
-		findings := k.check(state)
+		mut findings := k.check(state)
+		if s := state {
+			findings << equilibrium.check(&k, none, s)
+		}
 		rated := '${k.rates.len} rate${if k.rates.len == 1 { '' } else { 's' }}'
 		c.say('${file}: ${k.reactions.len} reaction${if k.reactions.len == 1 { '' } else { 's' }}, ${rated}, ${findings.len} finding${if findings.len == 1 {
 			''

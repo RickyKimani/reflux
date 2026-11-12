@@ -426,6 +426,12 @@ rec := db.find('watr') or {
   `remove(id) or { return fail(code, err, err_len, err.msg()) }`, and V took
   both `err`s for the error: "cannot use `IError` as `&char`". The parameter
   is `buf` now ([capi/capi.v](../capi/capi.v)).
+- **A function returns `!T` or `?T`, never both.** Go's `(T, bool, error)`
+  has no V spelling: `fn f() !?int` is refused ("the type must be Option or
+  Result"). Pick the one the caller acts on. The consistency check's search
+  for where a rate is zero returns `?[]f64`, none where it isn't zero
+  anywhere, and takes a rate it can't evaluate there as NaN, which ends the
+  search the same way ([equilibrium/consistency.v](../equilibrium/consistency.v)).
 
 ---
 
@@ -697,6 +703,14 @@ not alias an immutable array. With `b := [1, 2]`, both `mut a := b` and
 like Go. The stability iteration hit the first case, keeping last step's
 array (`last_step = step.clone()` in
 [flash/stability.v](../flash/stability.v)).
+
+**`clone` on an array of arrays is deep,** where Go's `slices.Clone` copies
+only the outer slice. Probed: after `c := b.clone()` on a `[][]f64`,
+`c[0][0] = 9` leaves `b` as it was. A row taken out still shares, as in Go:
+after `mut row := d[0]`, `row[0] = 7` changes `d`, and after `e[0] = e[1]`
+the two rows are one. Swapping rows, `a[0], a[1] = a[1], a[0]`, swaps them.
+The equilibrium's row reductions clone what they're given before reducing
+it ([equilibrium/equilibrium.v](../equilibrium/equilibrium.v)).
 
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.

@@ -312,4 +312,5 @@ def main():
     write("m9_reactions.json", reactions())
 
 
-main()
+if __name__ == "__main__":
+    main()

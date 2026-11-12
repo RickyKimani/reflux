@@ -168,6 +168,13 @@ kinetics/           reactions (M9)
   check.v           reflux kinetics check: notes and warnings on what's legal
   explain.v         the factor table: each rate's parts at a state
   exact.v           exact arithmetic: null spaces, whole coefficients
+equilibrium/        chemical equilibrium (M9), one phase, ideal gas or a cubic
+  rand.v            the RAND method in CEA's form: Newton on the
+                    constraints' potentials, every species in log space
+  equilibrium.v     Gibbs minimisation over the elements, and the
+                    equilibrium over chosen reactions, each shown right
+  consistency.v     each reversible rate held to the equilibrium from a
+                    state: where it stops along its reaction
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
@@ -230,7 +237,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (the tape against rates written in V), gen_m9_reactions.py
                     (formulas against RDKit and chemicals, and K(T) against
                     mpmath and thermo), gen_m9_kinetics.py (two papers'
-                    kinetics by mpmath),
+                    kinetics by mpmath), gen_m9_equilibrium.py (equilibria
+                    by mpmath, ideal gas and Peng–Robinson),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
                     (reflux's side of the benchmarks)

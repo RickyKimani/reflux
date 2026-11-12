@@ -126,7 +126,24 @@ Keep this section current: update it whenever a step is committed.
     papers' kinetics and the owner's DWSIM case's rates as typed, whose
     check finds its seven 8.314s, its two cut denominators and its overall
     K a factor of 0.20 off at 900 K.
-  - Next is step 7: equilibrium (the RAND method, and over chosen reactions).
+  - **Step 7 is done,** and amended D1 and D10, approved on 2026-11-11:
+    a new `equilibrium` module. Gibbs minimisation by the RAND method in
+    CEA's form (Gordon and McBride), species in log space, ideal gas or a
+    cubic with φ updated outside it; and the equilibrium over chosen
+    reactions by the same minimisation over what they conserve, with
+    stand-in potentials −νᵀ(ννᵀ)⁻¹ ln K (D10: not Newton on extents). Every
+    answer is checked (balance; stationarity, or each ln Q its ln K; a
+    stable phase, two refused as M6's) and matches mpmath's
+    (`tools/gen_m9_equilibrium.py`, 21 cases) to 6.0e-13 in ln y.
+  - Step 7's consistency check (`equilibrium/consistency.v`; D1:
+    `equilibrium` imports `kinetics` and `flash`) follows each reversible
+    rate along its reaction from the equilibrium a state reaches to where
+    it's zero, and `reflux kinetics check` runs it given a state. Xu and
+    Froment's stop within ΔG/RT 2.7e-15 of equilibrium; the DWSIM case's
+    overall rate stops at Q/K = 0.20. Found: an equilibrium over reactions
+    from a feed without an element was a singular matrix, fixed by looking
+    at the element rows too.
+  - Next is step 8: the integrators (RODAS4, Dormand–Prince 5(4)).
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -337,6 +354,9 @@ on nothing, and so do `release`, the release gate's logic, and `chem`
 expression language, uses `quantity`; `kinetics` (M9), reactions, uses
 `chem`, `expr`, `quantity` and `thermo`, and its tests `components`.
 `flowsheet` reads a file's reactions into `kinetics` (step 6).
+`equilibrium` (M9), chemical equilibrium and the rates' consistency with
+it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
+`components` and `flowsheet`; `main` uses it for `reflux kinetics check`.
 `components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
@@ -442,6 +462,17 @@ over the rest, built into a shared library for the Python package in
   - Every flash is `reflux_flash(fluid, spec, …)` with one layout (D6): the
     whole's values, then each phase's in the place of its label, liquid (0)
     then vapour (1). A single phase takes its label's place, the other NaN.
+- **`equilibrium`** is M9's (D9, D10): one phase, ideal gas or a cubic.
+  - `gibbs` minimises G over the amounts the feed's elements allow, and
+    `over_reactions` over those chosen reactions allow, both by RAND
+    (`rand.v`) in log space, φ updated outside it for a cubic. A row with
+    every coefficient of one sign and none of it in the feed drops its
+    species first.
+  - An answer is returned only once its balance, its stationarity (or each
+    reaction's ln Q = ln K) and, for a cubic, its phase's stability hold.
+  - `consistency` judges each reversible rate by where it stops along its
+    reaction from the equilibrium a state reaches: ΔG/RT there, zero for a
+    rate consistent with the Gibbs energies.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

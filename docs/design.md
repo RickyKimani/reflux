@@ -1325,6 +1325,110 @@ power, mol·Pa^0.5/(kg·s) rather than its base units. Numbers are written to
 five significant figures from their digits rounded to a whole number by
 `math.round`, so the text is the same whichever compiler built reflux.
 
+## Chemical equilibrium
+
+M9 step 7 ([equilibrium/rand.v](../equilibrium/rand.v),
+[equilibrium/equilibrium.v](../equilibrium/equilibrium.v)), D9 and D10.
+
+**What's minimised,** at T and P, in one phase (D9):
+
+    G/RT = Σⱼ nⱼ μⱼ/RT,   μⱼ/RT = gⱼ + ln(P/p°) + ln(nⱼ/n) + ln φⱼ,
+    gⱼ = μ°ⱼ/RT = (H°ⱼ − TS°ⱼ)/RT,
+
+with H° and S° along Cp as kinetics' standard properties take them, R
+exact and p° = 1 bar, subject to C·n = b, b = C·n⁰. A Gibbs minimisation's
+C is the element matrix, a row per element of the feed's species, with a
+row of its own for each species held inert or without a formula. Before
+anything else, what the feed can't make goes: a row whose coefficients
+share a sign, with nothing of it in the feed (an element the feed hasn't),
+fixes its species at zero, and they and it are dropped. What's left is
+reduced to independent rows.
+
+**The RAND method in CEA's form** (Gordon and McBride, NASA RP-1311, 1994):
+Newton on the constraints' potentials π and on ln n, the total amount a
+variable of its own, every species in log space, so that a vanishing one is
+a large negative ln nⱼ and never a negative nⱼ. Each step solves
+
+    Σᵢ (Σⱼ cₖⱼcᵢⱼnⱼ) πᵢ + (Σⱼ cₖⱼnⱼ) Δln n = bₖ − Σⱼ cₖⱼnⱼ + Σⱼ cₖⱼnⱼ μⱼ/RT
+    Σᵢ (Σⱼ cᵢⱼnⱼ) πᵢ + (Σⱼ nⱼ − n) Δln n = n − Σⱼ nⱼ + Σⱼ nⱼ μⱼ/RT
+
+then Δln nⱼ = −μⱼ/RT + Σᵢ cᵢⱼπᵢ + Δln n, damped by CEA's control factor
+
+    λ = min(1, 2/max(5|Δln n|, |Δln nⱼ| over majors), λ₂),
+    λ₂ = min over traces rising of |(−ln(nⱼ/n) − 9.2103404)/(Δln nⱼ − Δln n)|,
+
+a trace being below 1e-8 of the total, so no trace rises past 1e-4 of it in
+one step. Every species starts at an equal share of the feed's total. A
+full step that moves no species' ln n by more than 1e-10 has converged,
+Newton's error after it being of the order of its square; 500 steps
+haven't. A step that small is never damped.
+
+**A cubic** (D9): φ at the answer's amounts, from the model's stable root,
+held fixed inside RAND and updated outside it until ln φ moves by no more
+than 1e-12, at most 100 times. The answer's phase is then tested by
+Michelsen's stability test, and one that would split is refused: a second
+phase is M6's.
+
+**Over chosen reactions** (D10, as amended in step 7), the same
+minimisation with other constraints and potentials. C is what the
+reactions conserve, a basis of the null space of their coefficients ν (the
+vectors c with c·νᵣ = 0 for every reaction), by reduction to row echelon
+form. The potentials are stand-ins,
+
+    g = −νᵀ(ννᵀ)⁻¹ ln K,
+
+the least-norm g with Σⱼ νᵣⱼ gⱼ = −ln Kᵣ for every reaction. At a
+stationary point μⱼ/RT = Σᵢ cᵢⱼπᵢ, so each reaction's Σⱼ νᵣⱼ μⱼ/RT = 0:
+ln Q = ln K, Q on fugacities at 1 bar. A species no reaction touches is a
+conserved quantity of its own, held at its feed. The null space's basis
+mixes the elements, so the element rows, which every balanced equation
+conserves, are looked at too for what the feed can't make. The reactions
+must be independent (`kinetics.dependence`).
+
+**Shown right before it's returned:** every conserved row holds the feed's
+to 1e-12 of its largest term; a Gibbs minimisation's every species present
+has μⱼ/RT = Σᵢ cᵢⱼπᵢ to 1e-9, G at a minimum over what the elements allow;
+an equilibrium over reactions has each ln Q its ln K to 1e-9; and a
+cubic's phase is stable. A species held alone by a row, an inert one, is
+set to the feed's amount exactly. The answers match mpmath's at 50 digits
+by another method (Newton on ln n, `tools/gen_m9_equilibrium.py`) to
+6.0e-13 in ln y, combustion's traces at 1e-29 included.
+
+### The consistency check
+
+Kinetics.md's check 4 ([equilibrium/consistency.v](../equilibrium/consistency.v)):
+from a state's T, P and mole fractions, taken as amounts, the equilibrium
+over the kinetics' independent reactions, K from the Gibbs energies. Then
+each reversible rate, a structured law with a K or an expression, is
+followed along its own reaction from there,
+
+    n(ξ) = n_eq + νᵣ ξ,
+
+to where it's zero: probing outwards both ways, 2⁻⁵⁰ of the way to where a
+species runs out and doubling, then halving what's left, the way it runs
+first, until its sign changes, then bisecting to rounding. Both ways,
+because a rate with its sign reversed is zero at equilibrium but runs away
+from it. Its reaction's ΔG/RT = ln(Q/K) there, Q on fugacities, is where it
+stops:
+
+| Rate | Stops at ΔG/RT |
+|---|---|
+| consistent with the Gibbs energies | 0, within 1e-10 (2.7e-15 at worst on Xu and Froment's) |
+| a fitted K, in the ideal gas | ln K_fit − (ln K° + Δn ln a°), check_fitted's distance |
+| on partial pressures in a gas that isn't ideal | Σν ln φ, where Q on pressures is K |
+| on concentrations in such a gas | Σν ln φ + Δn ln Z |
+| on mole fractions without (p°/P)^Δn | Δn ln(P/p°) |
+
+A consistent rate is zero where its own Q is K, whatever the equilibrium's
+accuracy, so the tolerance is rounding's. A stop past 1e-10 is a note, past
+a factor of 2 in Q/K a warning, as a fitted K's distance is. At the state,
+a rate that runs against its reaction's ΔG (r·ΔG > 0, |ΔG/RT| past 1e-10),
+and not because it stops beyond equilibrium as a fitted K can, is warned
+of. A rate never zero along its reaction is a warning for a structured law
+and a note for an expression, irreversible as written. A reaction whose
+species the state can't make isn't judged, with a note saying so.
+`reflux kinetics check` runs it in the ideal gas when given a state.
+
 ## Streams and units
 
 A material stream holds its component molar flows nᵢ (mol/s) and the flash

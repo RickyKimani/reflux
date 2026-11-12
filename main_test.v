@@ -194,8 +194,9 @@ fn test_help_and_version() {
 const kinetics_dir = os.join_path(@VMODROOT, 'testdata', 'kinetics')
 
 // `reflux kinetics check` prints a file's findings and exits 0; given a
-// state, a fitted K is judged at its T and each typed constant says how far
-// it moves the rates.
+// state, a fitted K is judged at its T, each typed constant says how far it
+// moves the rates, and each reversible rate is held to the equilibrium the
+// reactions reach from it.
 fn test_kinetics_check() {
 	file := os.join_path(kinetics_dir, 'xu_froment.toml')
 	code, out, err := quiet(['kinetics', 'check', file])
@@ -204,11 +205,21 @@ fn test_kinetics_check() {
 	assert lines[0] == '${file}: 3 reactions, 3 rates, 2 findings'
 	assert lines[1].starts_with('note: overall = reforming + shift')
 	assert lines[2].starts_with('warning: K_H2O rises with T')
+	state := ['900 K', '15 bar', 'CH4=0.2', 'H2O=0.45', 'H2=0.2', 'CO=0.1', 'CO2=0.05']
+	mut with_state := ['kinetics', 'check', file]
+	with_state << state
+	code1, out1, _ := quiet(with_state)
+	assert code1 == 0
+	lines1 := out1.trim_space().split_into_lines()
+	assert lines1[0] == '${file}: 3 reactions, 3 rates, 3 findings'
+	assert lines1[3] == "note: reforming's, shift's and overall's rates are zero at the equilibrium this state reaches, over reforming and shift, and run towards it at the state"
 	dwsim := os.join_path(kinetics_dir, 'dwsim_reforming.toml')
-	code2, out2, _ := quiet(['kinetics', 'check', dwsim, '900 K', '15 bar', 'CH4=0.2', 'H2O=0.45',
-		'H2=0.2', 'CO=0.1', 'CO2=0.05'])
+	mut dwsim_state := ['kinetics', 'check', dwsim]
+	dwsim_state << state
+	code2, out2, _ := quiet(dwsim_state)
 	assert code2 == 0
 	assert out2.contains("warning: k1 has 8.314 J/(mol*K), 5.564e-5 below R, the molar gas constant, N_A·k_B: write R unless the paper fitted with this number; at 900 K it moves reforming's rate by -0.17838% from what R gives")
+	assert out2.contains("warning: overall's rate isn't zero at the equilibrium this state reaches: on its fitted K it stops where Q/K is 0.20173 (ΔG/RT -1.6008), so a reactor on it heads for a different equilibrium")
 }
 
 // `reflux kinetics explain` prints each rate and its factor table.
