@@ -172,8 +172,31 @@ Keep this section current: update it whenever a step is committed.
     inversion temperature). M3's D6 is amended, approved on 2026-11-12: a
     single phase more than four covolumes large is vapour. 17 supercritical fixture roots now
     differ from `thermo`'s labels.
-  - Next is step 10: the DWSIM references, the owner's case and each reactor
-    alone.
+  - **Step 10 is done,** and amended D13, approved on 2026-11-13. The
+    owner's Tutorial 2 (methanol in a conversion reactor; its −∞ sweeps
+    plotted a product's conversion) amended D2 and D10 before it, approved
+    on 2026-11-12:
+    - `expr` reads `(T in degC)`, a value's number on a unit's scale, and
+      a unit after a group, `(…) [%]`;
+    - a conversion may be an expression in T, taken at the outlet's T;
+    - a conversion reactor warns of an outlet past equilibrium, in
+      `Outcome.warnings` and report format 2's `units[].warnings`.
+  - Step 10's comparisons (`tools/gen_m9_dwsim.py`, `testdata/m9_dwsim.json`,
+    `reactors/dwsim_test.v`):
+    - The owner's PFR is within 2.3e-10 of the exact answer of DWSIM's
+      equations, and within criterion 8's targets of DWSIM at dV = 0.001.
+    - Tutorial 2's duties are explained to 3.2e-13.
+    - DWSIM's equilibrium reactor puts fugacities over 1 atm against a
+      1-bar K.
+    - Its Gibbs reactor is good to about 1e-3.
+    - Its CSTR reacts nothing in the vapour, so reflux's CSTR is held to
+      the exact answer of DWSIM's equations instead (D13).
+  - Found in step 10: reflux's CSTR couldn't start Newton on the owner's
+    case, so it now solves by continuation in its volume where Newton from
+    the inlet fails. The reactor goldens are in
+    `testdata/flowsheets/golden/reactors/`, and `tools/golden.vsh` takes
+    names, so that M4's goldens wait for v0.3.0.
+  - Next is step 11: speed.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -343,6 +366,12 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     constants as component files, and `reference_dwsim.toml`. It imports
     `gen_m3_dwsim.py`, and needs V on the PATH: it solves that file with
     reflux for the open loop. About five minutes.
+  - `tools/gen_m9_dwsim.py [part ...]` writes `testdata/m9_dwsim.json`: the
+    parts conversion, equilibrium, gibbs, cstr, pfr and ideal_gas. A part
+    not named keeps what the file has; a run that fails writes nothing. pfr
+    takes about a quarter of an hour, at dV = 0.001. It imports step 0's
+    spike, `spike/dwsim_pfr/run.py`. `REFLUX_TUTORIAL2` names the owner's
+    Tutorial 2 file, to check the script's case against it.
   - thermo 0.6.1's flash at a vapour fraction strictly between 0 and 1
     fails on a mixture (`dew` unbound): bisect on its PT flash instead.
   - `spike/dwsim/run.py` is M3 step 0's spike, and
@@ -372,6 +401,30 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     of ChemSep's eq. 102 with Jossi–Stiel–Thodos' correction, 30% below
     Wilke's in hydrogen-rich gas. A PFR's failure is silent too, and a
     reaction above its Tmax is skipped with no error.
+  - DWSIM's conversion reactor:
+    - It gives every compound a conversion, (in − out)/in, so a product's
+      is −∞. A sensitivity study of it plots −∞ with no message.
+    - Its conversion is a function of T alone, and isn't checked against
+      equilibrium.
+    - Its "PR78" package's departures aren't its PR package's with PR78's
+      α: they differ from `thermo`'s by 3e-5.
+    - Its adiabatic conversion reactor evaluates the expression at the
+      inlet's T, not the outlet's.
+  - DWSIM's other reactors (M9 step 10):
+    - The equilibrium reactor puts fugacities over 1 atm against K at
+      1 bar. Its default tolerances, 0.01 and 1e-3, leave its answer up to
+      3e-2 off: set both to 1e-10.
+    - The Gibbs reactor needs `CreateElementMatrix()` after the feed is
+      calculated. Its first solve from a feed lacking some products
+      refuses with "invalid initial estimates", and a second runs. Its
+      default IPOPT answer can leave the elements unbalanced by 7e-4, and
+      its two solvers agree only to 1e-3.
+    - The CSTR reacts nothing in the vapour, kinetic or catalytic, and
+      reports success. Its `IsothermalTemperature` defaults to 0 K, and it
+      needs a `Headspace`.
+    - DWSIM's copy of ChemSep gives water's ideal-gas Cp as eq. 16 with its
+      own constants, where reflux's file has eq. 107: 72 J/mol apart at
+      1000 K.
 
 ## Architecture
 
@@ -513,9 +566,13 @@ over the rest, built into a shared library for the Python package in
   - A maker reads its table through a `Section` whose `context` holds the
     file's format, species, component records and reactions (format 2).
   - A reactor's `Outcome` gives its elements as `conserved`, and the solver
-    checks it on them; a PFR's gives its `profile`.
+    checks it on them; a PFR's gives its `profile`, and a conversion
+    reactor's its `warnings` (an outlet past equilibrium).
   - Rates become each species' source through `Source`, with exact
-    derivatives; the PFR and CSTR use them in `rodas4` and `newton`.
+    derivatives; the PFR and CSTR use them in `rodas4` and `newton`. The
+    CSTR continues in its volume where Newton from the inlet fails.
+  - A conversion may be an expression in T, bound in the kinetics' rate
+    context with the file's definitions, evaluated at the outlet's T.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error

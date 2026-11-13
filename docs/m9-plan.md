@@ -24,7 +24,14 @@ amended D1, approved on 2026-11-10. Step 5 is done and amended criterion
 approved on 2026-11-10. Step 7 is done and amended D1 and D10,
 approved on 2026-11-11. Step 8 is done and amended criterion 6,
 approved on 2026-11-12. Step 9 is done and amended D11,
-approved on 2026-11-12. Step 10 is next.
+approved on 2026-11-12. Before step 10 started, the owner's Tutorial 2
+amended two decisions, both approved on 2026-11-12:
+- D2: a value read on a unit's scale, `(T in degC)`, and a result's unit
+  after a closing bracket;
+- D10: a conversion in T, and a warning past equilibrium.
+
+Step 10 is done, and amended D13, approved on 2026-11-13. Step 11 is
+next.
 
 ## Goal
 
@@ -222,7 +229,7 @@ All checked by tests in CI, as in M1 to M4.
 | # | Decision | Choice | Why |
 |---|---|---|---|
 | D1 | Where it lives | `expr`, the expression language, which imports `quantity` only. `kinetics`: reactions, stoichiometry and element balance, rate laws and sites, their checks and rendering, over `expr` and `thermo`. `equilibrium`: Gibbs minimisation, over `thermo` and `numeric`. The integrators in `numeric`. `reactors`: the unit operations, with makers for the file, as M4's D1 planned. **Amended in step 4:** a further module, `chem`, holds the elements, formulas and SMILES strings. It depends on nothing, and sits below both `components`, which takes a compound's formula from its file with it, and `kinetics`, which reads a formula in an equation with it. `kinetics` doesn't import `components`: a reaction's species are plain data, which the reactors (step 9) build from component records. **Amended in step 7:** `equilibrium` imports `kinetics`, for its species, reactions, standard properties and independence check, and `flash`, for the stability test, as well as `thermo` and `numeric`. The consistency check (criterion 4) is there, needing rates and equilibrium both, which `kinetics` can't import; `reflux kinetics check` imports it. | Each piece is tested alone, and `expr` can serve M8 without dragging in thermodynamics. Step 7: an equilibrium's species and reactions are kinetics' own, so a reactor equilibrates the reactions it reacts by, and a cubic's answer is tested for a second phase before it's returned. |
-| D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. **Amended in step 2:** a number's unit follows it after a space and runs to the next space, or to a ) or , that isn't its own, or it's in brackets, `2 [K]`; a word after a number that is also a name here is refused as ambiguous (`2 R`: two rankines, or twice the gas constant?). A unit with an offset (°C, °F, barg, psig) is refused in an expression. `log` is refused as ambiguous, with `ln` and `log10` offered. `·`, `×` and `−` are operators too. A definition can't take a variable's, a family's or a function's name either. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. A unit after a number is how papers write it, but a name after a number would be read silently as a unit where they collide (R, h, P), so that is refused; brackets say which. An offset in arithmetic is wrong as often as right (T − 25 °C). |
+| D2 | The language | Infix arithmetic with `+ − * / ^`, unary minus, and `exp`, `ln`, `log10`, `sqrt` and `abs`. Numbers may carry a unit, such as `240.1 kJ/mol`. Names are the context's (in a rate, `T`, `P`, and `p[CH4]`, `f[CH4]`, `c[CH4]` or `y[CH4]` by species name, formula or CAS number, quoted if it needs to be, `p['n-butane']`), a file's definitions, and built-in constants. **Definitions:** a `[definitions]` table names expressions for reuse, such as a rate constant or a site's denominator. They may use one another, and a cycle is refused. **Constants:** `R`, `N_A`, `k_B`, `h`, `F`, `c`, `g_n`, `pi` and `p_std` (1 bar), at the 2019 SI's exact values, each with its unit: R = N_A·k_B = 8.31446261815324 J/(mol·K). A definition can't take a constant's name. No assignment inside an expression, no loops, no conditionals, and nothing that runs code. **Amended in step 2:** a number's unit follows it after a space and runs to the next space, or to a ) or , that isn't its own, or it's in brackets, `2 [K]`; a word after a number that is also a name here is refused as ambiguous (`2 R`: two rankines, or twice the gas constant?). A unit with an offset (°C, °F, barg, psig) is refused in an expression. `log` is refused as ambiguous, with `ln` and `log10` offered. `·`, `×` and `−` are operators too. A definition can't take a variable's, a family's or a function's name either. **Amended before step 10** (approved on 2026-11-12): a value can be read on a unit's scale, `(T in degC)`. That's the number T reads in °C: 320 for 593.15 K, a dimensionless number, and the one place an offset applies. Likewise, `P in mmHg` is P over 133.322… Pa. `in` takes the name, member or bracketed expression just before it, as a unit binds to its number, so `0.0018*T in degC` is `0.0018*(T in degC)`. The unit must have the value's dimension. With an offset unit (°C, °F, barg, psig), `in` reads only the context's own T or P, which are absolute. `(T - 300 K) in degC` is refused, since a difference reads in K, and so is a definition read in °C. `in` is reserved, so no definition can take it. A reading that repeats is named once by a definition, `t = "T in degC"`. There's no declaration for a whole expression (`where T in degC`). A forgotten reading is a dimension error whose message suggests it. A unit may also follow a closing bracket, so a result's unit is written once: `(85 - 0.18*(T in degC)) [%]`. A reading renders as `(T in °C)`, and plain text reads back as written. | Enough for every rate and correlation this milestone meets, and a user's own equation without repeating a term in every reaction. A typed 8.314 costs 0.16% in a rate at E/RT ≈ 29, and a transposed 8.341 costs 9.6%, so the constant is built in and a typed one is flagged. A paper fitted with 8.314 can still write it, with its unit. Conditionals would break exact derivatives. A unit after a number is how papers write it, but a name after a number would be read silently as a unit where they collide (R, h, P), so that is refused; brackets say which. An offset in arithmetic is wrong as often as right (T − 25 °C). Before step 10: the owner's Tutorial 2 prints its correlation for T in °C and a conversion in %. The only way to write it was `0.85 - 0.0018 [1/K] * (T - 273.15 K)`: the user doing by hand the conversion the language is meant to spare them. Antoine's constants, in °C and mmHg, and many published fits are the same. A reading at each use keeps T one quantity in a file, and keeps a forgotten reading an error. A declaration for the whole expression would rebind T, as DWSIM's "T in K" does, and would let `T/300` through silently. Modelica also converts at each use (`to_degC(T)`). A result has one unit, so it goes once, at the end. |
 | D3 | Units | `quantity` gains a dimension algebra: a dimension is a vector of SI base exponents (mass, length, time, temperature, amount), and a unit a scale on one. Compound units (`kmol/(kg*h)`, `bar^-2`) parse from M4's named units. M4's named dimensions become constants of the algebra, so files read as before. **Amended in step 1:** the bases include electric current, for the coulomb and so for D2's Faraday constant. The exponents are exact rationals, for bar^0.5. Compound units are built from symbols with SI prefixes rather than from M4's whole names, and each of M4's units reads through them to M4's bits. A * after a / is refused as ambiguous. | One source of truth for units, now able to say why a dimension is wrong. A rate's units hold half powers (√(K·p_H₂)), and a ratio squared must be the unit again exactly. Symbols with prefixes cover the units kinetics papers use (cm³, mol/(g·s), kJ/mol) without listing every combination. |
 | D4 | One representation | Parsed expressions and the structured forms (Arrhenius centred on T_ref, van 't Hoff, a site's monomials, LHHW) build the same tree. The structured forms keep their structure, for site sharing and their own checks, and render, evaluate and differentiate through the tree. | Every check, rendering and derivative is written once, and a structured rate and the same rate typed as an expression give the same bits. |
 | D5 | Evaluation and derivatives | A tree compiles to a tape: a flat array of operations on slots, with constants folded and shared subexpressions merged. Evaluation walks the tape into a buffer the caller owns. Derivatives come from a reverse sweep over the same tape, giving the gradient with respect to every variable in one pass. No closures, no allocation per evaluation. **Amended in step 0:** operations are fused where it pays, a constant operand held in the operation (x + c, c·x, c/x) and a·exp(b/T), the form of every Arrhenius and van 't Hoff term, as one operation. The constants go into the caller's buffer once, and one reverse sweep carries every output's adjoints together. | A rate needs its gradient with respect to every species and T at once, and reverse mode gives that for about the cost of the rate. A tape is data, which V handles without closures. **Step 0 measured it** on Xu and Froment's three rates, with gcc `-prod`: written out in V, 130 to 220 ns for the rates and 210 to 330 ns with their gradients, as the laptop's clock varied; the plain tape about 4.5 and 6 times that, the fused tape 3 and 4 to 5 times. That's under 2 µs for three rates and every derivative, which puts a PFR solve of the owner's case at a few milliseconds even at a thousand integrator steps, against DWSIM's 9 to 29 s. Evaluators written out for the structured forms, the risk's fallback, would win the factor back at the cost of D4: two derivative codes per form, and a rate typed as an expression no longer giving the structured form's bits. Step 11 profiles the PFR, and fuses more if the tape dominates. |
@@ -230,10 +237,10 @@ All checked by tests in CI, as in M1 to M4.
 | D7 | Equilibrium constants | By default K(T) = exp(−ΔG°(T)/RT) at a standard state of 1 bar, from each species' ideal-gas H and S along Cp. A correlation may be given instead, and `check` reports how far it is from the thermodynamic K. | Consistent with the flowsheet's own thermodynamics by construction, and honest when a paper fitted its own. |
 | D8 | Integrators | Rosenbrock's RODAS4 (Hairer and Wanner), L-stable with an embedded error estimate, on the exact Jacobian from D5, for stiff problems. Dormand and Prince's 5(4) for the rest. Both take what they integrate as an interface, never a closure. A PFR's state is its molar flows, with T and P where they vary. | A Rosenbrock method needs no Newton iteration, only an LU per step, and exact Jacobians make it reliable. Near equilibrium, reforming kinetics is stiff. |
 | D9 | Gibbs minimisation | One phase for now (M6 adds more), ideal gas or a cubic. Minimise G over the species amounts subject to the element balance, by Newton on the element potentials (the RAND method, White, Johnson and Dantzig, 1958), with the fugacity coefficients updated outside it for a cubic. Species that vanish are handled in log space. | The standard method. It extends to the second phase M6 brings. |
-| D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. **Amended in step 7:** the equilibrium over chosen reactions isn't Newton on their extents but the Gibbs minimisation's own RAND method over what the reactions conserve (the null space of their coefficients), with stand-in potentials g = −νᵀ(ννᵀ)⁻¹ ln K, so that its stationary point has each Q its K. **Amended in step 0:** Ergun's viscosity is the gas mixture's at low pressure: each compound's from its component file's vapour-viscosity correlation (ChemSep's eq. 102, already imported), mixed by Wilke's rule and checked against `chemicals`. That's the first piece of M5's C7, brought forward. The PFR takes its viscosity through an interface, so a test can give it another, as step 10 gives it DWSIM's. A catalyst's loading is the bed's density, kg per m³ of reactor, and its void fraction enters Ergun alone, as in DWSIM. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. Step 0 found Ergun's drop 89% viscous in the owner's case, moving its methane conversion by 3.4e-3, and reflux had no viscosity. DWSIM's, a mole-fraction mean with Jossi, Stiel and Thodos' correction, is 30% below Wilke's in the hydrogen-rich gas. Step 7: an extent has bounds that a product the feed lacks sits on, where Newton's logarithms are infinite. In RAND's log space a vanishing species is no trouble, as in the Gibbs reactor, and one solver serves both, with the same checks. |
+| D10 | Reactors | Conversion (a key reactant's conversion per reaction, in order); equilibrium over chosen reactions, for restricted equilibrium, by Newton on their extents with K(T), the reactions independent; Gibbs (D9); CSTR at a given T or adiabatic, solved by Newton; PFR and packed bed, isothermal, adiabatic or at a duty per length, in catalyst mass or volume, with Ergun's pressure drop or a given one. Each outlet is a flash at its state, and each reactor's balances are checked before it returns, as M4's units are. **Amended in step 7:** the equilibrium over chosen reactions isn't Newton on their extents but the Gibbs minimisation's own RAND method over what the reactions conserve (the null space of their coefficients), with stand-in potentials g = −νᵀ(ννᵀ)⁻¹ ln K, so that its stationary point has each Q its K. **Amended in step 0:** Ergun's viscosity is the gas mixture's at low pressure: each compound's from its component file's vapour-viscosity correlation (ChemSep's eq. 102, already imported), mixed by Wilke's rule and checked against `chemicals`. That's the first piece of M5's C7, brought forward. The PFR takes its viscosity through an interface, so a test can give it another, as step 10 gives it DWSIM's. A catalyst's loading is the bed's density, kg per m³ of reactor, and its void fraction enters Ergun alone, as in DWSIM. **Amended before step 10** (approved on 2026-11-12): a conversion may be a number or an expression in `T`, the reactor's temperature, parsed by `expr` with its units checked to be dimensionless: `"0.85 - 0.0018*(T in degC)"`, with D2's reading. It's taken at the outlet's T, which an adiabatic reactor or one at a duty finds with its energy balance. A value outside 0 to 1 at that T is a failure that names the T. A conversion reactor also warns when its outlet is past equilibrium: any reaction whose Q, from the outlet's fugacities in bar, is above its K at 1 bar from the Gibbs energies (D7), beyond rounding. A warning is not a failure, since the conversion is the user's to give. A reaction with no K, its species lacking formation data, gets a note that it went unchecked. Warnings go in the unit's report, in format 2, which is unreleased. | What the owner's case and textbook problems need. A cooled PFR with a coolant stream is G2's, with the heat exchangers. Step 0 found Ergun's drop 89% viscous in the owner's case, moving its methane conversion by 3.4e-3, and reflux had no viscosity. DWSIM's, a mole-fraction mean with Jossi, Stiel and Thodos' correction, is 30% below Wilke's in the hydrogen-rich gas. Step 7: an extent has bounds that a product the feed lacks sits on, where Newton's logarithms are infinite. In RAND's log space a vanishing species is no trouble, as in the Gibbs reactor, and one solver serves both, with the same checks. Before step 10: the owner's Tutorial 2 (step 10) types its conversion as a function of T in DWSIM. Swept over pressure, it kept 27.4% at 30 bar, where equilibrium allows 7.9%, and nothing said so. |
 | D11 | The file | `[[site]]`, `[[reaction]]` and the reactor units in the flowsheet file. Their equations and expressions are strings that `expr` parses; their numbers carry units as M4's do. A file that uses them is format 2. Format 1 files read exactly as before. The report gains each PFR's profile, as report format 2. **Amended in step 6:** sites and reactions are tables by name, `[site.NAME]` and `[reaction.NAME]`, as feeds and units are, rather than arrays of tables: a name is unique by the table's key, and a failure's key reads `reaction.reforming.law`. `reflux kinetics check` reads a file's reactions without the flowsheet's other sections, so a file of reactions alone can be checked; `reflux solve` reads them with the reactors, in step 9. **Amended in step 9:** a reactor's table names the reactions it runs, `reactions = ["reforming", "shift"]`, by default every one it can (every one with a rate law for a PFR or a CSTR); a conversion reactor's `conversions` are its steps in order, each a reaction, its key reactant and its conversion. Every reactor takes `T`, `duty` or `adiabatic = true`, at most one, isothermal at its inlet's T with none. A PFR's `pressure_drop` is a drop or `"ergun"`. Format 2 reads format 1's sections as format 1 does, and a reactor in a format-1 file is refused. | One file per process, as now. A new section is a new format by the CHANGELOG's rules, but nothing old changes meaning. Step 9: one file's reactions can then serve reactors that run different ones (a reformer and a shift converter), as DWSIM's reaction sets do, without a set's table of its own; named sets can come later if a file wants the same list twice. |
 | D12 | The CLI | `reflux kinetics check <file>` runs every check on a file's reactions. `reflux kinetics explain <file> [T P composition]` prints each rate as reflux read it, and the factor table at a state. | kinetics.md's design. |
-| D13 | Comparing with DWSIM | The owner's case as a reflux file, with DWSIM's three denominators as marked overrides, compared at DWSIM's tightest useful dV, which step 0 finds. The published model, one site shared by all three, is solved beside it and reported. Each unit alone (conversion, Gibbs, CSTR, PFR) is compared with DWSIM's from the same inlet. **Amended in step 0:** the case is compared with three answers: DWSIM's at dV = 0.001, its tightest useful one, and at the file's 0.05; and the exact answer of DWSIM's equations without its sections, which the fixture integrates with SciPy. Isobaric first, then with Ergun, the test giving reflux's PFR DWSIM's viscosity. | The comparison measures the solvers, not two different models, and the published model is the one users should run. |
+| D13 | Comparing with DWSIM | The owner's case as a reflux file, with DWSIM's three denominators as marked overrides, compared at DWSIM's tightest useful dV, which step 0 finds. The published model, one site shared by all three, is solved beside it and reported. Each unit alone (conversion, Gibbs, CSTR, PFR) is compared with DWSIM's from the same inlet. **Amended in step 0:** the case is compared with three answers: DWSIM's at dV = 0.001, its tightest useful one, and at the file's 0.05; and the exact answer of DWSIM's equations without its sections, which the fixture integrates with SciPy. Isobaric first, then with Ergun, the test giving reflux's PFR DWSIM's viscosity. **Amended in step 10** (approved on 2026-11-13): DWSIM 9.0.5's CSTR reacts nothing in the vapour, catalytic or not, and says nothing, so reflux's CSTR is held to the exact answer of DWSIM's equations for a CSTR (the owner's rates as typed, by mpmath), as the PFR is. The exact answer with Ergun uses PR's density with exact constants, reflux's, and DWSIM's viscosity: DWSIM's own density takes R as 8.314, which moves the velocity by 5.6e-5 and the flows by about 1e-6, beyond criterion 8's 1e-8, and it matters only against DWSIM's answers, whose targets are 3e-4. DWSIM's Gibbs reactor is held to what its own answers are worth: its two solvers disagree by 1e-3, and its default one leaves the elements unbalanced by up to 7.3e-4. | The comparison measures the solvers, not two different models, and the published model is the one users should run. Step 10: DWSIM's CSTR can't run the case at all, and an answer from two densities measures the densities. |
 | D14 | Heat exchangers | Out of M9, into a milestone of their own after it. | The roadmap put G2 in M9, but nothing in M9's exit needs it, and M9 is large. A cooled PFR wants a coolant stream, which belongs with the exchangers. |
 | D15 | Versions | M9 ends with v0.3.0: format 2 is an addition, a minor release before 1.0. | The CHANGELOG's rules. |
 | D16 | Who writes what | As before, I write it all unless you claim a step. | |
@@ -1191,9 +1198,165 @@ flowchart LR
 - **V's notes:** an `or` block can't follow a `match` whose arms are
   Results; each call takes its own.
 
-### 10. DWSIM references
+### 10. DWSIM references — done, with D13 amended (approved on 2026-11-13)
 - The owner's case and each reactor alone, against DWSIM 9 (D13), with every
   difference explained, and golden flowsheets with reactors.
+- **The conversion reactor's case is the owner's Tutorial 2,** recorded on
+  2026-11-12, before the step began. It's methanol synthesis, CO + 2 H₂ =
+  CH₃OH, in an isothermal conversion reactor:
+  - the feed is 1500 kg/h of CO and H₂, at mole fractions 0.2 and 0.8, at
+    320 °C and 70 bar;
+  - the model is DWSIM's PR78;
+  - CO's conversion is 85 − 0.18 (T − 273.15) %, typed as text.
+
+  The file stays out of the repository; the generator builds the case from
+  its numbers and, given `REFLUX_TUTORIAL2`, checks it against the file
+  (outlet within 7.1e-16, duty to the last digit printed). What the record
+  found before the step:
+  - **Why its sensitivity studies gave −∞ at every point.** They plot
+    methanol's conversion. DWSIM works out (in − out)/in for every compound,
+    products included, and the file stores methanol's as `-Infinity`.
+  - **CO's conversion in the sweeps.** It's 27.4% at 30, 50 and 70 bar,
+    since a conversion reactor's conversion depends on T alone. From 200 to
+    320 °C it's 49.0, 41.8, 34.6 and 27.4%, as the course's solution has
+    it.
+  - **27.4% at 30 or 50 bar is past equilibrium.** On PR at 320 °C, CO's
+    equilibrium conversion is 7.9, 19.4 and 32.1% at 30, 50 and 70 bar.
+  - **DWSIM's empty liquid outlet** has NaN flows at 240 °C and 0 at the
+    other temperatures, with no message.
+- **Readings in the expression language** (D2, amended before this step):
+  [expr/parse.v](../expr/parse.v) reads `(T in degC)`, a value's number on
+  a unit's scale, as a node of its own, and a unit in brackets after a
+  group, `(85 - 0.18*(T in degC)) [%]`. The reading is (v − post)/scale −
+  pre, on the tree and on the tape alike, the tape skipping only x − 0 and
+  x/1. An offset reads only a context variable; a difference, a member, a
+  definition or a number before `in` is refused, each with its own message,
+  and a sum of a pure number and a temperature or pressure suggests the
+  reading. [design.md](design.md#expressions) has the rules.
+- **The conversion reactor** (D10, amended before this step): a conversion
+  is a number, a fraction such as `"27.4 %"` or an expression in T with the
+  file's definitions (`Section.expression`), taken at the outlet's T and
+  refused outside 0 to 1 there, naming the T. Each reaction it takes past
+  equilibrium is warned of with its Q/K, in `Outcome.warnings`, which run
+  through the solution to the report (format 2's `units[].warnings`) and
+  the table's "Warnings:". The CSV has no units, so nothing there.
+- **The CSTR solves by continuation where Newton fails** (found below): in
+  its volume, from a millionth up, the step in ln V doubling on success and
+  halving on failure, the last solve the whole volume's to the same
+  tolerance.
+- **[tools/gen_m9_dwsim.py](../tools/gen_m9_dwsim.py)** writes
+  [testdata/m9_dwsim.json](../testdata/m9_dwsim.json): each reactor built in
+  DWSIM 9.0.5 from numbers, its `Calculated` and `ErrorMessage` checked,
+  beside the exact answers of DWSIM's own equations (SciPy's Radau at
+  1e-12, mpmath at 30 digits) and the parts each comparison needs to be
+  taken apart. It imports step 0's spike for DWSIM's PFR, rate model and
+  viscosity.
+- **Golden flowsheets with reactors:** `reformer.toml` and a new
+  [methanol.toml](../testdata/flowsheets/methanol.toml), the tutorial at 30
+  bar, whose report carries its warning, in
+  `testdata/flowsheets/golden/reactors/`; `tools/golden.vsh` takes names,
+  so that M4's reports wait for v0.3.0 (step 12) as planned.
+- **Numbers,** each reactor alone (reactors/dwsim_test.v):
+  - **Conversion, Tutorial 2:** at all six states the flows are DWSIM's to
+    2.8e-16, the conversion typed as printed. The duties differ by 3.1 to
+    23.0 W (up to 4.1e-5), and each difference is taken apart to 3.2e-13 of
+    the duty: DWSIM's departures less thermo's PR (which reflux's are),
+    8.8 W at the base case, of which PR78's α for methanol and DWSIM's
+    rounded constants are 5.8 W and DWSIM's own PR78 departures 3.0 W, not
+    traced; and DWSIM's ideal-gas enthalpies less an exact quadrature of
+    reflux's Cp, −0.8 W (its copy of the coefficients' extra digits and its
+    approximate integral). At 30 and 50 bar reflux warns, Q/K = 4.56 and
+    1.60; at 70 bar it doesn't.
+  - **Adiabatic conversion:** DWSIM evaluates its expression at the
+    inlet's T, 27.4% at an outlet of 783.30 K, where the correlation gives
+    −6.8%; reflux takes it at the outlet's, as D10 has it, and finds 677.25
+    K at 12.3%, consistent. Given DWSIM's fixed 27.4%, reflux lands 0.004 K
+    from DWSIM's outlet, and warns: Q/K = 125.
+  - **Equilibrium:** reflux's reactor is the 1-bar equilibrium, computed
+    independently, to 6.1e-13; DWSIM's at 1e-10 is the equilibrium of
+    fugacities over 1 atm against the same K, to 2.9e-6. So the whole
+    difference, CO's conversion 7.932 against 7.745% at 30 bar, 19.354
+    against 18.958 at 50 and 32.050 against 31.501 at 70, is DWSIM's
+    standard state, 1.01325² on Q. At its default tolerances (0.01 and
+    1e-3) DWSIM's answers move by up to 2.8e-2.
+  - **Gibbs:** reflux's reactor is the 1-bar equilibrium to 6.6e-14 at
+    1000 K and 1 atm and 3.8e-13 at 900 K and 10 bar. DWSIM's are 7.5e-3 to
+    9.1e-3 away, and good only to about 1e-3: its default IPOPT leaves
+    carbon and oxygen unbalanced by 7.3e-4 at 1000 K (7.7e-5 at 900 K), its
+    other method balances them to 3e-6, the two disagree by 1e-3, and each
+    is 1e-3 to 4e-3 in ln(Q/K) from even the 1-atm equilibrium. Its first
+    solve from a feed with no CO or CO₂ refuses with "invalid initial
+    estimates", and a second runs.
+  - **CSTR:** DWSIM 9.0.5's CSTR reacts nothing in the vapour, kinetic or
+    catalytic, at any volume or headspace, and reports success (the feed
+    moved by 9e-16 mol/s); with the reaction in the liquid it fails. reflux's
+    CSTR on the owner's rates, 0.386 kg of catalyst in 1 m³ at 1000 K and 1
+    atm, is the exact answer of DWSIM's equations to 1.7e-16, methane's
+    conversion 0.6077.
+  - **The owner's PFR** (criterion 8, step 0's targets): within 2.2e-10 of
+    the exact answer of DWSIM's equations isobaric and 2.3e-10 with Ergun
+    (target 1e-8), the drop within 3.1e-7 Pa; against DWSIM at dV = 0.001,
+    8.4e-5 and 1.0e-4 in the worst flow (3e-4), 1.6e-5 and 2.5e-5 in
+    methane's conversion (5e-5), 0.24 Pa in the drop (1 Pa). At the file's
+    dV = 0.05, 4.9e-3 and 5.8e-3, 9.0e-4 and 1.3e-3 in the conversion and
+    18.6 Pa, DWSIM's sections (step 0). X is 0.7577996970 isobaric and
+    0.7616774826 with Ergun's 4896.874 Pa; on reflux's own viscosity,
+    Wilke's rule, 0.7626196838 and 6143.09 Pa. The duty is 151 to 156 W
+    below DWSIM's at dV = 0.001: reflux's enthalpies of DWSIM's own outlet
+    give DWSIM's duty but for 167 W, which is each compound's ideal-gas
+    enthalpy, DWSIM's copy of ChemSep giving water's Cp as eq. 16 with
+    other constants where reflux's file has eq. 107 (72 J/mol apart at
+    1000 K), to 0.29 W; the 10 to 16 W left is DWSIM's outlet being a little
+    further along.
+  - **The published model** beside it, Xu and Froment's one shared site
+    with K from the Gibbs energies and Wilke's viscosity
+    (`reformer.toml`, now golden): 0.76027.
+- **Found:**
+  - **reflux's CSTR failed on the owner's case.** Newton from the inlet
+    couldn't take a step (|F| = 1237): the rates near equilibrium make the
+    balances steep. Fixed by the continuation above; the generator's mpmath
+    solve needed the same.
+  - In DWSIM: the CSTR's silent failure in the vapour; the Gibbs reactor's
+    unbalanced default answer; the equilibrium reactor's fugacities over
+    1 atm against a 1-bar K; the adiabatic conversion reactor's expression
+    at the inlet's T; water's ideal-gas Cp; and its PR78's departures,
+    3e-5 from thermo's PR78 with its constants even where PR78 is PR. All
+    for the reports to DWSIM.
+  - The equilibrium reactor at DWSIM's default tolerances is off by up to
+    2.8e-2: a user would need to tighten them.
+  - A PFR's profile is where its integrator stepped, and rounding moves
+    that: under gcc the reformer's points sit within 1.1e-9 of tcc's, which
+    wrote its golden report, so the golden test holds a profile's points to
+    1e-6 and the outlet, in the streams, to 1e-9.
+- **Tests,** in four new files and two changed: [expr/reading_test.v](../expr/reading_test.v),
+  seven (the scales' known points; `in`'s binding; the tutorial's forms;
+  every refusal; a forgotten reading's message; the tape and its
+  derivatives; renderings that read back); `expr/sympy_test.v`'s readings
+  against SymPy (1.5e-15 at worst); [reactors/dwsim_test.v](../reactors/dwsim_test.v),
+  six (conversion, adiabatic conversion, equilibrium, Gibbs, CSTR, PFR);
+  [reactors/golden_test.v](../reactors/golden_test.v); and
+  `reactors/flowsheet_test.v`'s tutorial as a file (its warning in the JSON
+  and table, a definition, the percentage, and each refusal at its line).
+- **Planted mistakes:** 41, one at a time in a scratch copy, 35 caught at
+  once: the reading's arithmetic on the tree and on the tape, each of the
+  parser's refusals and its binding of `in`, the dimensions, the forgotten
+  reading's hint, the keyword, the renderings, the group's unit, the
+  conversion's range and T, the past-equilibrium check's sign, pressure, φ
+  and tolerance, the warnings' way through the solution to the report, the
+  maker's fixed conversion and its check for T alone, and the CSTR's
+  continuation in V and where it starts. Of the 6 others:
+  - three caught by tests written for them: a definition that uses P,
+    which `beyond_t` must follow, and the constructor's two checks of an
+    expression, which the file's reader makes first, so only code reaches
+    them (a test of the constructor's refusals).
+  - two first counted as caught only because the scratch copy lacked
+    `docs/`, which `flowsheet/report_test.v` reads; run again with it, the
+    table's warnings and `Section.expression`'s dimension check are caught.
+  - one explained: the continuation's step doubling. Without it the CSTR
+    still converges, in quarter-decade steps; it's there for speed.
+- **V's notes:** a positional literal needs every field, an Option one
+  included, so a struct that may grow is written with names; and `json2`
+  ignores keys a struct lacks, so a test declares only what it reads.
 
 ### 11. Speed
 - The owner's case and the 50-point study, timed against DWSIM 9 (criterion

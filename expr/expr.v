@@ -11,6 +11,10 @@
 //   read, and every node has a dimension, checked as the tree is built: an
 //   exp of something with units, or a pressure added to a temperature, is
 //   refused with its reason.
+// - A value can be read on a unit's scale, (T in degC), a pure number, so
+//   that a correlation goes in as its source prints it; and a group can take
+//   a unit after it, (85 - 0.18*(T in degC)) [%]. A reading is the one place
+//   an offset applies, and only to the context's own T or P.
 // - Every tree renders back as text that reads back to the same tree, and
 //   as Unicode and LaTeX, to hold against the paper.
 //
@@ -37,6 +41,8 @@ pub enum Kind as u8 {
 	div      // a/b
 	pow      // a^b
 	call     // a function of a: index into functions
+	reading  // a's number in a unit, (T in degC): value is the unit's scale, pre and post its offsets
+	scaled   // a group with a unit after it, (…) [%]: value is the unit's scale
 }
 
 // Node is one node of a tree. line and column are where it starts in the
@@ -49,8 +55,10 @@ pub:
 	index  int
 	value  f64
 	text   string // a number or a name, as written
-	unit   string // a number's unit, as written
+	unit   string // a number's, a reading's or a group's unit, as written
 	braced bool   // the unit was written in brackets, 2 [K]
+	pre    f64    // a reading's offsets, as quantity has them: SI = (x + pre)·scale + post
+	post   f64
 	line   int
 	column int
 pub mut:
@@ -223,7 +231,7 @@ fn reserved(ctx Context, name string) string {
 pub fn define(ctx Context, sources []Source) !Definitions {
 	mut names := []string{}
 	for s in sources {
-		what := reserved(ctx, s.name)
+		what := if s.name == 'in' { 'a keyword, as in (T in degC)' } else { reserved(ctx, s.name) }
 		if what != '' {
 			return ExprError{
 				text:       s.text
@@ -357,7 +365,7 @@ pub fn (e Expr) must_be(d Dim, what string) ! {
 		text:   e.text
 		line:   root.line
 		column: root.column
-		reason: '${what} must be ${with_article(d.name())}, but this is ${with_article(e.dim.name())}'
+		reason: '${what} must be ${with_article(d.name())}, but this is ${with_article(e.dim.name())}${reading_hint(d, e.dim)}'
 	}
 }
 

@@ -34,9 +34,20 @@ fn check(ctx Context, defs &Definitions, tree Expr) !Expr {
 				a, b := nodes[n.a].dim, nodes[n.b].dim
 				if !a.eq(b) {
 					op := if n.kind == .add { '+' } else { '−' }
-					return fail_at(tree, n, 'the two sides of ${op} must have the same units, but the left is ${describe(a)} and the right ${describe(b)}')
+					return fail_at(tree, n, 'the two sides of ${op} must have the same units, but the left is ${describe(a)} and the right ${describe(b)}${reading_hint(a, b)}${reading_hint(b, a)}')
 				}
 				a
+			}
+			.reading {
+				// n.dim is the unit's, from the parser.
+				a := nodes[n.a].dim
+				if !a.eq(n.dim) {
+					return fail_at(tree, n, "${describe(a)} can't be read in ${n.unit}, which is ${describe(n.dim)}")
+				}
+				Dim{}
+			}
+			.scaled {
+				nodes[n.a].dim.mul(n.dim) or { return fail_at(tree, n, err.msg()) }
 			}
 			.mul {
 				nodes[n.a].dim.mul(nodes[n.b].dim) or { return fail_at(tree, n, err.msg()) }
@@ -134,7 +145,36 @@ fn fold(defs &Definitions, nodes []Node, i int) ?f64 {
 		.call {
 			apply(n.index, fold(defs, nodes, n.a)?)
 		}
+		.reading {
+			read_on(n, fold(defs, nodes, n.a)?)
+		}
+		.scaled {
+			fold(defs, nodes, n.a)? * n.value
+		}
 	}
+}
+
+// read_on is a value's number on a reading's scale: quantity's
+// SI = (x + pre)·scale + post, solved for x. The tape does the same three
+// operations, skipping those that change nothing.
+@[inline]
+fn read_on(n Node, si f64) f64 {
+	return (si - n.post) / n.value - n.pre
+}
+
+// reading_hint suggests a reading where a pure number meets a temperature
+// or a pressure: likeliest, a correlation typed for T in °C or P in bar.
+fn reading_hint(pure Dim, other Dim) string {
+	if !pure.is_dimensionless() {
+		return ''
+	}
+	if other.eq(quantity.Dimension.temperature.dim()) {
+		return ": to use a temperature's number in a unit, read it on that unit's scale, as (T in degC) or (T in K)"
+	}
+	if other.eq(quantity.Dimension.pressure.dim()) {
+		return ": to use a pressure's number in a unit, read it on that unit's scale, as (P in bar)"
+	}
+	return ''
 }
 
 // to_ratio is the simplest fraction within 1e-12 of x, its denominator at

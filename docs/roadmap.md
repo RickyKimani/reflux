@@ -231,6 +231,13 @@ study of 50 feed temperatures took 30 minutes in the app, about 36 s a point.
 One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
 of that is in one reactor.
 
+**A second case, for correctness rather than speed:** the owner's methanol
+conversion reactor, Tutorial 2, recorded in M9's step 10. DWSIM's temperature
+and pressure sweeps both plotted −∞ at every point, with no message, because
+the quantity swept was methanol's conversion: (in − out)/in for a product the
+feed doesn't have. A sweep should refuse a quantity with no value at a point,
+and say why, rather than plot it.
+
 ### M9 — Equations, kinetics and reactors
 **In progress.** The plan, approved on 2026-11-08, is in [m9-plan.md](m9-plan.md),
 and its step 0's spike of DWSIM's PFR in [spike-dwsim-pfr.md](spike-dwsim-pfr.md).

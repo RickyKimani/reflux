@@ -1,0 +1,172 @@
+{
+  "format": 2,
+  "reflux": "0.2.0",
+  "file": "testdata/flowsheets/methanol.toml",
+  "status": "solved",
+  "error": null,
+  "components": [
+    {
+      "name": "carbon monoxide",
+      "compound": "Carbon monoxide",
+      "molar_mass": 0.0280101
+    },
+    {
+      "name": "hydrogen",
+      "compound": "Hydrogen",
+      "molar_mass": 0.00201588
+    },
+    {
+      "name": "methanol",
+      "compound": "Methanol",
+      "molar_mass": 0.0320419
+    }
+  ],
+  "streams": [
+    {
+      "name": "syngas",
+      "from": null,
+      "to": "reactor",
+      "T": 593.15,
+      "P": 3000000,
+      "vapour_fraction": 1,
+      "molar_flow": 57.7522669843873,
+      "mass_flow": 0.41666666666666663,
+      "volume_flow": 0.09570593532086724,
+      "H": -13435.66054775394,
+      "S": 139.95516276518273,
+      "V": 0.0016571805804045806,
+      "molar_flows": [
+        11.55045339687746,
+        46.20181358750984,
+        0
+      ],
+      "mass_flows": [
+        0.3235293546918773,
+        0.09313731197478933,
+        0
+      ],
+      "mole_fractions": [
+        0.2,
+        0.8,
+        0
+      ],
+      "mass_fractions": [
+        0.7764704512605055,
+        0.22352954873949438,
+        0
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 1,
+          "mole_fractions": [
+            0.2,
+            0.8,
+            0
+          ],
+          "H": -13435.66054775394,
+          "S": 139.95516276518273,
+          "V": 0.0016571805804045806
+        }
+      ]
+    },
+    {
+      "name": "product",
+      "from": "reactor",
+      "to": null,
+      "T": 593.15,
+      "P": 3000000,
+      "vapour_fraction": 1,
+      "molar_flow": 51.422618522898446,
+      "mass_flow": 0.4166667932596359,
+      "volume_flow": 0.08511099904529135,
+      "H": -21277.839445890837,
+      "S": 146.58548064542535,
+      "V": 0.0016551276751375758,
+      "molar_flows": [
+        8.385629166133036,
+        39.87216512602099,
+        3.1648242307444243
+      ],
+      "mass_flows": [
+        0.23488231150630295,
+        0.08037750023424318,
+        0.10140698151908976
+      ],
+      "mole_fractions": [
+        0.16307277628032346,
+        0.7753818508535489,
+        0.061545372866127594
+      ],
+      "mass_fractions": [
+        0.5637173763447515,
+        0.1929059419528973,
+        0.24337668170235116
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 1,
+          "mole_fractions": [
+            0.16307277628032346,
+            0.7753818508535489,
+            0.061545372866127594
+          ],
+          "H": -21277.839445890837,
+          "S": 146.58548064542535,
+          "V": 0.0016551276751375758
+        }
+      ]
+    }
+  ],
+  "units": [
+    {
+      "name": "reactor",
+      "type": "conversion_reactor",
+      "inlets": [
+        "syngas"
+      ],
+      "outlets": [
+        "product"
+      ],
+      "energy": [
+        {
+          "name": "duty",
+          "rate": -318222.36575204064
+        }
+      ],
+      "balance": {
+        "component": 9.227465511685296e-17,
+        "energy": 0
+      },
+      "profile": null,
+      "warnings": [
+        "synthesis is past equilibrium at the outlet: Q/K = 4.5574 at 593.15 K and 30 bar, so no reactor could convert this much"
+      ]
+    }
+  ],
+  "solver": {
+    "method": "wegstein",
+    "tol": 1e-9,
+    "max_iterations": 100
+  },
+  "blocks": [
+    {
+      "units": [
+        "reactor"
+      ],
+      "tears": [],
+      "cycles": 0,
+      "residuals": []
+    }
+  ],
+  "notes": [],
+  "balance": {
+    "component": 9.227465511685296e-17,
+    "energy": 0
+  },
+  "worst_unit": {
+    "component": 9.227465511685296e-17,
+    "energy": 0
+  }
+}

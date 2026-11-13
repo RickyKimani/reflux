@@ -40,6 +40,7 @@ pub:
 	energy    []EnergyStream
 	conserved [][]f64 // what a unit that reacts conserves: see Outcome
 	profile   ?Profile
+	warnings  []string
 }
 
 // TearHistory is how a block's tears converged.
@@ -159,6 +160,7 @@ fn (mut s Solver) pass(b Block) ! {
 			energy:    o.energy
 			conserved: o.conserved
 			profile:   o.profile
+			warnings:  o.warnings
 		}
 	}
 }

@@ -196,6 +196,22 @@ pub fn (mut s Section) measure(key string, d quantity.Dim, what string) !f64 {
 	return v
 }
 
+// expression reads an expression in a context, with its definitions (M9
+// step 10): a number, or a string the expression language reads, such as
+// "0.85 - 0.0018*(T in degC)", of dimension d. what is what it's for, as a
+// message says it.
+pub fn (mut s Section) expression(key string, ctx expr.Context, defs &expr.Definitions, d quantity.Dim, what string) !expr.Expr {
+	v := s.require(key)!
+	text := match v {
+		ast.Quoted { v.text }
+		ast.Number { v.text }
+		else { return s.fail(key, 'it should be a number, or an expression in quotes', []) }
+	}
+	e := expr.parse(ctx, defs, text) or { return s.fail(key, reason_of(err), []) }
+	e.must_be(d, what) or { return s.fail(key, reason_of(err), []) }
+	return e
+}
+
 // reason_of is an expression's failure without its place in the string,
 // which the key's line already gives.
 fn reason_of(err IError) string {

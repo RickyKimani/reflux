@@ -171,10 +171,19 @@ fn make_conversion(mut s flowsheet.Section) !flowsheet.Unit {
 		if i < 0 {
 			return t.fail('reaction', 'no reaction ${name}', quantity.closest(name, names))
 		}
+		// A number, a fraction such as "27.4 %", or an expression in T such
+		// as "0.85 - 0.0018*(T in degC)", with the file's definitions.
+		e := t.expression('conversion', k.ctx, &k.defs, quantity.Dim{}, 'a conversion')!
+		if what := beyond_t(e, &k.defs) {
+			return t.fail('conversion', 'a conversion may depend on T alone, and this uses ${what}',
+				[])
+		}
+		fixed := e.nodes.all(it.kind !in [.var, .member, .def])
 		steps << Conversion{
 			reaction:   k.reactions[i]
 			key:        species_index(k.species, t, 'key', t.text('key')!)!
-			conversion: t.fraction('conversion')!
+			conversion: if fixed { e.eval(&k.defs, []f64{len: k.ctx.slots()}) } else { 0 }
+			expression: if fixed { none } else { e }
 		}
 		t.finish()!
 	}
@@ -186,6 +195,8 @@ fn make_conversion(mut s flowsheet.Section) !flowsheet.Unit {
 		t:       h.t
 		duty:    h.duty
 		drop:    drop(mut s)!
+		ctx:     k.ctx
+		defs:    k.defs
 	)!
 }
 

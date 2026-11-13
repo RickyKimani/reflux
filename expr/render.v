@@ -63,11 +63,19 @@ fn (e &Expr) form(i int, s Style) string {
 		.div { e.quotient_form(n, s) }
 		.pow { e.power_form(n, s) }
 		.call { e.call_form(n, s) }
+		.reading { e.reading_form(n, s) }
+		.scaled { e.scaled_form(n, s) }
 	}
 }
 
 fn paren(text string, s Style) string {
 	return if s == .latex { '\\left(${text}\\right)' } else { '(${text})' }
+}
+
+// has_unit is whether a node is written with a unit after it: a number's,
+// or a group's.
+fn has_unit(n Node) bool {
+	return (n.kind == .num && n.unit != '') || n.kind == .scaled
 }
 
 // operand writes a child, in parentheses if it binds looser than need. In
@@ -76,10 +84,47 @@ fn paren(text string, s Style) string {
 fn (e &Expr) operand(i int, need int, s Style) string {
 	text := e.form(i, s)
 	n := e.nodes[i]
-	if e.prec(i, s) < need || (s == .unicode && n.kind == .num && n.unit != '') {
+	if e.prec(i, s) < need || (s == .unicode && has_unit(n)) {
 		return paren(text, s)
 	}
 	return text
+}
+
+// reading_form writes a reading in parentheses always, so that it reads as
+// one value wherever it stands: (T in degC), (T in °C).
+fn (e &Expr) reading_form(n Node, s Style) string {
+	inner := e.operand(n.a, 5, s)
+	return match s {
+		.plain {
+			unit := if n.braced { '[${n.unit}]' } else { n.unit }
+			'(${inner} in ${unit})'
+		}
+		.unicode {
+			'(${inner} in ${unit_unicode(degrees(n.unit))})'
+		}
+		.latex {
+			'\\left(${inner}\\ \\mathrm{in}\\ \\mathrm{${unit_latex(degrees(n.unit))}}\\right)'
+		}
+	}
+}
+
+// degrees writes degC and degF as °C and °F.
+fn degrees(unit string) string {
+	return match unit {
+		'degC' { '°C' }
+		'degF' { '°F' }
+		else { unit }
+	}
+}
+
+// scaled_form writes a group with its unit after it: (…) [%].
+fn (e &Expr) scaled_form(n Node, s Style) string {
+	inner := e.form(n.a, s)
+	return match s {
+		.plain { '(${inner}) [${n.unit}]' }
+		.unicode { '(${inner}) ${unit_unicode(n.unit)}' }
+		.latex { '\\left(${inner}\\right)\\,\\mathrm{${unit_latex(n.unit)}}' }
+	}
 }
 
 fn (e &Expr) neg_form(n Node, s Style) string {
@@ -88,8 +133,7 @@ fn (e &Expr) neg_form(n Node, s Style) string {
 	minus := if s == .unicode { '−' } else { '-' }
 	// In Unicode a number with a unit keeps its parentheses here too, since
 	// the minus sign may itself be divided: −(240.1 kJ/mol)/(R·T).
-	if e.prec(n.a, s) < 3 || child.kind == .neg
-		|| (s == .unicode && child.kind == .num && child.unit != '') {
+	if e.prec(n.a, s) < 3 || child.kind == .neg || (s == .unicode && has_unit(child)) {
 		return minus + paren(inner, s)
 	}
 	return minus + inner
@@ -149,8 +193,7 @@ fn (e &Expr) power_form(n Node, s Style) string {
 	// a^b^c is a^(b^c), so a power as the base needs parentheses; and a
 	// number's unit would take the ^ for its own, so a number with a unit
 	// does too, as does a call in LaTeX, where \exp(x)^{2} reads badly.
-	if e.prec(n.a, s) <= 4 || (base_node.kind == .num && base_node.unit != '')
-		|| (s == .latex && base_node.kind == .call) {
+	if e.prec(n.a, s) <= 4 || has_unit(base_node) || (s == .latex && base_node.kind == .call) {
 		base = paren(base, s)
 	}
 	exp_node := e.nodes[n.b]

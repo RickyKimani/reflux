@@ -12,15 +12,23 @@ import strconv
 //     expr   := term (("+" | "-") term)*
 //     term   := factor (("*" | "·" | "×" | "/") factor)*
 //     factor := ("-" | "+") factor | power
-//     power  := atom ["^" factor]
+//     power  := atom ["in" unit] ["^" factor]
 //     atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
-//               | "(" expr ")"
+//               | "(" expr ")" ["[" unit "]"]
 //
 // A number's unit follows it after a space and runs to the next space, or
 // to a ) or , that isn't its own: "240.1 kJ/mol / (R*T)". Or it's in
 // brackets, "240.1 [kJ/mol]", which is the way to write a unit that is
 // also a name, such as R. A key is letters, digits and _, or quoted, as
 // p['n-butane'].
+//
+// "in" reads the value just before it on a unit's scale, a pure number:
+// (T in degC) is 320 at 593.15 K, binding as a unit binds to its number, so
+// 0.0018*T in degC is 0.0018*(T in degC). A unit with an offset (°C, °F,
+// barg, psig) reads only a context variable, T or P, which is absolute: a
+// difference reads in K or Pa, and a definition may be one. A group may
+// take a unit in brackets after it, (85 - 0.18*(T in degC)) [%], its value
+// in that unit.
 
 // The deepest nesting the parser follows, so that no text can exhaust the
 // stack.
@@ -221,7 +229,10 @@ fn (mut p Parser) factor() !int {
 }
 
 fn (mut p Parser) power() !int {
-	base := p.atom()!
+	p.skip()
+	start := p.pos
+	atom := p.atom()!
+	base := p.reading(atom, start)!
 	p.skip()
 	if p.peek() != `^` {
 		return base
@@ -262,7 +273,7 @@ fn (mut p Parser) atom() !int {
 			return p.after_value()
 		}
 		p.pos++
-		return inner
+		return p.unit_after(inner, open)
 	}
 	if is_digit(c) || (c == `.` && p.pos + 1 < p.runes.len && is_digit(p.runes[p.pos + 1])) {
 		return p.number()
@@ -357,6 +368,9 @@ fn (mut p Parser) number() !int {
 		}
 		return p.fail(gap, 'a number and a name run together: write ${text}*${word.all_before('(')}')
 	}
+	if spaced && p.at_in() && p.unit_follows(p.pos + 2) {
+		return p.fail(p.pos, "a number before in: in reads a variable on a unit's scale, as (T in degC), and a number takes its unit after it, as ${text} K (for inches, ${text} [in])")
+	}
 	if spaced && starts_unit(c) {
 		from := p.pos
 		word := p.word()
@@ -425,20 +439,139 @@ fn (p &Parser) meaning(name string) string {
 	return if what != '' { what } else { 'a definition' }
 }
 
-// with_unit makes a number with its unit, in SI.
-fn (mut p Parser) with_unit(start int, text string, value f64, unit_text string, from int, braced bool) !int {
+// read_unit reads a unit's text, from its place in the expression.
+fn (p &Parser) read_unit(unit_text string, from int) !quantity.Unit {
 	if unit_text == '' {
 		return p.fail(from, 'empty brackets where a unit should be')
 	}
-	u := quantity.unit(unit_text) or {
+	return quantity.unit(unit_text) or {
 		if err is quantity.UnitError {
 			e := err as quantity.UnitError
 			return p.fail_with(from + e.column - 1, 'in the unit ${unit_text}: ${e.reason}', e.suggestions)
 		}
 		return p.fail(from, err.msg())
 	}
-	if u.pre != 0.0 || u.post != 0.0 || u.gauge {
-		return p.fail(from, "${unit_text} has an offset, so it can't stand in an expression: give the temperature in K or the pressure in Pa or bar")
+}
+
+fn has_offset(u quantity.Unit) bool {
+	return u.pre != 0.0 || u.post != 0.0 || u.gauge
+}
+
+fn (p &Parser) offset_refused(unit_text string, from int) IError {
+	return p.fail(from, "${unit_text} has an offset, so it can't stand in an expression: give the temperature in K or the pressure in Pa or bar, or read a variable on its scale, as (T in ${unit_text})")
+}
+
+// at_in is whether the word in starts here, alone.
+fn (p &Parser) at_in() bool {
+	return p.pos + 1 < p.runes.len && p.runes[p.pos] == `i` && p.runes[p.pos + 1] == `n`
+		&& (p.pos + 2 >= p.runes.len || !is_name_char(p.runes[p.pos + 2]))
+}
+
+// unit_follows is whether a unit follows a space from k on.
+fn (p &Parser) unit_follows(k int) bool {
+	mut j := k
+	for j < p.runes.len && is_space(p.runes[j]) {
+		j++
+	}
+	return j > k && j < p.runes.len && (starts_unit(p.runes[j]) || p.runes[j] == `[`)
+}
+
+// bracketed reads a unit in brackets, the [ at p.pos: its text and where
+// the text starts.
+fn (mut p Parser) bracketed() !(string, int) {
+	open := p.pos
+	p.pos++
+	from := p.pos
+	for p.pos < p.runes.len && p.runes[p.pos] != `]` {
+		p.pos++
+	}
+	if p.pos >= p.runes.len {
+		return p.fail(open, 'a [ with no ] to close its unit')
+	}
+	text := p.runes[from..p.pos].string().trim_space()
+	p.pos++
+	return text, from
+}
+
+// reading reads " in unit" after a value, if it's there: the value's number
+// on the unit's scale (D2, as amended before step 10). A unit with an
+// offset reads only a context variable: T and P are absolute, where a
+// difference, a member or a definition may not be.
+fn (mut p Parser) reading(base int, start int) !int {
+	save := p.pos
+	p.skip()
+	if p.pos == save || !p.at_in() {
+		p.pos = save
+		return base
+	}
+	at := p.pos
+	if !p.unit_follows(p.pos + 2) {
+		return p.fail(at, 'in needs a unit after it, as (T in degC)')
+	}
+	p.pos += 2
+	p.skip()
+	braced := p.peek() == `[`
+	mut unit_text := ''
+	mut from := p.pos
+	if braced {
+		unit_text, from = p.bracketed()!
+	} else {
+		unit_text = p.word()
+	}
+	u := p.read_unit(unit_text, from)!
+	if has_offset(u) {
+		what := match p.nodes[base].kind {
+			.var { '' }
+			.def { 'a definition, which may be a difference' }
+			.member { 'a member of a family' }
+			.num { 'a number' }
+			else { 'an expression, which may be a difference' }
+		}
+		if what != '' {
+			return p.fail(start, '${unit_text} has an offset, so it reads only a temperature or a pressure the context gives, such as T or P, not ${what}: read a difference in K or Pa')
+		}
+	}
+	return p.add(Node{
+		kind:   .reading
+		a:      base
+		value:  u.scale
+		pre:    u.pre
+		post:   u.post
+		unit:   unit_text
+		braced: braced
+		dim:    u.dim
+	}, start)
+}
+
+// unit_after reads a unit in brackets after a group's closing bracket, if
+// one is there: (85 - 0.18*t) [%] is the group's value in that unit.
+fn (mut p Parser) unit_after(inner int, open int) !int {
+	save := p.pos
+	p.skip()
+	if p.peek() != `[` {
+		p.pos = save
+		return inner
+	}
+	unit_text, from := p.bracketed()!
+	u := p.read_unit(unit_text, from)!
+	if has_offset(u) {
+		return p.offset_refused(unit_text, from)
+	}
+	return p.add(Node{
+		kind:   .scaled
+		a:      inner
+		value:  u.scale
+		unit:   unit_text
+		braced: true
+		dim:    u.dim
+	}, open)
+}
+
+// with_unit makes a number with its unit, in SI.
+fn (mut p Parser) with_unit(start int, text string, value f64, unit_text string, from int, braced bool) !int {
+	u := p.read_unit(unit_text, from)!
+	if has_offset(u) {
+		return p.offset_refused(unit_text, from)
 	}
 	si := value * u.scale
 	if !math.is_finite(si) {

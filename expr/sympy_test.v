@@ -25,8 +25,20 @@ struct ConstantRow {
 	unit  string
 }
 
+struct Reading {
+	text      string
+	points    [][]f64
+	values    []f64
+	scales    []f64
+	gradients [][]f64
+	plain     string
+	unicode   string
+	latex     string
+}
+
 struct Fixture {
 	cases     []Case
+	readings  []Reading
 	constants []ConstantRow
 }
 
@@ -88,6 +100,52 @@ fn test_every_rendering_is_the_one_sympy_confirmed() {
 				&& math.f64_bits(n.value) == math.f64_bits(m.value) && n.text == m.text, '${c.text}: node ${i}'
 		}
 	}
+}
+
+// The readings' context, as tools/expr_render.v has it: T in K, P in Pa.
+fn readings_context() expr.Context {
+	return expr.Context{
+		variables: [
+			expr.Variable{'T', quantity.Dimension.temperature.dim()},
+			expr.Variable{'P', quantity.Dimension.pressure.dim()},
+		]
+	}
+}
+
+fn test_readings_read_as_sympy_reads_them() {
+	// Readings and a group's unit (D2, as amended before step 10), each
+	// against its meaning written out in SymPy with the units' exact values
+	// (NIST SP 811), not reflux's tables: the value to 1e-12 of the point's
+	// scale, the tape's gradient to 1e-10 as for every case, and the
+	// renderings the generator decoded and confirmed.
+	f := load()!
+	assert f.readings.len >= 12
+	ctx := readings_context()
+	defs := expr.Definitions{}
+	mut worst := 0.0
+	for c in f.readings {
+		e := expr.parse(ctx, &defs, c.text) or { panic('${c.text}: ${err.msg()}') }
+		assert e.plain() == c.plain, '${c.text}: plain ${e.plain()}, not ${c.plain}'
+		assert e.unicode() == c.unicode, '${c.text}: unicode ${e.unicode()}, not ${c.unicode}'
+		assert e.latex() == c.latex, '${c.text}: latex ${e.latex()}, not ${c.latex}'
+		t := expr.compile(ctx, &defs, [e])
+		mut buf := t.buffer()
+		mut g := []f64{len: t.inputs}
+		for k, x in c.points {
+			got := e.eval(&defs, x)
+			err := math.abs(got - c.values[k]) / math.max(1.0, c.scales[k])
+			worst = math.max(worst, err)
+			assert err <= 1e-12, "${c.text} at ${x}: ${got} vs SymPy's ${c.values[k]}"
+			t.eval(x, mut buf)
+			assert math.f64_bits(t.output(&buf, 0)) == math.f64_bits(got), c.text
+			t.gradient(mut buf, mut g)
+			for j, want in c.gradients[k] {
+				gerr := math.abs(g[j] - want) / math.max(math.max(1.0, math.abs(want)), c.scales[k])
+				assert gerr <= 1e-10, "${c.text} at ${x}, d/d input ${j}: ${g[j]} vs SymPy's ${want}"
+			}
+		}
+	}
+	println("readings' worst error against SymPy, over each point's scale: ${worst:.2e}")
 }
 
 fn test_constants_are_the_si_values() {

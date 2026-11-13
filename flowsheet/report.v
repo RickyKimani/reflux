@@ -9,7 +9,7 @@ import v.vmod
 
 // The report's own format (D11), which docs/report-format.md describes. What
 // reads a report can rely on it: it changes only with a new number. Format 2
-// (M9) adds a reactor's profile to its unit.
+// (M9) adds a reactor's profile to its unit, and a unit's warnings.
 pub const report_format = 2
 
 // Report is a solve's results, or its failure: what the command line writes as
@@ -88,6 +88,9 @@ pub:
 	balance Balance
 	// profile is a reactor's state along it, if it has one (format 2).
 	profile ?[]ProfileReport @[json_null]
+	// warnings are what its results should be read with, though they stand,
+	// such as a conversion past equilibrium (format 2).
+	warnings []string
 }
 
 // ProfileReport is a point of a reactor's profile.
@@ -148,13 +151,14 @@ pub fn (l Loaded) report(sol Solution) Report {
 	mut units := []UnitReport{}
 	for i, p in l.sheet.units {
 		units << UnitReport{
-			name:    p.unit.name
-			kind:    l.types[i] or { '' }
-			inlets:  p.inlets
-			outlets: p.outlets
-			energy:  sol.units[i].energy
-			balance: sol.units[i].balance()
-			profile: profile_report(sol.units[i].profile)
+			name:     p.unit.name
+			kind:     l.types[i] or { '' }
+			inlets:   p.inlets
+			outlets:  p.outlets
+			energy:   sol.units[i].energy
+			balance:  sol.units[i].balance()
+			profile:  profile_report(sol.units[i].profile)
+			warnings: sol.units[i].warnings
 		}
 	}
 	return Report{

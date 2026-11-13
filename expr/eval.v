@@ -23,6 +23,8 @@ fn (e &Expr) value_of(defs &Definitions, x []f64, i int) f64 {
 		.div { e.value_of(defs, x, n.a) / e.value_of(defs, x, n.b) }
 		.pow { raise(e.value_of(defs, x, n.a), e.value_of(defs, x, n.b)) }
 		.call { apply(n.index, e.value_of(defs, x, n.a)) }
+		.reading { read_on(n, e.value_of(defs, x, n.a)) }
+		.scaled { e.value_of(defs, x, n.a) * n.value }
 	}
 }
 

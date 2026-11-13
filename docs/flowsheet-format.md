@@ -259,7 +259,28 @@ Its reactions reach equilibrium, each one's Q its K from the Gibbs energies
 
 | Key | |
 |---|---|
-| `conversions` | Its steps, in order: each a table with a `reaction`, a `key` reactant by name, and its `conversion`, from 0 to 1, of the key as it enters that step. A later step sees what earlier ones left. A step that needs more of a reactant than there is is refused. |
+| `conversions` | Its steps, in order: each a table with a `reaction`, a `key` reactant by name, and its `conversion` of the key as it enters that step. A later step sees what earlier ones left. A step that needs more of a reactant than there is is refused. |
+
+A `conversion` is a number from 0 to 1, a fraction with a unit such as
+`"27.4 %"`, or an expression in `T`, the reactor's temperature, with the
+file's definitions: a correlation typed as its source prints it, the
+temperature read on the scale it gives.
+
+```toml
+conversions = [{ reaction = "synthesis", key = "carbon monoxide", conversion = "0.85 - 0.0018*(T in degC)" }]
+# or, as a percentage
+conversions = [{ reaction = "synthesis", key = "carbon monoxide", conversion = "(85 - 0.18*(T in degC)) [%]" }]
+```
+
+The expression is taken at the outlet's T: the given or the inlet's for an
+isothermal reactor, and the one the energy balance finds for an adiabatic
+one or one at a duty. It must give 0 to 1 there, or the reactor fails,
+naming the T. It may use T alone. Typed without a reading, `0.85 -
+0.0018*T` is refused, since T is a temperature, with the reading suggested.
+
+A conversion reactor warns, in its report, of each reaction it takes past
+equilibrium, Q at its outlet above K at 1 bar from the Gibbs energies,
+with Q/K: no reactor could convert that much at that T and P.
 
 #### `cstr`
 

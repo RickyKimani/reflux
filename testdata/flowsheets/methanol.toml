@@ -1,0 +1,27 @@
+# Methanol synthesis in a conversion reactor, the owner's Tutorial 2 (M9
+# step 10): CO + 2 H2 = CH3OH, 1500 kg/h of syngas at 320 °C, CO's
+# conversion as the tutorial prints it, X = 0.85 − 0.0018 T with T in °C.
+# At 30 bar that conversion, 27.4%, is past equilibrium (7.9% on PR), and
+# the report warns of it; at the tutorial's 70 bar it isn't.
+format = 2
+
+[components]
+names = ["carbon monoxide", "hydrogen", "methanol"]
+
+[model]
+equation = "PR"
+
+[feed.syngas]
+T = "320 degC"
+P = "30 bar"
+flow = "1500 kg/h"
+mole_fractions = { "carbon monoxide" = 0.2, hydrogen = 0.8 }
+
+[unit.reactor]
+type = "conversion_reactor"
+in = "syngas"
+out = "product"
+conversions = [{ reaction = "synthesis", key = "carbon monoxide", conversion = "0.85 - 0.0018*(T in degC)" }]
+
+[reaction.synthesis]
+equation = "CO + 2 H2 = CH3OH"

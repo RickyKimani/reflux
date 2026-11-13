@@ -22,6 +22,9 @@ pub:
 	conserved [][]f64
 	// profile is a reactor's along its volume, if it has one.
 	profile ?Profile
+	// warnings are what its results should be read with, though they stand:
+	// a conversion reactor's outlet past equilibrium, say (M9 step 10).
+	warnings []string
 }
 
 // Profile is a reactor's state along it: the inlet, then each point its

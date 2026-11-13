@@ -637,6 +637,13 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `pub:`, so a report can't be edited after the fact. (I first assumed
   `pub mut:` meant "mutable only inside the module", as older V docs said.
   A probe showed it doesn't.)
+- **A positional literal needs every field,** as Go's unkeyed literal
+  does, and an Option field doesn't change that: with `struct G { a f64 b f64
+  c ?f64 }`, `G{1, 2}` is "too few fields in `G` literal (expecting 3, got
+  2)", while `G{a: 1, b: 2}` leaves `c` as `none`. M9 step 10 gave the
+  conversion reactor's `Conversion` an optional expression, and seven test
+  literals written `Conversion{rs[0], 0, 0.5}` stopped compiling, so a
+  struct that may grow is written with names (a probe, V 0.5.2).
 - **Struct update syntax**, which Go lacks: `Repair{...it, cas: rec.ids.cas}`
   copies `it` and changes one field. It works from another module on
   `pub:` fields too, which can be read there but not assigned, so it's how
@@ -1140,6 +1147,11 @@ fx := read_fixture[ThermoFixture]('m1_thermo.json')!
 `@FILE` is the path of the source file, filled in at compile time, so the
 test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
 module is gone; it's `json2` now.)
+
+A key the struct doesn't have is ignored, as Go's `encoding/json` ignores
+it, nested objects included, so a test reads only the fields it uses from
+a large fixture: [reactors/dwsim_test.v](../reactors/dwsim_test.v) declares
+a few fields of `testdata/m9_dwsim.json`'s many (a probe, V 0.5.2).
 
 A key that may be missing from the JSON fits an Option field. Where Go
 would use a `*float64` that's nil when absent, V's `json2` leaves a `?f64`

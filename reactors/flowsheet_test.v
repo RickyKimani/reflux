@@ -255,3 +255,78 @@ fractions = [0.5, 0.5]
 	assert sol.history.len == 1
 	assert sol.balance.component <= 1e-9 && sol.balance.energy <= 1e-9, '${sol.balance}'
 }
+
+// The owner's Tutorial 2 as a file (M9 step 10): the conversion typed as
+// the tutorial prints it, with T read in °C, or as DWSIM's percentage;
+// solved at 30 bar it warns that the outlet is past equilibrium, in the
+// report's JSON and its table, and at 70 bar it doesn't. What the key
+// refuses, it refuses at its line.
+const tutorial2 = 'format = 2
+
+[components]
+names = ["carbon monoxide", "hydrogen", "methanol"]
+
+[model]
+equation = "PR"
+
+[feed.feed]
+T = "320 degC"
+P = "30 bar"
+flow = "1500 kg/h"
+mole_fractions = { "carbon monoxide" = 0.2, hydrogen = 0.8 }
+
+[definitions]
+t = "T in degC"
+
+[unit.reactor]
+type = "conversion_reactor"
+in = "feed"
+out = "product"
+conversions = [{ reaction = "synthesis", key = "carbon monoxide", conversion = "0.85 - 0.0018*(T in degC)" }]
+
+[reaction.synthesis]
+equation = "CO + 2 H2 = CH3OH"
+'
+
+fn test_the_tutorials_conversion_as_printed() {
+	l := load(tutorial2)!
+	sol := l.solve()!
+	feed, out := sol.streams['feed'], sol.streams['product']
+	assert math.abs((feed.flows[0] - out.flows[0]) / feed.flows[0] - 0.274) <= 1e-12
+	report := l.report(sol)
+	assert report.units[0].warnings.len == 1
+	assert report.units[0].warnings[0].starts_with('synthesis is past equilibrium at the outlet: Q/K = 4.55')
+	j := json2.decode[json2.Any](report.json())!.as_map()
+	w := j['units']!.as_array()[0].as_map()['warnings']!.as_array()
+	assert w.len == 1 && w[0].str().contains('Q/K')
+	assert report.table().contains('Warnings:\n  reactor: synthesis is past equilibrium')
+	// The same through a definition, and as a percentage; and no warning
+	// at 70 bar.
+	for conv in ['"0.85 - 0.0018*t"', '"(85 - 0.18*(T in degC)) [%]"'] {
+		l2 := load(tutorial2.replace('"0.85 - 0.0018*(T in degC)"', conv))!
+		s2 := l2.solve()!
+		x := (s2.streams['feed'].flows[0] - s2.streams['product'].flows[0]) / s2.streams['feed'].flows[0]
+		assert math.abs(x - 0.274) <= 1e-12, conv
+	}
+	l3 := load(tutorial2.replace('P = "30 bar"', 'P = "70 bar"'))!
+	s3 := l3.solve()!
+	assert l3.report(s3).units[0].warnings.len == 0
+	assert !l3.report(s3).table().contains('Warnings')
+	// Refusals, at the conversion's line.
+	assert refused(tutorial2.replace('(T in degC)"', 'T"')).contains("line 22: unit.reactor.conversions[0].conversion: the two sides of − must have the same units, but the left is a pure number and the right a temperature, K: to use a temperature's number in a unit, read it on that unit's scale, as (T in degC)")
+	assert refused(tutorial2.replace('(T in degC)"', '(P in bar)"')).contains('line 22: unit.reactor.conversions[0].conversion: a conversion may depend on T alone, and this uses P')
+	// P through a definition is refused too.
+	assert refused(tutorial2.replace('t = "T in degC"', 't = "T in degC"
+pb = "P in bar"').replace('"0.85 - 0.0018*(T in degC)"',
+		'"0.003*pb"')).contains('a conversion may depend on T alone, and this uses P')
+	assert refused(tutorial2.replace('"0.85 - 0.0018*(T in degC)"', '"0.0018 1/K * T"')).contains('two values side by side')
+	why := refused(tutorial2.replace('"0.85 - 0.0018*(T in degC)"', '"0.5 m"'))
+	assert why.contains('a conversion must be a fraction, but this is a length'), why
+	// A conversion beyond 1 at the reactor's T fails, naming the T.
+	hot := load(tutorial2.replace('"0.85 - 0.0018*(T in degC)"', '"1.6 - 0.0018*(T in degC)"'))!
+	hot.solve() or {
+		assert err.msg().contains("synthesis's conversion is 1.024 at 593.15 K, not from 0 to 1"), err.msg()
+		return
+	}
+	assert false, 'a conversion above 1'
+}

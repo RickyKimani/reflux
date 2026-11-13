@@ -28,6 +28,14 @@ cases
     one reads \\log_{10}{\\left(x\\right)} \\cdot y as log(x·y), and the Lark
     one returns ambiguous trees for a function followed by an operator.
 
+readings
+    Readings on a unit's scale and units after a group (D2, as amended
+    before M9 step 10), in a context of T in K and P in Pa: each text with
+    its meaning written out here in SymPy, the units' exact values from NIST
+    SP 811 rather than reflux's tables, its value, scale and derivatives at
+    four seeded points, and reflux's renderings, each decoded with this
+    script's own units and found to mean the text.
+
 constants
     The built-in constants: the 2019 SI's defining constants as the SI
     Brochure (9th edition, table 1) gives them, R = N_A·k_B and F = N_A·e
@@ -391,14 +399,119 @@ class UnicodeReader:
         raise ValueError(f"unexpected {t}")
 
 
-def render(texts):
-    """reflux's renderings, from tools/expr_render.v."""
+def render(texts, mode=None):
+    """reflux's renderings, from tools/expr_render.v; mode "readings" reads
+    them in its context with T and P."""
     with tempfile.TemporaryDirectory() as d:
         path = pathlib.Path(d) / "cases.json"
         path.write_text(json.dumps(texts), encoding="utf-8")
-        r = subprocess.run(["v", "run", str(ROOT / "tools" / "expr_render.v"), str(path)], cwd=ROOT,
-                           capture_output=True, text=True, encoding="utf-8", check=True)
+        args = ["v", "run", str(ROOT / "tools" / "expr_render.v"), str(path)] + ([mode] if mode else [])
+        r = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True)
         return json.loads(r.stdout)
+
+
+# Readings (D2, as amended before M9 step 10), in a context with T in K and
+# P in Pa. Each reflux text has its meaning written out here in SymPy, with
+# the units' exact values from NIST SP 811 rather than reflux's tables, so
+# the reference doesn't come from what it checks.
+T, P = sympy.Symbol("T", positive=True), sympy.Symbol("P", positive=True)
+TP = {"T": T, "P": P}
+Q = sympy.Rational
+KELVIN_0 = Q("273.15")  # 0 °C
+MM_HG = Q("13595.1") * Q("9.80665") / 1000  # Pa: 13.5951 g/cm³ of mercury, 1 mm, standard gravity
+PSI = Q("0.45359237") * Q("9.80665") / Q("0.0254") ** 2  # Pa: a pound-force per square inch
+ATM = Q(101325)
+# Each unit a group may carry here, as a decimal for the readers.
+GROUP = {"%": "0.01", "mmHg": "133.322387415", "K": "1"}
+PSI_DEC = sympy.Float(PSI, 30)
+READINGS = [
+    ("T in degC", T - KELVIN_0),
+    ("0.85 - 0.0018*T in degC", Q("0.85") - Q("0.0018") * (T - KELVIN_0)),
+    ("(85 - 0.18*(T in degC)) [%]", (85 - Q("0.18") * (T - KELVIN_0)) / 100),
+    ("T in degF", T * Q(9, 5) - Q("459.67")),
+    ("T in [°C] ^ 2 / 100", (T - KELVIN_0) ** 2 / 100),
+    ("(T in R) / (T in K)", Q(9, 5) * T / T),
+    ("P in barg", (P - ATM) / 100000),
+    ("P in psig", (P - ATM) / PSI),
+    ("ln(P in mmHg)", sympy.log(P / MM_HG)),
+    ("(T in K) / (P in bar)", T / (P / 100000)),
+    # Water's Antoine equation, as published: P in mmHg from T in °C.
+    ("(10^(8.07131 - 1730.63 / (233.426 + T in degC))) [mmHg]",
+     10 ** (Q("8.07131") - Q("1730.63") / (Q("233.426") + T - KELVIN_0)) * MM_HG),
+    ("exp(-((P in bar) - 1) [K] / T)", sympy.exp(-(P / 100000 - 1) / T)),
+]
+
+
+def at_tp(e, pt):
+    return e.evalf(50, subs={TP[k]: mp.mpf(v) for k, v in pt.items()})
+
+
+def scale_tp(e, pt):
+    m = 0
+    for sub in sympy.preorder_traversal(e):
+        if sub.is_number or sub.free_symbols:
+            m = max(m, abs(float(at_tp(sub, pt))))
+    return m
+
+
+def unreading(text, style):
+    """A rendering with each reading and group unit written out as
+    arithmetic in the rendering's own syntax, by this script's units, for
+    the readers above."""
+    mul = {"plain": " * ", "unicode": "·", "latex": " \\cdot "}[style]
+
+    def div(x, y):
+        return f"\\frac{{{x}}}{{{y}}}" if style == "latex" else f"({x}) / ({y})"
+
+    def value(var, unit):
+        return {
+            "degC": f"{var} - 273.15", "°C": f"{var} - 273.15", "K": var,
+            "degF": f"{var}{mul}1.8 - 459.67", "°F": f"{var}{mul}1.8 - 459.67", "R": f"{var}{mul}1.8",
+            "bar": div(var, "100000"), "barg": div(f"{var} - 101325", "100000"),
+            "mmHg": div(var, "133.322387415"), "psig": div(f"{var} - 101325", PSI_DEC), "kPa": div(var, "1000"),
+        }[unit]
+
+    if style == "plain":
+        text = re.sub(r"\((T|P) in \[?([^\]\)]+)\]?\)", lambda m: f"({value(m[1], m[2])})", text)
+        return re.sub(r"\) \[([^\]]+)\]", lambda m: f"){mul}{GROUP[m[1]]}", text)
+    if style == "unicode":
+        text = re.sub(r"\((T|P) in ([^\)]+)\)", lambda m: f"({value(m[1], m[2])})", text)
+        return re.sub(r"\) (%|mmHg|K)", lambda m: f"){mul}{GROUP[m[1]]}", text)
+    names = {"{}^{\\circ}C": "degC", "{}^{\\circ}F": "degF"}
+    text = re.sub(r"\\left\((T|P)\\ \\mathrm\{in\}\\ \\mathrm\{(\{\}\^\{\\circ\}[CF]|[^}]+)\}\\right\)",
+                  lambda m: "\\left(" + value(m[1], names.get(m[2], m[2])) + "\\right)", text)
+    return re.sub(r"\\right\)\\,\\mathrm\{([^}]+)\}",
+                  lambda m: "\\right)" + mul + GROUP[m[1].replace("\\%", "%")], text)
+
+
+def readings():
+    """The readings' cases: SymPy's values and derivatives at seeded points,
+    and reflux's renderings, each decoded and found to mean the text."""
+    rng = random.Random(20261113)
+    pts_all = [[{"T": round(rng.uniform(250, 1500), 6), "P": round(rng.uniform(1e4, 1e7), 3)} for _ in range(4)]
+               for _ in READINGS]
+    rendered = render([r[0] for r in READINGS], "readings")
+    out = []
+    for (text, e), pts, r in zip(READINGS, pts_all, rendered):
+        if r["error"]:
+            raise SystemExit(f"reflux refused {text!r}: {r['error']}")
+        for style, reader in (("plain", lambda s: to_python(s)), ("unicode", lambda s: UnicodeReader(s).read()),
+                              ("latex", lambda s: LatexReader(s).read())):
+            decoded = sympy.parse_expr(reader(unreading(r[style], style)).replace("ln(", "log("),
+                                       local_dict=dict(LOCALS, T=T, P=P), evaluate=False)
+            for pt in pts:
+                a, b = at_tp(e, pt), at_tp(decoded, pt)
+                if abs(a - b) > mp.mpf("1e-12") * max(1, scale_tp(e, pt)):
+                    raise SystemExit(f"{style} of {text!r} means something else: {r[style]!r}: {a} vs {b} at {pt}")
+        out.append({
+            "text": text,
+            "points": [[pt["T"], pt["P"]] for pt in pts],
+            "values": [float(at_tp(e, pt)) for pt in pts],
+            "scales": [scale_tp(e, pt) for pt in pts],
+            "gradients": [[float(at_tp(sympy.diff(e, s), pt)) for s in (T, P)] for pt in pts],
+            "plain": r["plain"], "unicode": r["unicode"], "latex": r["latex"],
+        })
+    return out
 
 
 def same(e, python_text, pts, what, text):
@@ -493,12 +606,18 @@ def main():
                          "each point, by mpmath at 50 digits, rounded to the nearest double",
             "renderings": "reflux's, from tools/expr_render.v, each decoded here and found to mean the text, to "
                           "50 digits at every point",
+            "readings": "readings and units after a group (D2, as amended before M9 step 10), in a context of T "
+                        "in K and P in Pa, points giving T then P: each text's meaning written out in SymPy with "
+                        "the units' exact values from NIST SP 811, values and derivatives with respect to T and P "
+                        "by mpmath at 50 digits",
         },
         "cases": cases,
+        "readings": readings(),
         "constants": constants(),
     }
     OUT.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(cases)} cases ({len(HAND)} by hand), {len(data['constants'])} constants")
+    print(f"wrote {OUT.relative_to(ROOT)}: {len(cases)} cases ({len(HAND)} by hand), {len(data['readings'])} "
+          f"readings, {len(data['constants'])} constants")
 
 
 main()

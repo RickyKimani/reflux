@@ -160,6 +160,24 @@ fn (mut b Builder) node(n Node, at []int) int {
 		.call {
 			b.call(functions[n.index], at[n.a])
 		}
+		.reading {
+			// read_on's (si − post)/scale − pre, an operation skipped only
+			// where it changes no bit: x − 0, x/1.
+			mut x := at[n.a]
+			if n.post != 0.0 {
+				x = b.difference(x, b.constant(n.post))
+			}
+			if n.value != 1.0 {
+				x = b.quotient(x, b.constant(n.value))
+			}
+			if n.pre != 0.0 {
+				x = b.difference(x, b.constant(n.pre))
+			}
+			x
+		}
+		.scaled {
+			b.product(at[n.a], b.constant(n.value))
+		}
 	}
 }
 

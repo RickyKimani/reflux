@@ -181,7 +181,8 @@ fn test_conversion_in_order() {
 		['CH4 + H2O = CO + 3 H2', 'CO + H2O = CO2 + H2'])
 	c := new_conversion_reactor('conv',
 		species: sp
-		steps:   [Conversion{rs[0], 0, 0.5}, Conversion{rs[1], 3, 0.8}]
+		steps:   [Conversion{ reaction: rs[0], key: 0, conversion: 0.5 },
+			Conversion{ reaction: rs[1], key: 3, conversion: 0.8 }]
 		t:       900
 	)!
 	inlet := feed(fl, [2.0, 5, 0, 0, 0], 900, 2e5)
@@ -195,7 +196,7 @@ fn test_conversion_in_order() {
 	// Asking for more than there is is refused.
 	greedy := new_conversion_reactor('greedy',
 		species: sp
-		steps:   [Conversion{rs[0], 0, 1.0}]
+		steps:   [Conversion{ reaction: rs[0], key: 0, conversion: 1.0 }]
 	)!
 	greedy.calculate(fl, [feed(fl, [2.0, 1, 0, 0, 0], 900, 2e5)]) or {
 		assert err.msg().contains('r1 needs more Water than there is'), err.msg()
@@ -445,7 +446,11 @@ fn test_refused() {
 	r.calculate(fl, [feed(fl, [1.0, 0, 0], 1100, 1e5)]) or { why = err.msg() }
 	assert why.contains('by its energy balance and'), why
 	ms, mfl, mrs := setup(['124-38-9', '1333-74-0', '67-56-1', '7732-18-5'], ['CO2 + 3 H2 = CH3OH + H2O'])
-	c := new_conversion_reactor('conv', species: ms, steps: [Conversion{mrs[0], 0, 0.5}], t: 400)!
+	c := new_conversion_reactor('conv',
+		species: ms
+		steps:   [Conversion{ reaction: mrs[0], key: 0, conversion: 0.5 }]
+		t:       400
+	)!
 	why = ''
 	c.calculate(mfl, [feed(mfl, [1.0, 3, 0, 0], 500, 50e5)]) or { why = err.msg() }
 	assert why.contains('would split into two phases'), why
@@ -495,16 +500,22 @@ fn test_element_rows() {
 // that leaves no pressure is refused.
 fn test_conversion_edges() {
 	sp, fl, rs := setup(['7727-37-9', '1333-74-0', '7664-41-7'], ['N2 + 3 H2 = 2 NH3'])
-	c := new_conversion_reactor('conv', species: sp, steps: [Conversion{rs[0], 1, 1.0}])!
+	c := new_conversion_reactor('conv',
+		species: sp
+		steps:   [Conversion{ reaction: rs[0], key: 1, conversion: 1.0 }]
+	)!
 	o := c.calculate(fl, [feed(fl, [1.0, 0.7, 0], 700, 1e6)])!
 	assert math.abs(o.outlets[0].flows[1]) <= 1e-16, '${o.outlets[0].flows}'
-	short := new_conversion_reactor('short', species: sp, steps: [Conversion{rs[0], 1, 1.0}])!
+	short := new_conversion_reactor('short',
+		species: sp
+		steps:   [Conversion{ reaction: rs[0], key: 1, conversion: 1.0 }]
+	)!
 	mut why := ''
 	short.calculate(fl, [feed(fl, [0.1 * (1 - 1e-6), 0.3, 0], 700, 1e6)]) or { why = err.msg() }
 	assert why.contains('r1 needs more Nitrogen than there is'), why
 	steep := new_conversion_reactor('steep',
 		species: sp
-		steps:   [Conversion{rs[0], 1, 0.5}]
+		steps:   [Conversion{ reaction: rs[0], key: 1, conversion: 0.5 }]
 		drop:    2e6
 	)!
 	why = ''

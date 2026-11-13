@@ -4,8 +4,8 @@
 JSON, and `--csv streams.csv` its streams as CSV. This is format 2 of the
 JSON, and of the CSV, which is format 1's. It changes only with a new
 `format` number, so that what reads a report can rely on it. Format 2 (M9)
-adds a reactor's profile to its unit, an element balance where something
-reacts, and the failure `"reaction_failed"`.
+adds a reactor's profile to its unit, a unit's warnings, an element balance
+where something reacts, and the failure `"reaction_failed"`.
 
 - **Every number is SI:** K, Pa, mol/s, kg/s, m³/s, J/mol, J/(mol·K), m³/mol
   and W.
@@ -104,6 +104,7 @@ composition it was given. So it has fractions and a phase though its flows are
 | `energy` | Its duty or work. |
 | `balance` | How far it closes its balances, on the inlets it was calculated from. Where an inlet is a tear, those are a pass behind the stream in `streams`, by no more than `tol`. |
 | `profile` | A PFR's state along it, or `null` for a unit without one. |
+| `warnings` | What its results should be read with, though they stand, each a sentence: a conversion reactor's outlet past equilibrium, say, with its Q/K. Empty for most units. The text report lists them under the unit table. |
 
 ### `units[].energy[]`
 

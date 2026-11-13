@@ -949,9 +949,9 @@ writes itself back.
     expr   := term (("+" | "-") term)*
     term   := factor (("*" | "·" | "×" | "/") factor)*
     factor := ("-" | "+") factor | power
-    power  := atom ["^" factor]
+    power  := atom ["in" unit] ["^" factor]
     atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
-              | "(" expr ")"
+              | "(" expr ")" ["[" unit "]"]
 
 So ^ binds tighter than a minus sign and to the right, and · and / go left
 to right, as in Python and SymPy: −x^2 is −(x²), x^-2 is x⁻², a^b^c is
@@ -964,10 +964,48 @@ brackets, `240.1 [kJ/mol]`. The number becomes its SI value as it's read,
 by `quantity`'s scale, and its node has the unit's dimension. A word after a
 number that is also a name here is refused rather than guessed: "2 R" could
 be two rankines or twice the gas constant, so it asks for 2*R or 2 [R]. A
-unit with an offset (°C, °F, barg, psig) is refused, since in arithmetic
-its offset would be wrong; in a compound, °C is a kelvin of difference and
-reads. Two values side by side, with no operator, are refused: "2T", "2 T",
-"T (P)".
+unit with an offset (°C, °F, barg, psig) after a number is refused, since in
+arithmetic its offset would be wrong; in a compound, °C is a kelvin of
+difference and reads. Two values side by side, with no operator, are
+refused: "2T", "2 T", "T (P)".
+
+**A reading** (D2, as amended before M9 step 10) is a value's number on a
+unit's scale, a pure number, so that a correlation goes in as its source
+prints it: `0.85 - 0.0018*(T in degC)` is the tutorial's X = 0.85 − 0.0018 T
+with T in °C, and `log10(P in mmHg)` is Antoine's. With `quantity`'s
+SI = (x + pre)·scale + post, the reading of a value v is
+
+    x = (v − post)/scale − pre,
+
+T in °C being T − 273.15 K over 1 K, and P in barg (P − 101325 Pa)/10⁵ Pa.
+It's the one place an offset applies, and these rules keep it there:
+- `in` takes the name, member or bracketed group just before it, as a unit
+  binds to its number: `0.0018*T in degC` is `0.0018*(T in degC)`, and
+  `T in degC ^ 2` squares the reading. A number before `in` is refused,
+  as "2 in degC" (after a number, `in` alone is still the inch).
+- The unit must have the value's dimension.
+- A unit with an offset reads only a context variable, T or P, which is
+  absolute: `(T - 300 K) in degC` is refused, since a difference reads in
+  K, and so are a family member and a definition, which may be differences.
+- A reading renders as `(T in degC)` in plain text, `(T in °C)` in Unicode
+  and `\left(T\ \mathrm{in}\ \mathrm{{}^{\circ}C}\right)` in LaTeX,
+  always in parentheses, so that it reads as one value wherever it stands.
+- `in` is reserved, so no definition can take it. A reading that repeats
+  is named once by a definition, `t = "T in degC"`; there is no declaration
+  for a whole expression, which would rebind T and let `T/300` through.
+- A sum of a pure number and a temperature or pressure, or a pure number
+  asked for and a temperature given, is refused with the reading
+  suggested: likeliest, a correlation typed as printed without one.
+
+The tape computes a reading as the tree does, the three operations in
+order, skipping only x − 0 and x/1, which change no bit; its derivative is
+1/scale.
+
+**A group may take a unit** in brackets after it, `(85 - 0.18*(T in degC))
+[%]`: the group's value times the unit's scale, with the group's dimension
+times the unit's, as a number's unit does for a number. Only in brackets,
+so that a word after a group is still two values side by side; a unit with
+an offset is refused there as after a number.
 
 **Names** are letters, digits and _, starting with a letter, and bind to:
 - the context's variables, such as T and P, and its families' members, by
@@ -1566,9 +1604,20 @@ themselves.
 |---|---|
 | Gibbs | `equilibrium.gibbs` over every component (D9) |
 | equilibrium | `equilibrium.over_reactions`, K from the Gibbs energies, its reactions independent |
-| conversion | each step in order: extent ξ = X·n_key/(−ν_key), on the key as it enters the step; a reactant taken below zero beyond 1e-12 of the flow is refused, and within it is zero |
-| CSTR | Fᵢ,in − Fᵢ + V·Sᵢ = 0, and where T moves F·H(T, P, F) = F·H_in + Q, by `numeric.newton` from the inlet |
+| conversion | each step in order: extent ξ = X·n_key/(−ν_key), on the key as it enters the step; a reactant taken below zero beyond 1e-12 of the flow is refused, and within it is zero. X is a number or an expression in T, evaluated at the outlet's T (an adiabatic or a duty's found with the energy balance), which must give 0 to 1 there |
+| CSTR | Fᵢ,in − Fᵢ + V·Sᵢ = 0, and where T moves F·H(T, P, F) = F·H_in + Q, by `numeric.newton` from the inlet; where that fails, by continuation in V, from 10⁻⁶ of it to the whole, each solve from the last, the step in ln V doubled on success and halved on failure (fast rates near equilibrium, as in reforming at 1000 K, make the balances too steep for Newton from the inlet) |
 | PFR | dFᵢ/dV = Sᵢ, with T and P where they move, by `rodas4` (or `dopri5`) |
+
+**A conversion reactor past equilibrium** (D10, as amended before step
+10) is warned of, not refused, since its conversion is the user's to give:
+for each step's reaction, at the outlet,
+
+    ln(Q/K) = Σᵢ νᵢ (ln yᵢ + ln φᵢ + ln(P/1 bar)) − ln K(T) > 10⁻⁸,
+
+K at 1 bar from the Gibbs energies (D7) and φ from the outlet's flash, the
+tolerance being what the two's rounding allows. The warning gives Q/K, T
+and P; a reaction whose species lack formation data is noted as unchecked.
+The owner's Tutorial 2 at 320 °C holds 27.4% at 30 bar, where Q/K = 4.56.
 
 **A reactor's source of each species,** from the kinetics' rates
 ([reactors/source.v](../reactors/source.v)):

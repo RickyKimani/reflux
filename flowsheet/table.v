@@ -167,6 +167,16 @@ fn (r Report) unit_table(mut b strings.Builder) {
 		}
 		b.writeln(line.trim_right(' '))
 	}
+	warned := r.units.filter(it.warnings.len > 0)
+	if warned.len > 0 {
+		b.writeln('')
+		b.writeln('Warnings:')
+		for u in warned {
+			for w in u.warnings {
+				b.writeln('  ${u.name}: ${w}')
+			}
+		}
+	}
 }
 
 fn pad_left(s string, width int) string {
