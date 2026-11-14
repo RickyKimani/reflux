@@ -31,7 +31,7 @@ amended two decisions, both approved on 2026-11-12:
 - D10: a conversion in T, and a warning past equilibrium.
 
 Step 10 is done, and amended D13, approved on 2026-11-13. Step 11 is
-next.
+done. Step 12 is next.
 
 ## Goal
 
@@ -1358,10 +1358,68 @@ flowchart LR
   included, so a struct that may grow is written with names; and `json2`
   ignores keys a struct lacks, so a test declares only what it reads.
 
-### 11. Speed
+### 11. Speed — done
 - The owner's case and the 50-point study, timed against DWSIM 9 (criterion
   9), in `docs/benchmarks.md`. Both programs in one session, taking turns:
   in step 0 the laptop's clock moved DWSIM's solve between 9.4 and 29 s.
+- **The owner's case as a reflux file,** which D13 asked for:
+  [reformer_dwsim.toml](../testdata/flowsheets/reformer_dwsim.toml), the
+  feed, the packed bed with Ergun's drop and the catalyst, and DWSIM's three
+  rates as typed, with reflux's own viscosity.
+- **[tools/bench_reactor.v](../tools/bench_reactor.v)** times reflux on a
+  flowsheet with a reactor, built with gcc -prod: started once, it loads the
+  file and answers one feed temperature at a time on stdin, so that
+  **[tools/gen_m9_bench.py](../tools/gen_m9_bench.py)** can time DWSIM and
+  reflux in turns, point by point. It writes
+  [testdata/m9_bench.json](../testdata/m9_bench.json), and
+  `benchmarks/reactor.v` its section of [benchmarks.md](benchmarks.md).
+- **Numbers,** on the owner's laptop (Ryzen 5 PRO 3500U), 2026-11-13,
+  reflux built with gcc 16.2.0 -prod, DWSIM 9.0.5.0:
+  - **A single solve at 1000 K:** DWSIM 10.7 s (Radau, dV = 0.05, the
+    owner's setup) and 3.27 s on its explicit Runge–Kutta; reflux 27.8 ms
+    at rtol 1e-8 (471 steps) and 3.46 ms at 1e-4 (59 steps), 380 and 3,100
+    times faster than DWSIM's default, and 120 times its explicit
+    Runge–Kutta at 1e-8. At 1e-4 reflux's conversion is 2e-6 from its own at
+    1e-8, where DWSIM's sections leave it 1.3e-3 from the exact answer of its
+    own equations. Reading the file, the data and the fluid: 78 ms, once.
+  - **The study,** 50 feed temperatures from 700 to 1000 °C: DWSIM 11.7
+    minutes (14.2 s a point), reflux 2.12 s (37.9 ms a point), 330 times
+    faster; 273 ms at 1e-4. The owner's app took 30 minutes (step 0).
+  - **The published model,** Xu and Froment's shared site with K from the
+    Gibbs energies (`reformer.toml`): 393 ms a solve and 28.2 s for the
+    study, 14 times the case on DWSIM's typed K. See below.
+- **Where reflux's time goes** (V's `-profile`, an instrumented build, so
+  shares, not times):
+  - On DWSIM's rates, Peng–Robinson's states take about 35% (each point's
+    volume root and φ), Wilke's viscosity about 25% (each compound's
+    correlation again at every evaluation, though T doesn't move), and the
+    rates about 25%, the tape's own evaluation about 10%. So D5's question
+    is answered: rates written out by hand would save at most a tenth, and
+    the tape stays.
+  - On the published model, 93% is K(T): `Kinetics.fill` calls
+    `Reaction.standard` at every evaluation, and each integrates every
+    species' ideal-gas Cp from 298.15 K by Gauss–Kronrod (134,250 calls in
+    five solves), though an isothermal reactor's T never changes. Keeping K
+    at the last T, and each compound's viscosity at the last T, would bring
+    the published model to about the other's speed and take a quarter off
+    both. Left for M8 at the owner's word (2026-11-13), in the roadmap's
+    entry for it.
+- **Tests:** [benchmarks/reactor_test.v](../benchmarks/reactor_test.v),
+  three: reflux's conversions and steps solved again to 1e-12; DWSIM's
+  single solve step 0's answer to 1e-8, and its conversions within 2.4e-3
+  of reflux's across the study (2.29e-3 at worst: its sections 1.3e-3 low,
+  reflux's viscosity 9.4e-4 high), both rising with T; and the committed
+  report showing the fixture. And a test of the section's minutes.
+- **Planted mistakes:** 5, in the new section: 3 caught at once (the
+  totals, the medians, the ratios). The minutes' threshold survived, no time
+  in the fixture lying between one and two minutes, and is caught by the new
+  test. "And the last" in "every seventh point, and the last" changes
+  nothing with 50 points, the last being the 49th: explained.
+- **Checks:** the source changed in `benchmarks` alone (one file and its
+  tests), and at the owner's word its tests ran rather than the full tcc and
+  gcc checks; CI runs them.
+- **V's notes:** `os.get_line()` gives `''` at the end of the input and for
+  an empty line alike; and how `-profile` reads, and what it costs.
 
 ### 12. Release v0.3.0
 - The CHANGELOG entry, v.mod's version, and the release gate, as for v0.2.0.

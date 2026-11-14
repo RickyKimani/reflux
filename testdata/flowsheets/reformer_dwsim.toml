@@ -1,0 +1,79 @@
+# The owner's coursework case as DWSIM has it (M9 step 0, D13): its feed,
+# its isothermal packed bed with Ergun's pressure drop and its catalyst, and
+# its three rates as DWSIM's text boxes have them, each reaction's own
+# denominator, R typed as 8.314 and K typed in
+# (testdata/kinetics/dwsim_reforming.toml). Ergun's viscosity is reflux's,
+# Wilke's rule; DWSIM's is a mole-fraction mean (step 0). Step 11 times it
+# against DWSIM.
+format = 2
+
+[components]
+names = ["methane", "water", "hydrogen", "carbon monoxide", "carbon dioxide"]
+
+[model]
+equation = "PR"
+
+[feed.feed]
+T = "1000 K"
+P = "1 atm"
+molar_flows = { methane = "10 kmol/h", water = "10 kmol/h", hydrogen = "0.1 kmol/h", "carbon monoxide" = "0 kmol/h", "carbon dioxide" = "0 kmol/h" }
+
+[unit.reformer]
+type = "pfr"
+in = "feed"
+out = "product"
+volume = "1 m^3"
+length = "1 m"
+catalyst = { loading = "0.386 kg/m^3", void_fraction = 0.4, particle_diameter = "2 mm" }
+pressure_drop = "ergun"
+
+[site.Ni]
+symbol = "DEN"
+terms = [
+  { name = "K_CO", K = "8.23e-5 atm^-1 * exp(70650 J/mol / (8.314 J/(mol*K) * T))", a = { CO = 1 } },
+  { name = "K_CH4", K = "6.65e-4 atm^-1 * exp(38280 J/mol / (8.314 J/(mol*K) * T))", a = { CH4 = 1 } },
+  { name = "K_H2O", K = "1.77e5 * exp(-88680 J/mol / (8.314 J/(mol*K) * T))", a = { H2O = 1, H2 = -1 } },
+  { name = "K_H2", K = "6.12e-9 atm^-1 * exp(82900 J/mol / (8.314 J/(mol*K) * T))", a = { H2 = 1 } },
+]
+
+[reaction.reforming]
+equation = "CH4 + H2O = CO + 3 H2"
+law = "lhhw"
+k = "4.22e15 kmol*atm^0.5/(kg*h) * exp(-240100 J/mol / (8.314 J/(mol*K) * T))"
+orders = { CH4 = 1, H2O = 1, H2 = -2.5 }
+K = "exp(30.42 - 27106 K / T) * 1 atm^2"
+driving = "difference"
+site = "Ni"
+site_power = 2
+
+# DWSIM's shift has no CH4 term.
+[reaction.shift]
+equation = "CO + H2O = CO2 + H2"
+law = "lhhw"
+k = "1.96e6 kmol/(kg*h*atm) * exp(-67130 J/mol / (8.314 J/(mol*K) * T))"
+orders = { CO = 1, H2O = 1, H2 = -1 }
+K = "exp(-3.798 + 4160 K / T)"
+driving = "difference"
+site = "Ni"
+site_power = 2
+terms = [
+  { name = "K_H2O", K = "1.77e5 * exp(-88680 J/mol / (8.314 J/(mol*K) * T))", a = { H2O = 1, H2 = -1 } },
+  { name = "K_H2", K = "6.12e-9 atm^-1 * exp(82900 J/mol / (8.314 J/(mol*K) * T))", a = { H2 = 1 } },
+  { name = "K_CO", K = "8.23e-5 atm^-1 * exp(70650 J/mol / (8.314 J/(mol*K) * T))", a = { CO = 1 } },
+]
+
+# DWSIM's overall reaction has no CO term.
+[reaction.overall]
+equation = "CH4 + 2 H2O = CO2 + 4 H2"
+law = "lhhw"
+k = "1.02e15 kmol*atm^0.5/(kg*h) * exp(-243900 J/mol / (8.314 J/(mol*K) * T))"
+orders = { CH4 = 1, H2O = 2, H2 = -3.5 }
+K = "exp(34.218 - 31266 K / T) * 1 atm^2"
+driving = "difference"
+site = "Ni"
+site_power = 2
+terms = [
+  { name = "K_CH4", K = "6.65e-4 atm^-1 * exp(38280 J/mol / (8.314 J/(mol*K) * T))", a = { CH4 = 1 } },
+  { name = "K_H2O", K = "1.77e5 * exp(-88680 J/mol / (8.314 J/(mol*K) * T))", a = { H2O = 1, H2 = -1 } },
+  { name = "K_H2", K = "6.12e-9 atm^-1 * exp(82900 J/mol / (8.314 J/(mol*K) * T))", a = { H2 = 1 } },
+]

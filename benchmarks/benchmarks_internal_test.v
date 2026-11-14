@@ -128,3 +128,12 @@ fn test_passes_are_every_loops() {
 	}
 	assert passes(sol) == 3
 }
+
+fn test_seconds_print_in_minutes_from_two_minutes() {
+	// The reactor section's times (M9 step 11): seconds to three figures,
+	// minutes from two minutes up.
+	assert seconds(9.87) == '9.87 s'
+	assert seconds(119.0) == '119 s'
+	assert seconds(150.0) == '2.50 min'
+	assert seconds(702.0) == '11.7 min'
+}

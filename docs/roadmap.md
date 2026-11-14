@@ -217,6 +217,12 @@ on a reference column. Robustness is reported across a set of specs.
 - Design specs ("vary reflux ratio until purity is 99.5%"), converged
   together with the tear streams (F4).
 - Warm starts and state caching (F5).
+- What a reactor recomputes though its T hasn't moved, found in M9 step 11
+  (`docs/m9-plan.md`): each reaction's K(T) from the Gibbs energies, by
+  quadrature at every rate evaluation, 93% of the published reforming
+  model's solve; and each compound's gas viscosity in Ergun's drop, about a
+  quarter of a solve. Kept at the last T, the published model would run at
+  about the 28 ms of the case on typed K.
 - Sensitivity sweeps with warm starts along the sweep, parallel cases via
   `spawn`, and exact local sensitivities from the converged Jacobian (H1).
 - Optimisation: NLopt for small problems, IPOPT for large ones (B6, H3).
@@ -229,7 +235,10 @@ reforming exercise, one isothermal packed-bed PFR with three LHHW reactions
 and five components, on Peng–Robinson, with no recycle. DWSIM 9's sensitivity
 study of 50 feed temperatures took 30 minutes in the app, about 36 s a point.
 One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
-of that is in one reactor.
+of that is in one reactor. M9 step 11 timed both in one session, taking
+turns: DWSIM 10.7 s a solve and 11.7 minutes for the study, reflux 28 ms and
+2.1 s at rtol 1e-8 ([benchmarks.md](benchmarks.md)). The study is 50 cold
+solves there; M8's warm starts and parallel cases come on top.
 
 **A second case, for correctness rather than speed:** the owner's methanol
 conversion reactor, Tutorial 2, recorded in M9's step 10. DWSIM's temperature

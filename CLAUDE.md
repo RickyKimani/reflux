@@ -196,7 +196,16 @@ Keep this section current: update it whenever a step is committed.
     the inlet fails. The reactor goldens are in
     `testdata/flowsheets/golden/reactors/`, and `tools/golden.vsh` takes
     names, so that M4's goldens wait for v0.3.0.
-  - Next is step 11: speed.
+  - **Step 11 is done:** speed, against DWSIM in one session, taking turns
+    (`tools/gen_m9_bench.py`, `tools/bench_reactor.v`,
+    `testdata/m9_bench.json`, `docs/benchmarks.md`). The owner's case
+    (`testdata/flowsheets/reformer_dwsim.toml`): reflux 28 ms a solve against
+    DWSIM's 10.7 s, and 2.1 s for the 50-point study against 11.7 min. The
+    published model (`reformer.toml`) takes 393 ms, 93% of it in K(T), which
+    `Kinetics.fill` recomputes by quadrature at every evaluation: left for
+    M8, at the owner's word, with the viscosity Ergun's drop recomputes (the
+    roadmap's M8 entry). The tape is about 10% of a solve, so it stays (D5).
+  - Next is step 12: release v0.3.0.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run

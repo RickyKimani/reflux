@@ -227,7 +227,8 @@ sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
-                    flowsheet (docs/benchmarks.md)
+                    flowsheet and on the owner's reforming PFR
+                    (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
 capi/               the C API (M10a): reflux.h, and the functions it declares,
@@ -268,7 +269,9 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     the exact answers of its equations),
                     import_chemsep.vsh, data_quality.vsh, flash_sweep.vsh and
                     benchmarks.vsh (generated data and reports), bench_case.v
-                    (reflux's side of the benchmarks)
+                    and bench_reactor.v (reflux's side of the benchmarks),
+                    gen_m9_bench.py (the owner's PFR, DWSIM and reflux in
+                    turns)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

@@ -50,7 +50,15 @@ counts are exact. It's what found M3's slow volume roots (2,200 attraction
 evaluations for a binary flash). Two catches:
 - With `-prod -cc gcc` the instrumented build of a PH flash crashed, while
   the same program profiled fine under tcc. Profile with tcc and read the
-  shares, not the times.
+  shares, not the times. (M9 step 11's PFR did profile under `-prod -cc
+  gcc`, 24 times slower than its plain build: 9.5 s a solve against 0.39 s,
+  with 341 million calls of the bounds-checked index `v_fixed_index`. The
+  shares still found what mattered: 93% of the published model's time in
+  K(T)'s quadrature.)
+- The file's columns are the calls, the time with what the function calls,
+  the time in the function itself, the time a call, and the name, so sort
+  on the second to find where a solve goes and on the third to find what's
+  slow in itself.
 - `gc_heap_usage()` reports the GC heap's size and free bytes, which is
   how a leak shows: run the code in a loop, call `gc_collect()`, and see
   whether the heap keeps growing.
@@ -964,6 +972,13 @@ m := {
   got 30.0. Go has no such switch; its compiler drops a check only where it
   can prove the index in range. Keep it for hot loops whose indices are
   right by construction, such as the tape spike's interpreter.
+- **`os.get_line()` returns `''` at the end of the input and for an empty
+  line alike,** where Go's `bufio.Scanner` says which with `Scan()`. A
+  probe gave `[a]`, `[]`, `[b]` and then `[]` for ever from the input
+  `a`, an empty line and `b`. So a program that reads requests a line at a
+  time, as `tools/bench_reactor.v` does from `tools/gen_m9_bench.py`, stops
+  at the first empty line, and its client never sends one; its `println`
+  reaches the client through the pipe at once.
 - **A `match` on an enum is an if-else chain in the C,** tested arm by arm,
   not a `switch`. In the tape spike, putting the commonest arms first
   changed nothing measurable, so gcc's optimiser seems to cope, but don't
