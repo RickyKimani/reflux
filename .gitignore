@@ -25,3 +25,6 @@
 __pycache__/
 .pytest_cache/
 *.egg-info/
+
+# Local CLI framework harness; production tests belong in cli/.
+/cli_test/
