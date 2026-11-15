@@ -26,7 +26,7 @@ Every Langmuir–Hinshelwood–Hougen–Watson rate has the same shape:
 
 | Part | General form | Stored as |
 |---|---|---|
-| kinetic factor | k(T) = k_ref · exp(−Eₐ/R · (1/T − 1/T_ref)) | Arrhenius, centred on T_ref (better conditioned when fitting) |
+| kinetic factor | k(T) = A · exp(−Eₐ/RT), or k_ref · exp(−Eₐ/R · (1/T − 1/T_ref)) | Arrhenius, centred on T_ref when one is given (better conditioned when fitting) |
 | driving force | Π aᵢ^αᵢ · (1 − Q/K) | forward orders, plus reversibility (see below) |
 | adsorption term | (1 + Σ terms)ⁿ, where each term is Kⱼ(T)·Π aₖ^eₖ | a list of monomials; the power n per reaction |
 
@@ -172,24 +172,33 @@ planned alongside them (roadmap H4). There are two parts:
 
 ## How it maps onto V
 
+As built in M9 ([kinetics/law.v](../kinetics/law.v)):
+
 ```v
-pub type TempFn = Arrhenius | Constant | VantHoff
+// How a constant depends on T. Numbers stay as written, with their units,
+// so that a rate renders as its paper prints it.
+pub type TempFn = Arrhenius | Fixed | VantHoff | Written
 
 pub struct Monomial {
-	k     TempFn
-	exps  []SpeciesExp // (component index, exponent)
+	name   string   // names its K, as a definition
+	k      TempFn
+	powers []Power  // each a species, as written, and its exponent
 }
 
 pub struct Site {
-	name  string
-	terms []Monomial  // θ = 1 + Σ terms
+	name   string
+	symbol string     // names θ as a definition
+	terms  []Monomial // θ = 1 + Σ terms
 }
 
 pub type RateLaw = EleyRideal | Expression | Lhhw | PowerLaw
 ```
 
-A rate law is a sum type, because the module owns the list of forms. A
-reactor takes `[]Reaction` and doesn't care which form each one uses.
+A rate law is a sum type, because the module owns the list of forms. Each
+form writes the expression a user would type, which `expr` parses, so every
+rate, structured or typed out, is one tree, compiled onto one tape
+(`kinetics.build`). A reactor takes the kinetics and the reactions it runs,
+and doesn't care which form each one uses.
 
 ## Dependencies
 

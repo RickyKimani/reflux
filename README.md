@@ -34,22 +34,21 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m2-plan.md](docs/m2-plan.md), component data,
   [docs/m3-plan.md](docs/m3-plan.md), the flash, and
   [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet, and
-  [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python.
-  [docs/m9-plan.md](docs/m9-plan.md) is M9's, in progress: equations,
-  kinetics and reactors.
+  [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python,
+  and [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
   10,000 random mixtures from the database, every answer checked, and
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
   `thermo` and DWSIM 9 on the same flashes, and against DWSIM on the
-  reference flowsheet.
+  reference flowsheet and on the owner's reforming PFR.
 - [CHANGELOG.md](CHANGELOG.md) is every release, and what a version
   promises.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
   and why, with every formula the code uses.
-- [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics:
-  LHHW and friends as checkable data, not text.
+- [docs/kinetics.md](docs/kinetics.md) is the design for reaction kinetics,
+  as M9 built it: LHHW and friends as checkable data, not text.
 - [docs/spike-python-ffi.md](docs/spike-python-ffi.md) is what we learned
   calling reflux from Python and NumPy, and the rules M10a follows.
 - [docs/flowsheet-format.md](docs/flowsheet-format.md) is the flowsheet file
@@ -294,10 +293,11 @@ at the edges, i.e. input files and printed output.
 ## Status
 
 **M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash), M4
-(the first flowsheet) and M10a (thermo and the flash from Python) are done.**
-The exit reviews are at the ends of [docs/m1-plan.md](docs/m1-plan.md),
-[docs/m2-plan.md](docs/m2-plan.md), [docs/m3-plan.md](docs/m3-plan.md),
-[docs/m4-plan.md](docs/m4-plan.md) and [docs/m10a-plan.md](docs/m10a-plan.md).
+(the first flowsheet), M10a (thermo and the flash from Python) and M9
+(equations, kinetics and reactors) are done.** The exit reviews are at the
+ends of [docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
+[docs/m3-plan.md](docs/m3-plan.md), [docs/m4-plan.md](docs/m4-plan.md),
+[docs/m10a-plan.md](docs/m10a-plan.md) and [docs/m9-plan.md](docs/m9-plan.md).
 What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
@@ -420,8 +420,47 @@ And from M10a, thermo and the flash from Python
 - [x] A second release, v0.2.0, tagged on `main` after M10a's merge
       ([CHANGELOG.md](CHANGELOG.md)).
 
-By the roadmap, next is M10b: flowsheets from Python. M5 to M9 build on M4:
-steam, activity models, columns, specifications and reactors.
+And from M9, equations, kinetics and reactors
+([docs/kinetics.md](docs/kinetics.md)):
+
+- [x] Every equation a user gives, a rate, a rate constant, an adsorption
+      term or a conversion, read as an expression reflux understands, never
+      as text: its names bound, every node's dimension checked, built-in
+      constants at the 2019 SI's exact values (`R`, not a typed 8.314), and
+      a correlation written as its source prints it, `(T in degC)`. Each
+      writes itself back as text, Unicode and LaTeX, held against SymPy.
+- [x] Compound units with SI prefixes and exact rational exponents,
+      `kmol*bar^0.5/(kg*h)`, every M4 unit reading to M4's bits.
+- [x] Expressions compiled onto a tape that allocates nothing and gives
+      every derivative exactly, by one reverse sweep: Xu and Froment's three
+      rates and their gradients in about 1 µs.
+- [x] Reactions balanced by element and charge, with the balanced equation
+      suggested; rate laws as data (power law, LHHW, Eley–Rideal, your own
+      expression) with shared catalyst sites; K(T) from the Gibbs energies.
+      Two papers' kinetics match mpmath to 9.4e-15.
+- [x] `reflux kinetics check` finds what's wrong with a file's rates, and
+      `explain` prints each rate's factors at a state. On the owner's DWSIM
+      case it finds seven typed 8.314s, two denominators cut short and an
+      overall K a factor of 0.20 off.
+- [x] Gibbs minimisation by the RAND method, and the equilibrium over chosen
+      reactions, on the ideal gas or a cubic, matching mpmath to 6e-13.
+- [x] Two integrators, Dormand–Prince 5(4) and RODAS4, on the Test Set for
+      IVP Solvers' stiff problems.
+- [x] Five reactors as flowsheet units: Gibbs, equilibrium, conversion, CSTR
+      and PFR or packed bed, isothermal, adiabatic or at a duty, each closing
+      its elements and energy to 1e-10. The PFR carries the real gas and
+      Ergun's drop on Wilke's viscosity.
+- [x] Compared with DWSIM 9 reactor by reactor, every difference taken
+      apart: the owner's reforming PFR is within 2.3e-10 of the exact answer
+      of DWSIM's equations.
+- [x] The owner's case in 28 ms against DWSIM's 10.7 s, and its 50-point
+      study in 2.1 s against 11.7 minutes
+      ([docs/benchmarks.md](docs/benchmarks.md)).
+- [x] A third release, v0.3.0, to be tagged on `main` after M9's merge
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10b, flowsheets from Python, or M5 to M8: steam,
+activity models, columns, and specifications with sensitivity studies.
 
 ## Roadmap
 

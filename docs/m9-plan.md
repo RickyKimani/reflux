@@ -30,8 +30,8 @@ amended two decisions, both approved on 2026-11-12:
   after a closing bracket;
 - D10: a conversion in T, and a warning past equilibrium.
 
-Step 10 is done, and amended D13, approved on 2026-11-13. Step 11 is
-done. Step 12 is next.
+Step 10 is done, and amended D13, approved on 2026-11-13. Steps 11 to 13
+are done. **M9 is done** on 2026-11-15, with the exit review at the end.
 
 ## Goal
 
@@ -1421,12 +1421,55 @@ flowchart LR
 - **V's notes:** `os.get_line()` gives `''` at the end of the input and for
   an empty line alike; and how `-profile` reads, and what it costs.
 
-### 12. Release v0.3.0
+### 12. Release v0.3.0 — done
 - The CHANGELOG entry, v.mod's version, and the release gate, as for v0.2.0.
+- **v.mod and the package are 0.3.0:** `v.mod`, which the library and the
+  reports read through `@VMOD_FILE`, and `python/pyproject.toml`, which
+  `python/tests/test_library.py` holds to it.
+- **[CHANGELOG.md](../CHANGELOG.md)'s entry for 0.3.0:** what was added (the
+  expression language, compound units, `chem`, kinetics and its two
+  commands, equilibrium, the integrators, the reactors, file and report
+  format 2, the comparison with DWSIM and the speed), what changed (the
+  phase-label rule, report format 2, the V API, the golden reports), what was
+  fixed (the hot gas labelled liquid), and the known limitations. The C API
+  and the Python package are unchanged but for their version, ABI 1. The
+  entry is undated until the tag, which comes on `main` after the merge, as
+  v0.2.0's did.
+- **The golden reports, written again** by `v run tools/golden.vsh`, all
+  seven. M4's five went to report format 2, each unit gaining `profile`
+  (null) and `warnings` (empty), and all seven carry 0.3.0. A script
+  compared every value in each before and after: no number moved in any.
+  The entry names each, as the gate asks.
+- **The gate,** `v run tools/release.vsh`, now refuses for three reasons,
+  each the merge's or the tag's to settle: the tree has changes (this
+  step's, until it's committed), the branch is `m9-reactors`, not `main`,
+  and the entry has no date.
+- **Tests:** no source changed, so at the owner's word the full checks
+  didn't run. The tests that read what changed did, and pass:
+  `flowsheet/golden_test.v`, `reactors/golden_test.v`, `main_test.v` and
+  `release/`. CI runs everything on the commit, the Python package's version
+  test included. No code, so no planted mistakes.
 
-### 13. Docs and exit review
+### 13. Docs and exit review — done
 - README, roadmap, design notes, kinetics.md, the file format, the V notes,
   and a criterion-by-criterion review.
+- **[README.md](../README.md):** M9 in the status, with what it built, and
+  its plan beside the others.
+- **[roadmap.md](roadmap.md):** M9's entry done, with what the plan did
+  beyond the roadmap's exit, and its tracks marked (A9, C7, E6, G3, L1 to
+  L7). G3's yield reactor wasn't built, since none of M9's decisions took it
+  up; the roadmap says so.
+- **[kinetics.md](kinetics.md):** written as built. The kinetic factor is
+  Arrhenius plain or centred on T_ref, and "How it maps onto V" shows
+  `kinetics/law.v`'s types, each form writing the expression `expr` parses.
+- **Checked against the code, already written in their steps:**
+  [design.md](design.md) (expressions, the tape, reactions, rate laws, the
+  checks, equilibrium, the integrators and the reactors),
+  [flowsheet-format.md](flowsheet-format.md) and
+  [report-format.md](report-format.md) (format 2),
+  [benchmarks.md](benchmarks.md), [testdata/README.md](../testdata/README.md)
+  and [v-for-go.md](v-for-go.md).
+- No source changed, so no checks and no planted mistakes.
 
 ## Risks
 
@@ -1437,6 +1480,139 @@ flowchart LR
 | The Gibbs minimisation fails with trace species or near a phase boundary | no equilibrium reactor | log variables for vanishing species; one phase only in M9, with a second phase refused rather than hidden. **Step 7:** combustion's traces at 1e-29 match mpmath's, and a mixture that would split is refused |
 | The stiff integrator struggles where rates are huge and equilibrium near, as in reforming at 1000 °C | slow or failed PFRs | exact Jacobians, step control from the embedded estimate, and Hairer's test problems first, so the integrator is proven before the reactor uses it |
 | ChemSep's formulas or formation data are wrong for some compound | a wrong element balance or K(T) | each formula checked against its SMILES and molar mass, and ΔG°f against ΔH°f and S°, with failures listed in the data-quality report |
+
+## Exit review
+
+Checked on 2026-11-15 at the tip of `m9-reactors`, under V 0.5.2 (eab77e7)
+and gcc 16.2 on Windows 11.
+- **Locally:** the full checks, `v run tools/check.vsh` with tcc and with
+  gcc (and its `-prod` build), last ran in step 10, the last step to change
+  more than one module, and passed, with each check's run of the CLI. Step
+  11 changed `benchmarks` alone and ran its tests; steps 12 and 13 changed no
+  source, and ran the tests that read what they changed. 90 test files in
+  all, 27 of them new in M9.
+- **In CI:** all four jobs, Windows and Linux with tcc and gcc, passed on
+  `c30e2b4`, step 11 (run 43609869622), the Python tests in each gcc job;
+  and on steps 1, 3, 6 and 9 before it. Step 0's run, on `1ba74c1` (run
+  42683701876), failed in Ubuntu's gcc job, in `test_memory.py` alone: the
+  collector's heap doubling once, the flaky test carried from M10a (below).
+  Steps 12 and 13's commit gets its run when it's pushed.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Equations are parsed, never evaluated as text | **met** | Every equation a file gives, a rate, a constant, a site's term, a definition or a conversion, goes through `expr`'s parser to a tree whose every name is bound, or is refused. `expr/parse_test.v`: 35 syntax refusals and 18 name refusals, each with its line, its column and a suggestion, and two fuzzers, 20,000 seeded strings of the language's pieces and 10,000 well-formed expressions, never panicking, each refused with a place or read back node for node. Each renders back as plain text, which reads back to the same tree, Unicode and LaTeX (`render_test.v`, 38; `sympy_test.v`, 260 cases decoded and confirmed by SymPy). In a file, a refusal is at its line and key (`flowsheet/reactions_test.v`, fourteen, and 500 seeded files, none panicking; `reactors/flowsheet_test.v`). Units (30,000 seeded strings), formulas and SMILES (20,000 each) and equations (20,000) are fuzzed too. |
+| 2 | Units hold | **met** | Every node's dimension is derived, and a place asks for its own (`must_be`): a rate per mass or per volume as its law says, a site's term and a conversion dimensionless, a fitted K in its rate's activities to the Δn (`expr/units_test.v`, ten refusals, DWSIM's `exp(-240100/8.314/T)` among them; `kinetics/law_test.v`, nine). Numbers convert by SP 811 (`testdata/m9_units.json`, 101 factors, exact ones to 4 ulps), and every M4 unit to M4's bits. The constants are the doubles nearest the 2019 SI's exact values (`sympy_test.v`, against SciPy's CODATA 2018). A typed number within 1% of a constant of its dimension is flagged (`lint.v`), 8.341 J/(mol·K) among them, and at a state with how far it moves each rate: the DWSIM case's seven 8.314s, −0.18% (step 6). A reading on a unit's scale, `(T in degC)`, is checked as strictly (step 10). |
+| 3 | Derivatives are exact | **met** | `expr/tape_test.v`: every derivative of the 260 cases with respect to each of six inputs at four points is SymPy's (mpmath at 50 digits) to 1e-10 of its scale, 6.5e-16 at worst; Xu and Froment's rates are their central differences' to their truncation error; 0 bytes allocated in 100,000 evaluations with gradients. The readings' derivatives too (step 10). Through the kinetics, the jacobian with respect to T, P and each mole fraction matches central differences, with φ ≠ 1 and Z ≠ 1 (`law_test.v`). The cost, against the same three rates written in V (`tools/tape_bench.v`): 3.2 times for the rates and 6.7 with gradients, about 1 µs in all; in a PFR solve the tape is about a tenth (step 11). |
+| 4 | Kinetics is right | **met** | Both papers' kinetics load from TOML (`testdata/kinetics/`), render as their papers print them, and match mpmath from the papers' own formulas: Xu and Froment's three rates at 45 states and Vanden Bussche and Froment's two at 24, to 9.4e-15, their derivatives to 1.1e-14 (`law_test.v`, `reactions_test.v`). Each passes the element balance, the units and the consistency check. The sanity notes `check` gives them are the papers' own: Xu and Froment's K_H₂O rises with T, and Vanden Bussche and Froment's lumped constant has a negative activation energy. An unbalanced equation is refused with each element's imbalance and the balanced equation where its species allow one (`equation_test.v`, thirteen, and 20,000 seeded); the owner's set is found to be overall = reforming + shift (`dependence_test.v`). `equilibrium/consistency_test.v`: Xu and Froment's rates stop within ΔG/RT 2.7e-15 of the equilibrium of criterion 5 at 60 seeded states, and run towards it at every one. Vanden Bussche and Froment's, on Graaf's fitted K, stop where their own Q is K, at Q/K = 0.770 and 1.045 of the Gibbs energies' equilibrium, as `check` reports. |
+| 5 | Equilibrium is right | **met** | `equilibrium/equilibrium_test.v`: 21 equilibria by mpmath at 50 digits, by Newton in ln n rather than RAND, in the ideal gas and in PR (reforming from 700 to 1100 K and 1 to 30 bar, methanol, ammonia at 300 bar, combustion with traces at 1e-29): ln y within 6.0e-13, the elements to 1e-12, at most 36 steps, recorded. The reactors give the same, each closing its elements and energy (`reactors_test.v`, 1e-11 in ln y). K(T) against the correlations used with Xu and Froment's kinetics (criterion 5 as amended): within 0.083 in ln K for steam reforming and the shift, 0.16 for their sum, from 700 to 1300 K; the owner's DWSIM case's overall K is 86 times too small at 700 K (`kinetics/standard_test.v`). |
+| 6 | The integrator is right | **met** | As amended in step 8 (`numeric/ode_test.v`, `stiff_test.v`): each method's order within 0.14 and 0.29 of its claim; RODAS4 L-stable, its stability function at most 0.9987 in modulus in the left half-plane; stiff and non-stiff closed forms within 0.16 tolerance units; the Test Set for IVP Solvers' HIRES, Robertson, van der Pol and pollution problems within 0.13 tolerance units at three tolerances, the Oregonator 2.9; every step count recorded, unable to grow. E5 is held to its decay and its invariant's drift, its y₂ and y₃ being beyond a Rosenbrock method in double precision. |
+| 7 | Each reactor is right | **met** | `reactors/reactors_test.v` and `flowsheet_test.v`: a PFR's closed forms to 2.0e-11, a CSTR's to 1e-12, a dehydrogenation's with its change in moles to 7e-12, a given drop to 1e-9, Ergun's within Z's movement. Each reactor, the equilibrium reactor too, returns only once its elements and energy close to 1e-10, which the solver checks again on its elements; every outlet is a verified flash, one that would split refused. A long PFR on fugacities reaches the Gibbs reactor's equilibrium to 2.8e-14 in every mole fraction. |
+| 8 | The owner's case matches DWSIM 9 | **met** | `reactors/dwsim_test.v`, against step 0's targets: within 2.2e-10 of the exact answer of DWSIM's equations isobaric, and 2.3e-10 with Ergun (1e-8); against DWSIM at dV = 0.001, 1.0e-4 in the worst flow (3e-4), 2.5e-5 in methane's conversion (5e-5), 0.24 Pa in the drop (1 Pa). The duty's 151 to 156 W is taken apart: reflux's enthalpies of DWSIM's own outlet give DWSIM's duty but for 167 W, DWSIM's copy of water's ideal-gas Cp, to 0.29 W, and the 10 to 16 W left is DWSIM's outlet being a little further along. The published model is solved beside it, golden (`reformer.toml`, 0.76027). Each reactor alone is compared too, every difference explained: the conversion reactor's duties to 3.2e-13 (Tutorial 2), the equilibrium reactor's whole difference DWSIM's 1-atm fugacities, the Gibbs reactor's DWSIM's own 1e-3, and the CSTR held to the exact answer of DWSIM's equations, since DWSIM's reacts nothing in the vapour (D13). |
+| 9 | Speed is measured | **met** | [benchmarks.md](benchmarks.md), the two programs taking turns in one session, gcc `-prod`: the owner's case in 27.8 ms against DWSIM's 10.7 s, and the 50-point study in 2.12 s against 11.7 minutes (the owner's app took 30). The published model, on K from the Gibbs energies, takes 393 ms, 93% of it in K(T): M8's. `benchmarks/reactor_test.v` checks the fixture and the report. |
+| 10 | Files and the CLI | **met** | Reactions, sites, definitions and the reactor units in format 2 ([flowsheet-format.md](flowsheet-format.md)), every key checked and every refusal at its line (`reactions_test.v`, `reactors/flowsheet_test.v`). `reflux kinetics check` and `explain` on a file and a state, and `reflux solve` on a flowsheet with reactors, in `main_test.v`, each failure's exit status included; `tools/check.vsh` runs both commands on the built program. |
+| 11 | CI green, docs updated | **met** | CI passed on `c30e2b4`, the last commit to change source (run 43609869622), all four jobs. The docs: README, roadmap, design notes, kinetics.md, the file and report formats, benchmarks.md, testdata/README.md and the V notes, each step's lessons in [v-for-go.md](v-for-go.md). |
+
+**Planted mistakes.** 423 were planted across steps 1 to 11, one change at a
+time, in scratch copies, and 358 were caught at once. Every survivor got a
+new test, had its code deleted, or is explained in its step. Three more, in
+M3's phase-label rule, were all caught (step 9).
+- **Code deleted:** a negative superscript nothing reached and a
+  length check the empty rest made (step 1); a suggestion's common factor,
+  always 1 (step 4); the convergence test's three criteria, each implied by
+  another, made one, and a test of ln n's own step (step 7); RODAS4's count
+  of singular matrices reset after each good step, which Hairer's RODAS
+  doesn't do (step 8); and the conversion reactor's second setting of a
+  key's flow (step 9).
+- **Explained,** fourteen: the continued fraction's denominator check (step
+  2); CEA's limit on a rising trace, pivoting by size in `independent`, and
+  a convergence threshold of 1e-6 inside the tests' tolerance (step 7);
+  the end-of-interval slack in each integrator, setting t to t1 exactly, and
+  Dormand–Prince's rule after a rejection (step 8); `ν ≥ 0` as `ν > 0`, the
+  energy search's steps, the PFR's agreement check loosened and the whole
+  flowsheet's tolerance for tears that meet reactions (step 9); the CSTR's
+  step doubling (step 10); and "and the last" with 50 points (step 11).
+- **Survivors made the tests stronger:** each answer check handed an answer
+  a little wrong (step 7); Hairer's first step worked by hand (step 8); a
+  component without a formula, and a PFR at a duty (step 9); the
+  constructor's own checks (step 10).
+- **The scripts learned** that a scratch copy needs the `docs/` its tests
+  read (step 10), and that a pattern matching twice plants twice (steps 7
+  and 9).
+
+**Bugs found along the way,** each fixed in its step:
+- in `quantity`: a dimension's overflow escaping without its column (step 1,
+  by the fuzzing);
+- in `expr`: Unicode's 2.5·10⁻¹ as a divisor read as a product, a·(b/c)
+  written as a·b/c, and a unit running into the operator after it under a
+  minus sign (step 2); "a amount" and "a area" (steps 6 and 9); and `K` as a
+  name, which made every number in kelvins ambiguous, so the equilibrium
+  constants are `Keq[...]` (step 5);
+- in `equilibrium`: the equilibrium over reactions from a feed without an
+  element was a singular matrix (step 7, by the consistency check);
+- **in M3's PT flash:** a hot gas labelled liquid, however dilute, above its
+  Joule–Thomson inversion temperature, by the rule Π > 1 that `thermo`
+  shares. M3's D6 is amended (step 9);
+- in `reactors`: the CSTR couldn't start Newton on the owner's case, and now
+  continues in its volume (step 10).
+
+**What M9 found outside reflux:**
+- **ChemSep's data:** S° that mixes 1 atm and 1 bar, putting reforming's K
+  about 4% low; 142 compounds whose ΔG°f disagrees with their ΔH°f and S° by
+  over 1 kJ/mol; five files that disagree with themselves (step 4).
+- **The papers:** Xu and Froment's Table 5 and Table 6 disagree by up to
+  1.7% (k₃), and they give no equilibrium constants (step 5).
+- **The owner's DWSIM case:** seven typed 8.314s, two denominators cut
+  short, and an overall K that isn't the product of the other two, a factor
+  of 0.20 at 900 K (steps 4 and 6).
+- **DWSIM 9.0.5:** its PFR's first-order sections (step 0); its CSTR reacts
+  nothing in the vapour and reports success; its equilibrium reactor puts
+  fugacities over 1 atm against a 1-bar K; its Gibbs reactor's default
+  answer leaves the elements unbalanced by 7.3e-4; its adiabatic conversion
+  reactor takes the conversion at the inlet's T; its copy of water's
+  ideal-gas Cp; its PR78's departures; and a product's conversion of −∞,
+  which its sensitivity studies plot with no message (step 10).
+- **SymPy 1.13.3's LaTeX readers** misread function calls (step 2).
+- **V 0.5.2:** `f() or { none }` into an Option field passes the checker and
+  writes C no compiler takes (step 6), and a fixed array of structs in a
+  struct's zero value skips the element's field defaults (step 1).
+
+**Changed from the plan along the way,** each approved by the owner and
+marked in its table:
+- **Decisions amended:** D1 (steps 4 and 7), D2 (step 2, and before step
+  10), D3 (step 1), D5 (step 0), D10 (steps 0 and 7, and before step 10),
+  D11 (steps 6 and 9) and D13 (steps 0 and 10); criterion 5 (step 5) and
+  criterion 6 (step 8); criterion 8's targets set (step 0).
+- **From M3:** D6, a single phase more than four covolumes large is vapour
+  (step 9).
+- **Before step 10,** from the owner's Tutorial 2: readings on a unit's
+  scale, a conversion in T, and a warning past equilibrium in report format 2.
+
+**Carried forward, not done in M9:**
+- **v0.3.0's tag,** after the merge: date its CHANGELOG entry, run
+  `tools/release.vsh` on `main`, then tag and push.
+- **`test_memory.py` is still flaky on Ubuntu.** It was to be fixed early in
+  M9 and wasn't. It failed step 0's run, and has passed on every run since.
+  The fix is M10a's review's: compare the bytes live after a full
+  collection, not the collector's heap size.
+- **K(T) and the viscosity recomputed at a T that hasn't moved:** M8, in its
+  roadmap entry. The published reforming model would come to about the
+  typed case's speed.
+- **Reactors in one phase:** an outlet that would split is refused, for M6.
+- **The yield reactor** (G3), which no decision took up: later.
+- **Heat exchangers,** and a PFR cooled by a stream: after M9 (D14).
+- **Fitting kinetic constants** (H4) and expressions in M4's units: M8.
+- **Not traced:** 3.0 W of Tutorial 2's 8.8 W duty difference, DWSIM's own
+  PR78 departures (step 10).
+- **From M4 and M10a:** `flash.uv` on cold liquids, PH for 10 components a
+  little slower than DWSIM's, and warm starts (M8); V's code slower inside
+  the library and threads that don't scale (M8); `thermo`'s
+  `saturation_pressure` near Tc and below 10 K; wheels (I2).
+- **Upstream reports:** to DWSIM, this milestone's findings above, with
+  M4's; to `thermo`, its phase label for a dilute hot gas, with M4's flash
+  at a vapour fraction; to SymPy, its LaTeX readers; to V, `or { none }`
+  into an Option field, with M4's and M10a's.
+
+**Verdict: M9 is done.**
 
 ## Not in M9
 

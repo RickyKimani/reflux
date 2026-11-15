@@ -1,6 +1,6 @@
 {
-  "format": 1,
-  "reflux": "0.2.0",
+  "format": 2,
+  "reflux": "0.3.0",
   "file": "testdata/flowsheets/saturated_loop.toml",
   "status": "solved",
   "error": null,
@@ -268,7 +268,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "condense",
@@ -288,7 +290,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "share",
@@ -304,7 +308,9 @@
       "balance": {
         "component": 0,
         "energy": 3.732770990878404e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     }
   ],
   "solver": {

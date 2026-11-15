@@ -37,6 +37,120 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
+## [0.3.0]
+
+Equations, kinetics and reactors: the roadmap's M9. Every equation a user
+gives, a rate law, a rate constant, an adsorption term or a conversion, is
+read as an expression reflux understands, its names bound and its units
+checked, never taken as text. On it stand reaction kinetics, chemical
+equilibrium and five reactors, compared with DWSIM 9. Like 0.2.0, it's a
+source release (`v -prod -cc gcc -o reflux .`).
+
+### Added
+
+- **The expression language,** `expr` ([design.md](docs/design.md),
+  "Expressions").
+  - Numbers carry their units, `240.1 kJ/mol`, and every node's dimension is
+    checked: a pressure added to a temperature is refused, with why.
+  - Names bind to the context (T, P, each species' p, f, c and y by name,
+    formula or CAS number), to a file's definitions, and to built-in
+    constants at the 2019 SI's exact values: `R`, not a typed 8.314.
+  - A value can be read on a unit's scale, `0.85 - 0.0018*(T in degC)`, and
+    a group can take a unit, `(85 - 0.18*(T in degC)) [%]`, so a correlation
+    goes in as its source prints it.
+  - Each expression writes itself back as text, Unicode and LaTeX, and is
+    compiled onto a tape that evaluates allocating nothing and gives every
+    derivative exactly, by one reverse sweep.
+- **Compound units,** in `quantity`: SI prefixes and exact rational
+  exponents, `kmol*bar^0.5/(kg*h)`.
+- **Chemistry,** `chem`: elements, formulas and SMILES. Each component's
+  formula is the one its structure, SMILES and molar mass agree on.
+- **Reactions and kinetics,** `kinetics` ([kinetics.md](docs/kinetics.md)).
+  - Equations balanced by element and charge, with the balanced equation
+    suggested; a set's dependence; ΔH°, ΔS°, ΔG° and K(T) from the ideal gas.
+  - Rate laws as data: power law, LHHW, Eley–Rideal and the user's own
+    expression, with sites and their adsorption terms, K from the Gibbs
+    energies or the paper's correlation.
+  - `reflux kinetics check` flags what's wrong with a file's rates (a typed
+    8.314, a denominator cut short, a K that disagrees with the Gibbs
+    energies), and `reflux kinetics explain` prints each rate's factors at a
+    state.
+- **Chemical equilibrium,** `equilibrium`: Gibbs minimisation by the RAND
+  method, on the ideal gas or a cubic, and the equilibrium over chosen
+  reactions; and a check of where each reversible rate stops against it.
+- **Integrators,** in `numeric`: `dopri5`, and `rodas4` for stiff problems,
+  each returning an answer only once every step has met its tolerance.
+- **Reactors,** `reactors`: Gibbs, equilibrium, conversion, CSTR and PFR or
+  packed bed, each isothermal, adiabatic or at a duty, each checked on its
+  elements.
+  - The PFR carries the real gas's energy balance and Ergun's pressure drop
+    on the gas's viscosity (Wilke's rule), and reports its profile.
+  - A conversion may be an expression in T, and a conversion reactor warns
+    when its outlet is past equilibrium, with Q/K.
+  - The CSTR solves by Newton, with continuation in its volume where that
+    fails.
+- **Flowsheet file format 2:** reactions, sites, definitions and the reactor
+  units ([flowsheet-format.md](docs/flowsheet-format.md)). Format 1 files
+  read as before.
+- **Report format 2:** a unit's `profile` and `warnings`, balances on the
+  elements where something reacts, and the failure `"reaction_failed"`
+  ([report-format.md](docs/report-format.md)).
+- **Compared with DWSIM 9** (`testdata/m9_dwsim.json`): the owner's reforming
+  PFR is within 2.3e-10 of the exact answer of DWSIM's own equations, and
+  within 1.0e-4 of DWSIM's answer at its finest sections; each other reactor
+  alone, every difference taken apart.
+- **Speed** ([benchmarks.md](docs/benchmarks.md)): the owner's reforming PFR
+  in 28 ms against DWSIM's 10.7 s, and its 50-point study in 2.1 s against
+  11.7 minutes.
+
+### Changed
+
+- **A single phase more than four covolumes large is vapour,** whatever its
+  phase identification parameter says. Π alone called any gas above its
+  Joule–Thomson inversion temperature liquid, however dilute. 17 of M3's
+  1,327 reference roots, supercritical, now differ from `thermo`'s labels.
+- **The report is format 2.** Every unit has `profile` (null but for a PFR)
+  and `warnings` (empty for most units), beside format 1's keys.
+- **The V API,** as 0.x allows:
+  - `flowsheet.load` takes the makers of other modules' units (`makers:`),
+    and a unit's maker reads its table through `Section`, which now has
+    `context`, `measure` and `expression`;
+  - `flowsheet.Outcome` and `UnitResult` have `conserved`, `profile` and
+    `warnings`.
+- **The golden flowsheets' reports** were written again, all five
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json` and `saturated_loop.json`), in report format 2 and
+  for this version. No number in them moved. Two flowsheets with reactors
+  join them, in `testdata/flowsheets/golden/reactors/`: `reformer.json` and
+  `methanol.json`. `tools/golden.vsh` takes the names of those to write.
+
+The C API and the Python package are unchanged but for their version: ABI
+version 1, as in 0.2.0.
+
+### Fixed
+
+- **A hot gas was labelled liquid,** and a drum would have sent it out of its
+  liquid port: a reformer's product at 1000 K and 0.95 bar, for one. See the
+  change above.
+
+### Known limitations
+
+- **Reactors work in one phase.** An outlet that would split is refused, a
+  second phase being M6's.
+- **K from the Gibbs energies is slow in a rate,** recomputed by quadrature
+  at every evaluation: the published reforming model takes 393 ms a solve,
+  14 times the same case on typed K. M8 keeps it, and the viscosity Ergun's
+  drop needs, at the last T.
+- **ChemSep's data,** which the Gibbs energies come from: its S° mixes 1 atm
+  and 1 bar, which puts reforming's K about 4% low, and 142 compounds' ΔG°f
+  disagree with their ΔH°f and S° by over 1 kJ/mol
+  ([data-quality.md](docs/data-quality.md)).
+- **No heat exchangers,** so no PFR cooled by a stream (a later milestone);
+  no design specifications, sensitivity studies or warm starts (M8); no
+  flowsheets from Python (M10b).
+- **Two phases in a flash,** and cubic equations of state only, as in 0.2.0.
+- **Windows and Linux,** with V 0.5.2 (eab77e7).
+
 ## [0.2.0] — 2026-11-08
 
 Thermodynamics and flashes from Python: the roadmap's M10a. A C API that any

@@ -248,13 +248,31 @@ feed doesn't have. A sweep should refuse a quantity with no value at a point,
 and say why, rather than plot it.
 
 ### M9 — Equations, kinetics and reactors
-**In progress.** The plan, approved on 2026-11-08, is in [m9-plan.md](m9-plan.md),
-and its step 0's spike of DWSIM's PFR in [spike-dwsim-pfr.md](spike-dwsim-pfr.md).
-Heat exchangers, here at first, move to a milestone after M9 (its D14):
-nothing in M9's exit needs them, and a cooled PFR wants a coolant stream,
-which belongs with them. A gas's viscosity at low pressure comes the other
-way, from M5, since Ergun's pressure drop needs it (D10, as step 0 amended
-it).
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m9-plan.md](m9-plan.md), and its step 0's spike of
+DWSIM's PFR in [spike-dwsim-pfr.md](spike-dwsim-pfr.md). Heat exchangers,
+here at first, moved to a milestone after M9 (its D14): nothing in M9's exit
+needs them, and a cooled PFR wants a coolant stream, which belongs with them.
+A gas's viscosity at low pressure came the other way, from M5, since Ergun's
+pressure drop needs it (D10, as step 0 amended it). The plan went further
+than the exit below:
+- every equation a user gives is an expression in one language, with named
+  definitions, built-in constants at the SI's exact values, compound units
+  and readings on a unit's scale, `(T in degC)`, held against SymPy, and
+  compiled onto a tape that gives every derivative exactly;
+- Xu and Froment's reforming kinetics as well as Vanden Bussche and
+  Froment's, both against mpmath from the papers' own formulas, and the
+  owner's DWSIM case checked: its typed 8.314s, its cut denominators and its
+  overall K, a factor of 0.20 off;
+- the equilibrium over chosen reactions as well as Gibbs minimisation, and a
+  check of where each reversible rate stops against it;
+- each reactor against DWSIM 9 alone, every difference taken apart, and the
+  owner's PFR within 2.3e-10 of the exact answer of DWSIM's equations;
+- a correctness case, the owner's Tutorial 2, whose conversion reactor now
+  takes its correlation as printed and warns past equilibrium;
+- the owner's case timed against DWSIM's: 28 ms a solve against 10.7 s;
+- a hot gas labelled liquid by M3's flash, found and fixed, and the third
+  release, v0.3.0.
 
 - **Equations as data** (A9). DWSIM takes every equation as a string it
   evaluates: a rate, an equilibrium constant, a specification. reflux parses
@@ -393,7 +411,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |
 | A8 Releases: semver, changelog, golden suite gates every release | M4 |
-| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first; then M8's specifications and objectives, and every later equation |
+| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first (done, with a reactor's conversion); then M8's specifications and objectives, and every later equation |
 
 ### B — Numerics
 | Item | Pure V | C backend | Needed by |
@@ -417,7 +435,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - C6 Reference equations: IAPWS-IF97/95 natively; GERG-2008 through CoolProp
   first, natively later. **M5**
 - C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**,
-  except a gas's viscosity at low pressure, which Ergun's pressure drop needs: **M9**
+  except a gas's viscosity at low pressure, which Ergun's pressure drop needs: **M9** (done)
 - C8 Electrolytes (eNRTL, e-CPA). **after M12**
 - C9 Property packages: phase models + transport + data, chosen per
   flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and
@@ -440,7 +458,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - E3 PH, PS, TV, UV and vapour-fraction flashes; bubble and dew points. **M3**
 - E4 Three-phase and multiphase flash; free-water handling. **M6**
 - E5 Phase envelopes, critical points, azeotrope search. **M12**
-- E6 Chemical equilibrium by Gibbs minimisation. **M9**
+- E6 Chemical equilibrium by Gibbs minimisation. **M9** (done)
 
 ### F — Flowsheet core
 - F1 Streams, ports, unit-operation interface, flowsheet graph. **M4**
@@ -456,7 +474,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - G2 Heat exchangers: two-stream, by duty, outlet T, UA or approach. **after M9**
   (moved out of M9 by its D14)
 - G3 Reactors: conversion, yield, Gibbs, CSTR, PFR, packed bed (using Track L
-  kinetics). **M9**
+  kinetics). **M9** (done, with the equilibrium over chosen reactions, but
+  for the yield reactor, which none of its decisions took up: later)
 - G4 Columns: shortcut, inside-out, Naphtali–Sandholm; absorbers and
   strippers; three-phase and rate-based later. **M7**
 - G5 Extractors and other separators. **after M7**
@@ -505,16 +524,16 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 ### L — Reaction kinetics
 - L1 Rate-law building blocks: Arrhenius (centred on T_ref) and van 't Hoff
   temperature functions, monomials, catalyst sites with shared adsorption
-  terms. **M9**
+  terms. **M9** (done)
 - L2 Rate laws: power law, LHHW, Eley–Rideal; activity basis per reaction
-  (partial pressure, fugacity, concentration). **M9**
-- L3 TOML input with equation parsing and element-balance checks. **M9**
+  (partial pressure, fugacity, concentration). **M9** (done)
+- L3 TOML input with equation parsing and element-balance checks. **M9** (done)
 - L4 `reflux kinetics check` / `explain`: rendering (Unicode, LaTeX), units,
-  physical-sanity warnings, factor tables. **M9**
-- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9**
-- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9**
+  physical-sanity warnings, factor tables. **M9** (done)
+- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9** (done)
+- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9** (done)
 - L7 Free-form expression rate laws (parsed, unit-checked, differentiated): A9's
-  expressions, so **M9**
+  expressions, so **M9** (done)
 
 ---
 
