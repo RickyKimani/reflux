@@ -37,7 +37,7 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
-## [0.3.0]
+## [0.3.0] — 2026-11-15
 
 Equations, kinetics and reactors: the roadmap's M9. Every equation a user
 gives, a rate law, a rate constant, an adsorption term or a conversion, is

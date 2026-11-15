@@ -20,8 +20,8 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
-- **M0 to M4 and M10a are done** and merged into `main` (PRs #1 to #5).
-  **M9 is done** on its branch, `m9-reactors`, awaiting its PR.
+- **M0 to M4, M10a and M9 are done** and merged into `main` (PRs #1 to
+  #6).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
@@ -40,12 +40,13 @@ Keep this section current: update it whenever a step is committed.
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
     unit failures.
 - **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`, and
-  v0.2.0 (M10a), tagged on 2026-11-08 on `main`: source releases, annotated
-  tags, pushed. v0.3.0 (M9) has its CHANGELOG entry, undated until its tag
-  on `main` after the merge, and its version in `v.mod` and the package. A
-  changed golden report goes in the entry by name.
-- **`test_memory.py` is flaky on Ubuntu,** meant for early in M9 and not
-  done: it failed M9 step 0's CI run, and has passed since. It holds the
+  v0.2.0 (M10a), tagged on 2026-11-08, and v0.3.0 (M9), tagged on
+  2026-11-15, both on `main`: source releases, annotated tags, pushed. The
+  next release starts with a new CHANGELOG entry and its version in `v.mod`
+  and the package, and a changed golden report goes in that entry by name.
+- **`test_memory.py` is flaky on Ubuntu,** to fix before the next
+  milestone's first step: meant for early in M9, it wasn't done, failed M9
+  step 0's CI run, and has passed since. It holds the
   collector's `heap_size` from `reflux_collect`, free blocks included, and
   Boehm grows that in one large step when it chooses to and never gives it
   back. On `main`'s merge of M10a it doubled once, 5,580 KiB to about 11 MB,
@@ -53,8 +54,8 @@ Keep this section current: update it whenever a step is committed.
   bytes live after a full collection (heap size less free bytes), which
   changes what `reflux_collect` reports, or adds an output, so the header
   and `docs/python.md` say so.
-- **M9 (equations, kinetics and reactors) is done** on branch
-  `m9-reactors`, with its exit review at the end of its plan. Its plan,
+- **M9 (equations, kinetics and reactors) is done,** merged in PR #6 and
+  released as v0.3.0, with its exit review at the end of its plan. Its plan,
   `docs/m9-plan.md`, was approved on 2026-11-08: exit criteria 1–11,
   decisions D1–D16 and steps 0–13, ending in v0.3.0.
   - The owner's principle drives it: no equation is ever taken as text, not
@@ -213,11 +214,10 @@ Keep this section current: update it whenever a step is committed.
     CHANGELOG entry undated until the tag, the seven golden reports written
     again (report format 2, no number moved), and the docs and the exit
     review. No source changed, so no full checks ran; CI passed on step 11.
-  - Carried forward (in its review): v0.3.0's tag; `test_memory.py`; K(T)
+  - Carried forward (in its review): `test_memory.py`; K(T)
     and the viscosity at an unmoved T (M8); one-phase reactors (M6); the
     yield reactor; reports to DWSIM, `thermo` (a hot gas's label), SymPy and V.
-  - Next: the PR into `main` when asked, then the tag on `main`: date the
-    entry, run `tools/release.vsh`, tag and push.
+  - Next, by the roadmap: M10b (flowsheets from Python), or M5 to M8.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
