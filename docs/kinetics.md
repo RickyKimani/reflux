@@ -9,6 +9,12 @@ Setting up an LHHW model for a heterogeneous catalytic reactor meant:
 - entering the adsorption (denominator) terms one by one for every
   reaction, and leaving out by hand the species that weren't involved.
 
+The owner's own reforming case shows what that costs. In Xu and Froment's
+kinetics, all three reactions share one adsorption term. In the case's DWSIM
+file, the overall reaction's denominator has no CO term and the water–gas
+shift's no CH₄ term, because a DWSIM rate can only name its own reaction's
+species, and by their place in it: `R1`, `P2`.
+
 reflux treats kinetics as **structured data that the program understands**,
 not as strings it evaluates. The structure is what makes checking possible.
 
@@ -20,7 +26,7 @@ Every Langmuir–Hinshelwood–Hougen–Watson rate has the same shape:
 
 | Part | General form | Stored as |
 |---|---|---|
-| kinetic factor | k(T) = k_ref · exp(−Eₐ/R · (1/T − 1/T_ref)) | Arrhenius, centred on T_ref (better conditioned when fitting) |
+| kinetic factor | k(T) = A · exp(−Eₐ/RT), or k_ref · exp(−Eₐ/R · (1/T − 1/T_ref)) | Arrhenius, centred on T_ref when one is given (better conditioned when fitting) |
 | driving force | Π aᵢ^αᵢ · (1 − Q/K) | forward orders, plus reversibility (see below) |
 | adsorption term | (1 + Σ terms)ⁿ, where each term is Kⱼ(T)·Π aₖ^eₖ | a list of monomials; the power n per reaction |
 
@@ -75,44 +81,49 @@ from the thermodynamic value.
 
 ## Input format
 
-TOML, like flowsheets. The numbers below are placeholders, not the
-published parameters.
+TOML, in the flowsheet file or a file of its own
+([flowsheet-format.md](flowsheet-format.md#reactions-format-2) has every
+key). Vanden Bussche and Froment's methanol kinetics, as their paper gives
+them ([testdata/kinetics/](../testdata/kinetics/vanden_bussche_froment.toml)):
 
 ```toml
-[[site]]
-name = "Cu"
+format = 2
+
+[components]
+names = ["carbon dioxide", "hydrogen", "methanol", "water", "carbon monoxide"]
+
+[site.Cu]
 terms = [
-  { k = { k_ref = 1.0, dh = -40e3, t_ref = 500.0 }, a = { H2O = 1.0, H2 = -1.0 } },
-  { k = { k_ref = 1.0, dh = -20e3, t_ref = 500.0 }, a = { H2 = 0.5 } },
-  { k = { k_ref = 1.0, dh = -60e3, t_ref = 500.0 }, a = { H2O = 1.0 } },
+  { name = "K_a", K = "3453.38", a = { H2O = 1, H2 = -1 } },
+  { name = "K_b", K = { A = "0.499 bar^-0.5", dH = "-17197 J/mol" }, a = { H2 = 0.5 } },
+  { name = "K_c", K = { A = "6.62e-11 bar^-1", dH = "-124119 J/mol" }, a = { H2O = 1 } },
 ]
 
-[[reaction]]
-name = "methanol"
+[reaction.methanol]
 equation = "CO2 + 3 H2 = CH3OH + H2O"    # parsed; element balance checked
-basis = "partial_pressure"
-units = { rate = "mol/(kg_cat*s)", pressure = "bar" }
-k = { k_ref = 1.0, ea = 36e3, t_ref = 500.0 }
-orders = { CO2 = 1.0, H2 = 1.0 }
-reversible = "thermo"                      # K from ΔG°f
+law = "lhhw"
+k = { A = "1.07 mol/(kg*s*bar^2)", Ea = "-36696 J/mol" }
+orders = { CO2 = 1, H2 = 1 }
+K = "10^(3066 K / T - 10.592) * 1 bar^-2"  # or "gibbs", K from the component data
 site = "Cu"
 site_power = 3
 
-[[reaction]]
-name = "rwgs"
+[reaction.RWGS]
 equation = "CO2 + H2 = CO + H2O"
-basis = "partial_pressure"
-units = { rate = "mol/(kg_cat*s)", pressure = "bar" }
-k = { k_ref = 1.0, ea = 90e3, t_ref = 500.0 }
-orders = { CO2 = 1.0 }
-reversible = "thermo"
+law = "lhhw"
+k = { A = "1.22e10 mol/(kg*s*bar)", Ea = "94765 J/mol" }
+orders = { CO2 = 1 }
+K = "10^(2.029 - 2073 K / T)"
 site = "Cu"
-site_power = 1
 ```
 
 Power-law and Eley–Rideal rates use the same building blocks. A free-form
-expression type (a small parsed expression language, never `eval`) is the
-escape hatch for anything else, and it gets the same checks.
+expression is the escape hatch for anything else, and it gets the same
+checks. It's reflux's one expression language (roadmap A9), used wherever an
+equation is needed, not only in kinetics: parsed, never evaluated as text,
+with its names bound, its units checked, and exact derivatives. The structured
+forms build the same expressions, so a structured rate and the same rate typed
+out render, evaluate and differentiate alike ([m9-plan.md](m9-plan.md)).
 
 ## Checking that the model is what you meant
 
@@ -130,7 +141,13 @@ the factor table.
    the stated rate unit. bar versus Pa errors are caught here.
 4. **Thermodynamic consistency.** At an equilibrium composition from Gibbs
    minimisation (roadmap E6), every reversible rate is zero, and its sign
-   always points toward equilibrium.
+   always points toward equilibrium. Given a state, reflux brings the
+   reactions to equilibrium from it and follows each rate along its own
+   reaction to where it's zero. A rate that stops elsewhere is reported
+   with where, as Q/K: a fitted K, a rate on partial pressures in a gas that
+   isn't ideal, or a typed mistake, such as mole fractions without
+   (p°/P)^Δn, each stops somewhere of its own. A reactor on such a rate
+   heads for that point, not the flowsheet's equilibrium.
 5. **Physical sanity (warnings).** Negative constants; an adsorption
    enthalpy that's positive (adsorption is normally exothermic, so K should
    fall with T); a negative activation energy; a species in an adsorption
@@ -155,24 +172,33 @@ planned alongside them (roadmap H4). There are two parts:
 
 ## How it maps onto V
 
+As built in M9 ([kinetics/law.v](../kinetics/law.v)):
+
 ```v
-pub type TempFn = Arrhenius | Constant | VantHoff
+// How a constant depends on T. Numbers stay as written, with their units,
+// so that a rate renders as its paper prints it.
+pub type TempFn = Arrhenius | Fixed | VantHoff | Written
 
 pub struct Monomial {
-	k     TempFn
-	exps  []SpeciesExp // (component index, exponent)
+	name   string   // names its K, as a definition
+	k      TempFn
+	powers []Power  // each a species, as written, and its exponent
 }
 
 pub struct Site {
-	name  string
-	terms []Monomial  // θ = 1 + Σ terms
+	name   string
+	symbol string     // names θ as a definition
+	terms  []Monomial // θ = 1 + Σ terms
 }
 
 pub type RateLaw = EleyRideal | Expression | Lhhw | PowerLaw
 ```
 
-A rate law is a sum type, because the module owns the list of forms. A
-reactor takes `[]Reaction` and doesn't care which form each one uses.
+A rate law is a sum type, because the module owns the list of forms. Each
+form writes the expression a user would type, which `expr` parses, so every
+rate, structured or typed out, is one tree, compiled onto one tape
+(`kinetics.build`). A reactor takes the kinetics and the reactions it runs,
+and doesn't care which form each one uses.
 
 ## Dependencies
 

@@ -50,7 +50,15 @@ counts are exact. It's what found M3's slow volume roots (2,200 attraction
 evaluations for a binary flash). Two catches:
 - With `-prod -cc gcc` the instrumented build of a PH flash crashed, while
   the same program profiled fine under tcc. Profile with tcc and read the
-  shares, not the times.
+  shares, not the times. (M9 step 11's PFR did profile under `-prod -cc
+  gcc`, 24 times slower than its plain build: 9.5 s a solve against 0.39 s,
+  with 341 million calls of the bounds-checked index `v_fixed_index`. The
+  shares still found what mattered: 93% of the published model's time in
+  K(T)'s quadrature.)
+- The file's columns are the calls, the time with what the function calls,
+  the time in the function itself, the time a call, and the name, so sort
+  on the second to find where a solve goes and on the third to find what's
+  slow in itself.
 - `gc_heap_usage()` reports the GC heap's size and free bytes, which is
   how a leak shows: run the code in a loop, call `gc_collect()`, and see
   whether the heap keeps growing.
@@ -106,6 +114,16 @@ early, and `v fmt -w` reformatted what it made of the rest: the string's tail
 became a label and a stray name, and three lines after it, a comment and a
 declaration, were gone. Compile before formatting, or format with `-verify`
 first.
+
+**Gotcha: `v fmt` adds an import for a name that's a module's.** Like
+`goimports`, it imports a module that a file uses without importing: write
+`math.sqrt(2.0)` and `import math` appears. It goes by the name alone, so a
+test that called `builtin.find(...)` on a constant defined in another test
+file (and not this one) got `import builtin`, V's own built-in module, and
+the build then failed with "module 'builtin' is imported but never used",
+which says nothing about the missing constant. Name a constant so that it
+can't be taken for a module, and read an error about an import you never
+wrote as a name that isn't defined.
 
 A `.vsh` script inside the project can import the project's own modules,
 just as a program can. [tools/import_chemsep.vsh](../tools/import_chemsep.vsh)
@@ -198,6 +216,15 @@ scale(mut volumes, 1e6)
 `LU.solve_into(b, mut x)` in [numeric/lu.v](../numeric/lu.v) is the pattern
 for iterations: the caller owns `x`, says `mut` at the call, and the solve
 writes into it instead of allocating a new slice on every Newton step.
+
+**Only arrays, maps, structs, interfaces and pointers can be `mut`
+arguments.** `fn set(mut s string)` is refused ("mutable arguments are only
+allowed for arrays, interfaces, maps, pointers, structs or their aliases"),
+and so is a `mut` f64 or int. Go has no `mut` at all, and would pass a
+`*string`; V's message says to return the value instead. The integrators'
+stage helper, which says why an evaluation failed, returns the reason as a
+string, '' where it's fine (`ode_stage` in
+[numeric/dopri5.v](../numeric/dopri5.v)).
 
 `for mut x in arr` changes the elements in place. In Go, `for _, x := range arr`
 gives you a **copy**, which is a classic bug. V's `for mut` does what it
@@ -332,6 +359,10 @@ p := thermo.saturation_pressure(eos, 350.0) or {       // handle it; `err` is in
   `a, b := f()!` unpacks it. `overlapping_split` in
   [sweep/sweep_internal_test.v](../sweep/sweep_internal_test.v) returns
   `!(Point, thermo.Model, flash.FlashResult)`.
+- **`none` is a keyword,** so it can't name a variable: `none :=
+  quantity.Dim{}` is "non-name `none` on left side of `:=`". Go's `nil` is
+  only predeclared, and can be shadowed; V's `none` can't. M9 hit it twice,
+  naming a pure number's dimension, and calls it `pure`.
 - **`?T` is an Option**: a value or `none`, with no error message. Use it
   when "nothing here" is a normal answer, not a failure. `liquid_volume` in
   [thermo/model.v](../thermo/model.v) returns `?f64`, and `none` there
@@ -393,6 +424,13 @@ rec := db.find('watr') or {
 }
 ```
 
+- **But don't spread that `err` into a copy.** Inside `if err is UnitError`,
+  `UnitError{...err, suggestions: s}` compiles and copies nothing: in a
+  probe the copy came out empty, and even `suggestions`, set beside the
+  spread, was lost. Cast first, `e := err as UnitError`, and `...e` works;
+  or name the fields, as `unit` in [quantity/quantity.v](../quantity/quantity.v)
+  does.
+
 - **Wrapping** (Go's `fmt.Errorf("…: %w", err)`):
   `f() or { return error('loading ${path}: ${err}') }`. See `number` in
   [demo.v](../demo.v). V doesn't keep an error chain the way `%w` does.
@@ -405,6 +443,18 @@ rec := db.find('watr') or {
   `remove(id) or { return fail(code, err, err_len, err.msg()) }`, and V took
   both `err`s for the error: "cannot use `IError` as `&char`". The parameter
   is `buf` now ([capi/capi.v](../capi/capi.v)).
+- **An `or` block can't follow a `match` whose arms are Results.**
+  `match which { true { half(x) } false { third(x) } } or { -1 }` is
+  refused, and oddly: "unexpected `or` block, expression of type `!int` is
+  not an Option or a Result". Each call takes its own `or`, as the PFR's
+  choice of integrator does ([reactors/pfr.v](../reactors/pfr.v)), or the
+  `match` yields plain values from calls that already handled theirs.
+- **A function returns `!T` or `?T`, never both.** Go's `(T, bool, error)`
+  has no V spelling: `fn f() !?int` is refused ("the type must be Option or
+  Result"). Pick the one the caller acts on. The consistency check's search
+  for where a rate is zero returns `?[]f64`, none where it isn't zero
+  anywhere, and takes a rate it can't evaluate there as NaN, which ends the
+  search the same way ([equilibrium/consistency.v](../equilibrium/consistency.v)).
 
 ---
 
@@ -456,6 +506,13 @@ implements `Model` itself, by evaluating `inner` at a shifted volume. So
 `thermo.translate(thermo.translate(eos, c1)!, c2)!` is a valid model, and
 `solve_tp` can't tell it from a cubic. It's the same decorator pattern as
 wrapping an `io.Reader` in Go.
+
+**An interface can embed another, `mut` methods and all,** as Go's can, and
+a value of the bigger one passes where the smaller is asked: probed, a
+`mut o Ode` parameter took a `StiffOde`, and the calls made through it
+reached the caller's struct. `numeric.StiffOde` is `Ode` with a Jacobian,
+so `rodas4` hands its problem to the first-step code it shares with
+`dopri5` ([numeric/ode.v](../numeric/ode.v)).
 
 **Sum types** are what Go lacks: a *closed* set of variants, checked by the
 compiler. `Alpha` in [thermo/alpha.v](../thermo/alpha.v) is one, because the
@@ -551,6 +608,14 @@ tells V which enum `.pr` belongs to, so the elements fall back to ints.
   Go would give you `Tc = 0` without complaint. Every field of `Component`
   is required. See [thermo/component.v](../thermo/component.v).
 - **Defaults:** `tol f64 = 1e-10` in the struct definition.
+- **A fixed array of structs can miss its defaults.** With `struct Ratio {
+  num i64 den i64 = 1 }` and `struct Dim { e [6]Ratio }`, `Dim{}` gets
+  `den = 1` in every element, and so does `[]Part{len: 2}`. But `Part{}`,
+  a struct holding a `Dim`, gets `den = 0`: the array inside another
+  struct's zero value is left zeroed. Named fields of struct type keep their
+  defaults at any depth, so `quantity`'s `Dim` has six named `Ratio` fields,
+  not an array ([quantity/quantity.v](../quantity/quantity.v); a probe, V
+  0.5.2).
 - **`@[params]` structs** give you named, optional arguments, which Go
   doesn't have. `new_cubic` takes a `CubicOptions`:
 
@@ -564,6 +629,13 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `const butane = Component{…}` and `const kinds = [CubicKind.vdw, .rk, .srk, .pr]`.
 - Receivers: `fn (c Cubic) residual(…)` is a value receiver, and
   `fn (mut s Solver) step()` is the equivalent of Go's `func (s *Solver) Step()`.
+- **A reference parameter can't be kept in a struct for free.** Go's escape
+  analysis moves a value to the heap when a pointer to it outlives the
+  call. V refuses instead: putting a `&Definitions` parameter in a struct
+  field is "`defs` cannot be assigned outside `unsafe` blocks as it might
+  refer to an object stored on stack. Consider declaring `Definitions` as
+  `@[heap]`". The tape's builder holds a copy, `defs: *defs`, cheap since
+  the struct's arrays are shared headers ([expr/tape.v](../expr/tape.v)).
 - **Read-only exported fields.** In Go an exported field can always be
   written by anyone who has the struct. V separates the two: fields under
   `pub:` can be read outside the module but not assigned, and only
@@ -573,6 +645,13 @@ thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
   `pub:`, so a report can't be edited after the fact. (I first assumed
   `pub mut:` meant "mutable only inside the module", as older V docs said.
   A probe showed it doesn't.)
+- **A positional literal needs every field,** as Go's unkeyed literal
+  does, and an Option field doesn't change that: with `struct G { a f64 b f64
+  c ?f64 }`, `G{1, 2}` is "too few fields in `G` literal (expecting 3, got
+  2)", while `G{a: 1, b: 2}` leaves `c` as `none`. M9 step 10 gave the
+  conversion reactor's `Conversion` an optional expression, and seven test
+  literals written `Conversion{rs[0], 0, 0.5}` stopped compiling, so a
+  struct that may grow is written with names (a probe, V 0.5.2).
 - **Struct update syntax**, which Go lacks: `Repair{...it, cas: rec.ids.cas}`
   copies `it` and changes one field. It works from another module on
   `pub:` fields too, which can be read there but not assigned, so it's how
@@ -662,6 +741,14 @@ like Go. The stability iteration hit the first case, keeping last step's
 array (`last_step = step.clone()` in
 [flash/stability.v](../flash/stability.v)).
 
+**`clone` on an array of arrays is deep,** where Go's `slices.Clone` copies
+only the outer slice. Probed: after `c := b.clone()` on a `[][]f64`,
+`c[0][0] = 9` leaves `b` as it was. A row taken out still shares, as in Go:
+after `mut row := d[0]`, `row[0] = 7` changes `d`, and after `e[0] = e[1]`
+the two rows are one. Swapping rows, `a[0], a[1] = a[1], a[0]`, swaps them.
+The equilibrium's row reductions clone what they're given before reducing
+it ([equilibrium/equilibrium.v](../equilibrium/equilibrium.v)).
+
 **Gotcha:** `'abc'.f64()` returns `0.0` with no error. Always parse user input
 with `strconv.atof64`, which returns `!f64`.
 
@@ -701,6 +788,47 @@ which they are by name. In V:
 Go's has no edit distance. It counts bytes, not runes, so dropping the
 two-byte `°` from `°C` is two edits. `quantity` and `components` use it
 for their suggestions.
+
+**Gotcha: `.sort(a.x < b.x)` sees only `a` and `b`.** The comparison is
+compiled inline, so it can't read anything else, not even a module
+constant: `ps.sort(names[a.k] < names[b.k])` is refused with "can not access
+external variable `names`". Write a function and pass it,
+`ps.sort_with_compare(by_name)`, with `fn by_name(a &P, b &P) int`, which
+can read constants as any function can. Go's `slices.SortFunc` takes a
+closure either way. [chem/chem.v](../chem/chem.v) sorts a formula's
+elements by symbol so.
+
+**Gotcha (a V bug): `f() or { none }` into an Option field.** A struct
+field of type `?T` set from a function returning `!T`, as
+`S{ p: get() or { none } }`, passes V's checker, and V 0.5.2 then writes C
+that assigns an option to a plain struct, which neither tcc nor gcc
+compiles ("incompatible types when assigning to type 'main__P' from type
+'__v_option'"). Go has no Options to trip on. Make the Option first and
+fill it: `mut p := ?P(none)` then `if x := get() { p = x }`, as
+[flowsheet/reactions.v](../flowsheet/reactions.v) does for a species'
+formula and gas data.
+
+**Gotcha: a test file's function can hide its module's constant.** A
+test file is compiled into its module, as Go's internal tests are, so its
+names share the module's scope. In [kinetics](../kinetics/exact.v),
+`const one = Ratio{1, 1}` is the number 1, and a test defined a helper
+`fn one(...)`. `one + one` in the module still meant the constant, but
+`mut coeff := one`, where a function value fits too, took the test's
+function, and the error landed in the module's file: "cannot assign to
+`coeff`: expected `fn (...)`, not `kinetics.Ratio`". The module builds
+alone; only its tests broke. Go refuses the second declaration outright.
+Keep a test's helpers' names apart from the module's.
+
+**`index` on an array gives −1; on a string, an Option.** `[3, 4, 5].index(9)`
+is `-1`, as Go's `slices.Index` is, but `'hello'.index('z')` is `?int`,
+taken with `or {}`. So `if p := a.index(x) { … }` doesn't compile for an
+array, and `if p := s.index(t)` is the way for a string.
+
+**Gotcha: a `rune` has no `is_digit`.** `u8` has `is_digit()`,
+`is_letter()` and `is_space()`, as Go's `unicode` package has for runes,
+but V's `rune` has none of them: `r.is_digit()` is "unknown function".
+Compare with literals, `` r >= `0` && r <= `9` ``, as
+[chem/smiles.v](../chem/smiles.v) does in a small `digit(r rune) bool`.
 
 **Gotcha: `toml.Any` converts without complaint.** `doc.value('name').f64()`
 on a string returns `0.0`, and a missing key gives a `Null` that also
@@ -830,6 +958,31 @@ m := {
   the same a(T, n) on every step. One change there made every flash
   2.3–5.7 times faster ([docs/benchmarks.md](benchmarks.md)). Allocation,
   the usual suspect, wasn't near the top.
+- **"Allocates nothing" can be tested.** `gc_heap_usage().total_bytes`
+  counts every byte allocated since the program started, so its change
+  across a loop is what the loop allocated, as Go's `testing.AllocsPerRun`
+  tells you. A probe gave 0 for a loop that only writes into an existing
+  array and 211,264 bytes for 1,000 arrays of ten `f64`s. M9's tape spike
+  ([spike/tape/spike.v](../spike/tape/spike.v)) uses it to show that its
+  evaluations allocate nothing in 1,800,000 calls.
+- **`@[direct_array_access]` turns off a function's bounds checks.** Each
+  `v[i]` is normally a call to `array_get`, which panics out of range. With
+  the attribute it's a bare pointer read, and an index past the end reads
+  garbage without a word: a probe read element 200 of a 100-long array and
+  got 30.0. Go has no such switch; its compiler drops a check only where it
+  can prove the index in range. Keep it for hot loops whose indices are
+  right by construction, such as the tape spike's interpreter.
+- **`os.get_line()` returns `''` at the end of the input and for an empty
+  line alike,** where Go's `bufio.Scanner` says which with `Scan()`. A
+  probe gave `[a]`, `[]`, `[b]` and then `[]` for ever from the input
+  `a`, an empty line and `b`. So a program that reads requests a line at a
+  time, as `tools/bench_reactor.v` does from `tools/gen_m9_bench.py`, stops
+  at the first empty line, and its client never sends one; its `println`
+  reaches the client through the pipe at once.
+- **A `match` on an enum is an if-else chain in the C,** tested arm by arm,
+  not a `switch`. In the tape spike, putting the commonest arms first
+  changed nothing measurable, so gcc's optimiser seems to cope, but don't
+  count on a jump table.
 
 ---
 
@@ -1009,6 +1162,11 @@ fx := read_fixture[ThermoFixture]('m1_thermo.json')!
 `@FILE` is the path of the source file, filled in at compile time, so the
 test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
 module is gone; it's `json2` now.)
+
+A key the struct doesn't have is ignored, as Go's `encoding/json` ignores
+it, nested objects included, so a test reads only the fields it uses from
+a large fixture: [reactors/dwsim_test.v](../reactors/dwsim_test.v) declares
+a few fields of `testdata/m9_dwsim.json`'s many (a probe, V 0.5.2).
 
 A key that may be missing from the JSON fits an Option field. Where Go
 would use a `*float64` that's nil when absent, V's `json2` leaves a `?f64`

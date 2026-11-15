@@ -229,7 +229,7 @@ fn sub(a string, b string) string {
 fn test_a_wrong_field_is_refused_with_its_line_and_reason() {
 	feed := '[feed.feed]\n'
 	// The format.
-	refused(sub('format = 1', 'format = 2'), lined('format = 1'), 'format', 'reads format 1',
+	refused(sub('format = 1', 'format = 3'), lined('format = 1'), 'format', 'reads format 1 or 2, not 3',
 		'')
 	refused(sub('format = 1', 'format = "1"'), lined('format = 1'), 'format', 'a whole number',
 		'')

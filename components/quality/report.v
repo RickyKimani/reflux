@@ -75,6 +75,8 @@ fn render(s Sweep, imp chemsep.Import, cool CoolFixture, banks []components.KijB
 	o << '| Own vapour-pressure correlation usable | ${s.compounds} compounds | ${s.fallbacks.len} use Antoine |'
 	o << '| InChIKey unique | ${s.compounds} compounds | ${s.shared_inchikey.len} shared |'
 	o << '| Eq.-106 ranges within Tc | | ${s.past_tc.len} run past it |'
+	o << '| A formula two of structure, SMILES and molar mass agree on | ${s.compounds} compounds | ${s.no_formula.len} have none; ${s.conflicts.len} where structure and SMILES disagree |'
+	o << '| ΔG°f within 1 kJ/mol of ΔH°f − T°ΔS°f | ${s.formation_count} compounds | ${s.formation.len} |'
 	o << ''
 	o << '## Correlations: finite, and positive where they must be'
 	o << ''
@@ -142,6 +144,46 @@ fn render(s Sweep, imp chemsep.Import, cool CoolFixture, banks []components.KijB
 	o << 'vaporization and surface tensions.'
 	o << ''
 	o << problems_table(s.past_tc)
+	o << '## Formulas'
+	o << ''
+	o << "A compound's formula is read from its structure, CH3(CH2)2CH3, and from"
+	o << 'its SMILES string, and each checked against its molar mass by the'
+	o << 'standard atomic weights. It takes the formula two of the three agree'
+	o << "on (M9 step 4); reactions are balanced by it. A compound with none can't"
+	o << 'react.'
+	o << ''
+	o << '### No formula (${s.no_formula.len})'
+	o << ''
+	o << problems_table(s.no_formula)
+	o << '### Structure and SMILES disagree (${s.conflicts.len})'
+	o << ''
+	o << problems_table(s.conflicts)
+	o << "### A SMILES string's charge that isn't the file's (${s.charges.len})"
+	o << ''
+	o << problems_table(s.charges)
+	o << '## Gibbs energies of formation'
+	o << ''
+	o << 'ΔG°f against ΔH°f − T°(S° − Σ nₑS°ₑ), with T° = 298.15 K and the'
+	o << "elements' entropies in their reference states from CODATA's key values."
+	o << 'A K from ΔG°f differs from one from ΔH°f and S° by a factor of'
+	o << 'exp(gap/RT°) for every mole of such a compound in the reaction. reflux'
+	o << 'takes K from ΔH°f, S° and Cp (M9 decision D7), so a gap here means that'
+	o << 'ΔG°f or one of the other two is wrong, and K may be. Listed when'
+	o << "over 1 kJ/mol, largest first. Below that, rounding and the files'"
+	o << 'mixed standard pressures account for it: some of their S° are at 1 atm,'
+	o << '0.11 J/(mol·K) below the 1-bar value, which is 33 J/mol in ΔG°f for a'
+	o << 'mole of gas.'
+	o << ''
+	if s.formation.len == 0 {
+		o << 'None.'
+	} else {
+		o << '| CAS | Compound | ΔG°f (kJ/mol) | From ΔH°f and S° | Gap (kJ/mol) |'
+		o << '|---|---|---|---|---|'
+		for g in s.formation {
+			o << '| ${g.cas} | ${md(g.name)} | ${g5(g.dgf / 1e3)} | ${g5((g.dgf - g.gap) / 1e3)} | ${signed(f2(g.gap / 1e3))} |'
+		}
+	}
+	o << ''
 	o << '## ChemSep against CoolProp: the outliers'
 	o << ''
 	o << 'From the ${cool.fluids.len} fluids both have. Listed when ChemSep is off by'

@@ -1,6 +1,7 @@
 module flowsheet
 
 import components
+import kinetics
 import math
 import numeric
 import os
@@ -9,8 +10,9 @@ import thermo
 import toml
 import toml.ast
 
-// The format this reflux reads (D9). A later one comes with a migration.
-const file_format = 1
+// The formats this reflux reads (D9): 1, M4's, and 2, which adds M9's
+// reactions and reactors (D11). A later one comes with a migration.
+const file_formats = [1, 2]
 
 // How deep arrays and inline tables may nest. No flowsheet goes past 2, and
 // V's parser recurses, so it's what stops a file overflowing the stack.
@@ -28,6 +30,17 @@ pub:
 	dir string
 	// makers are unit types beyond the built-in ones (D1).
 	makers map[string]Maker
+}
+
+// Context is what a unit's maker may need beyond its own table: the file's
+// format, its components as reactions know them, with their records, and
+// its reactions, built (format 2's, D11).
+pub struct Context {
+pub:
+	format   int
+	species  []kinetics.Species
+	records  []components.Record
+	kinetics ?kinetics.Kinetics
 }
 
 // Loaded is a flowsheet file, read and checked: ready to solve, or to write
@@ -77,8 +90,8 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		text:  text
 	}
 	given := top.integer('format')!
-	if given != file_format {
-		return top.fail('format', 'this reflux reads format ${file_format}, not ${given}', [])
+	if given !in file_formats.map(i64(it)) {
+		return top.fail('format', 'this reflux reads format 1 or 2, not ${given}', [])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!
@@ -96,6 +109,26 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 
 	mut model := top.child('model')!
 	fl := read_model(mut model, db, component_names, names.line('names'))!
+
+	// The file's components as reactions know them, for a reactor's maker,
+	// and in format 2 its reactions.
+	mut records := []components.Record{}
+	mut species := []kinetics.Species{}
+	for name in component_names {
+		r := db.find(name) or { return names.fail('names', err.msg(), []) }
+		records << r
+		species << species_of(r)
+	}
+	mut built := ?kinetics.Kinetics(none)
+	if given == 2 && (top.has('reaction') || top.has('site') || top.has('definitions')) {
+		built = read_reactions(mut top, species)!
+	}
+	context := Context{
+		format:   int(given)
+		species:  species
+		records:  records
+		kinetics: built
+	}
 
 	mut solver := if top.has('solver') {
 		top.child('solver')!
@@ -132,6 +165,7 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 	for name in units.table.keys() {
 		mut s := units.child(name)!
 		s.components = component_names
+		s.context = context
 		types << read_unit(mut s, name, makers, mut sheet)!
 	}
 	top.finish()!

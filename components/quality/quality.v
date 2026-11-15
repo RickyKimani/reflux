@@ -81,7 +81,28 @@ pub mut:
 	no_ideal_gas    []Problem
 	no_component    []Problem
 	fallbacks       []Problem // vapour pressure from the Antoine record
+	no_formula      []Problem // no formula two of its sources agree on
+	conflicts       []Problem // a structure and a SMILES string that disagree
+	charges         []Problem // a SMILES string's charge that isn't the file's
+	formation_count int       // compounds with ΔH°f, ΔG°f and S°
+	formation       []Gap     // ΔG°f beyond formation_tolerance of ΔH°f and S°
 }
+
+// Gap is a compound whose ΔG°f isn't its ΔH°f and S°'s, by gap J/mol.
+pub struct Gap {
+pub:
+	cas  string
+	name string
+	dgf  f64
+	gap  f64
+}
+
+// formation_tolerance is how far ΔG°f may be from ΔH°f − T°ΔS°f before
+// it's listed, J/mol: 1 kJ/mol moves a K at 298.15 K by a factor of 1.5.
+// Below it, the files' rounding and their mixed standard pressures (S° at
+// 1 atm for some compounds, 1 bar for others: 33 J/mol a mole of gas) are
+// all there is.
+pub const formation_tolerance = 1000.0
 
 // sweep checks every compound in the database.
 pub fn sweep(db components.Database) !Sweep {
@@ -113,6 +134,7 @@ pub fn sweep(db components.Database) !Sweep {
 			}
 		}
 		r.ideal_gas() or { s.no_ideal_gas << Problem{r.ids.cas, r.name, err.msg()} }
+		check_formula(mut s, r)
 		r.component() or { s.no_component << Problem{r.ids.cas, r.name, err.msg()} }
 		vp := r.property('vapor_pressure') or { continue }
 		if vp.key != 'vapor_pressure' {
@@ -133,10 +155,46 @@ pub fn sweep(db components.Database) !Sweep {
 		}
 	}
 	s.shared_inchikey.sort(a.cas < b.cas)
+	s.formation.sort_with_compare(by_gap)
 	for cas in representative {
 		s.pr << pr_psat(db.find(cas)!)!
 	}
 	return s
+}
+
+// check_formula checks a compound's formula from its three sources, and
+// its ΔG°f against its ΔH°f and S°.
+fn check_formula(mut s Sweep, r components.Record) {
+	src := r.sources()
+	formula := r.formula() or {
+		s.no_formula << Problem{r.ids.cas, r.name, err.msg().all_after(' agree on: ')}
+		return
+	}
+	if st := src.structure {
+		if sm := src.smiles {
+			if st != sm.formula {
+				took := if formula == st { "the structure's" } else { "the SMILES string's" }
+				s.conflicts << Problem{r.ids.cas, r.name, 'structure ${st}, SMILES ${sm.formula} (${r.ids.smiles or {
+					''
+				}}): ${took}, as the molar mass agrees'}
+			}
+		}
+	}
+	if sm := src.smiles {
+		if sm.charge != (r.constants.charge or { 0 }) {
+			s.charges << Problem{r.ids.cas, r.name, 'SMILES charge ${sm.charge}, file ${r.constants.charge or {
+				0
+			}}'}
+		}
+	}
+	if r.constants.dhf == none || r.constants.dgf == none || r.constants.s0 == none {
+		return
+	}
+	gap := r.formation_gap() or { return }
+	s.formation_count++
+	if math.abs(gap) > formation_tolerance {
+		s.formation << Gap{r.ids.cas, r.name, r.constants.dgf or { 0 }, gap}
+	}
 }
 
 // check_property evaluates a property across its range, and says what's
@@ -251,4 +309,13 @@ fn round_sig(x f64, n int) f64 {
 fn round_to(x f64, decimals int) f64 {
 	s := math.pow(10.0, f64(decimals))
 	return math.round(x * s) / s
+}
+
+// by_gap orders gaps largest first, by magnitude, then by CAS number.
+fn by_gap(a &Gap, b &Gap) int {
+	x, y := math.abs(a.gap), math.abs(b.gap)
+	if x != y {
+		return if x > y { -1 } else { 1 }
+	}
+	return compare_strings(a.cas, b.cas)
 }

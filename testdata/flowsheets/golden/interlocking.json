@@ -1,6 +1,6 @@
 {
-  "format": 1,
-  "reflux": "0.2.0",
+  "format": 2,
+  "reflux": "0.3.0",
   "file": "testdata/flowsheets/interlocking.toml",
   "status": "solved",
   "error": null,
@@ -741,7 +741,9 @@
       "balance": {
         "component": 0,
         "energy": 1.2740615051249545e-13
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "cooler",
@@ -761,7 +763,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "drum",
@@ -782,7 +786,9 @@
       "balance": {
         "component": 1.8447865353897671e-16,
         "energy": 7.225301541351339e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "split",
@@ -799,7 +805,9 @@
       "balance": {
         "component": 2.551730751756684e-17,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "pump",
@@ -819,7 +827,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "pump2",
@@ -839,7 +849,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     }
   ],
   "solver": {

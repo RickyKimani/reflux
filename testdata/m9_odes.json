@@ -1,0 +1,215 @@
+{
+ "source": "Six stiff test problems as the Test Set for IVP Solvers of the University of Bari gives them (archimede.uniba.it/~testset/src/problems/, the files of 2006), with its reference solutions; each solved again by SciPy 1.14.1's Radau at rtol 1e-12 and atol = atol_per_rtol \u00d7 1e-12, as a check of the problems' transcription, its distance in units of atol + rtol\u00b7|y| and relative, over the components above 1e-30; E5's to 1e-3 relative, SciPy's Radau not resolving E5. tools/gen_m9_odes.py",
+ "problems": [
+  {
+   "name": "hires",
+   "t0": 0.0,
+   "t1": 321.8122,
+   "y0": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0057
+   ],
+   "atol_per_rtol": 0.0001,
+   "reference": [
+    0.0007371312573325668,
+    0.0001442485726316185,
+    5.888729740967575e-05,
+    0.001175651343283149,
+    0.002386356198831331,
+    0.006238968252742796,
+    0.002849998395185769,
+    0.002850001604814231
+   ],
+   "reference_source": "hires.f's solut: RADAU5 in true double precision on a Cray C90: uround 1.01e-19, rtol = atol = h0 = 1.1e-18",
+   "scipy": [
+    0.0007371312573325298,
+    0.0001442485726316112,
+    5.888729740966892e-05,
+    0.00117565134328308,
+    0.002386356198830241,
+    0.006238968252739421,
+    0.002849998395184985,
+    0.002850001604815044
+   ],
+   "scipy_tolerance_units": 0.533,
+   "scipy_relative": 5.41e-13
+  },
+  {
+   "name": "rober",
+   "t0": 0.0,
+   "t1": 100000000000.0,
+   "y0": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "atol_per_rtol": 0.0001,
+   "reference": [
+    2.083340149701255e-08,
+    8.333360770334713e-14,
+    0.999999979166505
+   ],
+   "reference_source": "rober.f's solut: RADAU in double precision on an Alphaserver DS20E: uround 1.01e-19, rtol = atol = h0 = 1.1e-18",
+   "scipy": [
+    2.0833401487107834e-08,
+    8.333360766372732e-14,
+    0.9999999791665162
+   ],
+   "scipy_tolerance_units": 0.099,
+   "scipy_relative": 4.75e-10
+  },
+  {
+   "name": "vdpol",
+   "t0": 0.0,
+   "t1": 2.0,
+   "y0": [
+    2.0,
+    0.0
+   ],
+   "atol_per_rtol": 1.0,
+   "reference": [
+    1.706167732170483,
+    -0.8928097010247975
+   ],
+   "reference_source": "vdpol.f's solut: RADAU in double precision on an Alphaserver DS20E: uround 1.01e-19, rtol = atol = h0 = 1.1e-18",
+   "scipy": [
+    1.7061677321706124,
+    -0.8928097010246725
+   ],
+   "scipy_tolerance_units": 0.066,
+   "scipy_relative": 1.4e-13
+  },
+  {
+   "name": "orego",
+   "t0": 0.0,
+   "t1": 360.0,
+   "y0": [
+    1.0,
+    2.0,
+    3.0
+   ],
+   "atol_per_rtol": 1.0,
+   "reference": [
+    1.000814870318523,
+    1228.178521549917,
+    132.0554942846706
+   ],
+   "reference_source": "orego.f's solut: RADAU in double precision on an Alphaserver DS20E: uround 1.01e-19, rtol = h0 = 1.1e-18, atol = 1.1e-40",
+   "scipy": [
+    1.000814870318523,
+    1228.178521549893,
+    132.05549428465847
+   ],
+   "scipy_tolerance_units": 0.0912,
+   "scipy_relative": 9.19e-14
+  },
+  {
+   "name": "e5",
+   "t0": 0.0,
+   "t1": 10000000000000.0,
+   "y0": [
+    0.00176,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "atol_per_rtol": 1e-20,
+   "reference": [
+    1.152903278711829e-291,
+    8.86765551764212e-23,
+    8.854814626268838e-23,
+    0.0
+   ],
+   "reference_source": "e5.f's solut: RADAU in double precision on an Alphaserver DS20E: uround 1.01e-19, rtol = h0 = 1.1e-18, atol = 1.1e-40",
+   "scipy": [
+    -1.623334872977962e-73,
+    8.864659704182499e-23,
+    8.857808221030715e-23,
+    -1.3997424736497584e-91
+   ],
+   "scipy_tolerance_units": 2970000.0,
+   "scipy_relative": 0.000338
+  },
+  {
+   "name": "pollu",
+   "t0": 0.0,
+   "t1": 60.0,
+   "y0": [
+    0.0,
+    0.2,
+    0.0,
+    0.04,
+    0.0,
+    0.0,
+    0.1,
+    0.3,
+    0.01,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.007,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "atol_per_rtol": 0.0001,
+   "reference": [
+    0.05646255480022769,
+    0.1342484130422339,
+    4.139734331099427e-09,
+    0.005523140207484359,
+    2.018977262302196e-07,
+    1.464541863493966e-07,
+    0.07784249118997964,
+    0.3245075353396018,
+    0.007494013383880406,
+    1.622293157301561e-08,
+    1.135863833257075e-08,
+    0.002230505975721359,
+    0.000208716288279863,
+    1.396921016840158e-05,
+    0.008964884856898295,
+    4.352846369330103e-18,
+    0.006899219696263405,
+    0.0001007803037365946,
+    1.772146513969984e-06,
+    5.682943292316392e-05
+   ],
+   "reference_source": "pollu.f's solut: RADAU5 in true double precision on a Cray C90: uround 1.01e-19, rtol = atol = h0 = 1.1e-18",
+   "scipy": [
+    0.05646255480022071,
+    0.13424841304224094,
+    4.139734331098913e-09,
+    0.005523140207483427,
+    2.018977262302401e-07,
+    1.4645418634942085e-07,
+    0.07784249118998406,
+    0.32450753533959836,
+    0.007494013383881283,
+    1.622293157301947e-08,
+    1.1358638332573534e-08,
+    0.002230505975720445,
+    0.00020871628827989733,
+    1.3969210168404606e-05,
+    0.008964884856898492,
+    4.35284636932937e-18,
+    0.006899219696263423,
+    0.00010078030373657373,
+    1.772146513969407e-06,
+    5.682943292313841e-05
+   ],
+   "scipy_tolerance_units": 0.392,
+   "scipy_relative": 4.49e-13
+  }
+ ]
+}

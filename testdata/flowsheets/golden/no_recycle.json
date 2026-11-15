@@ -1,6 +1,6 @@
 {
-  "format": 1,
-  "reflux": "0.2.0",
+  "format": 2,
+  "reflux": "0.3.0",
   "file": "testdata/flowsheets/no_recycle.toml",
   "status": "solved",
   "error": null,
@@ -597,7 +597,9 @@
       "balance": {
         "component": 0,
         "energy": 3.990440302040507e-13
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "chill",
@@ -617,7 +619,9 @@
       "balance": {
         "component": 0,
         "energy": 7.67242255292715e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "separator",
@@ -638,7 +642,9 @@
       "balance": {
         "component": 1.509903313490213e-16,
         "energy": 2.24024718711046e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "boost",
@@ -658,7 +664,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "knockout",
@@ -679,7 +687,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "stabilise",
@@ -699,7 +709,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     }
   ],
   "solver": {

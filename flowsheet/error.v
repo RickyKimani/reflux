@@ -10,6 +10,7 @@ pub enum Failure {
 	no_convergence    // a block's tears were still moving when the passes ran out
 	unbalanced        // a balance didn't close: a bug, or a unit that's wrong
 	bad_file          // a flowsheet file that can't be read: see line and key
+	reaction_failed   // a reactor's equilibrium, integration or Newton failed (M9)
 }
 
 // FlowsheetError is every failure in this module, never a panic (D8). Test

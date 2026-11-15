@@ -63,7 +63,7 @@ flowchart LR
   M4 --> M7[M7 Columns]
   M6 --> M7
   M4 --> M8[M8 Specs, sensitivity, optimisation]
-  M2 --> M9[M9 Reactors, kinetics, exchangers]
+  M2 --> M9[M9 Equations, kinetics, reactors]
   M4 --> M9
   M3 --> M10a[M10a Thermo from Python]
   M4 --> M10b[M10b Flowsheets from Python]
@@ -189,7 +189,8 @@ tolerance.
 ### M5 — Water, steam and transport properties
 - IAPWS-IF97 natively. IAPWS-95 is itself a Helmholtz equation, so it fits
   the `Model` contract directly (C6).
-- Viscosity, thermal conductivity, surface tension (C7).
+- Viscosity, thermal conductivity, surface tension (C7). M9 brings a gas's
+  viscosity at low pressure, for Ergun's pressure drop.
 - CoolProp behind a flag, as a reference oracle in tests (B-table).
 
 **Exit:** IF97 passes the verification tables published with the standard;
@@ -216,6 +217,12 @@ on a reference column. Robustness is reported across a set of specs.
 - Design specs ("vary reflux ratio until purity is 99.5%"), converged
   together with the tear streams (F4).
 - Warm starts and state caching (F5).
+- What a reactor recomputes though its T hasn't moved, found in M9 step 11
+  (`docs/m9-plan.md`): each reaction's K(T) from the Gibbs energies, by
+  quadrature at every rate evaluation, 93% of the published reforming
+  model's solve; and each compound's gas viscosity in Ergun's drop, about a
+  quarter of a solve. Kept at the last T, the published model would run at
+  about the 28 ms of the case on typed K.
 - Sensitivity sweeps with warm starts along the sweep, parallel cases via
   `spawn`, and exact local sensitivities from the converged Jacobian (H1).
 - Optimisation: NLopt for small problems, IPOPT for large ones (B6, H3).
@@ -228,9 +235,49 @@ reforming exercise, one isothermal packed-bed PFR with three LHHW reactions
 and five components, on Peng–Robinson, with no recycle. DWSIM 9's sensitivity
 study of 50 feed temperatures took 30 minutes in the app, about 36 s a point.
 One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
-of that is in one reactor.
+of that is in one reactor. M9 step 11 timed both in one session, taking
+turns: DWSIM 10.7 s a solve and 11.7 minutes for the study, reflux 28 ms and
+2.1 s at rtol 1e-8 ([benchmarks.md](benchmarks.md)). The study is 50 cold
+solves there; M8's warm starts and parallel cases come on top.
 
-### M9 — Reactors, kinetics and heat exchangers
+**A second case, for correctness rather than speed:** the owner's methanol
+conversion reactor, Tutorial 2, recorded in M9's step 10. DWSIM's temperature
+and pressure sweeps both plotted −∞ at every point, with no message, because
+the quantity swept was methanol's conversion: (in − out)/in for a product the
+feed doesn't have. A sweep should refuse a quantity with no value at a point,
+and say why, rather than plot it.
+
+### M9 — Equations, kinetics and reactors
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m9-plan.md](m9-plan.md), and its step 0's spike of
+DWSIM's PFR in [spike-dwsim-pfr.md](spike-dwsim-pfr.md). Heat exchangers,
+here at first, moved to a milestone after M9 (its D14): nothing in M9's exit
+needs them, and a cooled PFR wants a coolant stream, which belongs with them.
+A gas's viscosity at low pressure came the other way, from M5, since Ergun's
+pressure drop needs it (D10, as step 0 amended it). The plan went further
+than the exit below:
+- every equation a user gives is an expression in one language, with named
+  definitions, built-in constants at the SI's exact values, compound units
+  and readings on a unit's scale, `(T in degC)`, held against SymPy, and
+  compiled onto a tape that gives every derivative exactly;
+- Xu and Froment's reforming kinetics as well as Vanden Bussche and
+  Froment's, both against mpmath from the papers' own formulas, and the
+  owner's DWSIM case checked: its typed 8.314s, its cut denominators and its
+  overall K, a factor of 0.20 off;
+- the equilibrium over chosen reactions as well as Gibbs minimisation, and a
+  check of where each reversible rate stops against it;
+- each reactor against DWSIM 9 alone, every difference taken apart, and the
+  owner's PFR within 2.3e-10 of the exact answer of DWSIM's equations;
+- a correctness case, the owner's Tutorial 2, whose conversion reactor now
+  takes its correlation as printed and warns past equilibrium;
+- the owner's case timed against DWSIM's: 28 ms a solve against 10.7 s;
+- a hot gas labelled liquid by M3's flash, found and fixed, and the third
+  release, v0.3.0.
+
+- **Equations as data** (A9). DWSIM takes every equation as a string it
+  evaluates: a rate, an equilibrium constant, a specification. reflux parses
+  each into a structure, binds its names to the model, checks its units,
+  renders it back and differentiates it exactly. Kinetics is its first user.
 - **Kinetics as structured data** (Track L, design in
   [kinetics.md](kinetics.md)). This responds to DWSIM's text-box LHHW input.
   Rate laws are power law, LHHW, Eley–Rideal or a parsed expression.
@@ -242,7 +289,6 @@ of that is in one reactor.
   can be built before the reactors.
 - Conversion and yield reactors; Gibbs-minimisation equilibrium reactor (E6);
   CSTR; PFR and packed bed (which need an ODE integrator, B5).
-- Two-stream exchangers specified by duty, outlet T, UA or approach (G2).
 
 **Exit:** the Vanden Bussche–Froment methanol kinetics loads from TOML,
 renders back as the published equations, passes every check, and
@@ -365,6 +411,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |
 | A8 Releases: semver, changelog, golden suite gates every release | M4 |
+| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first (done, with a reactor's conversion); then M8's specifications and objectives, and every later equation |
 
 ### B — Numerics
 | Item | Pure V | C backend | Needed by |
@@ -387,7 +434,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - C5 Activity models: Wilson, NRTL, UNIQUAC, UNIFAC; γ–φ. **M6**
 - C6 Reference equations: IAPWS-IF97/95 natively; GERG-2008 through CoolProp
   first, natively later. **M5**
-- C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**
+- C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**,
+  except a gas's viscosity at low pressure, which Ergun's pressure drop needs: **M9** (done)
 - C8 Electrolytes (eNRTL, e-CPA). **after M12**
 - C9 Property packages: phase models + transport + data, chosen per
   flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and
@@ -410,7 +458,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - E3 PH, PS, TV, UV and vapour-fraction flashes; bubble and dew points. **M3**
 - E4 Three-phase and multiphase flash; free-water handling. **M6**
 - E5 Phase envelopes, critical points, azeotrope search. **M12**
-- E6 Chemical equilibrium by Gibbs minimisation. **M9**
+- E6 Chemical equilibrium by Gibbs minimisation. **M9** (done)
 
 ### F — Flowsheet core
 - F1 Streams, ports, unit-operation interface, flowsheet graph. **M4**
@@ -423,9 +471,11 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 ### G — Unit operations
 - G1 Mixer, splitter, valve, heater/cooler, pump, compressor/expander,
   flash drum, component separator. **M4**
-- G2 Heat exchangers. **M9**
+- G2 Heat exchangers: two-stream, by duty, outlet T, UA or approach. **after M9**
+  (moved out of M9 by its D14)
 - G3 Reactors: conversion, yield, Gibbs, CSTR, PFR, packed bed (using Track L
-  kinetics). **M9**
+  kinetics). **M9** (done, with the equilibrium over chosen reactions, but
+  for the yield reactor, which none of its decisions took up: later)
 - G4 Columns: shortcut, inside-out, Naphtali–Sandholm; absorbers and
   strippers; three-phase and rate-based later. **M7**
 - G5 Extractors and other separators. **after M7**
@@ -474,15 +524,16 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 ### L — Reaction kinetics
 - L1 Rate-law building blocks: Arrhenius (centred on T_ref) and van 't Hoff
   temperature functions, monomials, catalyst sites with shared adsorption
-  terms. **M9**
+  terms. **M9** (done)
 - L2 Rate laws: power law, LHHW, Eley–Rideal; activity basis per reaction
-  (partial pressure, fugacity, concentration). **M9**
-- L3 TOML input with equation parsing and element-balance checks. **M9**
+  (partial pressure, fugacity, concentration). **M9** (done)
+- L3 TOML input with equation parsing and element-balance checks. **M9** (done)
 - L4 `reflux kinetics check` / `explain`: rendering (Unicode, LaTeX), units,
-  physical-sanity warnings, factor tables. **M9**
-- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9**
-- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9**
-- L7 Free-form expression rate laws (parsed, unit-checked, differentiated). **after M9**
+  physical-sanity warnings, factor tables. **M9** (done)
+- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9** (done)
+- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9** (done)
+- L7 Free-form expression rate laws (parsed, unit-checked, differentiated): A9's
+  expressions, so **M9** (done)
 
 ---
 

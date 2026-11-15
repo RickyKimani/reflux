@@ -21,6 +21,7 @@ before they're written. He works on Windows with nushell. His Go package
 Keep this section current: update it whenever a step is committed.
 
 - **M0 to M4 and M10a are done** and merged into `main` (PRs #1 to #5).
+  **M9 is done** on its branch, `m9-reactors`, awaiting its PR.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
@@ -40,9 +41,11 @@ Keep this section current: update it whenever a step is committed.
     unit failures.
 - **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`, and
   v0.2.0 (M10a), tagged on 2026-11-08 on `main`: source releases, annotated
-  tags, pushed. The next release starts with a new CHANGELOG entry and its
-  version in `v.mod`, and a changed golden report goes in that entry by name.
-- **`test_memory.py` is flaky on Ubuntu,** to fix early in M9. It holds the
+  tags, pushed. v0.3.0 (M9) has its CHANGELOG entry, undated until its tag
+  on `main` after the merge, and its version in `v.mod` and the package. A
+  changed golden report goes in the entry by name.
+- **`test_memory.py` is flaky on Ubuntu,** meant for early in M9 and not
+  done: it failed M9 step 0's CI run, and has passed since. It holds the
   collector's `heap_size` from `reflux_collect`, free blocks included, and
   Boehm grows that in one large step when it chooses to and never gives it
   back. On `main`'s merge of M10a it doubled once, 5,580 KiB to about 11 MB,
@@ -50,6 +53,171 @@ Keep this section current: update it whenever a step is committed.
   bytes live after a full collection (heap size less free bytes), which
   changes what `reflux_collect` reports, or adds an output, so the header
   and `docs/python.md` say so.
+- **M9 (equations, kinetics and reactors) is done** on branch
+  `m9-reactors`, with its exit review at the end of its plan. Its plan,
+  `docs/m9-plan.md`, was approved on 2026-11-08: exit criteria 1–11,
+  decisions D1–D16 and steps 0–13, ending in v0.3.0.
+  - The owner's principle drives it: no equation is ever taken as text, not
+    only LHHW rates (roadmap A9). Users type their own, with species by
+    name, numbers with units, named definitions, and built-in constants at
+    the SI's exact values (`R`, not a typed 8.314).
+  - Its benchmark is the owner's reforming PFR (see the memory), whose DWSIM
+    file gives the three reactions three different denominators.
+  - Heat exchangers (G2) moved out of M9 to a later milestone (D14).
+  - **Step 0 is done:** the spikes on DWSIM's PFR
+    (`docs/spike-dwsim-pfr.md`) and on the tape (`spike/tape/spike.v`).
+    It amended D5 (the tape kept, with fused operations: 3 to 5 times
+    hand-written V, under 2 µs for three rates and their gradients), D10
+    (Ergun needs a gas viscosity, so ChemSep's correlations mixed by Wilke's
+    rule come forward from M5, and the PFR takes a viscosity through an
+    interface) and D13, and set criterion 8's targets. The owner approved
+    the amendments on 2026-11-09.
+  - **Step 1 is done:** `quantity`'s dimension algebra. `Dim` (exact
+    rational exponents of kg, m, s, K, mol, A), `unit(text)` for compound
+    units with SI prefixes, and `parse` reading any unit of a dimension.
+    Every M4 unit reads to M4's bits, against a frozen copy of M4's table,
+    and the new units match SP 811 (`testdata/m9_units.json`). D3 amended:
+    current as a base, rational exponents, symbols rather than M4's whole
+    names, and a * after a / refused as ambiguous.
+  - **Step 2 is done:** the `expr` module, the expression language
+    (`docs/design.md`, "Expressions"). Expressions parse to arena trees,
+    names bind to the context, definitions and the SI-exact constants, every
+    node's dimension is checked, and each writes back as plain text (which
+    reads back to the same tree), Unicode and LaTeX. Held against SymPy by
+    `testdata/m9_expressions.json` from `tools/gen_m9_fixtures.py`, which
+    needs V on the PATH (it runs `tools/expr_render.v`) and decodes reflux's
+    renderings itself: SymPy's LaTeX readers misread function calls. D2
+    amended: units after a space or in brackets, "2 R" refused as
+    ambiguous, offset units and `log` refused, `·` `×` `−` accepted.
+  - **Step 3 is done:** `expr/tape.v`, expressions compiled onto one tape
+    (folded, merged, fused, pruned), evaluated into the caller's `Buffer`
+    with nothing allocated, and differentiated by one reverse sweep for
+    every output. Every fusion keeps the tree's arithmetic, so the tape
+    gives eval's bits; derivatives match SymPy's (now in
+    `testdata/m9_expressions.json`) to 6.5e-16. Xu and Froment's three
+    rates: 55 operations, 3.2 times hand-written V for the rates and 6.7
+    with gradients, about 1 µs in all (`tools/tape_bench.v`).
+  - **Step 4 is done:** a new `chem` module (elements, formulas, SMILES;
+    D1 amended, approved on 2026-11-10) and `kinetics`' first part:
+    species by name, CAS number or formula; equations balanced by elements
+    and charge, with the balanced equation suggested; a set's dependence; ΔH°, ΔS°, ΔG° and K(T)
+    from the ideal gas (D7). A compound's formula is the one two of its
+    structure, SMILES and molar mass agree on (640 of 642; five files
+    disagree with themselves). Held against RDKit, chemicals, thermo and
+    mpmath (`tools/gen_m9_reactions.py`). Found: ChemSep's S° mixes 1 atm
+    and 1 bar (reforming's K about 4% low); 142 compounds' ΔG°f disagree
+    with their ΔH°f and S° by over 1 kJ/mol (data-quality.md); and the
+    owner's DWSIM case types an overall-reaction K that isn't the product
+    of the other two (86 times too small at 700 K).
+  - **Step 5 is done,** and amended criterion 5 (approved on 2026-11-10):
+    `kinetics/law.v` (the forms as data), `kinetics.v` (each form writes the
+    expression a user would type, parsed by `expr`: D4's same tree) and
+    `evaluate.v` (rates at a state, allocating nothing, and the jacobian by
+    the chain rule). A rate's context has `Keq[...]`, each reaction's K at
+    1 bar (not `K`, which clashes with kelvins). Xu and Froment's and Vanden
+    Bussche and Froment's rates match mpmath (`tools/gen_m9_kinetics.py`)
+    to 9.4e-15, every constant checked against the papers' tables (the
+    owner's copies, kept out of the repository). Xu and Froment's Table 5
+    and Table 6 disagree by up to 1.7% (k₃); their paper gives no
+    equilibrium constants, so criterion 5 compares Gibbs K with the
+    literature's correlations instead.
+  - **Step 6 is done,** and amended D11 (sites and reactions as tables by
+    name, `[site.NAME]` and `[reaction.NAME]`, approved on 2026-11-10):
+    `flowsheet/reactions.v` reads a file's reactions (format 2, alone or in a
+    flowsheet file), `kinetics/check.v` the checks (notes and warnings),
+    `kinetics/explain.v` the factor table, and `reflux kinetics check` and
+    `explain` (`kinetics_command.v`). Three files in `testdata/kinetics/`: the two
+    papers' kinetics and the owner's DWSIM case's rates as typed, whose
+    check finds its seven 8.314s, its two cut denominators and its overall
+    K a factor of 0.20 off at 900 K.
+  - **Step 7 is done,** and amended D1 and D10, approved on 2026-11-11:
+    a new `equilibrium` module. Gibbs minimisation by the RAND method in
+    CEA's form (Gordon and McBride), species in log space, ideal gas or a
+    cubic with φ updated outside it; and the equilibrium over chosen
+    reactions by the same minimisation over what they conserve, with
+    stand-in potentials −νᵀ(ννᵀ)⁻¹ ln K (D10: not Newton on extents). Every
+    answer is checked (balance; stationarity, or each ln Q its ln K; a
+    stable phase, two refused as M6's) and matches mpmath's
+    (`tools/gen_m9_equilibrium.py`, 21 cases) to 6.0e-13 in ln y.
+  - Step 7's consistency check (`equilibrium/consistency.v`; D1:
+    `equilibrium` imports `kinetics` and `flash`) follows each reversible
+    rate along its reaction from the equilibrium a state reaches to where
+    it's zero, and `reflux kinetics check` runs it given a state. Xu and
+    Froment's stop within ΔG/RT 2.7e-15 of equilibrium; the DWSIM case's
+    overall rate stops at Q/K = 0.20. Found: an equilibrium over reactions
+    from a feed without an element was a singular matrix, fixed by looking
+    at the element rows too.
+  - **Step 8 is done,** and amended criterion 6, approved on 2026-11-12:
+    `numeric`'s integrators, `dopri5` (Dormand and Prince's 5(4) pair,
+    with Hairer's stiffness detection, which refuses a stiff problem) and
+    `rodas4` (Hairer and Wanner's L-stable Rosenbrock method, on the
+    problem's own Jacobian), both as Hairer's codes step and control them,
+    taking the problem as an interface (`Ode`, `StiffOde`). Measured: each
+    solution's order, RODAS4's |R(z)| ≤ 1, closed forms, and the Test Set for
+    IVP Solvers' stiff problems (`tools/gen_m9_odes.py`) within 0.13
+    tolerance units, the Oregonator's within 2.9, steps recorded.
+  - Found in step 8: E5's y₂ and y₃ are beyond RODAS4 in double precision
+    (51% off under tcc, 20 times under gcc; a Rosenbrock stage's rounding is
+    relative to f's terms, which cancel there), so its test holds its decay
+    and its invariant's drift instead; and
+    an orbit's error grows to many tolerances, so criterion 6's "within the
+    tolerance asked" is read as errors in tolerance units, recorded.
+  - **Step 9 is done,** and amended D11, approved on 2026-11-12: a new
+    `reactors` module (Gibbs, equilibrium, conversion, CSTR, PFR) with makers
+    for format 2 files, each reactor's `reactions` naming what it runs. Every
+    reactor is isothermal, adiabatic or at a duty; the PFR's energy equation
+    carries the real gas, Ergun's drop takes Wilke's viscosity (`chemicals`
+    to 2.2e-16), and its profile goes in report format 2. A unit that reacts
+    reports its elements (`Outcome.conserved`), and the solver checks it, and
+    the whole flowsheet, on them. A long PFR on fugacities reaches the Gibbs
+    reactor's equilibrium to 2.8e-14.
+  - Found and fixed in step 9, at the owner's word: M3's PT flash labelled a
+    hot gas liquid (Π − 1 ≈ (B − T·dB/dT)/V > 0 above the Joule–Thomson
+    inversion temperature). M3's D6 is amended, approved on 2026-11-12: a
+    single phase more than four covolumes large is vapour. 17 supercritical fixture roots now
+    differ from `thermo`'s labels.
+  - **Step 10 is done,** and amended D13, approved on 2026-11-13. The
+    owner's Tutorial 2 (methanol in a conversion reactor; its −∞ sweeps
+    plotted a product's conversion) amended D2 and D10 before it, approved
+    on 2026-11-12:
+    - `expr` reads `(T in degC)`, a value's number on a unit's scale, and
+      a unit after a group, `(…) [%]`;
+    - a conversion may be an expression in T, taken at the outlet's T;
+    - a conversion reactor warns of an outlet past equilibrium, in
+      `Outcome.warnings` and report format 2's `units[].warnings`.
+  - Step 10's comparisons (`tools/gen_m9_dwsim.py`, `testdata/m9_dwsim.json`,
+    `reactors/dwsim_test.v`):
+    - The owner's PFR is within 2.3e-10 of the exact answer of DWSIM's
+      equations, and within criterion 8's targets of DWSIM at dV = 0.001.
+    - Tutorial 2's duties are explained to 3.2e-13.
+    - DWSIM's equilibrium reactor puts fugacities over 1 atm against a
+      1-bar K.
+    - Its Gibbs reactor is good to about 1e-3.
+    - Its CSTR reacts nothing in the vapour, so reflux's CSTR is held to
+      the exact answer of DWSIM's equations instead (D13).
+  - Found in step 10: reflux's CSTR couldn't start Newton on the owner's
+    case, so it now solves by continuation in its volume where Newton from
+    the inlet fails. The reactor goldens are in
+    `testdata/flowsheets/golden/reactors/`, and `tools/golden.vsh` takes
+    names, so that M4's goldens wait for v0.3.0.
+  - **Step 11 is done:** speed, against DWSIM in one session, taking turns
+    (`tools/gen_m9_bench.py`, `tools/bench_reactor.v`,
+    `testdata/m9_bench.json`, `docs/benchmarks.md`). The owner's case
+    (`testdata/flowsheets/reformer_dwsim.toml`): reflux 28 ms a solve against
+    DWSIM's 10.7 s, and 2.1 s for the 50-point study against 11.7 min. The
+    published model (`reformer.toml`) takes 393 ms, 93% of it in K(T), which
+    `Kinetics.fill` recomputes by quadrature at every evaluation: left for
+    M8, at the owner's word, with the viscosity Ergun's drop recomputes (the
+    roadmap's M8 entry). The tape is about 10% of a solve, so it stays (D5).
+  - **Steps 12 and 13 are done:** v.mod and the package at 0.3.0, the
+    CHANGELOG entry undated until the tag, the seven golden reports written
+    again (report format 2, no number moved), and the docs and the exit
+    review. No source changed, so no full checks ran; CI passed on step 11.
+  - Carried forward (in its review): v0.3.0's tag; `test_memory.py`; K(T)
+    and the viscosity at an unmoved T (M8); one-phase reactors (M6); the
+    yield reactor; reports to DWSIM, `thermo` (a hot gas's label), SymPy and V.
+  - Next: the PR into `main` when asked, then the tag on `main`: date the
+    entry, run `tools/release.vsh`, tag and push.
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -110,7 +278,7 @@ Keep this section current: update it whenever a step is committed.
     and below 10 K; the stability test's unjudged extrapolation, to watch;
     wheels (I2); the committed figure, drawn by hand; a report to V on a
     shared library's first call.
-  - M10b (flowsheets from Python) follows; M5 to M9 build on M4.
+  - M10b (flowsheets from Python) follows; M5 to M8 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
 
@@ -219,6 +387,12 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     constants as component files, and `reference_dwsim.toml`. It imports
     `gen_m3_dwsim.py`, and needs V on the PATH: it solves that file with
     reflux for the open loop. About five minutes.
+  - `tools/gen_m9_dwsim.py [part ...]` writes `testdata/m9_dwsim.json`: the
+    parts conversion, equilibrium, gibbs, cstr, pfr and ideal_gas. A part
+    not named keeps what the file has; a run that fails writes nothing. pfr
+    takes about a quarter of an hour, at dV = 0.001. It imports step 0's
+    spike, `spike/dwsim_pfr/run.py`. `REFLUX_TUTORIAL2` names the owner's
+    Tutorial 2 file, to check the script's case against it.
   - thermo 0.6.1's flash at a vapour fraction strictly between 0 and 1
     fails on a mixture (`dew` unbound): bisect on its PT flash instead.
   - `spike/dwsim/run.py` is M3 step 0's spike, and
@@ -236,13 +410,61 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     wrong mixing entropy moves a two-phase isentropic outlet: 0.42 K in
     step 8's expander. "What step 8 found" in
     `docs/spike-dwsim-flowsheet.md` has the rest.
+  - `spike/dwsim_pfr/run.py` is M9 step 0's spike: DWSIM's PFR on the
+    owner's reforming case (`docs/spike-dwsim-pfr.md`). `REFLUX_TUTORIAL`
+    names the owner's file, to check the script's case against it; the file
+    stays out of the repository.
+  - DWSIM's PFR holds each section's volumetric flow, Z and pressure at the
+    section's start, so its error is first order in dV, and its integrators
+    run at 1e-3 relative, which nothing sets. A rate names a reaction's
+    species R1, R2, P1, … by their order in its compound list.
+  - Ergun's drop needs the gas viscosity. DWSIM's is the mole-fraction mean
+    of ChemSep's eq. 102 with Jossi–Stiel–Thodos' correction, 30% below
+    Wilke's in hydrogen-rich gas. A PFR's failure is silent too, and a
+    reaction above its Tmax is skipped with no error.
+  - DWSIM's conversion reactor:
+    - It gives every compound a conversion, (in − out)/in, so a product's
+      is −∞. A sensitivity study of it plots −∞ with no message.
+    - Its conversion is a function of T alone, and isn't checked against
+      equilibrium.
+    - Its "PR78" package's departures aren't its PR package's with PR78's
+      α: they differ from `thermo`'s by 3e-5.
+    - Its adiabatic conversion reactor evaluates the expression at the
+      inlet's T, not the outlet's.
+  - DWSIM's other reactors (M9 step 10):
+    - The equilibrium reactor puts fugacities over 1 atm against K at
+      1 bar. Its default tolerances, 0.01 and 1e-3, leave its answer up to
+      3e-2 off: set both to 1e-10.
+    - The Gibbs reactor needs `CreateElementMatrix()` after the feed is
+      calculated. Its first solve from a feed lacking some products
+      refuses with "invalid initial estimates", and a second runs. Its
+      default IPOPT answer can leave the elements unbalanced by 7e-4, and
+      its two solvers agree only to 1e-3.
+    - The CSTR reacts nothing in the vapour, kinetic or catalytic, and
+      reports success. Its `IsothermalTemperature` defaults to 0 K, and it
+      needs a `Headspace`.
+    - DWSIM's copy of ChemSep gives water's ideal-gas Cp as eq. 16 with its
+      own constants, where reflux's file has eq. 107: 72 J/mol apart at
+      1000 K.
 
 ## Architecture
 
 The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`, and `flash` uses `thermo` and `numeric` but not
-`components`. `quantity`, units of measure (M4), depends on nothing, and
-so does `release`, the release gate's logic. `capi` (M10a) is the C API
+`components`. `quantity`, units of measure (M4) and M9's dimension algebra
+(compound units, exact rational exponents of kg, m, s, K, mol, A), depends
+on nothing, and so do `release`, the release gate's logic, and `chem`
+(M9), the elements, formulas and SMILES strings. `expr` (M9), the
+expression language, uses `quantity`; `kinetics` (M9), reactions, uses
+`chem`, `expr`, `quantity` and `thermo`, and its tests `components`.
+`flowsheet` reads a file's reactions into `kinetics` (step 6).
+`equilibrium` (M9), chemical equilibrium and the rates' consistency with
+it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
+`components` and `flowsheet`; `main` uses it for `reflux kinetics check`.
+`reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
+`equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
+`main` gives `flowsheet.load` its makers.
+`components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
@@ -291,7 +513,9 @@ over the rest, built into a shared library for the Python package in
   for systems (line search or dogleg), `broyden` for systems with no Jacobian,
   and `minimize` (a Levenberg–Marquardt-shifted Newton that knows f's rounding
   through `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
-  QAG integration and bisection. They take what they solve as an interface
+  QAG integration and bisection, and M9's integrators, `dopri5` and `rodas4`
+  (`Ode`, `StiffOde`), which return an answer only once every step has met
+  the tolerance. They take what they solve as an interface
   (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
   a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,
@@ -347,6 +571,29 @@ over the rest, built into a shared library for the Python package in
   - Every flash is `reflux_flash(fluid, spec, …)` with one layout (D6): the
     whole's values, then each phase's in the place of its label, liquid (0)
     then vapour (1). A single phase takes its label's place, the other NaN.
+- **`equilibrium`** is M9's (D9, D10): one phase, ideal gas or a cubic.
+  - `gibbs` minimises G over the amounts the feed's elements allow, and
+    `over_reactions` over those chosen reactions allow, both by RAND
+    (`rand.v`) in log space, φ updated outside it for a cubic. A row with
+    every coefficient of one sign and none of it in the feed drops its
+    species first.
+  - An answer is returned only once its balance, its stationarity (or each
+    reaction's ln Q = ln K) and, for a cubic, its phase's stability hold.
+  - `consistency` judges each reversible rate by where it stops along its
+    reaction from the equilibrium a state reaches: ΔG/RT there, zero for a
+    rate consistent with the Gibbs energies.
+- **`reactors`** is M9's (D10): Gibbs, equilibrium over chosen reactions,
+  conversion, CSTR and PFR, each a `flowsheet.Unit` with a maker (D1).
+  - A maker reads its table through a `Section` whose `context` holds the
+    file's format, species, component records and reactions (format 2).
+  - A reactor's `Outcome` gives its elements as `conserved`, and the solver
+    checks it on them; a PFR's gives its `profile`, and a conversion
+    reactor's its `warnings` (an outlet past equilibrium).
+  - Rates become each species' source through `Source`, with exact
+    derivatives; the PFR and CSTR use them in `rodas4` and `newton`. The
+    CSTR continues in its volume where Newton from the inlet fails.
+  - A conversion may be an expression in T, bound in the kinetics' rate
+    context with the file's definitions, evaluated at the outlet's T.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
@@ -414,7 +661,9 @@ or a test:
 - **Strings:** `'${x}'` and `"${x}"` both interpolate, so V source built as
   text needs raw strings, `r'...'`.
 - **Writing files from the shell:** bash heredocs mangle backslashes, so
-  write such files with the Write tool or a Python script.
+  write such files with the Write tool or a Python script. On Windows,
+  Python's `write_text` writes CRLF: use `write_bytes`, or
+  `newline='\n'`, and keep a script's own `\r` out of non-raw strings.
 - **Formatting:** printf-style formats round ties differently under tcc
   and gcc, so round with `math.round` before formatting anything compared
   byte for byte.
@@ -439,7 +688,10 @@ or a test:
   error into a `V panic` with no FAIL line, so a panic in a test's output
   isn't always a panic in the code.
 - **Inside `or {}`, `err` is the error,** even where a parameter is called
-  `err`: name a C buffer parameter `buf`.
+  `err`: name a C buffer parameter `buf`. And `T{...err, …}` on a smart-cast
+  `err` copies nothing: cast with `as` first, or name the fields.
+- **A fixed array of structs inside another struct's zero value** skips the
+  element type's field defaults. Named struct fields keep theirs.
 - **`v fmt -w` rewrites a file that doesn't parse,** and can drop lines.
   Compile first; mind an apostrophe in a single-quoted string.
 - **`@[has_globals]`** allows `__global` in the file it heads, not its whole

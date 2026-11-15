@@ -1,0 +1,32 @@
+# Vanden Bussche and Froment's methanol synthesis kinetics (J. Catal. 161, 1,
+# 1996), as their paper gives them: the rate equations their Eq. 3, the
+# constants their Table 2, and Graaf's equilibrium constants as they print
+# them. Rates in mol/(kg·s), pressures in bar.
+format = 2
+
+[components]
+names = ["carbon dioxide", "hydrogen", "methanol", "water", "carbon monoxide"]
+
+[site.Cu]
+terms = [
+  { name = "K_a", K = "3453.38", a = { H2O = 1, H2 = -1 } },
+  { name = "K_b", K = { A = "0.499 bar^-0.5", dH = "-17197 J/mol" }, a = { H2 = 0.5 } },
+  { name = "K_c", K = { A = "6.62e-11 bar^-1", dH = "-124119 J/mol" }, a = { H2O = 1 } },
+]
+
+[reaction.methanol]
+equation = "CO2 + 3 H2 = CH3OH + H2O"
+law = "lhhw"
+k = { A = "1.07 mol/(kg*s*bar^2)", Ea = "-36696 J/mol" }
+orders = { CO2 = 1, H2 = 1 }
+K = "10^(3066 K / T - 10.592) * 1 bar^-2"
+site = "Cu"
+site_power = 3
+
+[reaction.RWGS]
+equation = "CO2 + H2 = CO + H2O"
+law = "lhhw"
+k = { A = "1.22e10 mol/(kg*s*bar)", Ea = "94765 J/mol" }
+orders = { CO2 = 1 }
+K = "10^(2.029 - 2073 K / T)"
+site = "Cu"

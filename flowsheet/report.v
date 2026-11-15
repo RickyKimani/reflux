@@ -8,8 +8,9 @@ import thermo
 import v.vmod
 
 // The report's own format (D11), which docs/report-format.md describes. What
-// reads a report can rely on it: it changes only with a new number.
-pub const report_format = 1
+// reads a report can rely on it: it changes only with a new number. Format 2
+// (M9) adds a reactor's profile to its unit, and a unit's warnings.
+pub const report_format = 2
 
 // Report is a solve's results, or its failure: what the command line writes as
 // JSON and CSV, and prints as a stream table. Every number is SI, and every
@@ -82,8 +83,24 @@ pub:
 	outlets []string
 	energy  []EnergyStream // W, into the unit's material
 	// balance is on the inlets it was calculated from, which for a tear's
-	// consumer are a pass behind the stream reported.
+	// consumer are a pass behind the stream reported. A reactor's is on its
+	// elements.
 	balance Balance
+	// profile is a reactor's state along it, if it has one (format 2).
+	profile ?[]ProfileReport @[json_null]
+	// warnings are what its results should be read with, though they stand,
+	// such as a conversion past equilibrium (format 2).
+	warnings []string
+}
+
+// ProfileReport is a point of a reactor's profile.
+pub struct ProfileReport {
+pub:
+	volume      f64 // m³ from the inlet
+	length      f64 // m from the inlet, for a reactor of known length; else 0
+	t           f64 @[json: 'T'] // K
+	p           f64 @[json: 'P'] // Pa
+	molar_flows []f64 // mol/s
 }
 
 pub struct SolverReport {
@@ -134,12 +151,14 @@ pub fn (l Loaded) report(sol Solution) Report {
 	mut units := []UnitReport{}
 	for i, p in l.sheet.units {
 		units << UnitReport{
-			name:    p.unit.name
-			kind:    l.types[i] or { '' }
-			inlets:  p.inlets
-			outlets: p.outlets
-			energy:  sol.units[i].energy
-			balance: sol.units[i].balance()
+			name:     p.unit.name
+			kind:     l.types[i] or { '' }
+			inlets:   p.inlets
+			outlets:  p.outlets
+			energy:   sol.units[i].energy
+			balance:  sol.units[i].balance()
+			profile:  profile_report(sol.units[i].profile)
+			warnings: sol.units[i].warnings
 		}
 	}
 	return Report{
@@ -155,6 +174,19 @@ pub fn (l Loaded) report(sol Solution) Report {
 		balance:    sol.balance
 		worst_unit: sol.worst
 	}
+}
+
+// profile_report is a unit's profile as the report gives it, none for a unit
+// without one.
+fn profile_report(p ?Profile) ?[]ProfileReport {
+	pr := p or { return none }
+	return pr.points.map(ProfileReport{
+		volume:      it.volume
+		length:      it.length
+		t:           it.t
+		p:           it.p
+		molar_flows: it.flows
+	})
 }
 
 // failure is the report of a flowsheet that loaded and failed in solving: the
