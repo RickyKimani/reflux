@@ -25,6 +25,23 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
+- **M8 (specifications, sensitivity studies and optimisation) is planned**
+  on branch `m8-sensitivity`. Its plan, `docs/m8-plan.md`, was approved on
+  2026-11-16: exit criteria 1–13, decisions D1–D20 and steps 0–16, ending
+  in v0.4.0.
+  - One milestone, not split (D1): the optimiser is `numeric.sqp`, written
+    in V (D12), so no NLopt or IPOPT. The roadmap is to be amended: IPOPT
+    and data reconciliation move to M13 (B6, H4), and exact sensitivities
+    too (H1, D10).
+  - Its benchmark is the owner's 50-point reforming study; steps 1 to 8
+    meet the roadmap's exit before the optimiser begins.
+  - Research for the plan: four of the reforming case's five species give
+    Cp as ChemSep's eq. 16 (521 of 640 compounds), which has no closed-form
+    integral, so K(T) is a quadrature at every evaluation; threads with
+    `spawn` ran the 48-point study 2.1× faster on 4 workers, processes 2.6×.
+  - Step 0 is next: DWSIM's study, Adjust, optimiser and regression
+    headless (`docs/spike-dwsim-study.md`), warm starts measured, threads'
+    bits checked, and the `test_memory.py` fix.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -44,8 +61,8 @@ Keep this section current: update it whenever a step is committed.
   2026-11-15, both on `main`: source releases, annotated tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
-- **`test_memory.py` is flaky on Ubuntu,** to fix before the next
-  milestone's first step: meant for early in M9, it wasn't done, failed M9
+- **`test_memory.py` is flaky on Ubuntu,** to fix in M8's step 0: meant
+  for early in M9, it wasn't done, failed M9
   step 0's CI run, and has passed since. It holds the
   collector's `heap_size` from `reflux_collect`, free blocks included, and
   Boehm grows that in one large step when it chooses to and never gives it
@@ -217,7 +234,7 @@ Keep this section current: update it whenever a step is committed.
   - Carried forward (in its review): `test_memory.py`; K(T)
     and the viscosity at an unmoved T (M8); one-phase reactors (M6); the
     yield reactor; reports to DWSIM, `thermo` (a hot gas's label), SymPy and V.
-  - Next, by the roadmap: M10b (flowsheets from Python), or M5 to M8.
+  - Next: M8, chosen on 2026-11-16 (above).
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
