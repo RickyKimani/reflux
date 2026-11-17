@@ -255,8 +255,43 @@ fn registry_round() ! {
 	assert registry.items.len == before
 }
 
-fn test_collect_gives_the_heap() {
-	mut heap := i64(0)
-	assert reflux_collect(&heap) == ok && heap > 0
+fn test_collect_gives_the_live_bytes() {
+	mut live := i64(0)
+	assert reflux_collect(&live) == ok && live > 0
 	assert reflux_collect(unsafe { nil }) == ok
+	// What's live is in the heap, and garbage isn't: 16 MiB made and dropped
+	// leaves the count where it was, within a block or two of the collector's.
+	assert live <= i64(gc_heap_usage().heap_size)
+	make_garbage()
+	mut after := i64(0)
+	assert reflux_collect(&after) == ok
+	assert after < live + (1 << 20), 'live ${live}, after 16 MiB of garbage ${after}'
+	// The garbage's blocks are free now, and free blocks aren't counted: it
+	// isn't the heap's size.
+	assert after < i64(gc_heap_usage().heap_size), 'the heap is ${gc_heap_usage().heap_size}'
+	// It collects: after 256 KiB more garbage and a call, the collector has
+	// allocated next to nothing since its last collection.
+	for _ in 0 .. 4 {
+		piece := []u8{len: 1 << 16, init: 7}
+		assert piece[0] == 7
+	}
+	assert reflux_collect(unsafe { nil }) == ok
+	assert gc_heap_usage().bytes_since_gc < (1 << 16), '${gc_heap_usage().bytes_since_gc} bytes since the last collection'
+	// And what's kept is counted.
+	kept := []u8{len: 8 << 20, init: 1}
+	mut with_kept := i64(0)
+	assert reflux_collect(&with_kept) == ok
+	assert with_kept >= after + (7 << 20), 'after ${after}, with 8 MiB kept ${with_kept}'
+	assert kept[kept.len - 1] == 1
+}
+
+// make_garbage allocates 16 MiB in pieces and keeps none of it. It's a
+// function of its own so that nothing of it is on the caller's stack, where
+// the collector would take a stale pointer for a reference.
+@[noinline]
+fn make_garbage() {
+	for _ in 0 .. 256 {
+		piece := []u8{len: 1 << 16, init: 7}
+		assert piece[0] == 7
+	}
 }

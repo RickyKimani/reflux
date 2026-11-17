@@ -174,6 +174,9 @@ mut:
 	f1     []f64
 	f2     []f64
 	y1     []f64
+	// What Wilke's rule needs at the T last asked, kept until T moves
+	// (M8's D11).
+	wilke WilkeAt
 }
 
 // tp is T and P at V and the state.
@@ -193,7 +196,15 @@ fn (o PfrOde) tp(v f64, y []f64) (f64, f64) {
 fn (mut o PfrOde) ergun(t f64, p f64, flows []f64) !f64 {
 	c := o.r.catalyst
 	visc := o.r.viscosity or { return error('no viscosity') }
-	mu := visc.viscosity(t, p, o.src.y)!
+	// Wilke's rule mixes what depends on T alone, each compound's viscosity
+	// and each pair's factors: an isothermal reactor's are computed once
+	// (M8's D11). Any other viscosity is asked whole.
+	mu := if visc is Wilke {
+		visc.at(t, mut o.wilke)!
+		visc.mixed(o.wilke, o.src.y)
+	} else {
+		visc.viscosity(t, p, o.src.y)!
+	}
 	qv := o.src.volume // m³/s
 	mut mass := 0.0
 	for i, f in flows {
@@ -334,6 +345,11 @@ pub fn (r Pfr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.
 		f1:     []f64{len: m}
 		f2:     []f64{len: m}
 		y1:     []f64{len: m}
+	}
+	if visc := r.viscosity {
+		if visc is Wilke {
+			o.wilke = visc.room()
+		}
 	}
 	if r.drop == .given && !(inlet.p - r.pressure_drop > 0) {
 		return spec_error(r.name, 'a drop of ${r.pressure_drop} Pa from ${inlet.p} Pa leaves no pressure')

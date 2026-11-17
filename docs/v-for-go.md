@@ -514,6 +514,39 @@ reached the caller's struct. `numeric.StiffOde` is `Ode` with a Jacobian,
 so `rodas4` hands its problem to the first-step code it shares with
 `dopri5` ([numeric/ode.v](../numeric/ode.v)).
 
+**A value held as one interface can be asked whether it has another's
+methods,** as Go's `if w, ok := u.(Warm); ok` asks. In V it's `is`, the
+same word as for a concrete type:
+
+```v
+fn run(u Unit) string {
+	name := u.name
+	if u is Warm {
+		return '${name}, from its last answer: ${u.calculate_from(1, 7)}'
+	}
+	return '${name}: ${u.calculate(1)}'
+}
+```
+
+Probed under tcc and gcc: a `Unit` whose struct also has `calculate_from`
+took the first branch, and one without it the second. Inside the branch `u`
+*is* a `Warm` and no longer a `Unit`, so `u.name` there is an error ("type
+`Warm` has no field named `name`"), where Go keeps `u` and gives you `w`
+beside it: take what you need from the first interface before the test.
+M8's optional interface for a unit that can start from its last answer
+(D6) rests on this. A test against a concrete type works the same way, and
+is what the PFR uses to keep Wilke's viscosities
+([reactors/pfr.v](../reactors/pfr.v)): `if visc is Wilke { … } else { … }`
+as an expression, with statements and a `!` call in its branches.
+
+**A method with a value receiver can still count its calls,** through a
+pointer field. `numeric.Function` is `at(x f64) f64`, with no `mut`, so a
+wrapper that counts evaluations can't increment a field of its own. It
+holds `n &int` instead, and writes `unsafe { (*f.n)++ }`
+([spike/eq16/spike.v](../spike/eq16/spike.v)). In Go you'd give the method
+a pointer receiver and pass `&counter`; V's interface would then need
+`mut` on the method and on every parameter that takes it.
+
 **Sum types** are what Go lacks: a *closed* set of variants, checked by the
 compiler. `Alpha` in [thermo/alpha.v](../thermo/alpha.v) is one, because the
 module owns the full list of α functions:
@@ -965,6 +998,19 @@ m := {
   array and 211,264 bytes for 1,000 arrays of ten `f64`s. M9's tape spike
   ([spike/tape/spike.v](../spike/tape/spike.v)) uses it to show that its
   evaluations allocate nothing in 1,800,000 calls.
+- **What's live isn't the heap's size.** `gc_heap_usage().heap_size` is
+  what the collector has taken from the OS, free blocks included, like
+  Go's `MemStats.HeapSys`: it grows in large steps when the collector
+  chooses, and never shrinks. `gc_memory_use()` is that less the free
+  blocks, like `HeapInuse`, and after `gc_collect()` it's what the program
+  still holds. A test of a leak wants the second. M10a's memory test
+  watched the first, and failed on Ubuntu when the heap doubled once with
+  nothing leaked; `reflux_collect` reports the second since M8 step 0. Its
+  test ([capi/capi_test.v](../capi/capi_test.v)) shows the difference: 16
+  MiB allocated and dropped leaves the count within 1 MiB, and 8 MiB kept
+  raises it by at least 7. The garbage is made in a function of its own
+  (`@[noinline]`), because the collector reads the stack conservatively,
+  and a stale pointer left in the caller's frame would keep a piece alive.
 - **`@[direct_array_access]` turns off a function's bounds checks.** Each
   `v[i]` is normally a call to `array_get`, which panics out of range. With
   the attribute it's a bare pointer read, and an index past the end reads

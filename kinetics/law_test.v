@@ -414,6 +414,100 @@ fn test_thermo_k_and_the_jacobian() {
 	}
 }
 
+// A point keeps its K until T moves (M8's D11), and what it keeps is what a
+// new point computes, to the bit: at a T it returns to, after another, and
+// when only P or the composition moves. That a kept K isn't computed again
+// shows in a K overwritten by hand, which a fill at the same T leaves and a
+// fill at another T replaces. A fill that fails keeps nothing.
+fn test_k_is_kept_until_t_moves() {
+	sp := species_from(['74-82-8', '7732-18-5', '1333-74-0', '630-08-0', '124-38-9'])
+	rs := reforming_reactions(sp)
+	k := build(sp, rs, [xu_froment_site()], xu_froment_laws(.thermo), [])!
+	s := State{
+		t: 900
+		p: 15e5
+		y: [0.2, 0.45, 0.2, 0.1, 0.05]
+	}
+	mut pt := k.point()
+	assert !pt.kept
+	states := [s, with_p(s, 16e5), with_y(s, 0, 0.01), with_t(s, 901), with_t(s, 901),
+		with_p(with_t(s, 901), 2e5), s, with_t(s, 650), s]
+	for q, st in states {
+		k.fill(st, mut pt)!
+		assert pt.kept && pt.k_t == st.t
+		mut fresh := k.point()
+		k.fill(st, mut fresh)!
+		for i, x in fresh.x {
+			assert math.f64_bits(pt.x[i]) == math.f64_bits(x), 'state ${q}, input ${i}: ${pt.x[i]} vs ${x}'
+		}
+		for i, x in fresh.dln_k_dt {
+			assert math.f64_bits(pt.dln_k_dt[i]) == math.f64_bits(x), 'state ${q}, d ln K/dT ${i}'
+		}
+		// And each K is its reaction's own, from Reaction.standard, though
+		// the fill takes each species' integrals once for all three.
+		for r in k.k_used {
+			own := rs[r].standard(sp, st.t)!
+			assert math.f64_bits(pt.x[k.ctx.slot(4, r)]) == math.f64_bits(math.exp(own.ln_k)), 'state ${q}, K of ${rs[r].name}'
+			assert math.f64_bits(pt.dln_k_dt[r]) == math.f64_bits(own.dln_k_dt)
+		}
+	}
+	slot := k.ctx.slot(4, k.k_used[0])
+	right := pt.x[slot]
+	pt.x[slot] = 1.0
+	k.fill(with_p(s, 3e5), mut pt)!
+	assert pt.x[slot] == 1.0, 'K was computed again at an unmoved T'
+	k.fill(with_t(s, 899), mut pt)!
+	assert pt.x[slot] != 1.0
+	k.fill(s, mut pt)!
+	assert math.f64_bits(pt.x[slot]) == math.f64_bits(right)
+	// A T with no standard properties is refused, and then nothing is kept:
+	// not that T, which would pass the next fill, and not the last one,
+	// whose K a failed fill may have half replaced.
+	if _ := k.fill(with_t(s, -1), mut pt) {
+		assert false, 'a fill at −1 K'
+	}
+	assert !pt.kept
+	if _ := k.fill(with_t(s, -1), mut pt) {
+		assert false, 'a second fill at −1 K'
+	}
+	k.fill(s, mut pt)!
+	assert pt.kept && math.f64_bits(pt.x[slot]) == math.f64_bits(right)
+}
+
+// At a new T a fill integrates each species once, however many reactions
+// it's in. The quadrature's panels are all that either allocates, so the
+// collector's count says how many integrals ran: the reforming model's
+// fill, ten integrals for five species, allocates under 0.6 of what its
+// three reactions' standard properties do taken one by one, 24 integrals
+// (measured: 2,752 bytes against 6,048, 0.46; water's are closed forms).
+fn test_a_fill_integrates_each_species_once() {
+	sp := species_from(['74-82-8', '7732-18-5', '1333-74-0', '630-08-0', '124-38-9'])
+	rs := reforming_reactions(sp)
+	k := build(sp, rs, [xu_froment_site()], xu_froment_laws(.thermo), [])!
+	s := State{
+		t: 900
+		p: 15e5
+		y: [0.2, 0.45, 0.2, 0.1, 0.05]
+	}
+	mut pt := k.point()
+	k.fill(s, mut pt)!
+	mut before := gc_heap_usage().total_bytes
+	k.fill(with_t(s, 901), mut pt)!
+	shared := gc_heap_usage().total_bytes - before
+	before = gc_heap_usage().total_bytes
+	for r in k.k_used {
+		rs[r].standard(sp, 901)!
+	}
+	apart := gc_heap_usage().total_bytes - before
+	println('a fill at a new T allocates ${shared} bytes; its reactions one by one, ${apart}')
+	assert shared > 0 && apart > 0
+	assert f64(shared) < 0.6 * f64(apart), '${shared} bytes against ${apart}'
+	// And at an unmoved T, nothing.
+	before = gc_heap_usage().total_bytes
+	k.fill(with_p(with_t(s, 901), 2e5), mut pt)!
+	assert gc_heap_usage().total_bytes - before == 0
+}
+
 // Rates are evaluated into the caller's buffer, allocating nothing.
 fn test_rates_allocate_nothing() {
 	k := xu_froment()

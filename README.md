@@ -59,7 +59,9 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/spike-dwsim-flowsheet.md](docs/spike-dwsim-flowsheet.md) does the
   same for its flowsheets, for M4, and
   [docs/spike-dwsim-pfr.md](docs/spike-dwsim-pfr.md) for its plug-flow
-  reactor, for M9.
+  reactor, for M9, and
+  [docs/spike-dwsim-study.md](docs/spike-dwsim-study.md) for its
+  sensitivity analysis, Adjust, optimiser and regression, for M8.
 - [docs/v-for-go.md](docs/v-for-go.md) is V for Go programmers. It points
   back into this code for every feature.
 
@@ -171,6 +173,7 @@ kinetics/           reactions (M9)
   kinetics.v        rate laws to definitions and expressions, bound, checked
                     and compiled onto one tape
   evaluate.v        rates at a state, and their derivatives by the chain rule
+                    each K kept until T moves
   check.v           reflux kinetics check: notes and warnings on what's legal
   explain.v         the factor table: each rate's parts at a state
   exact.v           exact arithmetic: null spaces, whole coefficients
@@ -195,7 +198,8 @@ reactors/           the reactors (M9): flowsheet units with makers for the file
                     where Newton from the inlet fails
   pfr.v             the PFR and packed bed: isothermal, adiabatic or with a
                     duty, Ergun's drop, its profile
-  viscosity.v       the gas viscosity Ergun needs: Wilke's rule
+  viscosity.v       the gas viscosity Ergun needs: Wilke's rule, with what
+                    depends on T alone kept until T moves
   makers.v          the reactors' tables in a flowsheet file (format 2)
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
@@ -284,6 +288,11 @@ spike/dwsim/        driving DWSIM 9 from Python, headless (M3 step 0)
 spike/dwsim_flowsheet/  DWSIM 9's flowsheets and recycle, headless (M4 step 0)
 spike/dwsim_pfr/    DWSIM 9's plug-flow reactor on the owner's case (M9 step 0)
 spike/tape/         a tape of rates against the same written in V (M9 step 0)
+spike/dwsim_study/  DWSIM 9's study, Adjust, optimiser and regression, by its
+                    own forms, unshown (M8 step 0)
+spike/study/        warm starts by hand, threads' bits and a solve's
+                    allocations (M8 step 0)
+spike/eq16/         what K(T) costs, and equation 16 by a fixed rule (M8 step 1)
 .v-version          the V commit CI builds
 ```
 

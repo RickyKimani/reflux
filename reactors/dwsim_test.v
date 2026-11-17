@@ -534,6 +534,58 @@ fn test_the_owners_pfr_against_dwsim() {
 			)!
 			oo := own.calculate(fl, [inlet])!
 			println("  with reflux's viscosity (Wilke's rule): X ${conversion_of(oo.outlets[0].flows):.10f}, drop ${inlet.p - oo.outlets[0].p:.4f} Pa")
+			// Each compound's viscosity kept while T doesn't move (M8's D11)
+			// changes nothing: the same reactor asking the viscosity whole at
+			// every state, as it did before, gives every number's bits. And
+			// adiabatic, where T moves at every state and nothing is kept.
+			for thermal in [Thermal.isothermal, .adiabatic] {
+				kept := new_pfr('pfr',
+					k:         k
+					reactions: all
+					volume:    pf.volume
+					length:    pf.length
+					catalyst:  Catalyst{pf.loading, pf.void_fraction, pf.particle}
+					thermal:   thermal
+					drop:      .ergun
+					viscosity: wilke
+				)!
+				whole := Pfr{
+					...kept
+					viscosity: Whole{wilke}
+				}
+				a := kept.calculate(fl, [inlet])!
+				b := whole.calculate(fl, [inlet])!
+				pa := a.profile or { panic('no profile') }
+				pb := b.profile or { panic('no profile') }
+				assert pa.points.len == pb.points.len && pa.points.len > 10
+				mut numbers := 0
+				for q, x in pa.points {
+					y := pb.points[q]
+					assert math.f64_bits(x.volume) == math.f64_bits(y.volume)
+					assert math.f64_bits(x.t) == math.f64_bits(y.t)
+					assert math.f64_bits(x.p) == math.f64_bits(y.p), '${thermal}, point ${q}: ${x.p} vs ${y.p}'
+					for i, f in x.flows {
+						assert math.f64_bits(f) == math.f64_bits(y.flows[i])
+						numbers++
+					}
+				}
+				assert math.f64_bits(a.outlets[0].p) == math.f64_bits(b.outlets[0].p)
+				assert math.f64_bits(a.outlets[0].h) == math.f64_bits(b.outlets[0].h)
+				if thermal == .adiabatic {
+					assert pa.points.last().t < inlet.t - 50, 'T should have moved: ${pa.points.last().t} K'
+				}
+				println('  ${thermal}, viscosities kept against asked whole: ${pa.points.len} points, ${numbers} flows, every bit the same')
+			}
 		}
 	}
+}
+
+// Whole is Wilke's viscosity asked whole at every state, as the PFR asked
+// for it before it kept each compound's (M8's D11).
+struct Whole {
+	w Wilke
+}
+
+fn (x Whole) viscosity(t f64, p f64, y []f64) !f64 {
+	return x.w.viscosity(t, p, y)
 }

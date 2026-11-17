@@ -28,21 +28,39 @@ pub:
 //
 // A species without ΔH°f, S° or ideal-gas data is refused, by name.
 pub fn (r Reaction) standard(species []Species, t f64) !Standard {
-	if !(t > 0) || math.is_inf(t, 1) {
-		return fail(r.name, r.text, 0, 'no standard properties at T = ${t} K')
-	}
+	r.has_standard(t)!
 	mut dh := 0.0
 	mut ds := 0.0
 	for j, k in r.species {
-		gas, dhf, s0 := formation(r, species[k], r.written[j])!
-		h := dhf + gas.cp.int_cp(thermo.t_ref, t)
-		s := s0 + gas.cp.int_cp_over_t(thermo.t_ref, t)
-		if !math.is_finite(h) || !math.is_finite(s) {
-			return fail(r.name, r.text, 0, "${r.written[j]}'s Cp doesn't integrate from ${thermo.t_ref} to ${t} K")
-		}
+		h, s := r.species_standard(species[k], j, t)!
 		dh += r.nu[j] * h
 		ds += r.nu[j] * s
 	}
+	return standard_of(t, dh, ds)
+}
+
+// has_standard refuses a T with no standard properties.
+fn (r Reaction) has_standard(t f64) ! {
+	if !(t > 0) || math.is_inf(t, 1) {
+		return fail(r.name, r.text, 0, 'no standard properties at T = ${t} K')
+	}
+}
+
+// species_standard is the ideal-gas H° and S° at T of the reaction's j-th
+// species, s: the two integrals of its Cp. Several reactions' K at one T
+// share them (Kinetics.fill), each summing them as standard does.
+fn (r Reaction) species_standard(s Species, j int, t f64) !(f64, f64) {
+	gas, dhf, s0 := formation(r, s, r.written[j])!
+	h := dhf + gas.cp.int_cp(thermo.t_ref, t)
+	e := s0 + gas.cp.int_cp_over_t(thermo.t_ref, t)
+	if !math.is_finite(h) || !math.is_finite(e) {
+		return fail(r.name, r.text, 0, "${r.written[j]}'s Cp doesn't integrate from ${thermo.t_ref} to ${t} K")
+	}
+	return h, e
+}
+
+// standard_of is a reaction's standard properties from its ΔH° and ΔS°.
+fn standard_of(t f64, dh f64, ds f64) Standard {
 	dg := dh - t * ds
 	return Standard{
 		t:        t

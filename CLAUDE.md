@@ -25,8 +25,8 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M8 (specifications, sensitivity studies and optimisation) is planned**
-  on branch `m8-sensitivity`. Its plan, `docs/m8-plan.md`, was approved on
+- **M8 (specifications, sensitivity studies and optimisation) is under
+  way** on branch `m8-sensitivity`. Its plan, `docs/m8-plan.md`, was approved on
   2026-11-16: exit criteria 1–13, decisions D1–D20 and steps 0–16, ending
   in v0.4.0.
   - One milestone, not split (D1): the optimiser is `numeric.sqp`, written
@@ -39,9 +39,37 @@ Keep this section current: update it whenever a step is committed.
     Cp as ChemSep's eq. 16 (521 of 640 compounds), which has no closed-form
     integral, so K(T) is a quadrature at every evaluation; threads with
     `spawn` ran the 48-point study 2.1× faster on 4 workers, processes 2.6×.
-  - Step 0 is next: DWSIM's study, Adjust, optimiser and regression
-    headless (`docs/spike-dwsim-study.md`), warm starts measured, threads'
-    bits checked, and the `test_memory.py` fix.
+  - **Step 0 is done,** and amended D6 and D18, approved on 2026-11-17:
+    the spikes (`docs/spike-dwsim-study.md`,
+    `spike/study/spike.v`) and the `test_memory.py` fix.
+    - DWSIM's study, Adjust, optimiser and regression have no API, but a
+      script runs each form unshown ("DWSIM 9.0.5" below).
+    - Warm starts by hand: a tear started from its neighbour's answer
+      costs passes with Wegstein (11.0 against 4.0 cold) and Broyden (11.8
+      against 8.1) on the reference flowsheet. So step 5 first measures
+      what a warm start must carry, Broyden's Jacobian above all (D6).
+    - Threads sharing one `Loaded` give one thread's bits: 218,200 numbers.
+      4 threads run the owner's study about 1.6 times faster.
+    - A PFR's solve allocates 20.6 kB a step, nearly all of it
+      `Source.state`: 1,025 bytes a call. Step 7 starts there.
+    - `reflux_collect` reports the bytes live after its collection
+      (`gc_memory_use()`), for 0.4.0's CHANGELOG entry. `test_memory.py`
+      holds them within 256 KiB: they stayed within 68.
+    - V 0.5.2 tests an interface value for another interface with `is`,
+      which D6's `Warm` needs.
+  - **Step 1 is done,** and amended D11, approved on 2026-11-17: a rate's
+    workspace keeps K until T moves, and at a new T integrates each species
+    once for all its reactions; a PFR keeps what Wilke's rule needs at a T
+    (`WilkeAt`).
+    - Every answer keeps its bits: four checksums of studies, isothermal
+      and adiabatic, against the code before, and the golden reports.
+    - The published reforming model solves in about 20 ms, from 400; the
+      owner's case 1.2 to 1.4 times faster.
+    - Equation 16 by a fixed 24-node Gauss–Legendre rule holds 1e-13 for all
+      521 compounds to 1500 K and would cut a fill at a new T from 17 µs to
+      about 2 (`spike/eq16`). Whether to use it is the owner's to decide;
+      the recommendation is to leave it until an adiabatic reactor needs it.
+  - Step 2 is next: flowsheet variables in expressions.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -61,16 +89,11 @@ Keep this section current: update it whenever a step is committed.
   2026-11-15, both on `main`: source releases, annotated tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
-- **`test_memory.py` is flaky on Ubuntu,** to fix in M8's step 0: meant
-  for early in M9, it wasn't done, failed M9
-  step 0's CI run, and has passed since. It holds the
-  collector's `heap_size` from `reflux_collect`, free blocks included, and
-  Boehm grows that in one large step when it chooses to and never gives it
-  back. On `main`'s merge of M10a it doubled once, 5,580 KiB to about 11 MB,
-  and failed; the rerun passed, as both PR runs had. The fix: compare the
-  bytes live after a full collection (heap size less free bytes), which
-  changes what `reflux_collect` reports, or adds an output, so the header
-  and `docs/python.md` say so.
+- **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, not
+  yet on `main`. It held the collector's `heap_size`, free blocks included,
+  which Boehm grows in one large step when it chooses to and never gives
+  back: on `main`'s merge of M10a it doubled once and failed. It now holds
+  the bytes live after a full collection.
 - **M9 (equations, kinetics and reactors) is done,** merged in PR #6 and
   released as v0.3.0, with its exit review at the end of its plan. Its plan,
   `docs/m9-plan.md`, was approved on 2026-11-08: exit criteria 1–11,
@@ -231,7 +254,7 @@ Keep this section current: update it whenever a step is committed.
     CHANGELOG entry undated until the tag, the seven golden reports written
     again (report format 2, no number moved), and the docs and the exit
     review. No source changed, so no full checks ran; CI passed on step 11.
-  - Carried forward (in its review): `test_memory.py`; K(T)
+  - Carried forward (in its review): `test_memory.py` (M8 step 0); K(T)
     and the viscosity at an unmoved T (M8); one-phase reactors (M6); the
     yield reactor; reports to DWSIM, `thermo` (a hot gas's label), SymPy and V.
   - Next: M8, chosen on 2026-11-16 (above).
@@ -448,6 +471,29 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
       α: they differ from `thermo`'s by 3e-5.
     - Its adiabatic conversion reactor evaluates the expression at the
       inlet's T, not the outlet's.
+  - `spike/dwsim_study/run.py` is M8 step 0's spike
+    (`docs/spike-dwsim-study.md`): DWSIM's sensitivity analysis, Adjust,
+    optimiser and regression. None has an API; each is a form of the
+    classic app, run by its button's handler.
+    - `DWSIM.Automation.Automation` (the first automation class) makes the
+      app's main window unshown. A flowsheet is built with `Automation3`,
+      saved, and loaded there as a `FormFlowsheet`; a bare one can't take
+      objects. The forms read `My.Application.ActiveSimulation`.
+    - A study's failed point records the last point's numbers, with no
+      message. After a study, the restored flowsheet doesn't solve again
+      here: use one loaded fresh.
+    - The flowsheet solver doesn't run an Adjust unless it's marked
+      simultaneous; its control panel does. The simultaneous solver at a
+      tolerance it can't reach leaves the flowsheet at its derivative's
+      last point, 1% off in the varied value.
+    - Of the optimiser's 11 methods only `AL_BRENT_B`, bounded Brent's,
+      finds an optimum. An objective expression over auxiliary variables
+      throws in the nine that aren't Brent's (an index of −1 in its
+      `FunctionValue`), unbounded Brent's sets the variable to 0, and
+      the DotNumerics methods and IPOPT minimise when asked to maximise.
+    - The regression ran and fitted no kᵢⱼ, by any of its four methods.
+    - "Background parallel" solves serially.
+    - The script's process can take a minute to exit after its last line.
   - DWSIM's other reactors (M9 step 10):
     - The equilibrium reactor puts fugacities over 1 atm against K at
       1 bar. Its default tolerances, 0.01 and 1e-3, leave its answer up to
@@ -609,6 +655,9 @@ over the rest, built into a shared library for the Python package in
   - Rates become each species' source through `Source`, with exact
     derivatives; the PFR and CSTR use them in `rodas4` and `newton`. The
     CSTR continues in its volume where Newton from the inlet fails.
+  - What depends on T alone is kept until T moves (M8's D11), and is the
+    same number kept or not: each reaction's K, in the rates' `Point`, and
+    what Wilke's rule needs (`WilkeAt`), in the PFR.
   - A conversion may be an expression in T, bound in the kinetics' rate
     context with the file's definitions, evaluated at the outlet's T.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the

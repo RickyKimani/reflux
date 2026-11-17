@@ -361,6 +361,25 @@ A result keeps its fluid open while it lives, for `reason`. A closed fluid's
 handle is never given out again, so using it is a `BadHandle` error, never a
 crash.
 
+The library has a garbage collector of its own, which Python's doesn't see.
+`reflux.collect()` runs a full collection there and returns the bytes still
+live after it, for watching what the library holds over many calls:
+
+```python
+before = reflux.collect()
+for _ in range(1000):
+    fluid.flash_pt(300.0, 20e5, [0.5, 0.5])
+print(reflux.collect() - before < 1 << 20)
+```
+
+```text
+True
+```
+
+Before 0.4.0 it returned the collector's heap size, free blocks included,
+which grows in large steps and is never given back, so it said little about
+a leak.
+
 ## Threads
 
 Calls from many Python threads at once are safe, and give the same answers as

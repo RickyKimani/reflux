@@ -150,6 +150,6 @@ def test_the_version_needs_room():
     assert lib.reflux_version(buf, len(v) + 1) == _native.OK and buf.value == v
 
 
-def test_collect_gives_the_heap():
+def test_collect_gives_the_live_bytes():
     assert reflux.collect() > 0
     assert _native.lib.reflux_collect(None) == _native.OK

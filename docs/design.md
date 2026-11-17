@@ -1257,6 +1257,17 @@ with T° = 298.15 K, and
 with R = N_A·k_B = 8.31446261815324 J/(mol·K), expr's built-in constant,
 since K appears in rates that use it. K is on activities p/1 bar.
 
+**What a rate's workspace keeps** (M8's D11,
+[kinetics/evaluate.v](../kinetics/evaluate.v)). The two integrals are
+quadratures for most compounds: 521 of the database's 640 give Cp as
+ChemSep's equation 16, A + exp(B/T + C + D·T + E·T²), which has no
+antiderivative in closed form. So `Kinetics.fill` computes each K only
+when T has moved since the workspace's last fill, which an isothermal
+reactor's never does, and at a new T it integrates each species once,
+however many reactions it's in. Each reaction then sums its species' H° and
+S° exactly as above, in the same order, so a K kept or shared is the K
+`Reaction.standard` gives, to the bit. A fill that fails keeps nothing.
+
 **The check against ΔG°f.** In a balanced equation the elements' entropies
 cancel, so a data set whose ΔG°f agrees with its ΔH°f and S° gives
 
@@ -1665,6 +1676,14 @@ Wilke's rule,
     μ = Σᵢ yᵢμᵢ / Σⱼ yⱼΦᵢⱼ,   Φᵢⱼ = [1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼]² / [8(1 + Mᵢ/Mⱼ)]^½,
 
 pressure ignored. It matches `chemicals`' Wilke and EQ102 to 2.2e-16.
+
+Everything in it but the mole fractions depends on T alone: each μᵢ, and
+each pair's 1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼ and [8(1 + Mᵢ/Mⱼ)]^½. A PFR keeps those
+(`WilkeAt`) until T moves (M8's D11), so that along an isothermal reactor
+each state costs the sums alone, with no correlation, power or square
+root. The sums are the rule's own arithmetic in its own order, so the
+viscosity is the same number, to the bit, kept or not. A viscosity that
+isn't Wilke's, as a test's, is asked whole at every state.
 
 **What the tests show:** an isomerisation's exp(−kPV/F) and 1/(1 + kPV/F)
 to 3.2e-11 and 1e-12, and a dehydrogenation's −X − 2 ln(1 − X) = kPV/F₀ to
