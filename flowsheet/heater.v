@@ -62,6 +62,11 @@ pub fn (h Heater) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its energy stream, for an expression (M8's D3).
+pub fn (h Heater) energy_ports() []string {
+	return ['duty']
+}
+
 // calculate finds the outlet and the duty, F·(H_out − H_in). With a duty
 // given, that's the duty the flash reached, within its energy tolerance.
 pub fn (h Heater) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {

@@ -1,8 +1,8 @@
 # The flowsheet file format
 
-A flowsheet is a [TOML](https://toml.io) file, format 1 or 2: format 2 (M9)
-adds reactions and reactors, and reads every format-1 file's sections as
-format 1 does.
+A flowsheet is a [TOML](https://toml.io) file, format 1, 2 or 3: format 2
+(M9) adds reactions and reactors, and format 3 (M8) adds specs. Each reads
+every earlier format's sections as that format does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
 
@@ -78,8 +78,8 @@ prefixes, and how a compound unit is written.
 
 ## `format`
 
-Required: 1, or 2 for a file with reactions or reactors. A later format will
-come with a way to migrate.
+Required: 1, 2 for a file with reactions or reactors, or 3 for a file with
+specs. A later format will come with a way to migrate.
 
 ## `[components]`
 
@@ -422,6 +422,64 @@ then each species' mole fraction, summing to 1:
 ```
 reflux kinetics explain plant.toml "900 K" "15 bar" CH4=0.2 H2O=0.45 H2=0.2 CO=0.1 CO2=0.05
 ```
+
+## Specs (format 3)
+
+A spec varies a number the file gives until an equation over the
+flowsheet holds (M8's D5): DWSIM's Adjust, met with the flowsheet's loops
+rather than around them.
+
+```toml
+format = 3
+
+[spec.vapour]
+vary = "unit.cooler.outlet_T"
+between = ["200 K", "260 K"]
+until = "gas.F = 60 mol/s"
+```
+
+| Key | |
+|---|---|
+| `vary` | Required. A key the file gives a feed or a unit, as below. |
+| `between` | Required. The least and the most it may take, each in a unit of its own (or a plain number for a fraction). The file's value must be between them: the spec starts from it. |
+| `until` | Required. An equation, two expressions with `=` between them, of one dimension, over the flowsheet's variables, below. |
+
+`reflux solve` meets every spec, and the report gives each one's value, its
+equation's two sides, and how far apart they are
+([report-format.md](report-format.md)). A target its bounds can't reach is
+refused with what they do reach:
+
+```
+reflux: plant.toml:65: spec.vapour: its target is out of reach: with unit.cooler.outlet_T from 200 K to 260 K, gas.F goes from 41.9919 mol/s to 76.6534 mol/s, never 200 mol/s (at 10 values)
+```
+
+**A key to vary** names a feed's or unit's table and a number in it, as the
+file writes them: `feed.syngas.T`, `unit.reactor.volume`,
+`feed.syngas.molar_flows.methane`, `unit.split.fractions[0]`,
+`unit.tube.catalyst.loading`. It must be a number the file gives and its
+maker reads as one: `unit.cooler.duty` is refused where the cooler gives
+`outlet_T`, and so are `type`, `in`, and a conversion that's an expression
+in T. Each new value is checked as the file's own would be: a split whose
+fractions don't sum to 1 is refused, so two fractions are varied together.
+
+**The flowsheet's variables,** in a spec's equation and later a study's
+outputs, a name with one dot:
+
+| Name | |
+|---|---|
+| `gas.T`, `gas.P` | a stream's temperature and pressure |
+| `gas.F` | its molar flow |
+| `gas.n[methane]` | a component's molar flow |
+| `gas.y[CH4]` | a component's mole fraction, of the whole stream |
+| `gas.h` | its molar enthalpy |
+| `gas.vf` | its vapour fraction |
+| `cooler.duty`, `pump.work` | a unit's duty or work: an adiabatic reactor has none |
+
+A stream whose name isn't one word is quoted: `'let down'.T`. A component
+goes by the file's name, its formula, its CAS number or its aliases, quoted
+where it isn't a word, `gas.n['n-butane']`. Every number has its unit, as in
+any expression ([design.md](design.md#expressions)), so `gas.T = 300` is
+refused, and `gas.T = 300 K` reads.
 
 ## What it refuses that TOML allows
 

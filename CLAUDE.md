@@ -69,7 +69,24 @@ Keep this section current: update it whenever a step is committed.
       521 compounds to 1500 K and would cut a fill at a new T from 17 µs to
       about 2 (`spike/eq16`). Whether to use it is the owner's to decide;
       the recommendation is to leave it until an adiabatic reactor needs it.
-  - Step 2 is next: flowsheet variables in expressions.
+  - **Steps 2 to 4 are done,** built together, and amend D3, D4 and D5,
+    for the owner to approve (not yet committed).
+    - Step 2: dotted names in `expr`, `product.T`, `product.n[CH4]`,
+      `reactor.duty`, `'let down'.T` quoted; `Expr.value`, a value or why
+      there's none (D9); equations with `=`, `<=`, `>=`;
+      `flowsheet/variables.v` and the optional `Energies` interface.
+    - Step 3: a `Section` notes every number its maker reads;
+      `Loaded.input(key)` and `Loaded.with(inputs, values)` remake a feed or
+      unit by its maker, to the bit. A remake costs 8 to 80 µs a unit.
+    - Step 4: format 3's `[spec.NAME]`, specs' links in planning, Brent for
+      one spec alone, Broyden on tears and specs together with a nested
+      retry, each spec checked again from the solution; report format 3.
+      The reference flowsheet's D18 spec: 219.7574877219 K in 27 passes;
+      an isothermal PFR's volume to 1.1e-11 of its closed form.
+    - Found: two specs varying each other's targets need the whole first
+      Jacobian; `with_history` dropped an error's line; a V bug, an empty
+      `[]` as an `or {}` block's value.
+  - Step 5 is next: warm starts.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -518,7 +535,8 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 (compound units, exact rational exponents of kg, m, s, K, mol, A), depends
 on nothing, and so do `release`, the release gate's logic, and `chem`
 (M9), the elements, formulas and SMILES strings. `expr` (M9), the
-expression language, uses `quantity`; `kinetics` (M9), reactions, uses
+expression language, uses `quantity`, and has M8's dotted names for a
+flowsheet's variables; `kinetics` (M9), reactions, uses
 `chem`, `expr`, `quantity` and `thermo`, and its tests `components`.
 `flowsheet` reads a file's reactions into `kinetics` (step 6).
 `equilibrium` (M9), chemical equilibrium and the rates' consistency with
@@ -591,7 +609,7 @@ over the rest, built into a shared library for the Python package in
     Mathias–Copeman α come from its database's root (M10a's D9), never from
     the source tree behind its back.
 - **`flowsheet`** is M4's: streams, units, the graph, the solver, the file
-  and the reports.
+  and the reports, and M8's specs.
   - A `Stream` is its molar flows plus the flash that gave its state, so
     it's never half specified. Its H, S and V are its phases'.
   - A `Unit` is `calculate(fluid, inlets) !Outcome` and holds nothing about
@@ -607,6 +625,14 @@ over the rest, built into a shared library for the Python package in
     molar H, by direct substitution, Wegstein or Broyden. A `Solution` is only
     returned with every balance checked: each unit to 1e-10 on the inlets it
     used, and the whole to the gap the tears left.
+  - A `Section` notes every number its maker reads (`Readings`), so a key
+    such as `unit.cooler.outlet_T` can be varied: `Loaded.with` remakes the
+    feed or unit by its maker (M8's D4). `Variables` names each stream's and
+    unit's variables for expressions, `gas.F`, `cooler.duty` (D3).
+  - A spec (`[spec.NAME]`, format 3) is a link in planning from what it
+    reads to what it varies, so both land in one block; it's met by Brent
+    alone, or by Broyden with the tears, and checked again from the
+    solution (D5). `Loaded.solve` solves on the plan made at load.
   - A `Report` is a solution, or a failure, in SI: `Loaded.report`,
     `Loaded.failure` or `load_failure`. Its JSON and CSV come from that one
     struct, and its stream table rounds by `math.round`, never printf.

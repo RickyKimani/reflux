@@ -81,6 +81,11 @@ pub fn (c Cstr) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (c Cstr) energy_ports() []string {
+	return energy_names(c.thermal)
+}
+
 // CstrSystem is a CSTR's equations for Newton, scaled: the balances over
 // the inlet's total flow, and the energy balance over F·RT. Each evaluation
 // makes its own workspace, numeric.System's receiver being immutable; a

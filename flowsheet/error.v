@@ -11,6 +11,7 @@ pub enum Failure {
 	unbalanced        // a balance didn't close: a bug, or a unit that's wrong
 	bad_file          // a flowsheet file that can't be read: see line and key
 	reaction_failed   // a reactor's equilibrium, integration or Newton failed (M9)
+	spec_not_met      // a spec's target out of reach of its bounds, or not met (M8)
 }
 
 // FlowsheetError is every failure in this module, never a panic (D8). Test

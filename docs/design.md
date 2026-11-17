@@ -952,6 +952,7 @@ writes itself back.
     power  := atom ["in" unit] ["^" factor]
     atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
               | "(" expr ")" ["[" unit "]"]
+    name   := word ["." word] | quoted "." word
 
 So ^ binds tighter than a minus sign and to the right, and · and / go left
 to right, as in Python and SymPy: −x^2 is −(x²), x^-2 is x⁻², a^b^c is
@@ -1031,6 +1032,56 @@ an offset is refused there as after a number.
 
 A name that binds to nothing is refused, with the closest names within two
 edits.
+
+**A flowsheet's names** (M8's D3) have one dot: a stream's or a unit's
+name, then one of its variables, as the file names them. A scope that
+isn't a word is quoted, `'let down'.T`, and no space goes either side of
+the dot. Each is an input slot, filled from a solution:
+
+| Name | Dimension | Its value |
+|---|---|---|
+| `s.T`, `s.P` | temperature, pressure | the stream's |
+| `s.F` | molar flow | Σ nᵢ |
+| `s.n[X]` | molar flow | X's flow nₓ |
+| `s.y[X]` | none | nₓ / Σ nᵢ, of the whole stream; none where Σ nᵢ = 0 |
+| `s.h` | molar enthalpy | the stream's, on the fluid's reference |
+| `s.vf` | none | its vapour fraction, β |
+| `u.duty`, `u.work` | power | the unit's energy stream of that name |
+
+A component answers to the file's name, its compound's name, CAS number and
+aliases, and its formula where no other component has it, which is what it
+renders as; otherwise the file's name. A unit names its energy streams
+before it calculates (`Energies`), so an adiabatic reactor has no duty to
+name, and a mixer nothing. A name that isn't there is refused by what's
+wrong: a scope that isn't there ("no stream or unit prodct here", with
+product.T offered), a variable its scope hasn't ("stream product has no TT:
+it has T, P, F, h, vf, n[…], y[…]"), a scope alone ("product is a stream:
+name one of its variables"), or a variable without its scope ("n is a
+stream's: say whose, as feed.n[CH4]"). Plain text writes a quoted scope
+back quoted; LaTeX writes a scope upright, `\mathrm{let\ down}.T`.
+
+**A value, or why there's none** (M8's D9). `Expr.value` computes what `eval`
+does, in its order and to its bits, but refuses, at the node and in words,
+where `eval` would give ±∞ or NaN:
+
+| Node | Refused when | Saying |
+|---|---|---|
+| an input | it's NaN | it has no value here, and why if the caller knows: "gas has no flow" |
+| a/b | b = 0 | it divides by b, which is zero here |
+| ln a, log10 a | the result isn't finite (a ≤ 0) | a, and that a logarithm needs a number above zero |
+| sqrt a | a < 0 | a, which is negative here |
+| a^b | 0^(b < 0), or a < 0 and b not whole | which |
+| anything else | the result isn't finite | that it's too large for a number |
+
+Tutorial 2's product conversion, (in − out)/in with none in, is the first
+division's refusal, not −∞.
+
+**Equations** are two expressions with `=`, `<=` or `>=` between them (`≤`
+and `≥` too): a spec's target (D5) or an optimisation's constraint (D13).
+The relation is found outside brackets and quotes; none, two, a strict `<`
+or `>`, or `==` is refused. Each side is parsed with the other blanked, so
+its lines and columns are the whole text's, and the two must have one
+dimension.
 
 **Definitions** name expressions for reuse, in any order. Each may use the
 others but not itself through any chain, found by a depth-first walk that
@@ -1874,6 +1925,79 @@ inlets it was calculated from. The whole can't close better than the tears
 allow, and it must close to exactly that: the gap between the last pass's start
 and end, in each tear's flows and enthalpy flow, plus rounding. A solution that
 doesn't is an error, never a result.
+
+## Varying a number
+
+A study, a spec or an optimiser varies a number the file gives a feed or a
+unit, by its key (M8's D4): `unit.cooler.outlet_T`, `feed.f.T`,
+`feed.f.molar_flows.methane`, `unit.split.fractions[0]`. Nothing is set on
+a unit: the value replaces the file's in its tree, and the feed or unit is
+made again by its own maker, which checks it as it checks the file.
+
+**Readings.** A `Section` notes every number its maker reads, with its key,
+its SI value and the dimension it was read as, M4's named one where there
+is one (a temperature, or a temperature difference). A key can be varied
+only if its maker read it as a number: so `27 degC` is 300.15 K, as the
+maker had it, and `type`, `in`, or a conversion that's an expression in T
+are refused, with the keys that can be.
+
+**Writing.** A new value goes into the tree as a pure number, or as
+`value.str()` with the dimension's SI unit (K, Pa, mol/s, W, J/mol, or base
+units such as kg/m^3), each of scale 1. V's shortest decimal reads back to
+the same double (200,000 random doubles, measured), so the maker reads the
+value given to the bit, and `with` checks that it did. Only the tables and
+lists on the key's path are copied, and the rest of the file is shared.
+
+**What it costs** (gcc `-prod`, `tools/remake_bench.v`): 8 to 80 µs for a
+unit, against 0.3 µs to 8 ms for its own calculation, and 0.3 to 0.6 ms for
+a feed, which is a flash.
+
+## Specs
+
+A spec varies an input within its bounds until an equation holds (M8's D5):
+
+    r = (lhs − rhs) / s,    s = max(|lhs|, |rhs|, s₀),    |r| ≤ tol
+
+where s₀ is the block's own scale for the equation's dimension: the flow
+into the block for a flow, F·R·T_max for a power, R·T_max for a molar
+enthalpy, 1 for a pure number, and 0 otherwise, a temperature or pressure
+being far from zero. So a target of 0 W is met to tol of F·RT.
+
+**Planning.** A spec is a link from each unit that makes what its equation
+reads to the unit it varies, or the units the feed it varies enters, as if
+a stream joined them. Tarjan's components then put both in one block, and
+the link is torn already: the spec's value is the block's unknown, and the
+tears are the fewest streams that break the cycles left. A spec none of
+whose links closes a loop is refused, since nothing it reads depends on
+what it varies. A link that doesn't close one still orders the blocks, its
+reading made before its block.
+
+**One spec, no tears: Brent** (1973) within the bounds, each evaluation the
+spec's unit remade and the block calculated once. The bracket is the bounds
+if r changes sign between them; else nine values between, evenly spaced; and
+a target no pair brackets is refused with what the values reached ("gas.F
+goes from 41.99 to 76.65 mol/s, never 200 mol/s"). A value Brent asks for
+again is the sampled one, not calculated again.
+
+**Several specs, or tears: Broyden** (1965) on the tears' scaled variables
+and the specs' values together, each evaluation one pass, its residuals the
+tears' changes and each spec's r. The specs' first Jacobian J is a pass's,
+each value stepped by 1e-4 of its bounds' width from the tears' start, and
+a spec's value is
+
+    v = v₀ + m·u,    m = −J⁻¹,
+
+so that the first step in u, with Broyden's H₀ = −I, is Newton's on the
+specs, as it's direct substitution on the tears. A value is held within
+its bounds. Held at a bound three evaluations running, the target is likely
+out of reach: Broyden is stopped, and the spec is tried again nested, the
+specs' values outside (Brent for one, Broyden for more) around the tears
+converged from where the last evaluation left them. Specs whose J is
+singular can't be met together from there, and are refused.
+
+**The answer** is a solution like any other, every balance checked (M4's
+D8), and each spec checked again from the solution's streams and units:
+|r| ≤ tol, and the value within its bounds.
 
 ## Reports
 

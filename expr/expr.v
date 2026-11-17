@@ -99,10 +99,22 @@ pub:
 // Context is what an expression's names may be bound to: its variables
 // and families. Their slots, an evaluation's inputs, are the variables in
 // order, then each family's members in order.
+//
+// A variable's or family's name may have one dot, scope.name, as a
+// flowsheet's do (M8's D3): product.T, product.n[CH4], reactor.duty. scopes
+// says what each scope is, for messages; it binds nothing.
 pub struct Context {
 pub:
 	variables []Variable
 	families  []Family
+	scopes    []Scope
+}
+
+// Scope is what the names before a dot are: a stream or a unit, say.
+pub struct Scope {
+pub:
+	name string
+	what string
 }
 
 // slots is how many inputs an evaluation takes.
@@ -387,6 +399,50 @@ pub fn (e Expr) uses() []int {
 		}
 	}
 	return out
+}
+
+// scope_of is what a scope is, or ''.
+fn scope_of(ctx Context, name string) string {
+	for s in ctx.scopes {
+		if s.name == name {
+			return s.what
+		}
+	}
+	return ''
+}
+
+// in_scope lists the names a scope has, each as it's written after its
+// dot, a family's with [ ].
+fn in_scope(ctx Context, scope string) []string {
+	mut out := []string{}
+	for v in ctx.variables {
+		if v.name.contains('.') && v.name.all_before_last('.') == scope {
+			out << v.name.all_after_last('.')
+		}
+	}
+	for f in ctx.families {
+		if f.name.contains('.') && f.name.all_before_last('.') == scope {
+			out << '${f.name.all_after_last('.')}[…]'
+		}
+	}
+	return out
+}
+
+// scoped_plain writes a dotted name as an expression reads it: its scope
+// quoted where it isn't a name, 'let down'.T.
+fn scoped_plain(name string) string {
+	if !name.contains('.') {
+		return name
+	}
+	return '${quoted_scope(name.all_before_last('.'))}.${name.all_after_last('.')}'
+}
+
+// quoted_scope is a scope as an expression writes it.
+fn quoted_scope(scope string) string {
+	if is_identifier(scope) {
+		return scope
+	}
+	return if scope.contains("'") { '"${scope}"' } else { "'${scope}'" }
 }
 
 fn is_identifier(s string) bool {

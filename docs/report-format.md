@@ -1,11 +1,13 @@
 # The report format
 
 `reflux solve plant.toml --json results.json` writes a flowsheet's results as
-JSON, and `--csv streams.csv` its streams as CSV. This is format 2 of the
+JSON, and `--csv streams.csv` its streams as CSV. This is format 3 of the
 JSON, and of the CSV, which is format 1's. It changes only with a new
 `format` number, so that what reads a report can rely on it. Format 2 (M9)
 adds a reactor's profile to its unit, a unit's warnings, an element balance
-where something reacts, and the failure `"reaction_failed"`.
+where something reacts, and the failure `"reaction_failed"`. Format 3 (M8)
+adds the file's specs, each block's specs and their residuals, and the
+failure `"spec_not_met"`.
 
 - **Every number is SI:** K, Pa, mol/s, kg/s, m³/s, J/mol, J/(mol·K), m³/mol
   and W.
@@ -34,7 +36,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 
 | Key | |
 |---|---|
-| `format` | 2. |
+| `format` | 3. |
 | `reflux` | The version of reflux that wrote it. |
 | `file` | The flowsheet file, as the command line named it. |
 | `status` | `"solved"` or `"failed"`. |
@@ -47,6 +49,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 | `notes` | Anything the plan has to say about its choices. |
 | `balance` | How far the whole flowsheet is from closing its balances, or `null` on a failure. |
 | `worst_unit` | The worst unit's, for each balance, or `null` on a failure. |
+| `specs` | Each spec of the file as it was met, in the file's order. Empty without specs, and on a failure. |
 
 ### `components[]`
 
@@ -141,6 +144,21 @@ The PFR's inlet, then each point its integrator stepped to.
 | `tears` | The streams torn, or none for a block of one unit. |
 | `cycles` | Its elementary cycles. |
 | `residuals` | A row for each pass, holding each tear's largest change in that pass as a fraction of its scale: a component's flow against the stream's total flow, P against itself, and H against RT. It converged when the last row is within `tol`. Empty for a block with no tears, which is calculated once, and for one in which a failure came before a pass finished. |
+| `specs` | The specs met with the block, by name: those whose links put the block together (D5 in [m8-plan.md](m8-plan.md)). |
+| `spec_residuals` | A row for each evaluation of the block's specs, each one's residual as a fraction of its scale (`specs[].residual`). Empty for a block without specs. |
+
+### `specs[]`
+
+| Key | |
+|---|---|
+| `name` | As the file names it, `[spec.NAME]`. |
+| `vary` | The key it varied, such as `"unit.cooler.outlet_T"`. |
+| `value` | The value the key took, in SI. |
+| `unit` | That value's SI unit, such as `"K"`, or `""` for a pure number. |
+| `until` | Its equation, as reflux writes it back. |
+| `lhs` | The equation's left side in the solution, in SI. |
+| `rhs` | Its right side. |
+| `residual` | lhs − rhs as a fraction of the larger of the two, or of the block's own scale for that dimension where both are near zero (a flow's F, a duty's F·RT, a pure number's 1). It's within `tol`, checked from the solution itself. |
 
 ### `balance`, `worst_unit`, `units[].balance`
 
@@ -153,7 +171,7 @@ The PFR's inlet, then each point its integrator stepped to.
 
 | Key | |
 |---|---|
-| `kind` | `"bad_file"`, `"bad_flowsheet"`, `"bad_specification"`, `"flash_failed"`, `"no_convergence"`, `"unbalanced"` or `"reaction_failed"` (a reactor's equilibrium, integration or Newton), and `"other"` for anything else. |
+| `kind` | `"bad_file"`, `"bad_flowsheet"`, `"bad_specification"`, `"flash_failed"`, `"no_convergence"`, `"unbalanced"`, `"reaction_failed"` (a reactor's equilibrium, integration or Newton) or `"spec_not_met"` (a spec's target out of reach of its bounds, or not met), and `"other"` for anything else. |
 | `message` | All of it, as one line. |
 | `unit` | The unit at fault, or `""`. |
 | `reason` | Why, in words. |
@@ -178,9 +196,10 @@ has it.
 
 ## What it prints
 
-`reflux solve` prints how the flowsheet was solved, a stream table, and each
-unit's duty and work, in K, bar, mol/s, kg/s, kJ/mol and kW, to 5 significant
-figures. `--trace` adds every pass of every loop. These are for reading, and
+`reflux solve` prints how the flowsheet was solved, each spec's value, a
+stream table, and each unit's duty and work, in K, bar, mol/s, kg/s, kJ/mol
+and kW, to 5 significant figures. `--trace` adds every pass of every loop,
+and each spec's residual at every evaluation. These are for reading, and
 their layout may change. The JSON is for programs.
 
 ## Failures

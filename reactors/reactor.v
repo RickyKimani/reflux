@@ -84,6 +84,11 @@ pub enum Thermal {
 	duty       // a given heat, W, into the reactor
 }
 
+// energy_names is a reactor's energy streams: a duty, unless it's adiabatic.
+fn energy_names(t Thermal) []string {
+	return if t == .adiabatic { []string{} } else { ['duty'] }
+}
+
 // at_tp is the outlet stream with these flows at T and P.
 fn at_tp(unit string, fl thermo.Fluid, flows []f64, t f64, p f64) !flowsheet.Stream {
 	return flowsheet.feed_tp(fl, flows, t, p) or { return named(unit, err) }

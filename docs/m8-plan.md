@@ -20,7 +20,8 @@ Status: **approved** on 2026-11-16, after a draft that split M8 in two: it's
 one milestone, as the owner decided, with its optimiser written in V (D1,
 D12). Step 0 is done and amended D6 and D18, and step 1 is done and amended
 D11, both approved on 2026-11-17. Whether equation 16 is integrated by a
-fixed rule (step 1) is still the owner's to decide. Step 2 is next.
+fixed rule (step 1) is still the owner's to decide. Steps 2 to 4 are done
+and amend D3, D4 and D5, for the owner to approve. Step 5 is next.
 
 ## Goal
 
@@ -287,9 +288,9 @@ All checked by tests in CI, as before.
 |---|---|---|---|
 | D1 | Scope | One milestone, the roadmap's M8 (discussed on 2026-11-16): specs, warm starts, studies, workers, sensitivities, optimisation and fitting. The roadmap is amended in three places:<br>- B6: no C optimiser in M8, its own SQP (D12) instead, with IPOPT moving to M13;<br>- H1: exact sensitivities move to M13 (D10);<br>- H4: data reconciliation moves to M13. | The optimiser in V removes the C dependencies, NLopt and IPOPT, which were the case for splitting M8. A flowsheet optimisation is small and dense. Reconciliation needs measured data against the whole flowsheet's equations, M13's. |
 | D2 | Where it lives | <br>- **`flowsheet`:** specs, since they change how a block converges.<br>- **A new module, `study`:** studies, workers, sensitivities and flowsheet optimisation, over `flowsheet`.<br>- **`numeric`:** the SQP and least squares, each over an interface.<br>- **A new module, `fit`:** fitting, over `kinetics`, `flash`, `thermo` and `numeric`.<br>- **`main`:** `reflux study`, `optimize` and `fit`.<br>- **`kinetics` and `reactors`:** caching K and the viscosity.<br><br>vlib has no module named `study` or `fit`. | A study and an optimisation are many solves; the solve itself stays one. Fitting is many evaluations of a model, not of a flowsheet. |
-| D3 | Naming flowsheet variables | A name with one dot:<br>- for a stream, `product.T`, `product.P`, `product.F` (total molar flow), `product.n[CH4]` (a component's flow), `product.y[CH4]`, `product.h` and `product.vf` (vapour fraction);<br>- for a unit, its energy streams by their names, `reactor.duty` and `pump.work`.<br><br>The grammar's atom gains `name "." name`. A stream or unit that isn't there, or a variable it lacks, is refused with the closest names. Each variable has its dimension, so `product.T - 300` is refused as M9's sums are. | It reads like the file, where a stream is `[feed.syngas]` and a unit `[unit.reactor]`, and keeps M9's members for components. Families keyed by stream, `T[product]`, would need two keys for a composition, `y[product, CH4]`. |
-| D4 | What can be varied | Any number the file gives a feed or a unit, by its key: `"feed.syngas.T"`, `"unit.cooler.duty"`, `"unit.reactor.volume"`. Each point replaces that value in the file's tree, with its unit, and remakes the feed or unit through its maker, which checks it as it checks the file. The value's dimension must be the key's. | Every unit, today's and later ones, is variable at once, with its own checks, and no unit writes setters. Remaking a unit costs microseconds against a solve's milliseconds; step 3 measures it. |
-| D5 | Specs | `[spec.NAME]` has three keys:<br>- `vary`, a key, as D4;<br>- `between`, its bounds;<br>- `until`, an equation of two expressions whose sides share a dimension, `"drum_vapour.y[CH4] = 5 %"`.<br><br>In planning, a spec is an edge from the unit that makes what it measures back to what it varies (a unit, or the units its feed enters), so they land in one block. That block's unknowns are its tears and its specs' values, and Broyden converges them together (F4). The residuals are the tears' changes and each spec's two sides' difference, scaled.<br><br>A block with one spec and no tears is solved by Brent within the bounds instead. A spec that fails in a block with tears is tried once more nested, Brent around the block's tears, before it's refused.<br><br>The answer must meet each target to the solver's tolerance and stay within its bounds. A unit's value set equal to an expression of others, DWSIM's Spec block, is a spec that varies that value until it equals the expression. | Together is a pass an evaluation, where DWSIM's simultaneous adjusts take a whole solve. Brent can't fail inside a bracket, and a single spec is the common case. Bounds let a target out of reach be refused with what the bounds reach, rather than wandering. |
+| D3 | Naming flowsheet variables | A name with one dot:<br>- for a stream, `product.T`, `product.P`, `product.F` (total molar flow), `product.n[CH4]` (a component's flow), `product.y[CH4]`, `product.h` and `product.vf` (vapour fraction);<br>- for a unit, its energy streams by their names, `reactor.duty` and `pump.work`.<br><br>The grammar's atom gains `name "." name`. A stream or unit that isn't there, or a variable it lacks, is refused with the closest names. Each variable has its dimension, so `product.T - 300` is refused as M9's sums are.<br><br>**Amended in step 2.** A stream or unit whose name isn't one word is quoted before its dot, `'let down'.T`, as a member's key is. A unit names its energy streams through an optional interface, `Energies`, so that they bind at load: an adiabatic reactor has none. | It reads like the file, where a stream is `[feed.syngas]` and a unit `[unit.reactor]`, and keeps M9's members for components. Families keyed by stream, `T[product]`, would need two keys for a composition, `y[product, CH4]`. |
+| D4 | What can be varied | Any number the file gives a feed or a unit, by its key: `"feed.syngas.T"`, `"unit.cooler.duty"`, `"unit.reactor.volume"`. Each point replaces that value in the file's tree, with its unit, and remakes the feed or unit through its maker, which checks it as it checks the file. The value's dimension must be the key's.<br><br>**Amended in step 3.** A key's value and dimension are those its maker read, noted by the `Section` as it read them, not parsed again from the file: `27 degC` is 300.15 K where a temperature was read. A key no maker reads as a number is refused. A key into a nested table or a list is written as the file nests it, `unit.tube.catalyst.loading`, `unit.split.fractions[0]`. | Every unit, today's and later ones, is variable at once, with its own checks, and no unit writes setters. Remaking a unit costs microseconds against a solve's milliseconds; step 3 measures it. |
+| D5 | Specs | `[spec.NAME]` has three keys:<br>- `vary`, a key, as D4;<br>- `between`, its bounds;<br>- `until`, an equation of two expressions whose sides share a dimension, `"drum_vapour.y[CH4] = 5 %"`.<br><br>In planning, a spec is an edge from the unit that makes what it measures back to what it varies (a unit, or the units its feed enters), so they land in one block. That block's unknowns are its tears and its specs' values, and Broyden converges them together (F4). The residuals are the tears' changes and each spec's two sides' difference, scaled.<br><br>A block with one spec and no tears is solved by Brent within the bounds instead. A spec that fails in a block with tears is tried once more nested, Brent around the block's tears, before it's refused.<br><br>The answer must meet each target to the solver's tolerance and stay within its bounds. A unit's value set equal to an expression of others, DWSIM's Spec block, is a spec that varies that value until it equals the expression.<br><br>**Amended in step 4.** The residual is (lhs − rhs)/max(\|lhs\|, \|rhs\|, s₀), s₀ the block's own scale for the dimension. Several specs with no tears are met by Broyden on their values, and nested so around the tears. The specs' first Jacobian is a whole pass's, J, and their unknowns v₀ + (−J⁻¹)·u, since two specs can each vary what the other reads. Broyden held at a bound three evaluations running is stopped for the nested retry. Brent's bracket is the bounds, or nine values between them. | Together is a pass an evaluation, where DWSIM's simultaneous adjusts take a whole solve. Brent can't fail inside a bracket, and a single spec is the common case. Bounds let a target out of reach be refused with what the bounds reach, rather than wandering. |
 | D6 | Warm starts | A study's or an optimiser's point starts its tears from the last point's, with a secant predictor through the last two where both exist.<br><br>A unit that can use its last answer says so with an optional interface, `Warm`, whose `calculate_from(fl, inlets, last Outcome)` takes it. `Unit` is unchanged, and a unit without it starts cold:<br>- the CSTR starts Newton from its last outlet, skipping continuation;<br>- a reactor at a duty or adiabatic brackets its T around the last;<br>- a PFR starts from its last first step.<br><br>A warm answer is checked exactly as a cold one is.<br><br>**Amended in step 0, for step 5 to settle.** A tear started from its neighbour's answer, as `SolveParams.estimates` allows today, took more passes than a cold start on the reference flowsheet with Wegstein (11.0 a point against 4.0) and with Broyden (11.8 against 8.1), and fewer only with direct substitution (24 against 29). The predictor brought Broyden's to 7.8 and Wegstein's to 8.4. So a tear's value alone isn't the warm start. Step 5 first measures what is, Broyden's Jacobian carried along with the tears above all, and a block is started warm only where that takes no more passes than cold. | `Unit`'s promise, nothing about a solve, keeps units shareable between threads, so the last answer comes in from outside. A predictor is cheap and halves the work along a smooth sweep.<br><br>Step 0 measured the tears' part by hand, and it doesn't hold as written. |
 | D7 | Determinism | A study's points go in chunks of a fixed size, 8 unless the file says otherwise. Each chunk starts cold at its first point and warm-starts the rest in order. Workers take whole chunks. A grid of two inputs runs along its rows, alternating direction, so each point's neighbour is the last one solved. | The same chunks give the same bits whatever the number of workers (criterion 5). DWSIM's answers depend on the order of its points. |
 | D8 | Workers | Threads, with `spawn`, sharing one loaded file. The number is the CPU count unless `--workers` says otherwise. Step 7 profiles a solve's allocations and removes those in the hot path that it can. | Measured: 2.1× with 4 threads against 2.6× with 4 processes, which would each read the file and the data and need their reports merged. One process keeps one report. |
@@ -624,21 +625,266 @@ laptop's clock moves between runs):
   bit for bit is the code before this step, which the spike's checksums
   were compared with once.
 
-### 2. Flowsheet variables in expressions
+### 2. Flowsheet variables in expressions — done, with D3 amended
 - D3: the grammar's dotted names, a context over a solution's streams and
   units, dimensions, refusals and renderings.
 - Evaluating an output at a solution, with D9's NaN and reason.
 
-### 3. Remaking a feed or unit with a value replaced
+Steps 2, 3 and 4 were built together, with one tcc and one gcc check, each
+written up apart.
+
+**What was built:**
+- **[expr/parse.v](../expr/parse.v):** a name may have one dot,
+  `product.T`, `product.n[CH4]`, `reactor.duty`, and a scope that isn't a
+  word is quoted, `'let down'.T`. A context's `scopes` say what each scope
+  is, for the refusals: a scope that isn't there ("no stream or unit
+  prodct here", with product.T offered), a variable its scope hasn't
+  ("stream product has no TT: it has T, P, F, h, vf, n[…], y[…]"), a scope
+  alone, or a variable without its scope ("n is a stream's: say whose, as
+  feed.n[CH4]").
+- **[expr/render.v](../expr/render.v):** each writes back: plain text
+  quotes a scope that isn't a word, and LaTeX writes it upright,
+  `\mathrm{let\ down}.T`.
+- **[expr/value.v](../expr/value.v):** `Expr.value`, D9's evaluation: eval's
+  arithmetic in eval's order, refusing at the node and in words where eval
+  would give ±∞ or NaN. An input that's NaN says why, if the caller knows
+  ("gas has no flow"); a division by zero names its divisor; a logarithm, a
+  root or a power says which argument, and what it is there.
+- **[expr/equation.v](../expr/equation.v):** two expressions with `=`,
+  `<=` or `>=`, each side parsed with the other blanked so that its places
+  are the whole text's, and one dimension between them. `<=` and `>=` are
+  for step 10; a spec refuses them.
+- **[flowsheet/variables.v](../flowsheet/variables.v):** `Variables`, each
+  stream's T, P, F, h, vf, n[…] and y[…] and each unit's energy streams,
+  with where each slot comes from in a solution. A component renders as
+  its formula where no other has it, as `kinetics.rate_context` does, and
+  answers to the file's name, its compound's, CAS number and aliases.
+  `Loaded.expression` and `Loaded.value`.
+- **`Energies`,** an optional interface: a unit names its energy streams
+  before it calculates, so that `cooler.duty` binds at load. The heater,
+  drum and separator name a duty, the pump, compressor and expander their
+  work, and each reactor its duty unless it's adiabatic.
+
+**D3 is amended,** for the owner to approve: a stream or unit whose name
+isn't one word, as the reference flowsheet's `let down` and `flash gas`, is
+quoted before its dot, `'let down'.T`, as a member's key is quoted. The
+unit's names come from `Energies`, which D3 didn't say.
+
+**Tests:**
+- [expr/scoped_test.v](../expr/scoped_test.v): every dotted name binds to
+  its slot with its dimension; 22 refusals, each at its column with its
+  suggestion; each renders back, plain text reading back to the same tree;
+  `value` is eval's bits at 1,000 seeded points of five expressions; ten
+  refusals of `value`, each saying where and why, and eval giving ±∞ or
+  NaN at each; equations and their 13 refusals.
+- [flowsheet/spec_test.v](../flowsheet/spec_test.v): every variable of the
+  reference flowsheet's every stream and unit against the solution's own
+  numbers, the mole fractions summing to 1 within 4e-16; units with no
+  energy refused; an emptied stream's fractions and ratios refused, saying
+  why.
+- [reactors/flowsheet_test.v](../reactors/flowsheet_test.v): a reactor's
+  duty, and none for an adiabatic one.
+
+### 3. Remaking a feed or unit with a value replaced — done, with D4 amended
 - D4: a key into the file's tree, a value with its unit put in its place,
   and the feed or unit remade by its maker, its checks included.
 - What remaking costs, measured on every unit type.
 
-### 4. Specs
+**What was built:**
+- **[flowsheet/section.v](../flowsheet/section.v):** a `Section` notes
+  every number its maker reads, with its key, its SI value and the
+  dimension it was read as (M4's named one where there is one), in a
+  `Readings` shared with the sections made from it.
+- **[flowsheet/vary.v](../flowsheet/vary.v):** `Input`, a number by its
+  key; `Loaded.input`, which makes the feed or unit once to read the key's
+  value as its maker has it; `Loaded.with`, the file with inputs replaced,
+  each touched feed or unit made again by its maker (`make_unit`, split out
+  of `read_unit`); `readings_of`, the keys a feed or unit can vary; and
+  `si_text`. `Loaded` keeps the file's text, its makers and what they're
+  given.
+- **The keys** are as the file writes them: `feed.f.T`,
+  `unit.cooler.outlet_T`, `feed.f.molar_flows.methane`,
+  `unit.split.fractions[0]`, `unit.tube.catalyst.loading`.
+- **A value goes back** as a pure number, or with its dimension's SI unit,
+  scale 1, as V's shortest decimal, which reads back to the same double, so
+  the maker reads it to the bit; `with` checks that it did. Only the tables
+  on the key's path are copied.
+
+**D4 is amended,** for the owner to approve: a key's value and dimension are
+the ones its maker read, recorded as it read them, not parsed again from
+the file's text. So `27 degC` is 300.15 K where the maker read a
+temperature, and a key no maker reads as a number (`type`, `in`, a
+conversion that's an expression in T) is refused with those that can be
+varied.
+
+**What remaking costs** (gcc `-prod`, 200 remakes each,
+[tools/remake_bench.v](../tools/remake_bench.v)), against the unit's own
+calculation on its solved inlets:
+
+| type | key | remake | calculate |
+|---|---|---|---|
+| mixer | `P` | 12 µs | 2.5 ms |
+| compressor | `outlet_P` | 32 µs | 5.1 ms |
+| heater | `duty` | 41 µs | 2.0 ms |
+| expander | `delta_P` | 19 µs | 3.6 ms |
+| component separator | `fractions.methane` | 11 µs | 0.46 ms |
+| valve | `delta_P` | 9 µs | 0.97 ms |
+| splitter | `fractions[0]` | 14 µs | 0.3 µs |
+| flash drum | `T` | 9 µs | 0.31 ms |
+| pump | `delta_P` | 8 µs | 1.1 ms |
+| conversion reactor | `conversions[0].conversion` | 23 µs | 0.25 ms |
+| PFR | `catalyst.loading` | 54 µs | 8.3 ms |
+| CSTR | `T` | 79 µs | 0.57 ms |
+| equilibrium reactor | `T` | 22 µs | 0.98 ms |
+| Gibbs reactor | `T` | 22 µs | 0.84 ms |
+| feed | `T` or `P` | 0.34 to 0.65 ms | (a flash) |
+
+D4's guess holds: a remake is microseconds against a solve's milliseconds,
+but for a splitter, whose own calculation is less.
+
+**Tests** ([flowsheet/spec_test.v](../flowsheet/spec_test.v),
+[reactors/flowsheet_test.v](../reactors/flowsheet_test.v)):
+- Every number of the reference, every-unit and no-recycle flowsheets and
+  of the reactor chain, each unit remade with its own value, calculates
+  its outlets again to the bit; each feed remade flashes to the same T.
+- A value given is what the maker reads: the cooler at 220 K makes `cold`
+  at 220 K exactly; a feed in °C is varied in K; the splitter's fractions
+  together, and one alone refused by the splitter at its line; the file
+  written back with the new value; the file it came from unchanged.
+- Eight keys refused, each saying why.
+
+### 4. Specs — done, with D5 amended
 - D5: `[spec.NAME]` read and checked; the planning edge; Broyden over tears
   and spec values; Brent for one spec alone; the nested retry; bounds and the
   reachable range.
 - Closed forms (criterion 1) and the reference flowsheet with a spec.
+
+**What was built:**
+- **Format 3** ([flowsheet/file.v](../flowsheet/file.v)) reads
+  `[spec.NAME]` ([flowsheet/spec.v](../flowsheet/spec.v)): `vary`, a key
+  (D4); `between`, read as the key's maker reads it; `until`, an equation
+  over the flowsheet's variables. Formats 1 and 2 read as before, and
+  refuse a spec.
+- **Planning** ([flowsheet/sheet.v](../flowsheet/sheet.v),
+  [graph.v](../flowsheet/graph.v)): each spec is a `Link` from every unit
+  making what its equation reads to the unit it varies, or that its feed
+  enters, added to the graph after the streams. A link inside a block is
+  torn already; `Block.specs` lists the block's specs and its `cycles` its
+  streams' alone. A spec none of whose links closes a loop is refused.
+- **Solving** ([flowsheet/spec.v](../flowsheet/spec.v),
+  [solve.v](../flowsheet/solve.v)): `Loaded.solve` solves on the plan made
+  at load, in lists of its own, since a spec remakes what it varies.
+  - One spec and no tears: Brent within the bounds, bracketed by the bounds
+    or by nine values between them; a target no pair brackets is refused
+    with the range they reached.
+  - Several specs, or tears: Broyden on the tears and the specs' values
+    together, each evaluation one pass, the specs' first Jacobian a pass's
+    from the tears' start and their unknowns v = v₀ + m·u with m = −J⁻¹. On
+    failure where there are tears, once more nested: Brent, or Broyden for
+    several, around the tears converged.
+  - Each spec checked again from the solution: |r| ≤ tol, within its
+    bounds (`SpecResult`). A failure is `.spec_not_met` at the spec's line.
+- **Report format 3** ([flowsheet/report.v](../flowsheet/report.v),
+  [report-format.md](report-format.md)): `specs[]`, and each block's specs
+  and their residuals. `reflux solve` prints each spec's value, and
+  `--trace` each evaluation.
+
+**D5 is amended,** for the owner to approve, in what it left open:
+- **The residual's scale:** r = (lhs − rhs)/max(|lhs|, |rhs|, s₀), s₀ the
+  block's own scale for the dimension (F for a flow, F·RT for a power, RT
+  for a molar enthalpy, 1 for a pure number), so that a target of 0 W is
+  met to tol·F·RT.
+- **Several specs in a block with no tears** are met by Broyden on their
+  values, and nested with several, by Broyden around the tears.
+- **The first Jacobian** of the specs is a pass's, all of it: two specs that
+  each vary what the other reads have a zero diagonal, which a diagonal
+  start couldn't meet (found here).
+- **Broyden held at a bound** three evaluations running is stopped, and the
+  nested retry's bracket says what the bounds reach: an unreachable target
+  in the reference flowsheet's loop took 15 s, 97 passes against the bound,
+  and takes 5.7 s.
+
+**Measured** (tol 1e-9; evaluations are passes of the block, or converged
+loops for the nested retry):
+
+| case | way | evaluations | against |
+|---|---|---|---|
+| a heater's duty for 250 K | Brent | 8 | the flash at 250 K, within F·Cp·\|T − 250 K\| |
+| a feed's flow for a 3 MW duty | Brent | 10 | Q/(h_out − h_in), to 1e-9 |
+| an isothermal PFR's volume for 90% | Brent | 11 | ln(10)/2 m³, to 1.1e-11 |
+| two heaters, each varying what the other reads | Broyden | 9 | both targets to 1e-9 |
+| (T − 300 K)² = 400 K², bracketed inside the bounds | Brent | 13 | 280 or 320 K |
+| a duty of 0 W | Brent | 3 | the feed's T, 300 K |
+| the reference flowsheet, its cooler for 60 mol/s of gas | Broyden, with the tear | 27 | Brent on whole solves from outside: 219.7574877219 K against 219.7574877222 |
+| the same, for 200 mol/s | refused | 15 | gas.F from 41.99 to 76.65 mol/s |
+
+DWSIM's Adjust found 219.7546705409 K for the same spec (step 0), on its own
+PR: step 13 compares them by state.
+
+**Found and fixed:**
+- **`with_history` dropped an error's line and key,** which no error in a
+  solve had before a spec's. A spec's failure now keeps its place in the
+  file.
+- **A V bug:** an empty `[]` as an `or {}` block's value writes C that no
+  compiler takes ([v-for-go.md](v-for-go.md), §8).
+
+**Tests:**
+- [flowsheet/spec_test.v](../flowsheet/spec_test.v): the cases above;
+  a tolerance of 1e-18, below rounding, refused by the check from the
+  solution; an equation with no value refused, saying why; 13 refusals of
+  a spec in the file, each at its line; the report's specs; the solve's
+  lists apart from the file's; each count of evaluations, which can't grow.
+- [reactors/flowsheet_test.v](../reactors/flowsheet_test.v): the PFR's
+  volume.
+- [main_test.v](../main_test.v): `reflux solve` prints and writes a spec,
+  and one out of reach exits 1 at its line.
+- The JSON's keys against [report-format.md](report-format.md),
+  [flowsheet/report_test.v](../flowsheet/report_test.v).
+
+**Planted mistakes for steps 2 to 4:** 48, in scratch copies, one at a
+time.
+- **Caught, 40 at first:**
+  - in `expr`: a 0/0 let through as too large; an input's NaN or its reason
+    lost; log10's or a fractional power's refusal miscounted; a sum in
+    `value` that isn't eval's; dotted names not read, suggested without
+    their variable, a scope alone or a variable without its scope not
+    explained; a quoted scope that's empty, or written back unquoted; LaTeX's
+    space; an equation's relation left in its left side, its dimensions
+    unchecked, a strict < taken;
+  - in `flowsheet`: an empty stream's fraction given a value; F, n and y
+    crossed; a unit's energy by the wrong name; a value written as an f32,
+    or recorded off by 1e-7; a nested table's readings lost; a list's index
+    not read; reversed or outlying bounds, or a `<=`, accepted; a stream's
+    maker not linked, or a link not torn, or a spec reaching nothing
+    accepted; no sampling between the bounds; no floor under a zero
+    target's scale; m = +J⁻¹; the check from the solution loosened; a varied
+    feed's stream not updated; Broyden's specs not remade; the bound rule
+    off; the solve's lists shared with the file's; the report's value from
+    the wrong side; an adiabatic reactor given a duty.
+- **Four survived at first, and new tests catch each:** a scope with a dot
+  in its name, a key in double quotes, a key whose unit's name is a prefix
+  of another (`unit.coolerx.outlet_T`), and Brent re-evaluating the bounds,
+  which the heater's evaluation count, now held at its measured 8, catches.
+- **Four survive, explained:**
+  - `with`'s check that the maker read the value given: it guards the
+    writing, which the tests check on their own (an f32 writing is caught
+    by both);
+  - the re-evaluation at Brent's root where its last evaluation wasn't the
+    root: without it, the check from the solution would refuse a spec it
+    had met, never pass a wrong one, and no test case leaves Brent's root
+    elsewhere;
+  - the probe's step, 1e-4 of the bounds' width: at 1e-1 the reference
+    flowsheet's spec takes no more passes, Broyden's updates correcting
+    its first Jacobian;
+  - a link from outside its block marking its unit as fed, which only
+    changes which of equally good tears is preferred: no test flowsheet has
+    such a link.
+
+**For 0.4.0's CHANGELOG entry:** file format 3 (specs) and report format 3
+(`specs`, and each block's), with the failure `spec_not_met`. Every report's
+`format` is 3 now, so the golden reports are written again at the release,
+no number moved: the golden test, which holds their numbers, passes
+unchanged.
 
 ### 5. Warm starts
 - D6: the tears' predictor, `Warm`, and the CSTR, the reactors with an

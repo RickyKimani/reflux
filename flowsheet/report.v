@@ -9,8 +9,9 @@ import v.vmod
 
 // The report's own format (D11), which docs/report-format.md describes. What
 // reads a report can rely on it: it changes only with a new number. Format 2
-// (M9) adds a reactor's profile to its unit, and a unit's warnings.
-pub const report_format = 2
+// (M9) adds a reactor's profile to its unit, and a unit's warnings; format 3
+// (M8) adds the specs, and each block's.
+pub const report_format = 3
 
 // Report is a solve's results, or its failure: what the command line writes as
 // JSON and CSV, and prints as a stream table. Every number is SI, and every
@@ -31,6 +32,22 @@ pub:
 	notes      []string      // what the plan says about its choices
 	balance    ?Balance @[json_null] // of the whole flowsheet
 	worst_unit ?Balance @[json_null] // the worst unit's, for each balance
+	specs      []SpecReport // each spec as met (format 3)
+}
+
+// SpecReport is a spec as met (format 3): the key it varied and the value
+// it took there, in SI, its equation and its two sides, and how far apart
+// they are as a fraction of their scale.
+pub struct SpecReport {
+pub:
+	name     string
+	vary     string
+	value    f64
+	unit     string // value's, in SI: '' for a pure number
+	until    string
+	lhs      f64
+	rhs      f64
+	residual f64
 }
 
 pub struct ComponentReport {
@@ -120,6 +137,10 @@ pub:
 	// fraction of its scale (D7). It's empty for a block with no tears, which is
 	// calculated once, and for one in which a failure came before a pass finished.
 	residuals [][]f64
+	// specs are those met with the block, and spec_residuals has a row for each
+	// evaluation of them, each one's residual (format 3).
+	specs          []string
+	spec_residuals [][]f64
 }
 
 pub struct ErrorReport {
@@ -169,11 +190,37 @@ pub fn (l Loaded) report(sol Solution) Report {
 		streams:    streams
 		units:      units
 		solver:     l.solver_report()
-		blocks:     block_reports(l.sheet, sol.plan, sol.history)
+		blocks:     block_reports(l.sheet, sol.plan, sol.history, l.specs)
 		notes:      sol.plan.notes
 		balance:    sol.balance
 		worst_unit: sol.worst
+		specs:      l.spec_reports(sol)
 	}
+}
+
+// spec_reports is each spec as the solution met it.
+fn (l Loaded) spec_reports(sol Solution) []SpecReport {
+	mut out := []SpecReport{}
+	for r in sol.specs {
+		spec := l.specs.filter(it.name == r.name)
+		out << SpecReport{
+			name:     r.name
+			vary:     r.key
+			value:    r.value
+			unit:     spec.map(if it.input.dim.is_dimensionless() {
+				''
+			} else {
+				si_text(it.input.dim)
+			})[0] or {
+				''
+			}
+			until:    spec.map(it.until.plain())[0] or { '' }
+			lhs:      r.lhs
+			rhs:      r.rhs
+			residual: r.residual
+		}
+	}
+	return out
 }
 
 // profile_report is a unit's profile as the report gives it, none for a unit
@@ -200,7 +247,7 @@ pub fn (l Loaded) failure(err IError) Report {
 		error:      error_report(err)
 		components: l.component_reports()
 		solver:     l.solver_report()
-		blocks:     block_reports(l.sheet, l.plan, history)
+		blocks:     block_reports(l.sheet, l.plan, history, l.specs)
 		notes:      l.plan.notes
 	}
 }
@@ -312,22 +359,27 @@ fn phase_report(fl thermo.Fluid, ph flash.Phase) PhaseReport {
 	}
 }
 
-// block_reports is the plan's blocks, each with the history of its tears. The
-// history has an entry for each block with tears that solve reached, in order.
-fn block_reports(f Flowsheet, plan Plan, history []TearHistory) []BlockReport {
+// block_reports is the plan's blocks, each with the history of its tears and
+// specs. The history has an entry for each block with tears or specs that
+// solve reached, in order.
+fn block_reports(f Flowsheet, plan Plan, history []TearHistory, specs []Spec) []BlockReport {
 	mut out := []BlockReport{cap: plan.blocks.len}
 	mut next := 0
 	for b in plan.blocks {
 		mut rows := [][]f64{}
-		if b.tears.len > 0 && next < history.len {
+		mut spec_rows := [][]f64{}
+		if (b.tears.len > 0 || b.specs.len > 0) && next < history.len {
 			rows = history[next].residuals.clone()
+			spec_rows = history[next].spec_residuals.clone()
 			next++
 		}
 		out << BlockReport{
-			units:     b.units.map(f.units[it].unit.name)
-			tears:     b.tears
-			cycles:    b.cycles
-			residuals: rows
+			units:          b.units.map(f.units[it].unit.name)
+			tears:          b.tears
+			cycles:         b.cycles
+			residuals:      rows
+			specs:          b.specs.map(specs[it].name)
+			spec_residuals: spec_rows
 		}
 	}
 	return out

@@ -312,6 +312,29 @@ f := fn [mut calls] (x f64) f64 {
 [numeric/integrate_test.v](../numeric/integrate_test.v) counts function
 evaluations this way. My first version captured an `int` and counted zero.
 
+**Immutable, but not what it points to, by halves.** A struct whose field is
+a pointer under `mut:` can reach through it from an immutable receiver, as a
+Go method on a value receiver changes what a pointer field points at. But V
+lets only a `mut` method through: probed in V 0.5.2,
+
+```v
+struct Section {
+mut:
+	log &Readings = &Readings{}
+}
+
+fn (s Section) record(x Reading) {
+	s.log.add(x)       // fine: add is `fn (mut r Readings) add(...)`
+	s.log.list << x    // refused: "`s` is immutable"
+}
+```
+
+`numeric.brent` takes `at(x f64) !f64`, with no `mut`, so M8's spec passes
+it a struct holding `&Solver` whose `at` calls the solver's `mut` methods
+([flowsheet/spec.v](../flowsheet/spec.v)). A `Section`'s readings are shared
+with the sections made from it the same way, one `&Readings` between them
+([flowsheet/section.v](../flowsheet/section.v)).
+
 ---
 
 ## 4. Errors and options: `!T`, `?T`, and `or {}`
@@ -840,6 +863,16 @@ compiles ("incompatible types when assigning to type 'main__P' from type
 fill it: `mut p := ?P(none)` then `if x := get() { p = x }`, as
 [flowsheet/reactions.v](../flowsheet/reactions.v) does for a species'
 formula and gas data.
+
+**Gotcha (a V bug): an empty `[]` as an `or {}` block's value.**
+`return parse(s) or { fail(err.msg(), []) }`, with `fail` taking a
+`[]string`, passes V's checker, and V 0.5.2 writes C naming an array it
+never declared (`'__arr_lit_2' undeclared`), which neither tcc nor gcc
+compiles; its fallback compiler then fails on something else entirely.
+Probed alone. Go's `nil` slice has no such step to get wrong. Give the type,
+`[]string{}`, or return from inside the block:
+`x := parse(s) or { return fail(err.msg(), []string{}) }`, as
+[flowsheet/spec.v](../flowsheet/spec.v) does for a spec's bounds.
 
 **Gotcha: a test file's function can hide its module's constant.** A
 test file is compiled into its module, as Go's internal tests are, so its

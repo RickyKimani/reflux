@@ -50,12 +50,38 @@ fn test_solve_a_reactor() {
 	code, _, err := quiet(['solve', file, '--json', json_path])
 	assert code == 0 && err == '', err
 	r := decode(json_path)!
-	assert r.format == 2 && r.units.len == 1 && r.units[0].kind == 'pfr'
+	assert r.format == 3 && r.units.len == 1 && r.units[0].kind == 'pfr'
 	profile := r.units[0].profile or { panic('no profile') }
 	product := r.streams.filter(it.name == 'product')[0]
 	assert profile[0].volume == 0 && profile.last().volume == 1 && profile.last().length == 1
 	assert profile.last().p == product.p && profile.last().molar_flows == product.molar_flows
 	assert product.vapour_fraction == 1 && product.phases[0].phase == 'vapour'
+}
+
+// A spec (M8 step 4, format 3): `reflux solve` meets it, prints its value
+// and writes it in the report; one out of reach exits 1, at its line.
+fn test_solve_meets_a_spec() {
+	spec := '
+[spec.vapour]
+vary = "unit.cooler.outlet_T"
+between = ["200 K", "260 K"]
+until = "gas.F = 60 mol/s"
+'
+	file := scratch('spec.toml')
+	os.write_file(file, os.read_file(reference)!.replace('format = 1', 'format = 3') + spec)!
+	json_path := scratch('spec.json')
+	code, out, err := quiet(['solve', file, '--json', json_path, '--trace'])
+	assert code == 0 && err == '', err
+	assert out.contains('  Spec vapour: unit.cooler.outlet_T = 219.76 K, where gas.F = 60 mol/s, to '), out
+	assert out.contains('The specs vapour, with mixer, cooler, drum, split, pump:
+'), out
+	r := decode(json_path)!
+	assert r.specs.len == 1 && r.specs[0].vary == 'unit.cooler.outlet_T' && r.specs[0].unit == 'K'
+	os.write_file(file, os.read_file(reference)!.replace('format = 1', 'format = 3') +
+		spec.replace('60 mol/s', '200 mol/s'))!
+	code2, _, err2 := quiet(['solve', file])
+	assert code2 == 1
+	assert err2.contains('spec.toml:64: spec.vapour: its target is out of reach'), err2
 }
 
 fn test_trace_prints_every_pass_after_the_table() {

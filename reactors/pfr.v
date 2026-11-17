@@ -150,6 +150,11 @@ pub fn (r Pfr) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (r Pfr) energy_ports() []string {
+	return energy_names(r.thermal)
+}
+
 // PfrOde is a PFR's equations, for the integrators: the state is the flows,
 // then T if it moves, then P under Ergun's drop. A given drop's P is a line
 // in V.

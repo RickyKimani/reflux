@@ -180,7 +180,7 @@ fn test_the_json_reads_back_as_the_report() {
 
 fn test_the_json_is_laid_out_a_value_to_a_line() {
 	_, _, r := solved(cases['reference'].text)!
-	assert r.json().starts_with('{\n  "format": 2,\n  "reflux": "')
+	assert r.json().starts_with('{\n  "format": 3,\n  "reflux": "')
 	assert r.json().contains('\n      "molar_flows": [\n        70,\n        10,\n')
 	assert r.json().ends_with('\n}\n')
 }
@@ -190,7 +190,7 @@ fn test_the_json_is_the_solution() {
 		types := sheet.types
 		l, sol, r := solved(sheet.text)!
 		j := parse(r.json())
-		assert j['format']!.int() == 2 && j['status']!.str() == 'solved'
+		assert j['format']!.int() == 3 && j['status']!.str() == 'solved'
 		assert j['reflux']!.str() == flowsheet.version()
 		assert j['error']! is json2.Null
 		// The components, from the database itself.
@@ -528,6 +528,17 @@ fn test_the_json_is_as_documented() {
 	assert list(j['blocks']!)[0].keys() == doc['blocks[]']
 	assert j['balance']!.as_map().keys() == doc['balance']
 	assert j['worst_unit']!.as_map().keys() == doc['worst_unit']
+	// A spec's report, from a file with one (format 3).
+	text := read_flowsheet('reference.toml').replace('format = 1', 'format = 3') +
+		'
+[spec.cold]
+vary = "unit.cooler.outlet_T"
+between = ["200 K", "260 K"]
+until = "gas.F = 60 mol/s"
+'
+	_, _, rs := solved(text)!
+	js := parse(rs.json())
+	assert list(js['specs']!)[0].keys() == doc['specs[]']
 	load('format = 2') or {
 		f := parse(flowsheet.load_failure(err).json())
 		assert f.keys() == doc['']
@@ -536,9 +547,9 @@ fn test_the_json_is_as_documented() {
 		all.sort()
 		// A profile's keys are checked with a reactor's report, in
 		// reactors/flowsheet_test.v.
-		assert all == ['', 'balance', 'blocks[]', 'components[]', 'error', 'solver', 'streams[]',
-			'streams[].phases[]', 'units[]', 'units[].balance', 'units[].energy[]', 'units[].profile[]',
-			'worst_unit']
+		assert all == ['', 'balance', 'blocks[]', 'components[]', 'error', 'solver', 'specs[]',
+			'streams[]', 'streams[].phases[]', 'units[]', 'units[].balance', 'units[].energy[]',
+			'units[].profile[]', 'worst_unit']
 		return
 	}
 	assert false, 'format 2 loaded'

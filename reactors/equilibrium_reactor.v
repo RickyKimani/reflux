@@ -64,6 +64,11 @@ pub fn (e EquilibriumReactor) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (e EquilibriumReactor) energy_ports() []string {
+	return energy_names(e.thermal)
+}
+
 // calculate finds the equilibrium over the reactions, at T or by the energy
 // balance.
 pub fn (e EquilibriumReactor) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {

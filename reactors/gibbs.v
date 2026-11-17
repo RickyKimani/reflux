@@ -78,6 +78,11 @@ pub fn (g Gibbs) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (g Gibbs) energy_ports() []string {
+	return energy_names(g.thermal)
+}
+
 // calculate finds the equilibrium, at T or by the energy balance, and the
 // duty an isothermal reactor takes, F·H out less F·H in.
 pub fn (g Gibbs) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {

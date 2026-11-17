@@ -152,12 +152,14 @@ expr/               the expression language (M9): every equation a user gives
                     parsed into a tree, its names bound, its units checked,
                     written back as plain text, Unicode and LaTeX
   parse.v           the grammar, numbers with units, names and members,
-                    readings on a unit's scale, (T in degC), and a group's
-                    unit, (…) [%]
+                    a flowsheet's dotted names, product.T (M8), readings on
+                    a unit's scale, (T in degC), and a group's unit, (…) [%]
   check.v           every node's dimension, and fixed powers as fractions
   render.v          plain text that reads back, Unicode and LaTeX
   expr.v            nodes, contexts, built-in constants, definitions
   eval.v, lint.v    the tree's value; numbers that look like a constant
+  value.v           a value, or why there's none, never ±∞ (M8)
+  equation.v        equations, =, <= and >=, for specs and constraints (M8)
   tape.v            expressions compiled to a tape: folded, merged, fused;
                     evaluation into the caller's buffer, and the gradient by
                     one reverse sweep
@@ -204,6 +206,12 @@ reactors/           the reactors (M9): flowsheet units with makers for the file
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
   unit.v            the Unit interface, and energy streams
+  variables.v       a flowsheet's names for expressions, and their values
+                    in a solution (M8)
+  vary.v            a number the file gives, by its key, and the file with
+                    it replaced, remade by its maker (M8)
+  spec.v            design specs: read, linked in planning, and met by Brent
+                    or Broyden with the tears, each checked again (M8)
   mixer.v           mixer: flows and enthalpy add, then a PH flash
   splitter.v        splitter: fractions of the flow, the inlet's state
   pressure.v        outlet P or ΔP, for whatever changes pressure
@@ -274,7 +282,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     benchmarks.vsh (generated data and reports), bench_case.v
                     and bench_reactor.v (reflux's side of the benchmarks),
                     gen_m9_bench.py (the owner's PFR, DWSIM and reflux in
-                    turns)
+                    turns), remake_bench.v (what remaking each unit type
+                    costs)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

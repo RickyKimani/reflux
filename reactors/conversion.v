@@ -143,6 +143,11 @@ pub fn (c ConversionReactor) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (c ConversionReactor) energy_ports() []string {
+	return energy_names(c.thermal)
+}
+
 // flows_out runs the steps on the inlet's flows at the outlet's T: each
 // step's extent is its conversion of its key as it enters the step, over the
 // key's coefficient. A step that would take a reactant below zero beyond

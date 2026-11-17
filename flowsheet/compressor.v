@@ -56,6 +56,11 @@ pub fn (u Compressor) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its energy stream, for an expression (M8's D3).
+pub fn (u Compressor) energy_ports() []string {
+	return ['work']
+}
+
 // inlet_ports is in.
 pub fn (u Expander) inlet_ports() []string {
 	return ['in']
@@ -64,6 +69,11 @@ pub fn (u Expander) inlet_ports() []string {
 // outlet_ports is out.
 pub fn (u Expander) outlet_ports() []string {
 	return ['out']
+}
+
+// energy_ports names its energy stream, for an expression (M8's D3).
+pub fn (u Expander) energy_ports() []string {
+	return ['work']
 }
 
 // isentropic is the inlet taken to P at constant S.
