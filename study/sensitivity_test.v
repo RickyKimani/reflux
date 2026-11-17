@@ -255,3 +255,39 @@ fn test_a_derivative_through_a_recycle() {
 	// Measured: estimated within 3.6e-8, which can't grow.
 	assert d.error <= 5e-8, '${d.error}'
 }
+
+// One-sided differences (D13), as the optimiser takes them where a bound is
+// within the step: the PFR's dX/dV and dX/dT at T = 400 K, V = 1 m³,
+// against mpmath's closed forms, from above and from below, each within its
+// estimate and the estimate within 1e-5 of the derivative's scale.
+fn test_one_sided_differences() {
+	fixture := json2.decode[json2.Any](os.read_file(os.join_path(@VMODROOT, 'testdata',
+		'm8_sensitivities.json'))!)!.as_map()
+	c := fixture['cases']!.as_array()[4].as_map()
+	assert c['T']!.f64() == 400.0 && c['V']!.f64() == 1.0
+	base := load_text(pfr_file)!
+	l := flowsheet.Loaded{
+		...base
+		params: flowsheet.SolveParams{
+			...base.params
+			tol: sensitivity_tol
+		}
+	}
+	sol := l.solve()!
+	x := "(f.n['n-butane'] - product.n['n-butane']) / f.n['n-butane']"
+	e := l.expression(x)!
+	f := l.value(e, sol)!
+	for key, name in {
+		'unit.tube.volume': 'dX/dV'
+		'feed.f.T':         'dX/dT'
+	} {
+		input := l.input(key)!
+		exact := c[name]!.f64()
+		for side in [Side.above, .below] {
+			d := differences(l, sol, [e], ['X'], input, 1e-4 * input.value, side)
+			ratio := honest(d[0], exact, f, input.value, '${name} ${side}')
+			println('${name} from ${side}: the estimate is ${ratio:.3g} times its true error')
+			assert ratio >= 2.0
+		}
+	}
+}

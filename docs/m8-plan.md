@@ -22,8 +22,10 @@ D12). Step 0 is done and amended D6 and D18, and step 1 is done and amended
 D11, both approved on 2026-11-17. Whether equation 16 is integrated by a
 fixed rule (step 1) is still the owner's to decide. Steps 2 to 4 are done
 and amend D3, D4 and D5, and steps 5 and 6 are done and amend D6, all
-approved on 2026-11-17. Steps 7 and 8 are done, and step 8 amends D10, for
-the owner to approve. Steps 1 to 8 meet the roadmap's exit; step 9 is next.
+approved on 2026-11-17. Steps 7 and 8 are done, and step 8 amends D10,
+approved on 2026-11-17. Steps 1 to 8 meet the roadmap's exit. Steps 9
+and 10 are done, built together, and amend D12 and D13, approved on
+2026-11-17. Step 11 is next.
 
 ## Goal
 
@@ -297,10 +299,10 @@ All checked by tests in CI, as before.
 | D7 | Determinism | A study's points go in chunks of a fixed size, 8 unless the file says otherwise. Each chunk starts cold at its first point and warm-starts the rest in order. Workers take whole chunks. A grid of two inputs runs along its rows, alternating direction, so each point's neighbour is the last one solved. | The same chunks give the same bits whatever the number of workers (criterion 5). DWSIM's answers depend on the order of its points. |
 | D8 | Workers | Threads, with `spawn`, sharing one loaded file. The number is the CPU count unless `--workers` says otherwise. Step 7 profiles a solve's allocations and removes those in the hot path that it can. | Measured: 2.1× with 4 threads against 2.6× with 4 processes, which would each read the file and the data and need their reports merged. One process keeps one report. |
 | D9 | A point's outcome | Each point has a status (solved, failed, or solved with an output that has no value) and reasons in words, as M10a's points have. An expression that divides by zero, or takes the log of zero, at a point is NaN with its reason ("methanol's conversion: the feed has no methanol"), never ±∞. A failed point doesn't stop the study, and the next point starts cold. | Tutorial 2's −∞ is what a sweep must never do. M10a's C API already works this way, so M10b can hand it to Python unchanged. |
-| D10 | Sensitivities | The derivative of each output with respect to each input, at any point, by central differences of warm-started solves.<br>- The solve's tolerance is tightened to 1e-12 for them.<br>- Each step is chosen from the input's scale.<br>- The error is estimated from steps h and h/2 by Richardson's extrapolation, and reported beside the derivative.<br><br>The same derivatives are the optimiser's gradients. Exact sensitivities, by the implicit function theorem on the converged Jacobian (H1), need each unit's Jacobian, which comes with M13's residuals (J1).<br><br>**Amended in step 8.** The error's estimate adds the solves' noise, from a fifth solve at v: |D(h/2) − D(h)| + |Δ⁴|/h, Δ⁴ the fourth difference over the five. With the two differences alone a spec's derivative underestimated its error, its noise being of their size. Each step is h = 1e-4·\|v\|; an input at 0 is refused. | Differences work for every unit, and give an error estimate that a user can judge. An optimiser needs gradients good to about 1e-6, which a solve at 1e-12 gives. The PFR's rows in T and P are themselves differences (M9 step 9), so an exact path would be partial today. |
+| D10 | Sensitivities | The derivative of each output with respect to each input, at any point, by central differences of warm-started solves.<br>- The solve's tolerance is tightened to 1e-12 for them.<br>- Each step is chosen from the input's scale.<br>- The error is estimated from steps h and h/2 by Richardson's extrapolation, and reported beside the derivative.<br><br>The same derivatives are the optimiser's gradients. Exact sensitivities, by the implicit function theorem on the converged Jacobian (H1), need each unit's Jacobian, which comes with M13's residuals (J1).<br><br>**Amended in step 8,** approved on 2026-11-17. The error's estimate adds the solves' noise, from a fifth solve at v: |D(h/2) − D(h)| + |Δ⁴|/h, Δ⁴ the fourth difference over the five. With the two differences alone a spec's derivative underestimated its error, its noise being of their size. Each step is h = 1e-4·\|v\|; an input at 0 is refused. | Differences work for every unit, and give an error estimate that a user can judge. An optimiser needs gradients good to about 1e-6, which a solve at 1e-12 gives. The PFR's rows in T and P are themselves differences (M9 step 9), so an exact path would be partial today. |
 | D11 | Keeping K(T) and the viscosity | A reactor's rates keep each reaction's K, and each compound's viscosity, at the T they were last computed at. A new T computes them as now, so every answer keeps its bits. Whether eq. 16's Cp should integrate faster, for reactors whose T moves, is measured in step 1 and decided there.<br><br>**Amended in step 1.**<br>- Wilke's rule keeps each pair's two factors with each compound's viscosity: its powers and square roots, not the correlations, were most of its cost.<br>- At a T that moves, each species' two integrals are taken once and shared by the reactions it's in, each summing them as before: 10 integrals for the reforming model where its three reactions took 24, and the same bits. | Exact by construction. An isothermal reactor, the owner's case, never moves T. |
-| D12 | The optimiser | `numeric.sqp`, written in V, for small dense problems: minimise f(x) subject to bounds, equalities c(x) = 0 and inequalities c(x) ≥ 0.<br>- **The method:** Han and Powell's SQP. The Hessian of the Lagrangian comes from a BFGS update with Powell's damping, and each step's QP is solved by an active-set method on the bounds and the linearised constraints. Steps are accepted by an ℓ1 merit function with a backtracking line search (Nocedal and Wright, ch. 18).<br>- **What it takes:** the problem as an interface, with gradients, exact where the caller has them and D10's differences for a flowsheet.<br>- **What it returns:** an answer only once the first-order conditions hold to their tolerances, each multiplier with it. A QP with no feasible point, a line search that can't descend, or the iteration budget spent is a typed `OptimizeError` with its reason. | Every flowsheet optimisation M8 meets has a handful of inputs. SQP converges superlinearly there, takes constraints directly, and needs no dependency. Checking the conditions is how the optimiser shows its answer, as every other solver here does. DWSIM's stops when its objective stops changing. |
-| D13 | Optimising a flowsheet | `[optimize.NAME]` has four keys:<br>- `vary`, keys with bounds, as D4;<br>- `minimize` or `maximize`, an expression;<br>- `subject_to`, equations and inequalities over flowsheet variables, `"product.T <= 1100 K"`;<br>- `start`, optionally.<br><br>The path is feasible: each evaluation is a converged solve, specs included, warm-started from the last (D6), and the constraints are the SQP's. The equation reader of D5 takes `<=` and `>=` too. The report gives the optimum, the multipliers, which bounds and constraints are active, and each evaluation. | The feasible path keeps every evaluation a checked solve. The infeasible path's fewer passes come from giving the optimiser the tears, which M13's equation-oriented solve does anyway. |
+| D12 | The optimiser | `numeric.sqp`, written in V, for small dense problems: minimise f(x) subject to bounds, equalities c(x) = 0 and inequalities c(x) ≥ 0.<br>- **The method:** Han and Powell's SQP. The Hessian of the Lagrangian comes from a BFGS update with Powell's damping, and each step's QP is solved by an active-set method on the bounds and the linearised constraints. Steps are accepted by an ℓ1 merit function with a backtracking line search (Nocedal and Wright, ch. 18).<br>- **What it takes:** the problem as an interface, with gradients, exact where the caller has them and D10's differences for a flowsheet.<br>- **What it returns:** an answer only once the first-order conditions hold to their tolerances, each multiplier with it. A QP with no feasible point, a line search that can't descend, or the iteration budget spent is a typed `OptimizeError` with its reason.<br><br>**Amended in step 9,** approved on 2026-11-17:<br>- **The QP** is Goldfarb and Idnani's dual active-set method (`numeric.qp`), from the unconstrained minimum, each step's system factorised afresh: the problems are small.<br>- **A QP with no point is relaxed** first, as Powell's and Schittkowski's codes do: δ ∈ [0, 1] scales each equality and violated inequality, at a cost ½ρδ². A linearisation can have no point where the problem has, so the problem is refused as infeasible only when δ comes out 1, no step lowering the violation, or the relaxed QP fails too.<br>- **The problem** gives its values, then its gradients at the same x, so that a flowsheet differentiates from the solve it just made.<br>- **tol** is absolute on c and relative to max(1, ‖∇f‖∞) on the Lagrangian's gradient, so the caller scales its constraints. | Every flowsheet optimisation M8 meets has a handful of inputs. SQP converges superlinearly there, takes constraints directly, and needs no dependency. Checking the conditions is how the optimiser shows its answer, as every other solver here does. DWSIM's stops when its objective stops changing. |
+| D13 | Optimising a flowsheet | `[optimize.NAME]` has four keys:<br>- `vary`, keys with bounds, as D4;<br>- `minimize` or `maximize`, an expression;<br>- `subject_to`, equations and inequalities over flowsheet variables, `"product.T <= 1100 K"`;<br>- `start`, optionally.<br><br>The path is feasible: each evaluation is a converged solve, specs included, warm-started from the last (D6), and the constraints are the SQP's. The equation reader of D5 takes `<=` and `>=` too. The report gives the optimum, the multipliers, which bounds and constraints are active, and each evaluation.<br><br>**Amended in step 10,** approved on 2026-11-17:<br>- **`start`** is each input's own, `{ key, between, start }`, the file's value if not given.<br>- **The problem is scaled:** each input over its bounds to [0, 1], the objective over its largest derivative at the start, each constraint over its sides' size there; the SQP's tol is 1e-6, above the gradients' noise.<br>- **The gradients** are D10's differences with a step of 1e-4 of the largest value the bounds allow, at most a quarter of the range, and one-sided where a bound is within the step: a pump's efficiency at 1 can't be stepped past. `--workers` takes the inputs at once.<br>- **The multipliers** are reported as how fast the optimum improves as each bound or constraint is relaxed, per unit of its own.<br>- **The first evaluation** is cold, and every later one starts from the last. | The feasible path keeps every evaluation a checked solve. The infeasible path's fewer passes come from giving the optimiser the tears, which M13's equation-oriented solve does anyway. |
 | D14 | Fitting kinetics | `[fit.NAME]` in a reactions file has four keys:<br>- `data`, a CSV whose header gives each column with its unit (`T [K]`, `P [bar]`, `y[CH4]`, `r[reforming] [mol/(kg*s)]`);<br>- `parameters`, by name: constants and definitions such as `k1.A`, `k1.Ea` or `K_CO.dH`;<br>- `start`, if not the file's values;<br>- `weights`, each rate's absolute or relative error.<br><br>The residuals are the measured rates less the model's. The fit is least squares by Gauss–Newton with a Levenberg–Marquardt shift (`numeric.least_squares`), on ∂r/∂θ from the tape, exactly: the fitted constants become the tape's inputs. An Arrhenius or van 't Hoff constant is fitted centred on the data's mean T, and reported in the file's own form.<br><br>The report gives each value, its standard error and 95% interval by linearisation, the correlation matrix, the residuals, and the fitted section as file text. Rate data only, as from a differential reactor; outlet data from an integral reactor, a PFR solved per evaluation, comes later. | M9's exact derivatives make the fit exact to rounding in its Jacobian. Centring removes most of A's and Eₐ's correlation (kinetics.md), and the correlation matrix shows what's left. Rate data is how kinetics is measured for fitting, and needs no reactor model. |
 | D15 | Fitting kᵢⱼ | `[fit.NAME]` with VLE data (T, P, x, y), the kᵢⱼ of named pairs as parameters, and residuals in bubble pressure and vapour composition, each weighted. The derivatives are by differences, and the solver and report are D14's. | The data DWSIM's regression and thermo's users fit. kᵢⱼ is one number a pair, so differences are cheap and enough. |
 | D16 | The file | Format 3 adds `[spec.NAME]`, `[study.NAME]`, `[optimize.NAME]` and `[fit.NAME]`.<br><br>A study has:<br>- `vary`, one or two, each a key with `from`, `to` and `points`, or `values`;<br>- `report`, named expressions;<br>- optionally `chunk` and `sensitivities` (which outputs, with respect to which inputs).<br><br>Formats 1 and 2 read as before. | A new section is a new format, by the CHANGELOG's rules. |
@@ -1184,7 +1186,7 @@ owner's study 1.3 to 2 times as fast on one thread.
   and by T, k Arrhenius, at nine points, by mpmath at 50 digits, each
   closed form checked against mpmath's numerical derivative to 1e-30.
 
-**D10 is amended,** for the owner to approve: the error's estimate is
+**D10 is amended,** approved on 2026-11-17: the error's estimate is
 |D(h/2) − D(h)| + |Δ⁴|/h, the second part from a fifth solve, at v itself.
 With the two differences alone, the spec's case underestimated its error,
 7.3e-5 W/K against 5.1e-5: a spec met at 1e-12 of its scale leaves the duty
@@ -1250,17 +1252,199 @@ output has no value here, without solving, and the table says "at 1 point".
   once in the table for every point; an output with no value at one point
   alone; the JSON's and the CSV's new keys and columns, against the format.
 
-### 9. The SQP
+### 9. The SQP — done, with D12 amended
 - D12: `numeric.sqp`, the damped BFGS update, the active-set QP, the merit
   function, and the first-order conditions checked at the answer.
 - Hock and Schittkowski's problems from a uv script that writes their
   published optima and starts, with each problem written again in the test.
 
-### 10. Optimising a flowsheet
+Steps 9 and 10 were built together, at the owner's word.
+
+**What was built:**
+- **[numeric/qp.v](../numeric/qp.v):** `qp`, a strictly convex QP by
+  Goldfarb and Idnani's dual active-set method, from the unconstrained
+  minimum, each step's system factorised afresh; `QpError` with its kind.
+- **[numeric/sqp.v](../numeric/sqp.v):** `sqp` over the `Constrained`
+  interface (its values, then its gradients at the same x), with bounds,
+  equalities and inequalities: the QP at each iterate, relaxed by δ where it
+  has no point; the first-order conditions checked at x with the QP's
+  multipliers; backtracking on the ℓ1 merit function with Powell's weights;
+  BFGS with Powell's damping, scaled at its first update. `OptimizeError`
+  carries its kind, the last x and the iterates
+  ([design.md](design.md#the-optimiser)).
+- **[tools/gen_m8_hock_schittkowski.py](../tools/gen_m8_hock_schittkowski.py)**
+  and [testdata/m8_hock_schittkowski.json](../testdata/m8_hock_schittkowski.json):
+  21 problems, 1 to 100, in SymPy; each optimum solved again by mpmath at
+  40 digits on the published optimum's active set, and checked within 1e-6
+  of the published x* and f*, every active multiplier positive. The check
+  caught HS11's x* as first quoted here, 1.23468, which mpmath put at
+  1.234772825 with the published f*.
+
+**D12 is amended,** approved on 2026-11-17: the QP is Goldfarb and
+Idnani's; a QP with no point is relaxed before the problem is refused; the
+problem gives its values and then its gradients; and tol is absolute on c,
+so the caller scales (the table above).
+
+**Criterion 7, measured** (`numeric/sqp_test.v`; tol 1e-8):
+- Every problem from its published start reaches its optimum: f within
+  1e-9 of mpmath's, x within 1e-6 (HS3's x₁, where f's curvature is 2e-5,
+  within 1e-3), every multiplier within 1e-5. The first-order conditions are
+  checked from the problem's own gradients, not the solver's bookkeeping.
+- HS2 reaches its global optimum, (1.2244, 1.5), not the local one near
+  x₁ = −1.22. HS9's optima are a family, (12k − 3, 16k − 4); from (0, 0) it
+  reaches k = −3. After the first step, f's curvature along the constraint is
+  near zero, so the first update's scaling makes B small and the next step
+  long.
+- Iterations: HS1 24, HS2 21, HS3 4, HS4 2, HS5 7, HS6 12, HS7 10, HS9 8,
+  HS10 13, HS11 8, HS12 10, HS14 6, HS15 3, HS21 2, HS28 5, HS35 12, HS39 15,
+  HS43 11, HS48 9, HS71 8, HS100 16: 206 in all, recorded.
+- Refused, each with its kind and reason: x₁ + x₂ ≥ 3 with x₁ + x₂ ≤ 1 (it
+  stops where the ℓ1 violation is stationary, 2); a disc and a half-plane
+  that don't meet; Rosenbrock's in 3 iterations (the error carries its 3
+  iterates); f = x₁ in 50; crossed bounds, a start that isn't finite, a tol
+  of 0, bounds of the wrong length; a problem that fails at its start, and
+  one whose gradients fail. A step into where the problem fails, x − ln x
+  from 8, is shortened.
+- The QP alone (`numeric/qp_test.v`): Nocedal and Wright's example 16.4 to
+  1e-15, a box, equalities with one repeated and one inconsistent, four
+  refusals, and 500 seeded random QPs, each answer's conditions checked from
+  scratch, 10 steps at most.
+
+**Found:**
+- **A relaxed QP can fail.** The disc and the half-plane reach x = (2, 0)
+  with B's second diagonal at 1.9e8 and the rows dependent to 1e-8, where
+  the dual method finds no point though δ = 1 has one. The problem is
+  refused as infeasible, with the QP's reason. A fold of the pending
+  multiplier for a degenerate vertex was tried, reached by nothing, and
+  taken out.
+- **The tcc check found** the interface's first name, `Problem`, taken by
+  structs in `numeric/newton_test.v` and `stiff_test.v`, which V builds
+  each with the module alone; running the new tests alone hadn't shown it.
+  It's `Constrained` now.
+- **Three V lessons** (docs/v-for-go.md): that one; a `@[params]` struct's
+  named form works only as the last parameter; and an `or` block's value
+  must be the call's type, so a test takes an expected error in an `if`'s
+  `else`.
+
+**Planted mistakes:** 20, in scratch copies, one at a time.
+- **Caught, 18:**
+  - the QP: half its full step; the multipliers moved the wrong way; an
+    equality never flipped to its violated side; a met equality added
+    again; violations of 1e-6 let through; z taken as zero at 1e-2; the last
+    violated row added rather than the most (written again to build; the
+    random QPs' steps rose past 10);
+  - the SQP: no damping; no first scaling; every step accepted; the merit's
+    weights zero; stationarity at 10³·tol; the infeasibility test at δ > 2;
+    a start left outside its bounds; the bounds' multipliers added in the
+    Lagrangian's gradient; y without the constraints' part; the relaxed
+    QP's δ column signed wrong; a lower bound's multiplier halved.
+- **Deleted, 1:** the QP's polish, a last solve of the active system: no
+  test told it apart, the dual method's answer meeting every test's
+  tolerance alone.
+- **Survives, explained, 1:** complementarity not checked at the answer.
+  The QP's multipliers are zero off its active rows, and a row active in
+  the QP but not at x has c > 0, so d is at least c/‖∇c‖ and the
+  stationarity check, ‖B·d‖ small, fails first. The check stays as the
+  conditions' own statement.
+
+**Tests:** [numeric/qp_test.v](../numeric/qp_test.v) and
+[numeric/sqp_test.v](../numeric/sqp_test.v), as above.
+
+### 10. Optimising a flowsheet — done, with D13 amended
 - D13: `[optimize.NAME]`, inequalities in the equation reader, the feasible
   path with warm starts, and `reflux optimize`.
 - The series reactions' closed-form optimum against mpmath, an optimum on a
   bound and one on a constraint.
+
+**What was built:**
+- **[flowsheet/optimize.v](../flowsheet/optimize.v):** format 3's
+  `[optimize.NAME]`, read into an `OptimizePlan`: `vary`, each `{ key,
+  between, start }`; `minimize` or `maximize`; `subject_to`, equations and
+  inequalities by M8 step 2's reader. Every key checked, every refusal at its
+  line.
+- **[study/optimize.v](../study/optimize.v):** `optimize(l, plan,
+  params)`, the SQP on a `Sheet`, the flowsheet as its `Constrained` problem. The
+  problem is scaled (inputs over their bounds, the objective over its
+  largest derivative at the start, each constraint over its sides there).
+  Every evaluation is a solve at 1e-12, specs and all, from the last
+  evaluation's solution. The gradients are step 8's differences, one-sided
+  where a bound is within the step, an input's five solves on a worker of
+  their own with `--workers`. The `Optimum` gives the inputs, the objective,
+  each constraint's sides, activity and multiplier, each bound's multiplier,
+  the specs' values and the iterates in SI ([design.md](design.md#optimising-a-flowsheet)).
+- **[study/sensitivity.v](../study/sensitivity.v):** `differences`, step
+  8's `slopes` taken apart, about the point or to one side of it. The
+  central path keeps step 8's arithmetic: every study answer is the same.
+- **The report:** its own format 1 ([report-format.md](report-format.md),
+  [study/optimize_report.v](../study/optimize_report.v)), and
+  `reflux optimize FILE [NAME] [--json] [--csv] [--workers N]`, sharing its
+  arguments with `reflux study` ([study_command.v](../study_command.v)).
+  It exits 0 with an optimum and 1 without.
+- **[tools/gen_m8_series.py](../tools/gen_m8_series.py)** and
+  [testdata/m8_series.json](../testdata/m8_series.json): series reactions,
+  n-pentane to isopentane to neopentane, in an isothermal PFR, their optima
+  and multipliers at 50 digits; and
+  [testdata/flowsheets/series.toml](../testdata/flowsheets/series.toml).
+
+**D13 is amended,** approved on 2026-11-17: `start` is each input's
+own; the problem is scaled; the gradients' step is from the bounds, and
+one-sided at a bound; the multipliers are reported as improvements per unit
+relaxed; and the first evaluation is cold (the table above).
+
+**Criterion 8, measured** (`study/optimize_test.v`; tol 1e-6 scaled):
+
+| optimum | against mpmath | iterations, solves |
+|---|---|---|
+| inside the bounds, B over V at 400 K | V* = 0.654998 m³ to 1e-5, B* = 0.490275 mol/s to 1e-11, dB/dV zero to 1e-5 of K₁B | 7, 45 |
+| on a bound, B over V and T | T = 420 K exactly, V*(420 K) = 0.362617 m³ to 1e-5, the bound's multiplier ∂B/∂T = 0.0025987 mol/(s·K) to 1e-5 | 10, 112 |
+| on a constraint, F_C ≤ 0.05 mol/s | V = 0.238259 m³ to 1e-5, F_C to 1e-6 of its limit, the multiplier dB/dV ÷ dC/dV = 2.42346 to 1e-5 | 8, 52 |
+| on an equality, F_A = 0.5 mol/s | V = ln 2/K₁ to 1e-9, its multiplier −dC/dF_A to 1e-5, signed as relaxing it raises F_A | 6, 37 |
+| a pump's work over its efficiency | η = 1 exactly, a bound it can't step past; the multiplier W_s = W to 1e-6 | 2, 13 |
+
+Each is verified from the closed form's own derivatives, not the optimiser's.
+The same optimum comes with B plus 100 mol/s, and with the constraint's
+sides times 1e9 (its multiplier 1e9 times smaller). Two workers give the
+same bits as one. A constraint no point meets is refused, with its
+iterates in the report. `series.toml`'s optimum sits on T's bound and its
+constraint at once: 8 iterations, 90 solves, 4.1 s under tcc on 2 workers.
+DWSIM's optimiser on the same problem is step 13's (D18).
+
+One-sided differences, against the PFR's closed forms from above and from
+below: each estimate 3.99 to 4.09 times its true error.
+
+**Found:**
+- **R₁'s estimate had no margin.** With R₁ = 2·D(h/2) − D(h) as the
+  one-sided value, 4/3·|R₁ − R₂| is exactly its truncation, and the
+  estimate came out 1.01 times the true error. The value is now R₂, whose
+  truncation is a quarter of that, at twice R₁'s noise.
+- **An empty list has no line** in V's TOML tree, so `vary = []` is refused
+  at its table's header, as a study's is.
+
+**Planted mistakes:** 13, in scratch copies, one at a time.
+- **Caught, 9:** central differences at an upper bound (the pump's
+  efficiency stepped past 1, which its maker refuses); R₁ as the value; the one-sided estimate's truncation
+  dropped (the first attempt, `+ 0·quarter`, changed nothing and was
+  replaced); an equality's multiplier unsigned; the start's gradient taken
+  again (the solves rose past their record); no constraint active; a step of
+  1e-2; `reflux optimize` exiting 0 with no optimum; the bounds' names
+  swapped in the report.
+- **Survived at first, caught by new tests, 3:** the side at the lower
+  bound (a test of `step_of`); the objective scaled by its size, not its
+  derivative (B plus 100 mol/s); a constraint scaled by 1 (its sides times
+  1e9).
+- **Survives, explained, 1:** the optimiser's warm starts off. They change
+  only the work, a PFR keeping just its first step, and an optimisation
+  records its solves, not their passes or steps.
+
+**Tests:**
+- [study/optimize_test.v](../study/optimize_test.v): the five optima
+  above, the scales, the step and its side, a bound exactly, no feasible
+  point, workers, fifteen refusals of the file, and the JSON against the
+  format.
+- [study/sensitivity_test.v](../study/sensitivity_test.v): the one-sided
+  differences.
+- [main_test.v](../main_test.v): `reflux optimize`, its table, JSON, CSV
+  and exit status, and five wrong commands.
 
 ### 11. Fitting kinetics
 - D14: `numeric.least_squares`, fitted constants as the tape's inputs, the

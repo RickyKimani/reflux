@@ -472,6 +472,21 @@ rec := db.find('watr') or {
   not an Option or a Result". Each call takes its own `or`, as the PFR's
   choice of integrator does ([reactors/pfr.v](../reactors/pfr.v)), or the
   `match` yields plain values from calls that already handled theirs.
+- **An `or` block's value is the call's type,** so Go's `v, err := f()`,
+  keeping the error to look at, has no `e := f() or { err }`: that's "wrong
+  return type `IError` in the `or {}` block, expected `numeric.QpSolution`".
+  A test that expects an error takes it in an `if`'s `else`, where `err` is
+  in scope:
+
+```v
+if _ := qp(p) {
+	assert false, 'solved'
+} else {
+	assert err is QpError && (err as QpError).kind == .infeasible, err.msg()
+}
+```
+
+  ([numeric/qp_test.v](../numeric/qp_test.v); V 0.5.2, M8 step 9.)
 - **A function returns `!T` or `?T`, never both.** Go's `(T, bool, error)`
   has no V spelling: `fn f() !?int` is refused ("the type must be Option or
   Result"). Pick the one the caller acts on. The consistency check's search
@@ -698,6 +713,12 @@ thermo.new_cubic(.pr, comps)!                                   // no options
 thermo.new_cubic(.pr, comps, kij: [0.0, 0.02, 0.02, 0.0])!       // one by name
 thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 ```
+
+  **The named form works only for the last parameter.** A test helper
+  `refused(mut p Problem, x0 []f64, params SqpParams, kind SqpFailure, says
+  string)` can't be called `refused(mut p, x0, tol: 0.0, .bad_input, 'tol')`:
+  "expected 5 arguments, but got 4". With `params` last, it can
+  ([numeric/sqp_test.v](../numeric/sqp_test.v); M8 step 9).
 
 - **Consts can be structs and arrays,** which Go doesn't allow:
   `const butane = Component{…}` and `const kinds = [CubicKind.vdw, .rk, .srk, .pr]`.
@@ -972,6 +993,15 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
   - [thermo/cubic_test.v](../thermo/cubic_test.v) has no `module` line and
     imports `thermo`, so it can only see `pub` names. That keeps the public
     API honest.
+- **Each internal test file builds alone with its module,** where
+  `go test` builds a package's test files together. So two test files in
+  `numeric` may each declare a `struct Problem`, but neither may take a name
+  the module's own files use. When `numeric/sqp.v` declared
+  `pub interface Problem`, `newton_test.v` and `stiff_test.v` stopped
+  building ("cannot register struct `Problem`, another type with this name
+  exists"), and running `sqp_test.v` alone didn't show it. The interface is
+  `Constrained` now (M8 step 9). After adding a name to a module, run all
+  of its tests, not the new file's.
 - `math.tolerance(a, b, tol)` is the relative-or-absolute float compare.
 - **An expensive fixture, computed once.** A `const` whose value is a
   function call is evaluated when the program starts, so every test function
@@ -1221,6 +1251,10 @@ for k in 0 .. 8 {
 }
 all := ts.wait() // [][]i64, in the order spawned
 ```
+
+A method call spawns as a function's does, `ts << spawn s.slope(sol, k)`:
+the optimiser takes each input's differences on a thread of its own that
+way ([study/optimize.v](../study/optimize.v)).
 
 **A map isn't safe for concurrent use,** as in Go, and V doesn't catch the
 misuse, as Go's runtime often does ("concurrent map writes"). `capi`'s

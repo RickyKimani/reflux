@@ -2,6 +2,7 @@
 //
 //     reflux solve plant.toml [--json results.json] [--csv streams.csv] [--trace]
 //     reflux study plant.toml [NAME] [--json study.json] [--csv study.csv] [--workers N]
+//     reflux optimize plant.toml [NAME] [--json optimum.json] [--csv iterations.csv] [--workers N]
 //     reflux kinetics check FILE [T P NAME=y ...]
 //     reflux kinetics explain FILE T P NAME=y ...
 //     reflux demo [T P]
@@ -24,6 +25,11 @@ const usage = 'usage:
       Run a study in the file, by NAME if it has more than one, and print
       its points; --json and --csv write them (docs/report-format.md).
       --workers runs it on N threads, the processors by default.
+  reflux optimize FILE [NAME] [--json OUT] [--csv OUT] [--workers N]
+      Run an optimisation in the file, by NAME if it has more than one, and
+      print its optimum and iterations; --json and --csv write them
+      (docs/report-format.md). --workers differentiates by N inputs at once,
+      the processors by default.
   reflux kinetics check FILE [T P NAME=y ...]
   reflux kinetics explain FILE T P NAME=y ...
       Check the reactions in a file, or explain its rates at a state:
@@ -36,7 +42,8 @@ const usage = 'usage:
 
 The exit status is 0 when it worked, 1 when the flowsheet failed or a report
 could not be written, and 2 when the command is wrong. A study that ran is 0,
-even with failed points, which its table lists.'
+even with failed points, which its table lists; an optimisation is 0 only
+with an optimum.'
 
 fn main() {
 	mut c := Console{
@@ -80,6 +87,9 @@ fn run(args []string, mut c Console) int {
 		'study' {
 			return study_command(args[1..], mut c)
 		}
+		'optimize' {
+			return optimize_command(args[1..], mut c)
+		}
 		'demo' {
 			return demo(args[1..], mut c)
 		}
@@ -99,7 +109,8 @@ fn run(args []string, mut c Console) int {
 			return 2
 		}
 		else {
-			hint := did_you_mean(command, ['solve', 'study', 'kinetics', 'demo', 'version', 'help'])
+			hint := did_you_mean(command, ['solve', 'study', 'optimize', 'kinetics', 'demo', 'version',
+				'help'])
 			c.complain('reflux: no command ${command}${hint}\n\n${usage}')
 			return 2
 		}

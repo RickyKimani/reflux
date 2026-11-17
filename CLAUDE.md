@@ -110,8 +110,8 @@ Keep this section current: update it whenever a step is committed.
       through it. A PFR solve allocated 9.72 MB and now 0.57; the owner's
       50-point study takes 0.71 s on 4 workers (1.74 s on one before).
       Step 0's four study checksums are unchanged.
-  - **Step 8 is done,** and amends D10, for the owner to approve
-    (committed): a study's `sensitivities`, each point's derivatives by
+  - **Step 8 is done,** and amends D10, approved on 2026-11-17
+    (committed at 5166fc9): a study's `sensitivities`, each point's derivatives by
     central differences of five solves at 1e-12 (v, ±h, ±h/2, h = 1e-4·v),
     Richardson's extrapolation, and an error's estimate of the two
     differences' gap plus a fourth difference's noise over h (the
@@ -124,7 +124,28 @@ Keep this section current: update it whenever a step is committed.
       bias the estimate can't see; only the 1e-12 tolerance bounds it
       (1e-8 of the derivative). A recycle's derivative against cold solves
       at 1e-13 holds it.
-  - Steps 1 to 8 meet the roadmap's exit. Step 9 is next: the SQP.
+  - Steps 1 to 8 meet the roadmap's exit.
+  - **Steps 9 and 10 are done,** built together, and amend D12 and D13,
+    approved on 2026-11-17 (committed).
+    - Step 9: `numeric.qp` (Goldfarb and Idnani's dual active-set method)
+      and `numeric.sqp` (Han and Powell's SQP: damped BFGS, an ℓ1 merit
+      function, a QP with no point relaxed by δ, the first-order conditions
+      checked at the answer). 21 of Hock and Schittkowski's problems reach
+      their optima from their published starts, 206 iterations in all,
+      each answer checked from scratch against mpmath's
+      (`tools/gen_m8_hock_schittkowski.py`).
+    - Step 10: format 3's `[optimize.NAME]`, `study.optimize` (the problem
+      scaled; every evaluation a solve at 1e-12, warm; gradients by D10's
+      differences, one-sided at a bound), its report format 1 and
+      `reflux optimize`. Series reactions in a PFR reach their closed-form
+      optima inside the bounds, on a bound and on a constraint, each
+      multiplier within 1e-5 (`tools/gen_m8_series.py`).
+    - Found: a one-sided difference's estimate, R₁'s, had no margin (1.01
+      times its error), so its value is R₂; a relaxed QP at a badly
+      conditioned iterate can fail, and is then reported as infeasible.
+  - Step 11 is next: fitting kinetics. On 2026-11-17 the owner had steps 9
+    and 10 built together; pairing the rest likewise (11 and 12, 13 and 14,
+    15 and 16) was proposed, not yet chosen.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -409,6 +430,7 @@ v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
 v run . study testdata/flowsheets/methanol_study.toml              # a study: its points, and why an output has no value
+v run . optimize testdata/flowsheets/series.toml best              # an optimisation: its optimum, multipliers and iterates
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
@@ -473,6 +495,9 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
 
   - `tools/gen_m8_sensitivities.py` writes `testdata/m8_sensitivities.json`
     (mpmath only): a PFR's derivatives for M8's criterion 6.
+  - `tools/gen_m8_hock_schittkowski.py` (SymPy and mpmath) writes
+    `testdata/m8_hock_schittkowski.json`, and `tools/gen_m8_series.py`
+    (mpmath) `testdata/m8_series.json`: criteria 7 and 8.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
@@ -586,8 +611,9 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
-`components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies over
-`flowsheet`, and `main` uses it for `reflux study`. `capi` (M10a) is the C API
+`components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
+and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
+uses it for `reflux study` and `reflux optimize`. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
@@ -641,7 +667,9 @@ over the rest, built into a shared library for the Python package in
   through `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
   QAG integration and bisection, and M9's integrators, `dopri5` and `rodas4`
   (`Ode`, `StiffOde`), which return an answer only once every step has met
-  the tolerance. They take what they solve as an interface
+  the tolerance. M8's `qp` (Goldfarb and Idnani) and `sqp` (Han and Powell,
+  `Constrained`, `OptimizeError`) return an optimum only once its first-order
+  conditions hold. They take what they solve as an interface
   (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
   a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,
@@ -680,6 +708,9 @@ over the rest, built into a shared library for the Python package in
     solution (D5). `Loaded.solve` solves on the plan made at load.
   - `Loaded.solve_from(Start)` starts from a neighbour's solution (M8's
     D6); a unit implementing `Warm` starts from its last answer.
+  - `[study.NAME]` and `[optimize.NAME]` are read into `StudyPlan` and
+    `OptimizePlan` (`studies.v`, `optimize.v`); the `study` module runs
+    them.
   - A `Report` is a solution, or a failure, in SI: `Loaded.report`,
     `Loaded.failure` or `load_failure`. Its JSON and CSV come from that one
     struct, and its stream table rounds by `math.round`, never printf.

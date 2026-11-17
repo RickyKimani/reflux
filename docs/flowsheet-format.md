@@ -1,7 +1,8 @@
 # The flowsheet file format
 
 A flowsheet is a [TOML](https://toml.io) file, format 1, 2 or 3: format 2
-(M9) adds reactions and reactors, and format 3 (M8) adds specs. Each reads
+(M9) adds reactions and reactors, and format 3 (M8) adds specs, studies
+and optimisations. Each reads
 every earlier format's sections as that format does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
@@ -505,6 +506,38 @@ expression that has no value at a point, such as a product's conversion
 when the feed has none, is reported with its reason, and so is a point
 that fails; the study goes on. [testdata/flowsheets/methanol_study.toml](../testdata/flowsheets/methanol_study.toml)
 is Tutorial 2's.
+
+## Optimisations (format 3)
+
+An optimisation finds the inputs, within their bounds, that minimise or
+maximise an expression over the flowsheet, subject to equations and
+inequalities over it (M8's D13). Every evaluation is a converged solve,
+specs and all; the optimum is returned only once its first-order
+conditions hold ([design.md](design.md#optimising-a-flowsheet)).
+`reflux optimize plant.toml [NAME]` runs it
+([report-format.md](report-format.md)).
+
+```toml
+[optimize.best]
+vary = [
+    { key = "unit.tube.volume", between = ["0.1 m^3", "2 m^3"] },
+    { key = "feed.f.T", between = ["380 K", "420 K"], start = "400 K" },
+]
+maximize = "product.n[isopentane]"
+subject_to = ["product.n[neopentane] <= 0.2 mol/s"]
+```
+
+| Key | |
+|---|---|
+| `vary` | Required. A list of inputs, each `{ key, between }`, its least and most values, and optionally `start`, else the file's value, which must be within them. A key is as a spec's (above), and a key a spec varies can't be. |
+| `minimize` or `maximize` | Required, one of the two. An expression over the flowsheet's variables, as a spec's `until`'s sides. |
+| `subject_to` | A list of equations and inequalities over the flowsheet's variables, each with `=`, `<=` or `>=` (`≤` and `≥` too) between two sides of one dimension. |
+
+An optimisation that finds no optimum, because no point meets its
+constraints or its iterations run out, says why, and its report gives each
+iterate. [testdata/flowsheets/series.toml](../testdata/flowsheets/series.toml)
+has series reactions in a PFR, whose optimum sits on a bound and a
+constraint at once.
 
 ## What it refuses that TOML allows
 

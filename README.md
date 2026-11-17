@@ -101,6 +101,11 @@ numeric/
   newton.v          Newton for nonlinear systems: line search or dogleg
   broyden.v         Broyden's quasi-Newton method, with no Jacobian
   minimize.v        Newton minimisation with a Levenberg–Marquardt shift
+  qp.v              convex quadratic programmes: Goldfarb and Idnani's dual
+                    active-set method (M8)
+  sqp.v             constrained optimisation: Han and Powell's SQP, damped
+                    BFGS, an ℓ1 merit function, the first-order conditions
+                    checked at the answer (M8)
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
   ode.v             initial-value problems (M9): the interfaces, Hairer's
                     error norm and first step
@@ -218,6 +223,7 @@ flowsheet/
   warm.v            a solve started from a neighbouring point's: Start, and
                     the Warm interface for units (M8)
   studies.v         a file's [study.NAME], read (M8)
+  optimize.v        a file's [optimize.NAME], read (M8)
   mixer.v           mixer: flows and enthalpy add, then a PH flash
   splitter.v        splitter: fractions of the flow, the inlet's state
   pressure.v        outlet P or ΔP, for whatever changes pressure
@@ -244,8 +250,12 @@ study/              studies (M8): one or two inputs over their values, in
                     chunks, each point from its neighbour, every output at
                     every point or why it has none
   study.v           the order, the chunks and each point's outcome
-  sensitivity.v     each point's derivatives, Richardson's from five solves
+  sensitivity.v     each point's derivatives, Richardson's from five solves,
+                    about the point or to one side of it
   report.v          the study's report: JSON, CSV and the table
+  optimize.v        an optimisation (M8): the SQP on the flowsheet, scaled,
+                    every evaluation a converged solve
+  optimize_report.v the optimisation's report: JSON, CSV and the table
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
@@ -296,7 +306,10 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m9_bench.py (the owner's PFR, DWSIM and reflux in
                     turns), remake_bench.v (what remaking each unit type
                     costs), study_bench.v (a study on 1 to 8 workers),
-                    gen_m8_sensitivities.py (a PFR's derivatives by mpmath)
+                    gen_m8_sensitivities.py (a PFR's derivatives by mpmath),
+                    gen_m8_hock_schittkowski.py (Hock and Schittkowski's
+                    problems, their optima again by mpmath), gen_m8_series.py
+                    (series reactions' optima by mpmath)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

@@ -280,6 +280,76 @@ reasons once, and each failed point's. `--workers N` runs it on N threads,
 as many as the processors by default; the report is the same bits whatever
 N is.
 
+## The optimisation report
+
+`reflux optimize plant.toml best --json optimum.json --csv iterations.csv`
+writes an optimisation's outcome (M8's D13, D17): a format of its own,
+format 1, which changes only with a new number. Every number is SI. An
+optimisation with no optimum still writes its report, with its reason and
+its iterates.
+
+#### The optimisation
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `file` | The flowsheet file, as the command line named it. |
+| `optimize` | The optimisation's name. |
+| `status` | `"optimal"`, with an optimum whose first-order conditions hold; or `"failed"`, with `reason`, or `error` if the file didn't load. |
+| `error` | Why the file didn't load, as the solve's `error`, or `null`. |
+| `reason` | Why there's no optimum, or `""`. |
+| `goal` | `"minimize"` or `"maximize"`. |
+| `objective` | What's minimised or maximised: `expression` as reflux writes it back, `unit`, and `value` at the optimum, or `null`. |
+| `inputs` | What it varies, each as below, in the file's order. |
+| `constraints` | What it's subject to, each as below, in the file's order. |
+| `specs` | The file's specs at the optimum: each `name` and `value`. |
+| `iterations` | Every iterate, the last the optimum, or the last before it failed. |
+| `evaluations` | The solves at points the optimiser chose. |
+| `solves` | Every solve, the gradients' included. |
+
+#### `inputs[]`
+
+| Key | |
+|---|---|
+| `key` | The input's key, as `vary` gives it. |
+| `unit` | Its values' SI unit, `""` for a pure number. |
+| `lower` | Its least value. |
+| `upper` | Its most. |
+| `start` | Where the optimisation started it. |
+| `value` | Its value at the optimum, or at the last iterate. |
+| `bound` | `"lower"` or `"upper"` where it's on a bound, else `""`. |
+| `multiplier` | The bound's multiplier: how fast the objective improves (falls when minimised, rises when maximised) as that bound is relaxed, per unit of the input; 0 off a bound. |
+
+#### `constraints[]`
+
+| Key | |
+|---|---|
+| `equation` | The constraint, as reflux writes it back. |
+| `unit` | Its sides' SI unit, `""` for a pure number. |
+| `lhs` | Its left side at the optimum, or `null`. |
+| `rhs` | Its right side, or `null`. |
+| `active` | Whether it holds with equality there: always, for an equality. |
+| `multiplier` | How fast the objective improves as the constraint is relaxed, per unit of its sides, at least 0 for an inequality; for an equality, as its right side grows, of either sign. `null` with no optimum. |
+
+#### `iterations[]`
+
+| Key | |
+|---|---|
+| `inputs` | Each input's value. |
+| `objective` | The objective's value. |
+| `violation` | The worst constraint's violation, as a fraction of its sides' size at the start. |
+| `stationarity` | The Lagrangian's gradient's largest entry, in the inputs scaled over their bounds and the objective over its largest derivative at the start: below 1e-6 at an optimum. |
+| `step` | The fraction of the QP's step the line search took from it, 0 at the last. |
+
+The CSV has a row for each iterate: `iteration` from 0, each input as
+`KEY [unit]`, the objective as `minimize [unit]` or `maximize [unit]`, and
+`violation`, `stationarity` and `step`.
+`reflux optimize` prints the optimum, each input with its bounds and any
+bound it's on, each constraint, and each iterate, to 5 significant figures.
+`--workers N` differentiates by N inputs at once, as many as the processors
+by default; the report is the same bits whatever N is.
+
 ## Exit status
 
 | Status | |
@@ -292,3 +362,7 @@ N is.
 table lists; 1 when its file didn't load or has no studies, or a report
 couldn't be written; and 2 for a wrong command, a study name that isn't
 there included.
+
+`reflux optimize` exits 0 with an optimum; 1 when its file didn't load or
+has no optimisations, when it found no optimum, or when a report couldn't be
+written; and 2 for a wrong command.

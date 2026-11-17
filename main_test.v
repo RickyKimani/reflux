@@ -120,6 +120,49 @@ fn test_study_prints_its_points_and_writes_its_reports() {
 	assert none_ == 1 && why.contains('has no studies'), why
 }
 
+// An optimisation (M8 step 10): `reflux optimize` prints the optimum, its
+// active bound and constraint and its iterations, writes its JSON and CSV,
+// and exits 0; one with no feasible point exits 1, still writing its
+// report; a wrong name or a second one exits 2, and a file with none 1.
+fn test_optimize_prints_the_optimum_and_writes_its_reports() {
+	file := os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'series.toml')
+	json_path, csv_path := scratch('optimum.json'), scratch('iterations.csv')
+	code, out, err := quiet(['optimize', file, 'best', '--json', json_path, '--csv', csv_path,
+		'--workers', '2'])
+	assert code == 0 && err == '', err
+	assert out.contains('optimisation best: an optimum in '), out
+	assert out.contains('maximize product.n[isopentane] = 0.54141 mol/s'), out
+	assert out.contains('feed.f.T [K]   380.00  420.00  400.00   420.00  upper'), out
+	assert out.contains('product.n[neopentane] <= 0.2 mol/s  0.20000  0.20000     yes'), out
+	assert out.contains(', on 2 workers.'), out
+	j := json2.decode[json2.Any](os.read_file(json_path)!)!.as_map()
+	assert j['format']!.int() == 1 && j['status']!.str() == 'optimal' && j['goal']!.str() == 'maximize'
+	iterations := j['iterations']!.as_array().len
+	lines := os.read_file(csv_path)!.split_into_lines()
+	assert lines.len == iterations + 1
+	assert lines[0] == 'iteration,unit.tube.volume [m^3],feed.f.T [K],maximize [mol/s],violation,stationarity,step'
+	none_json := scratch('none.json')
+	no, _, said := quiet(['optimize', file, 'impossible', '--json', none_json])
+	assert no == 1 && said == '', said
+	failed := json2.decode[json2.Any](os.read_file(none_json)!)!.as_map()
+	assert failed['status']!.str() == 'failed' && failed['reason']!.str().contains('no feasible point')
+	for args, want in {
+		'':         'has optimisations best, impossible: name one'
+		'bset':     'has no optimisation bset (did you mean best?)'
+		'best two': 'one optimisation at a time'
+		'--trace':  "--trace is solve's"
+	} {
+		mut full := ['optimize', file]
+		if args != '' {
+			full << args.split(' ')
+		}
+		wrong, _, why := quiet(full)
+		assert wrong == 2 && why.contains(want), '${args}: ${why}'
+	}
+	none_, _, why := quiet(['optimize', reference])
+	assert none_ == 1 && why.contains('has no optimisations: add a [optimize.NAME]'), why
+}
+
 // The workers by default are the processors (M8's D8).
 fn test_the_processors() {
 	assert cpus() >= 1

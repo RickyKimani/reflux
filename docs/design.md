@@ -2097,6 +2097,124 @@ the tolerance bounds it, to about ε/10⁻⁴ of the derivative, 10⁻⁸ at
 ε = 10⁻¹². At a study's 10⁻⁹ it would be 10⁻⁵, which is why the tolerance
 is tightened (M8 step 8 found it, by a mistake planted there).
 
+## The optimiser
+
+`numeric.sqp` (M8's D12) minimises f(x) subject to equalities c(x) = 0,
+inequalities c(x) ≥ 0 and bounds l ≤ x ≤ u, by Han and Powell's sequential
+quadratic programming as Nocedal and Wright give it (*Numerical
+Optimization*, ch. 18). The problem is an interface, `Constrained`: its values,
+then its gradients at the same x, so that a flowsheet differentiates from
+the solve it just made.
+
+**The QP.** At each iterate the step d solves
+
+    minimise ½·dᵀBd + ∇fᵀd
+    subject to c + ∇c·d = 0 (equalities), ≥ 0 (inequalities),
+               l − x ≤ d ≤ u − x
+
+and its multipliers λ̂ (the constraints'), μ̂ (the bounds') are the next
+estimates. `numeric.qp` solves it by Goldfarb and Idnani's dual active-set
+method (Math. Programming 27, 1983): from the unconstrained minimum −B⁻¹∇f,
+it adds each equality not met and then the most violated inequality, by its
+distance s/‖row‖. Adding row p moves d along z and the active multipliers
+along −r, where
+
+    B·z + N·r = nₚ,   Nᵀ·z = 0,
+
+N the active rows. The step is the smaller of t₂ = −sₚ/(zᵀnₚ), which meets
+p, and t₁, the least uⱼ/rⱼ over active inequalities with rⱼ > 0, which takes
+one to zero and drops it. z = 0 with no t₁ proves p can't be met: the QP has
+no point. The problems are small, so z and r come from the whole system,
+factorised at each step.
+z is taken as zero where zᵀnₚ ≤ 10⁻¹²·nₚᵀB⁻¹nₚ, its size with nothing
+active.
+
+**A QP with no point.** A linearisation can have no point though the
+problem has; then the QP is relaxed, as Powell's and Schittkowski's codes
+do: a variable δ ∈ [0, 1] scales each equality and violated inequality,
+
+    ∇cᵢ·d + (1 − δ)·cᵢ = 0 or ≥ 0,   at a cost ½·ρδ²,  ρ = 10⁴·max(1, maxᵢ Bᵢᵢ),
+
+and δ = 1, d = 0 always meets every row. A δ that comes out 1 means no step
+lowers the constraints' violation, and the problem is refused: it may have
+no feasible point near x. So is one whose relaxed QP fails too, which only
+a badly conditioned one does.
+
+**The answer.** x is returned once, with λ̂ and μ̂ from the QP at x:
+
+    max |cᵢ| (equalities), max(−cᵢ) (inequalities)   ≤ tol
+    ‖∇f − Σλᵢ∇cᵢ − μ_l + μ_u‖∞                         ≤ tol·max(1, ‖∇f‖∞)
+    λᵢ (inequalities), μ_l, μ_u                       ≥ −tol·max(1, ‖∇f‖∞)
+    |λᵢcᵢ|, μ_l·(x − l), μ_u·(u − x)                    ≤ tol·max(1, ‖∇f‖∞), the bounds' × max(1, |x|)
+
+tol is absolute on c, so the caller scales its constraints; 10⁻⁸ by default.
+
+**The step.** α·d is accepted by backtracking on the ℓ1 merit function
+
+    φ(x) = f(x) + Σ νᵢ·vᵢ(x),   vᵢ = |cᵢ| (equalities), max(0, −cᵢ) (inequalities),
+    φ(x + αd) ≤ φ(x) + 10⁻⁴·α·Dφ,   Dφ = ∇fᵀd − (1 − δ)·Σ νᵢvᵢ,
+
+with Powell's weights νᵢ = max(|λ̂ᵢ|, (νᵢ + |λ̂ᵢ|)/2), at least |λ̂ᵢ|, which
+makes Dφ ≤ −dᵀBd < 0. Each shorter α is the quadratic's minimum through
+φ(0), Dφ and φ(α), kept within [α/10, α/2]; a step where the problem can't
+be evaluated is halved. Every iterate is clamped into the bounds, which the
+QP's d already keeps it within, so the problem is never evaluated outside
+them.
+
+**B.** The Lagrangian's Hessian, from the identity, by BFGS on
+s = x₊ − x and y = ∇L(x₊, λ̂) − ∇L(x, λ̂), the bounds' part linear and so
+cancelling, with Powell's damping:
+
+    θ = 1 if sᵀy ≥ 0.2·sᵀBs, else 0.8·sᵀBs/(sᵀBs − sᵀy),
+    r = θy + (1 − θ)Bs,   B ← B − BssᵀB/(sᵀBs) + rrᵀ/(sᵀr),
+
+which keeps B positive definite. The first update scales the identity by
+yᵀy/sᵀy (Shanno and Phua) where sᵀy > 0.
+
+## Optimising a flowsheet
+
+An `[optimize.NAME]` (M8's D13) is `numeric.sqp` on the flowsheet's
+inputs, every evaluation a converged solve at 10⁻¹², specs and all,
+started from the last evaluation's solution (D6); its first evaluation, at
+the start, is cold. The problem the SQP sees is scaled:
+
+    u = (x − lo)/(hi − lo) ∈ [0, 1],
+    f = ±F/s_F,   s_F = maxₖ |∂F/∂uₖ| at the start (|F| there, or 1, if that's 0),
+    c = (lhs − rhs)/sᵢ for = and ≥,  (rhs − lhs)/sᵢ for ≤,
+    sᵢ = max(|lhs|, |rhs|) at the start, or 1 in SI if both are 0,
+
+with − to maximise. The objective's gradient so starts at about 1, and
+`optimize_tol`, 10⁻⁶, is the SQP's tol: well above the gradients' noise,
+about 10⁻⁸ of their scale. The equalities go first, as the SQP takes them.
+
+**Gradients** are the sensitivities' differences (above), of the objective
+and of each constraint's two sides, with a step of 10⁻⁴ of the largest
+value the input's bounds allow, max(|x|, |lo|, |hi|), so that an input at
+0 has one, and at most a quarter of its range. Where a bound is within the
+step, they're one-sided, at x + σ·h·k/4, k = 0 to 4, σ = ±1 into the range:
+
+    D(s) = (f(x + σs) − f(x))/(σs),
+    R₁ = 2·D(h/2) − D(h) = f′ − h²f‴/12,   R₂ = 2·D(h/4) − D(h/2) = f′ − h²f‴/48,
+    f′ ≈ R₂,   e = 4/3·|R₁ − R₂| + |Δ⁴|/h,
+
+the first part R₁'s truncation, four times R₂'s, since 4/3·|R₁ − R₂| alone
+would be R₂'s estimate with no margin. R₂ carries about 10ε/h of the
+solves' noise, twice R₁'s.
+
+`--workers` takes the inputs at once, each from the point's solution, so
+the bits are the same.
+
+**The multipliers,** unscaled, are how fast the optimum's objective
+improves (falls when minimised, rises when maximised) as each is relaxed,
+per unit of its own:
+
+    an inequality:   λᵢ·s_F/sᵢ   (≥ 0)
+    an equality:    −λᵢ·s_F/sᵢ   (as its right side grows, either sign)
+    a bound:         μ·s_F/(hi − lo)
+
+so that, by the envelope theorem, a bound's is ∂F/∂x at the optimum, and
+a constraint's ∂F/∂x over its sides' ∂/∂x there, for one input.
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from
