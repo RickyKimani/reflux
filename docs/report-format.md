@@ -214,6 +214,50 @@ The message goes to stderr, its file and line first, as a compiler's would:
 reflux: plant.toml:26: unit.cooler.type: no unit type heatr (did you mean heater?)
 ```
 
+## The study report
+
+`reflux study plant.toml --json study.json --csv study.csv` writes a
+study's results (M8's D17): a format of its own, format 1, which changes
+only with a new number. Every number is SI. A point that fails, or an
+output with no value, is reported with its reason, and the study's other
+points stand.
+
+#### The study
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `file` | The flowsheet file, as the command line named it. |
+| `study` | The study's name. |
+| `status` | `"ran"`, even with failed points, or `"failed"` if the file didn't load. |
+| `error` | Why it failed, as the solve's `error`, or `null`. |
+| `inputs` | What it varies: `key` and `unit`, the values' SI unit, `""` for a pure number. |
+| `outputs` | What it reports: `name`, `expression` as reflux writes it back, and `unit`. |
+| `specs` | The file's specs, whose values each point gives. |
+| `chunk` | How many points ran from one cold start. |
+| `points` | Every point, in the grid's order: the first input's values outer. |
+
+#### `points[]`
+
+| Key | |
+|---|---|
+| `index` | Its place in the grid's order, from 0. |
+| `inputs` | Each input's value. |
+| `status` | `"solved"`; `"no_value"`, solved, with an output that has no value; or `"failed"`. |
+| `outputs` | Each output, `{ "value": x, "reason": "" }`, or `{ "value": null, "reason": "it divides by …" }`. |
+| `error` | Why a failed point failed, or `""`. |
+| `specs` | Each spec's value there. |
+| `passes` | The passes of its blocks with tears. |
+| `spec_evaluations` | Its specs' evaluations. |
+| `steps` | Its integrators' accepted steps. |
+| `warm` | Whether it started from its neighbour's solution, or cold. |
+
+The CSV has a row for each point: `point`, each input as `KEY [unit]`,
+each output as `NAME [unit]`, NaN where it has no value, and `status`.
+`reflux study` prints the points to 5 significant figures, each output's
+reasons once, and each failed point's.
+
 ## Exit status
 
 | Status | |
@@ -221,3 +265,8 @@ reflux: plant.toml:26: unit.cooler.type: no unit type heatr (did you mean heater
 | 0 | It solved, and every report was written. |
 | 1 | The flowsheet didn't load or didn't solve, or a report couldn't be written. |
 | 2 | The command is wrong: an unknown option, say, or no file. |
+
+`reflux study` exits 0 when the study ran, failed points and all, which its
+table lists; 1 when its file didn't load or has no studies, or a report
+couldn't be written; and 2 for a wrong command, a study name that isn't
+there included.

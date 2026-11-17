@@ -214,6 +214,7 @@ fn (mut s Solver) with_specs(b Block) ! {
 	s.spec_rows = [][]f64{}
 	s.inner_started = false
 	s.flow, s.t_in = s.entering(b)
+	s.warm_values()
 	if b.tears.len == 0 {
 		if b.specs.len == 1 {
 			s.spec_brent(b.specs[0]) or { return s.failed(err) }
@@ -231,6 +232,7 @@ fn (mut s Solver) with_specs(b Block) ! {
 		for k in b.specs {
 			s.values[k] = l.specs[k].input.value
 		}
+		s.warm_values()
 		s.inner_started = false
 		if b.specs.len == 1 {
 			s.spec_brent(b.specs[0]) or { return s.failed(err) }
@@ -404,9 +406,18 @@ fn (mut s Solver) spec_brent(k int) ! {
 		s: &s
 		k: k
 	}
+	// From a neighbour's value, a bracket is looked for near it first.
+	if s.start != none {
+		if s.near(root, spec)! {
+			return
+		}
+	}
 	mut a, mut fa := spec.lo, root.at(spec.lo)!
 	mut b, mut fb := spec.hi, root.at(spec.hi)!
-	if fa != 0.0 && fb != 0.0 && (fa > 0.0) == (fb > 0.0) {
+	if bracket := s.bracket() {
+		a, b = bracket[0], bracket[1]
+		fa, fb = root.at(a)!, root.at(b)!
+	} else if fa != 0.0 && fb != 0.0 && (fa > 0.0) == (fb > 0.0) {
 		mut found := false
 		mut last, mut f_last := spec.lo, fa
 		for i in 1 .. 10 {
@@ -437,6 +448,100 @@ fn (mut s Solver) spec_brent(k int) ! {
 	}
 	_ = fa
 	_ = fb
+}
+
+// warm_values starts the block's specs from the last point's values, or
+// the secant through the last two, where the solve starts from a neighbour.
+fn (mut s Solver) warm_values() {
+	l := s.file or { return }
+	for k in s.block.specs {
+		spec := l.specs[k]
+		if v := s.warm_value(k, spec.lo, spec.hi) {
+			s.values[k] = v
+		}
+	}
+}
+
+// near meets a spec from its value now, a neighbour's: met there already,
+// or bracketed by secant steps from it, each at most four times the last,
+// the first as large as the last two points' change, then Brent. It says
+// whether it met the spec; if it found no bracket within its bounds, the
+// cold search follows, with what it sampled.
+fn (mut s Solver) near(root SpecRoot, spec Spec) !bool {
+	k := root.k
+	v0 := s.values[k]
+	f0 := root.at(v0)!
+	if math.abs(f0) <= s.params.tol {
+		return true
+	}
+	mut step := 1e-3 * (spec.hi - spec.lo)
+	if start := s.start {
+		if before := start.before {
+			if a := before.specs[k] {
+				if b := start.last.specs[k] {
+					if a.value != b.value {
+						step = math.abs(b.value - a.value)
+					}
+				}
+			}
+		}
+	}
+	mut x0, mut g0 := v0, f0
+	mut x1 := math.min(spec.hi, v0 + step)
+	if x1 == v0 {
+		x1 = math.max(spec.lo, v0 - step)
+	}
+	for _ in 0 .. 12 {
+		root.at(x1)!
+		if bracket := s.bracket() {
+			s.brent_in(root, spec, bracket[0], bracket[1])!
+			return true
+		}
+		g1 := s.samples.last().residual
+		mut next := x1 - g1 * (x1 - x0) / (g1 - g0)
+		reach := 4.0 * math.abs(x1 - x0)
+		if !math.is_finite(next) {
+			next = x1 + 2.0 * (x1 - x0)
+		}
+		next = math.max(x1 - reach, math.min(x1 + reach, next))
+		next = math.max(spec.lo, math.min(spec.hi, next))
+		if next == x1 {
+			return false
+		}
+		x0, g0, x1 = x1, g1, next
+	}
+	return false
+}
+
+// bracket is the first pair of neighbouring values sampled so far whose
+// residuals have opposite signs, or one that is zero.
+fn (s Solver) bracket() ?[]f64 {
+	mut samples := s.samples.clone()
+	samples.sort(a.value < b.value)
+	for i in 1 .. samples.len {
+		a, b := samples[i - 1], samples[i]
+		if a.residual == 0.0 || b.residual == 0.0 || (a.residual > 0.0) != (b.residual > 0.0) {
+			return [a.value, b.value]
+		}
+	}
+	return none
+}
+
+// brent_in meets a spec by Brent's method in a bracket, and leaves the
+// block at its root.
+fn (mut s Solver) brent_in(root SpecRoot, spec Spec, a f64, b f64) ! {
+	r := numeric.brent(root, a, b, ftol: s.params.tol, max_iter: s.params.max_iterations) or {
+		return FlowsheetError{
+			kind:   .spec_not_met
+			reason: 'Brent within [${shown(a, spec.input.dim)}, ${shown(b, spec.input.dim)}]: ${err.msg()}'
+			line:   spec.line
+			key:    'spec.${spec.name}'
+		}
+	}
+	// The state must be the root's, which a cached value isn't.
+	if s.values[root.k] != r.x {
+		s.try(root.k, r.x)!
+	}
 }
 
 // out_of_reach refuses a target its bounds don't bracket, with what they

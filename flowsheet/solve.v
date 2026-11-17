@@ -102,7 +102,7 @@ pub fn (f Flowsheet) solve(fl thermo.Fluid, params SolveParams) !Solution {
 		named << name
 	}
 	plan := f.plan(tears: named, work: params.work)!
-	return f.run(fl, params, plan, none)
+	return f.run(fl, params, plan, none, none)
 }
 
 // solve solves the flowsheet with the file's own solver settings, and its
@@ -111,11 +111,20 @@ pub fn (l Loaded) solve() !Solution {
 	if l.specs.len == 0 {
 		return l.sheet.solve(l.fluid, l.params)
 	}
-	return l.sheet.run(l.fluid, l.params, l.plan, l)
+	return l.sheet.run(l.fluid, l.params, l.plan, l, none)
 }
 
-// run solves a flowsheet on a plan, with a file's specs if there are any.
-fn (f Flowsheet) run(fl thermo.Fluid, params SolveParams, plan Plan, file ?Loaded) !Solution {
+// solve_from solves the file from a neighbouring point's solution (M8's
+// D6): its tears, its specs' values and its units each start from there,
+// and the answer is checked as a cold one is.
+pub fn (l Loaded) solve_from(start Start) !Solution {
+	file := if l.specs.len > 0 { ?Loaded(l) } else { none }
+	return l.sheet.run(l.fluid, l.params, l.plan, file, start)
+}
+
+// run solves a flowsheet on a plan, with a file's specs if there are any,
+// from a start if there is one.
+fn (f Flowsheet) run(fl thermo.Fluid, params SolveParams, plan Plan, file ?Loaded, start ?Start) !Solution {
 	mut s := Solver{
 		sheet:  f
 		fl:     fl
@@ -123,6 +132,7 @@ fn (f Flowsheet) run(fl thermo.Fluid, params SolveParams, plan Plan, file ?Loade
 		nc:     fl.model.components().len
 		runs:   []UnitResult{len: f.units.len}
 		file:   file
+		start:  start
 	}
 	if l := file {
 		// A spec remakes what it varies, so the solve has its own lists.
@@ -154,6 +164,7 @@ struct Solver {
 	params SolveParams
 	nc     int
 	file   ?Loaded // with specs: what they vary is remade from it
+	start  ?Start  // a neighbouring point's solution, to start from (M8's D6)
 mut:
 	sheet   Flowsheet
 	streams map[string]Stream
@@ -192,7 +203,7 @@ fn (mut s Solver) pass(b Block) ! {
 	for i in b.units {
 		p := s.sheet.units[i]
 		inlets := p.inlets.map(s.streams[it])
-		o := p.unit.calculate(s.fl, inlets)!
+		o := s.calculated(i, p.unit, inlets)!
 		if o.outlets.len != p.outlets.len {
 			return bad_spec(p.unit.name, 'it gave ${o.outlets.len} outlets for ${p.outlets.len} ports')
 		}
@@ -234,9 +245,11 @@ fn (mut s Solver) begin(b Block) ! {
 	s.flow = mix.total
 	s.rows = [][]f64{}
 	for name in b.tears {
-		s.streams[name] = s.params.estimates[name] or {
-			inlets := s.sheet.units.filter(name in it.inlets)[0].inlets
-			if inlets.any(it !in b.tears) { empty } else { full }
+		s.streams[name] = s.warm_tear(name) or {
+			s.params.estimates[name] or {
+				inlets := s.sheet.units.filter(name in it.inlets)[0].inlets
+				if inlets.any(it !in b.tears) { empty } else { full }
+			}
 		}
 	}
 }
@@ -379,22 +392,38 @@ fn (mut s Solver) set_tears(x []f64) ! {
 	}
 }
 
-// wegstein is the next x from the last two passes, variable by variable
-// (Wegstein, Commun. ACM 1, 1958). With s the slope of g, q = s/(s − 1) gives
+// wegstein_by is Wegstein's next x, variable by variable, from each one's
+// slope s through the last two passes, slopes_of's (Wegstein, Commun. ACM 1,
+// 1958). q = s/(s − 1) gives
 // x ← q·x + (1 − q)·g(x), held to q in [−5, 0] so that it only ever
 // accelerates, and by no more than 5 times the step (D7).
-fn wegstein(x0 []f64, g0 []f64, x []f64, g []f64) []f64 {
+fn wegstein_by(slopes []f64, x []f64, g []f64) []f64 {
 	mut next := g.clone()
 	for i in 0 .. x.len {
-		dx := x[i] - x0[i]
-		if dx == 0.0 {
+		slope := slopes[i] or { 0.0 }
+		if slope == 0.0 {
 			continue
 		}
-		slope := (g[i] - g0[i]) / dx
 		q := math.max(-5.0, math.min(0.0, slope / (slope - 1.0)))
 		next[i] = q * x[i] + (1.0 - q) * g[i]
 	}
 	return next
+}
+
+// slopes_of is each variable's slope through two passes, x0 → g0 and
+// x → g, for Wegstein: 0 where x didn't move.
+fn slopes_of(x0 []f64, g0 []f64, x []f64, g []f64) []f64 {
+	mut out := []f64{len: x.len}
+	if x0.len != x.len {
+		return out
+	}
+	for i in 0 .. x.len {
+		dx := x[i] - x0[i]
+		if dx != 0.0 {
+			out[i] = (g[i] - g0[i]) / dx
+		}
+	}
+	return out
 }
 
 // by_substitution is direct substitution, with Wegstein's step every other
@@ -413,7 +442,7 @@ fn (mut s Solver) by_substitution() ! {
 			return
 		}
 		if s.params.method == .wegstein && k >= 3 && k % 2 == 1 {
-			s.set_tears(wegstein(x0, g0, x, g))!
+			s.set_tears(wegstein_by(slopes_of(x0, g0, x, g), x, g))!
 		}
 		x0 = x.clone()
 		g0 = g.clone()

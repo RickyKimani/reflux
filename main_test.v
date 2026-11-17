@@ -84,6 +84,36 @@ until = "gas.F = 60 mol/s"
 	assert err2.contains('spec.toml:64: spec.vapour: its target is out of reach'), err2
 }
 
+// A study (M8 step 6): `reflux study` prints its points and why an output
+// has no value, writes its JSON and CSV, and exits 0 though an output had
+// none; a wrong study name or option exits 2, and a file with none 1.
+fn test_study_prints_its_points_and_writes_its_reports() {
+	file := os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'methanol_study.toml')
+	json_path, csv_path := scratch('study.json'), scratch('study.csv')
+	code, out, err := quiet(['study', file, '--json', json_path, '--csv', csv_path])
+	assert code == 0 && err == '', err
+	assert out.contains('study temperature: 4 points, 0 solved, 4 with an output that has no value, 0 failed; in chunks of 8, 3 from a neighbour and 1 cold.'), out
+	assert out.contains('methanol_conversion, at every point: it divides by syngas.n[CH4O], which is zero here'), out
+	j := os.read_file(json_path)!
+	assert j.contains('"format": 1') && j.contains('"value": null')
+	assert os.read_file(csv_path)!.split_into_lines().len == 5
+	named, _, _ := quiet(['study', file, 'temperature'])
+	assert named == 0
+	for args, want in {
+		'temprature':  'has no study temprature (did you mean temperature?)'
+		'--trace':     "--trace is solve's"
+		'a b':         'one study at a time'
+		'--workerz 2': 'no option --workerz'
+	} {
+		mut full := ['study', file]
+		full << args.split(' ')
+		wrong, _, why := quiet(full)
+		assert wrong == 2 && why.contains(want), '${args}: ${why}'
+	}
+	none_, _, why := quiet(['study', reference])
+	assert none_ == 1 && why.contains('has no studies'), why
+}
+
 fn test_trace_prints_every_pass_after_the_table() {
 	code, out, _ := quiet(['solve', reference, '--trace'])
 	assert code == 0

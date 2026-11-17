@@ -66,6 +66,7 @@ pub:
 	// file's specs (D5).
 	variables Variables
 	specs     []Spec
+	studies   []StudyPlan // the file's [study.NAME], for the study module (D16)
 }
 
 // load reads a flowsheet file. See load_text.
@@ -198,6 +199,16 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		loaded = Loaded{
 			...loaded
 			specs: read_specs(mut specs, loaded)!
+		}
+	}
+	if top.has('study') {
+		if given < 3 {
+			return top.fail('study', 'studies need format 3', [])
+		}
+		mut studies := top.child('study')!
+		loaded = Loaded{
+			...loaded
+			studies: read_studies(mut studies, loaded)!
 		}
 	}
 	top.finish()!

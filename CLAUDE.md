@@ -70,7 +70,7 @@ Keep this section current: update it whenever a step is committed.
       about 2 (`spike/eq16`). Whether to use it is the owner's to decide;
       the recommendation is to leave it until an adiabatic reactor needs it.
   - **Steps 2 to 4 are done,** built together, and amend D3, D4 and D5,
-    for the owner to approve (not yet committed).
+    approved on 2026-11-17 (committed at a43d8ea).
     - Step 2: dotted names in `expr`, `product.T`, `product.n[CH4]`,
       `reactor.duty`, `'let down'.T` quoted; `Expr.value`, a value or why
       there's none (D9); equations with `=`, `<=`, `>=`;
@@ -86,7 +86,21 @@ Keep this section current: update it whenever a step is committed.
     - Found: two specs varying each other's targets need the whole first
       Jacobian; `with_history` dropped an error's line; a V bug, an empty
       `[]` as an `or {}` block's value.
-  - Step 5 is next: warm starts.
+  - **Steps 5 and 6 are done,** built together, and amend D6, for the
+    owner to approve (not yet committed).
+    - Step 5: `Loaded.solve_from(Start)` starts a point from its
+      neighbour's solution; the optional `Warm` interface lets a unit start
+      from its last answer (CSTR Newton from its last outlet, 10× faster;
+      an energy balance's T bracket, 2×; the PFR's first step, nothing).
+      Specs start from their last values (8 → 4.5 evaluations), tears only
+      with direct substitution or specs: with Wegstein and Broyden a
+      neighbour's tears cost passes, and carrying their Jacobian or slopes
+      cost more (measured by `spike/warm`, then taken out).
+    - Step 6: format 3's `[study.NAME]`, the `study` module (chunks of 8,
+      a serpentine over two inputs, each point solved, no_value or failed
+      with its reason), its own report format 1, and `reflux study`.
+      Tutorial 2's methanol conversion reports why it has no value.
+  - Step 7 is next: workers.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -370,6 +384,7 @@ v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 8 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
+v run . study testdata/flowsheets/methanol_study.toml              # a study: its points, and why an output has no value
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
@@ -545,7 +560,8 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
-`components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
+`components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies over
+`flowsheet`, and `main` uses it for `reflux study`. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
@@ -633,6 +649,8 @@ over the rest, built into a shared library for the Python package in
     reads to what it varies, so both land in one block; it's met by Brent
     alone, or by Broyden with the tears, and checked again from the
     solution (D5). `Loaded.solve` solves on the plan made at load.
+  - `Loaded.solve_from(Start)` starts from a neighbour's solution (M8's
+    D6); a unit implementing `Warm` starts from its last answer.
   - A `Report` is a solution, or a failure, in SI: `Loaded.report`,
     `Loaded.failure` or `load_failure`. Its JSON and CSV come from that one
     struct, and its stream table rounds by `math.round`, never printf.

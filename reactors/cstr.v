@@ -207,6 +207,17 @@ fn (c Cstr) solve(sys CstrSystem, x0 []f64) ![]f64 {
 // calculate solves the CSTR by Newton from its inlet, or by continuation in
 // its volume where that fails, and finds its outlet at the T it reaches.
 pub fn (c Cstr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return c.outcome(fl, inlets, none)
+}
+
+// calculate_from starts Newton from the last point's outlet (M8's D6),
+// skipping the continuation; where Newton fails from there, it starts cold.
+pub fn (c Cstr) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	o := last.outlets[0] or { return c.outcome(fl, inlets, none) }
+	return c.outcome(fl, inlets, o)
+}
+
+fn (c Cstr) outcome(fl thermo.Fluid, inlets []flowsheet.Stream, from ?flowsheet.Stream) !flowsheet.Outcome {
 	n := c.k.species.len
 	inlet := one_inlet(c.name, fl, inlets, n)!
 	p := pressure_out(c.name, inlet, c.drop)!
@@ -234,7 +245,21 @@ pub fn (c Cstr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet
 	if has_t {
 		x0 << inlet.t
 	}
-	x := c.solve(sys, x0) or { return failed(c.name, err.msg()) }
+	mut x := []f64{}
+	if last := from {
+		if last.flows.len == n {
+			mut warm := last.flows.clone()
+			if has_t {
+				warm << last.t
+			}
+			if sol := numeric.newton(sys, warm, ftol: 1e-12, xtol: 1e-14) {
+				x = sol.x.clone()
+			}
+		}
+	}
+	if x.len == 0 {
+		x = c.solve(sys, x0) or { return failed(c.name, err.msg()) }
+	}
 	flows := x[..n].clone()
 	t := if has_t { x[n] } else { sys.t_fixed }
 	outlet := at_tp(c.name, fl, flows, t, p)!

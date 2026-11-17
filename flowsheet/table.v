@@ -213,7 +213,7 @@ fn pad_right(s string, width int) string {
 
 // figures is x to 5 significant figures: as a decimal from a thousandth up to a
 // million, and as a power of ten outside that.
-fn figures(x f64) string {
+pub fn figures(x f64) string {
 	if x == 0.0 || !math.is_finite(x) {
 		return if x == 0.0 { '0' } else { '${x}' }
 	}

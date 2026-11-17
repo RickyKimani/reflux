@@ -8,6 +8,7 @@ import flowsheet { FlowsheetError, Loaded, Solution }
 import math
 import numeric
 import os
+import thermo
 
 const db = components.load_default() or { panic(err) }
 
@@ -469,4 +470,68 @@ until = "gas.F = 60 mol/s"
 	refused(with_spec(spec.replace('gas.F', 'feed.F')), 65, 'it reads only feeds')
 	refused(with_spec(spec.replace('unit.cooler.outlet_T', 'unit.second.duty').replace('["200 K", "260 K"]',
 		'["-1 MW", "1 MW"]')), 65, 'nothing it measures depends on what it varies')
+}
+
+// Hot is a unit that can't start cold: it passes its inlet through only
+// from a neighbour's answer, to show that a warm solve asks its units for
+// calculate_from (M8 step 5, D6).
+struct Hot {
+	name string
+}
+
+fn (h Hot) inlet_ports() []string {
+	return ['in']
+}
+
+fn (h Hot) outlet_ports() []string {
+	return ['out']
+}
+
+fn (h Hot) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return error('Hot starts only from a neighbour')
+}
+
+fn (h Hot) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	assert last.outlets.len == 1
+	return flowsheet.Outcome{
+		outlets: inlets
+	}
+}
+
+fn test_a_warm_solve_starts_its_units_from_their_last_answers() {
+	l := load(flowsheet_text('no_recycle.toml'))!
+	sol := l.solve()!
+	mut sheet := flowsheet.Flowsheet{
+		feeds: l.sheet.feeds
+	}
+	feed := l.sheet.feeds[0].name
+	sheet.add_unit(Hot{'hot'}, {
+		'in':  feed
+		'out': 'through'
+	})!
+	sheet.solve(l.fluid) or { assert err.msg().contains('Hot starts only from a neighbour') }
+	last := flowsheet.Solution{
+		...sol
+		units: [flowsheet.UnitResult{
+			name:    'hot'
+			inlets:  [sol.streams[feed]]
+			outlets: [sol.streams[feed]]
+		}]
+	}
+	loaded := Loaded{
+		...l
+		sheet: sheet
+		plan:  sheet.plan()!
+		specs: []
+	}
+	warm := loaded.solve_from(flowsheet.Start{
+		last: last
+	})!
+	assert warm.streams['through'].flows == sol.streams[feed].flows
+	// Started without its units, it's cold again.
+	loaded.solve_from(flowsheet.Start{ last: last, units: false }) or {
+		assert err.msg().contains('Hot starts only from a neighbour')
+		return
+	}
+	assert false
 }

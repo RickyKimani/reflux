@@ -86,9 +86,20 @@ pub fn (g Gibbs) energy_ports() []string {
 // calculate finds the equilibrium, at T or by the energy balance, and the
 // duty an isothermal reactor takes, F·H out less F·H in.
 pub fn (g Gibbs) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return g.outcome(fl, inlets, none)
+}
+
+// calculate_from brackets the energy balance's T around the last point's
+// (M8's D6).
+pub fn (g Gibbs) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	return g.outcome(fl, inlets, last_t(last))
+}
+
+fn (g Gibbs) outcome(fl thermo.Fluid, inlets []flowsheet.Stream, from ?f64) !flowsheet.Outcome {
 	inlet := one_inlet(g.name, fl, inlets, g.species.len)!
 	at := GibbsAt{g, fl, inlet.flows, pressure_out(g.name, inlet, g.drop)!}
-	return thermal_outcome(g.name, at, inlet, g.thermal, g.t, g.duty, element_rows(g.species))
+	return thermal_outcome(g.name, at, inlet, g.thermal, g.t, g.duty, element_rows(g.species),
+		from)
 }
 
 // GibbsAt is a Gibbs reactor's outlet at a temperature, for the energy
@@ -129,11 +140,13 @@ fn one_inlet(name string, fl thermo.Fluid, inlets []flowsheet.Stream, n int) !fl
 // inlet's (adiabatic) or the inlet's plus the duty. An isothermal reactor's
 // duty is F·H out less F·H in; an adiabatic one has none, its balance
 // closing to Brent's tolerance.
-fn thermal_outcome(name string, at Outlet, inlet flowsheet.Stream, thermal Thermal, t f64, duty f64, rows [][]f64) !flowsheet.Outcome {
+fn thermal_outcome(name string, at Outlet, inlet flowsheet.Stream, thermal Thermal, t f64, duty f64, rows [][]f64, from ?f64) !flowsheet.Outcome {
+	// From a neighbour's T, the bracket starts near it (M8's D6).
+	guess, first := if f := from { f, warm_step } else { inlet.t, 50.0 }
 	outlet := match thermal {
 		.isothermal { at.outlet_at(if t > 0 { t } else { inlet.t })! }
-		.adiabatic { solve_t(name, at, enthalpy_flow(inlet), inlet.t)! }
-		.duty { solve_t(name, at, enthalpy_flow(inlet) + duty, inlet.t)! }
+		.adiabatic { solve_t(name, at, enthalpy_flow(inlet), guess, first)! }
+		.duty { solve_t(name, at, enthalpy_flow(inlet) + duty, guess, first)! }
 	}
 	one_phase(name, outlet)!
 	energy := match thermal {

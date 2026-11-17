@@ -72,9 +72,20 @@ pub fn (e EquilibriumReactor) energy_ports() []string {
 // calculate finds the equilibrium over the reactions, at T or by the energy
 // balance.
 pub fn (e EquilibriumReactor) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return e.outcome(fl, inlets, none)
+}
+
+// calculate_from brackets the energy balance's T around the last point's
+// (M8's D6).
+pub fn (e EquilibriumReactor) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	return e.outcome(fl, inlets, last_t(last))
+}
+
+fn (e EquilibriumReactor) outcome(fl thermo.Fluid, inlets []flowsheet.Stream, from ?f64) !flowsheet.Outcome {
 	inlet := one_inlet(e.name, fl, inlets, e.species.len)!
 	at := EquilibriumAt{e, fl, inlet.flows, pressure_out(e.name, inlet, e.drop)!}
-	return thermal_outcome(e.name, at, inlet, e.thermal, e.t, e.duty, element_rows(e.species))
+	return thermal_outcome(e.name, at, inlet, e.thermal, e.t, e.duty, element_rows(e.species),
+		from)
 }
 
 // EquilibriumAt is an equilibrium reactor's outlet at a temperature.

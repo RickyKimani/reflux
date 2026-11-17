@@ -481,6 +481,30 @@ where it isn't a word, `gas.n['n-butane']`. Every number has its unit, as in
 any expression ([design.md](design.md#expressions)), so `gas.T = 300` is
 refused, and `gas.T = 300 K` reads.
 
+## Studies (format 3)
+
+A study solves the flowsheet at each value of one input, or each pair of
+two, and reports expressions over the flowsheet at each point (M8's D16).
+`reflux study plant.toml [NAME]` runs it ([report-format.md](report-format.md)).
+
+```toml
+[study.temperature]
+vary = [{ key = "feed.syngas.T", from = "200 degC", to = "320 degC", points = 13 }]
+report = { CO_conversion = "(syngas.n[CO] - product.n[CO]) / syngas.n[CO]", T_out = "(product.T in degC)" }
+```
+
+| Key | |
+|---|---|
+| `vary` | Required. A list of one input or two, each `{ key, from, to, points }`, evenly spaced from `from` to `to`, or `{ key, values }`, a list. A key is as a spec's (above), and a key a spec varies can't be. Each value is read as the key's maker reads it, in a unit of its own. |
+| `report` | Required. Named expressions over the flowsheet's variables, as a spec's `until`'s sides. |
+| `chunk` | How many points run from one cold start, 8 by default: each chunk's first point is solved cold, and the rest from their neighbours. |
+
+Two inputs make a grid: the first's values outer, the second's inner. An
+expression that has no value at a point, such as a product's conversion
+when the feed has none, is reported with its reason, and so is a point
+that fails; the study goes on. [testdata/flowsheets/methanol_study.toml](../testdata/flowsheets/methanol_study.toml)
+is Tutorial 2's.
+
 ## What it refuses that TOML allows
 
 - **A `\u` escape.** Write the character itself. V 0.5.2's TOML reader can crash

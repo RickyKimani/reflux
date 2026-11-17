@@ -385,7 +385,8 @@ fn block_reports(f Flowsheet, plan Plan, history []TearHistory, specs []Spec) []
 	return out
 }
 
-fn error_report(err IError) ErrorReport {
+// error_report is a failure as a report gives it, for the solve's report and a study's.
+pub fn error_report(err IError) ErrorReport {
 	if err is FlowsheetError {
 		return ErrorReport{
 			kind:        err.kind.str()

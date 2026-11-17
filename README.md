@@ -83,8 +83,9 @@ These goals come from what went wrong with DWSIM:
 ```
 v.mod               module manifest (Go's go.mod), with reflux's version
 CHANGELOG.md        every release, what a version promises, how to make one
-main.v              the command line: reflux solve, kinetics, demo, version, help
+main.v              the command line: reflux solve, study, kinetics, demo, version, help
 kinetics_command.v  reflux kinetics check and explain
+study_command.v     reflux study (M8)
 demo.v              reflux demo, on database components
 main_test.v         the command line, run in the test's own process
 numeric/
@@ -212,6 +213,9 @@ flowsheet/
                     it replaced, remade by its maker (M8)
   spec.v            design specs: read, linked in planning, and met by Brent
                     or Broyden with the tears, each checked again (M8)
+  warm.v            a solve started from a neighbouring point's: Start, and
+                    the Warm interface for units (M8)
+  studies.v         a file's [study.NAME], read (M8)
   mixer.v           mixer: flows and enthalpy add, then a PH flash
   splitter.v        splitter: fractions of the flow, the inlet's state
   pressure.v        outlet P or ΔP, for whatever changes pressure
@@ -234,6 +238,11 @@ flowsheet/
                     (docs/report-format.md)
   table.v           the stream table and the trace, for reading
   error.v           FlowsheetError: every failure, typed, never a panic
+study/              studies (M8): one or two inputs over their values, in
+                    chunks, each point from its neighbour, every output at
+                    every point or why it has none
+  study.v           the order, the chunks and each point's outcome
+  report.v          the study's report: JSON, CSV and the table
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
@@ -302,6 +311,7 @@ spike/dwsim_study/  DWSIM 9's study, Adjust, optimiser and regression, by its
 spike/study/        warm starts by hand, threads' bits and a solve's
                     allocations (M8 step 0)
 spike/eq16/         what K(T) costs, and equation 16 by a fixed rule (M8 step 1)
+spike/warm/         what a warm start must carry (M8 step 5)
 .v-version          the V commit CI builds
 ```
 

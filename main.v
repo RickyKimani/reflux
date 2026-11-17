@@ -1,6 +1,7 @@
 // reflux's command line (M4, D11; M9, D12):
 //
 //     reflux solve plant.toml [--json results.json] [--csv streams.csv] [--trace]
+//     reflux study plant.toml [NAME] [--json study.json] [--csv study.csv]
 //     reflux kinetics check FILE [T P NAME=y ...]
 //     reflux kinetics explain FILE T P NAME=y ...
 //     reflux demo [T P]
@@ -19,6 +20,9 @@ const usage = 'usage:
       Solve a flowsheet file (docs/flowsheet-format.md) and print its stream
       table. --json writes the results (docs/report-format.md), --csv the
       streams, and --trace prints every pass of every loop.
+  reflux study FILE [NAME] [--json OUT] [--csv OUT]
+      Run a study in the file, by NAME if it has more than one, and print
+      its points; --json and --csv write them (docs/report-format.md).
   reflux kinetics check FILE [T P NAME=y ...]
   reflux kinetics explain FILE T P NAME=y ...
       Check the reactions in a file, or explain its rates at a state:
@@ -30,7 +34,8 @@ const usage = 'usage:
   reflux help
 
 The exit status is 0 when it worked, 1 when the flowsheet failed or a report
-could not be written, and 2 when the command is wrong.'
+could not be written, and 2 when the command is wrong. A study that ran is 0,
+even with failed points, which its table lists.'
 
 fn main() {
 	mut c := Console{
@@ -71,6 +76,9 @@ fn run(args []string, mut c Console) int {
 		'solve' {
 			return solve(args[1..], mut c)
 		}
+		'study' {
+			return study_command(args[1..], mut c)
+		}
 		'demo' {
 			return demo(args[1..], mut c)
 		}
@@ -90,7 +98,7 @@ fn run(args []string, mut c Console) int {
 			return 2
 		}
 		else {
-			hint := did_you_mean(command, ['solve', 'kinetics', 'demo', 'version', 'help'])
+			hint := did_you_mean(command, ['solve', 'study', 'kinetics', 'demo', 'version', 'help'])
 			c.complain('reflux: no command ${command}${hint}\n\n${usage}')
 			return 2
 		}

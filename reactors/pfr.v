@@ -324,6 +324,24 @@ fn (mut o PfrOde) jacobian(v f64, y []f64, mut jac []f64, mut dfdt []f64) ! {
 // the energy balance, held to the integrated T. The profile is the inlet
 // and every point the integrator stepped to.
 pub fn (r Pfr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return r.integrate(fl, inlets, 0)
+}
+
+// calculate_from integrates from the last point's first step (M8's D6), so
+// the integrator needn't choose one.
+pub fn (r Pfr) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	mut h0 := 0.0
+	if p := last.profile {
+		if p.points.len > 1 {
+			h0 = p.points[1].volume - p.points[0].volume
+		}
+	}
+	return r.integrate(fl, inlets, h0)
+}
+
+// integrate solves the PFR, from a first step of h0 m³, or one the
+// integrator chooses where h0 is 0.
+fn (r Pfr) integrate(fl thermo.Fluid, inlets []flowsheet.Stream, h0 f64) !flowsheet.Outcome {
 	n := r.k.species.len
 	inlet := one_inlet(r.name, fl, inlets, n)!
 	src := new_source(r.name, r.k, r.reactions, r.catalyst.loading, fl.model)!
@@ -374,6 +392,7 @@ pub fn (r Pfr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.
 		rtol:   r.rtol
 		atols:  atols
 		record: true
+		h0:     h0
 	}
 	sol := if r.integrator == .rodas4 {
 		numeric.rodas4(mut o, 0, y0, r.volume, params) or {

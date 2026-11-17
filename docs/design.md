@@ -1999,6 +1999,48 @@ singular can't be met together from there, and are refused.
 D8), and each spec checked again from the solution's streams and units:
 |r| ≤ tol, and the value within its bounds.
 
+## Warm starts
+
+A point of a study starts from its neighbour's solution (M8's D6), and its
+answer is checked as a cold one is. What it carries was measured (M8 step
+5), and is what pays:
+
+- **Units** that can, through `Warm`: the CSTR's Newton from its last
+  outlet, falling back to the inlet and continuation; an energy balance's
+  T bracketed out from its last T by steps of 5 K that double, where cold
+  it starts from the inlet's by 50 K; the PFR's first step.
+- **Specs,** from their last values. One spec alone is met or bracketed
+  near there first, by secant steps out from it, each at most four times
+  the last, the first as large as the last two points' change, before the
+  cold search over its bounds.
+- **Tears,** with direct substitution and in a block with specs only.
+  Wegstein's and Broyden's own starts beat a neighbour's tears.
+
+With two points behind it, a tear's flows, P and h and a spec's value
+start from the secant through them,
+
+    x = b + r·(b − a),    r = (this step)/(the last step),
+
+where both steps are along one input in one direction; a flow is held at
+zero, and a tear is a PH flash from b's T. Methods' own state, Broyden's
+inverse Jacobian or Wegstein's slopes, isn't carried: it took more passes.
+
+## Studies
+
+A study (M8's D7, D9) solves a grid of one or two inputs' values, each
+point remade from the file (D4), and evaluates its outputs there (D3, D9).
+
+**Order.** Along the first input's values; with two, along each row of the
+second's, alternating direction, so that each point's neighbour is the last
+solved. Points go in chunks of 8, or as the file says: each chunk's first
+point is cold and the rest warm, so the answers don't depend on how chunks
+are shared out (D8's workers, step 7).
+
+**Each point** is solved, solved with an output that has no value (its
+reason kept, D9), or failed (its reason kept). The study goes on past a
+failure, and the next point starts cold. Evenly spaced values are
+from + (to − from)·i/(n − 1), the last set to `to` exactly.
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from

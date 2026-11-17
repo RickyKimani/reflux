@@ -21,7 +21,8 @@ one milestone, as the owner decided, with its optimiser written in V (D1,
 D12). Step 0 is done and amended D6 and D18, and step 1 is done and amended
 D11, both approved on 2026-11-17. Whether equation 16 is integrated by a
 fixed rule (step 1) is still the owner's to decide. Steps 2 to 4 are done
-and amend D3, D4 and D5, for the owner to approve. Step 5 is next.
+and amend D3, D4 and D5, approved on 2026-11-17. Steps 5 and 6 are done,
+and amend D6, for the owner to approve. Step 7 is next.
 
 ## Goal
 
@@ -291,7 +292,7 @@ All checked by tests in CI, as before.
 | D3 | Naming flowsheet variables | A name with one dot:<br>- for a stream, `product.T`, `product.P`, `product.F` (total molar flow), `product.n[CH4]` (a component's flow), `product.y[CH4]`, `product.h` and `product.vf` (vapour fraction);<br>- for a unit, its energy streams by their names, `reactor.duty` and `pump.work`.<br><br>The grammar's atom gains `name "." name`. A stream or unit that isn't there, or a variable it lacks, is refused with the closest names. Each variable has its dimension, so `product.T - 300` is refused as M9's sums are.<br><br>**Amended in step 2.** A stream or unit whose name isn't one word is quoted before its dot, `'let down'.T`, as a member's key is. A unit names its energy streams through an optional interface, `Energies`, so that they bind at load: an adiabatic reactor has none. | It reads like the file, where a stream is `[feed.syngas]` and a unit `[unit.reactor]`, and keeps M9's members for components. Families keyed by stream, `T[product]`, would need two keys for a composition, `y[product, CH4]`. |
 | D4 | What can be varied | Any number the file gives a feed or a unit, by its key: `"feed.syngas.T"`, `"unit.cooler.duty"`, `"unit.reactor.volume"`. Each point replaces that value in the file's tree, with its unit, and remakes the feed or unit through its maker, which checks it as it checks the file. The value's dimension must be the key's.<br><br>**Amended in step 3.** A key's value and dimension are those its maker read, noted by the `Section` as it read them, not parsed again from the file: `27 degC` is 300.15 K where a temperature was read. A key no maker reads as a number is refused. A key into a nested table or a list is written as the file nests it, `unit.tube.catalyst.loading`, `unit.split.fractions[0]`. | Every unit, today's and later ones, is variable at once, with its own checks, and no unit writes setters. Remaking a unit costs microseconds against a solve's milliseconds; step 3 measures it. |
 | D5 | Specs | `[spec.NAME]` has three keys:<br>- `vary`, a key, as D4;<br>- `between`, its bounds;<br>- `until`, an equation of two expressions whose sides share a dimension, `"drum_vapour.y[CH4] = 5 %"`.<br><br>In planning, a spec is an edge from the unit that makes what it measures back to what it varies (a unit, or the units its feed enters), so they land in one block. That block's unknowns are its tears and its specs' values, and Broyden converges them together (F4). The residuals are the tears' changes and each spec's two sides' difference, scaled.<br><br>A block with one spec and no tears is solved by Brent within the bounds instead. A spec that fails in a block with tears is tried once more nested, Brent around the block's tears, before it's refused.<br><br>The answer must meet each target to the solver's tolerance and stay within its bounds. A unit's value set equal to an expression of others, DWSIM's Spec block, is a spec that varies that value until it equals the expression.<br><br>**Amended in step 4.** The residual is (lhs − rhs)/max(\|lhs\|, \|rhs\|, s₀), s₀ the block's own scale for the dimension. Several specs with no tears are met by Broyden on their values, and nested so around the tears. The specs' first Jacobian is a whole pass's, J, and their unknowns v₀ + (−J⁻¹)·u, since two specs can each vary what the other reads. Broyden held at a bound three evaluations running is stopped for the nested retry. Brent's bracket is the bounds, or nine values between them. | Together is a pass an evaluation, where DWSIM's simultaneous adjusts take a whole solve. Brent can't fail inside a bracket, and a single spec is the common case. Bounds let a target out of reach be refused with what the bounds reach, rather than wandering. |
-| D6 | Warm starts | A study's or an optimiser's point starts its tears from the last point's, with a secant predictor through the last two where both exist.<br><br>A unit that can use its last answer says so with an optional interface, `Warm`, whose `calculate_from(fl, inlets, last Outcome)` takes it. `Unit` is unchanged, and a unit without it starts cold:<br>- the CSTR starts Newton from its last outlet, skipping continuation;<br>- a reactor at a duty or adiabatic brackets its T around the last;<br>- a PFR starts from its last first step.<br><br>A warm answer is checked exactly as a cold one is.<br><br>**Amended in step 0, for step 5 to settle.** A tear started from its neighbour's answer, as `SolveParams.estimates` allows today, took more passes than a cold start on the reference flowsheet with Wegstein (11.0 a point against 4.0) and with Broyden (11.8 against 8.1), and fewer only with direct substitution (24 against 29). The predictor brought Broyden's to 7.8 and Wegstein's to 8.4. So a tear's value alone isn't the warm start. Step 5 first measures what is, Broyden's Jacobian carried along with the tears above all, and a block is started warm only where that takes no more passes than cold. | `Unit`'s promise, nothing about a solve, keeps units shareable between threads, so the last answer comes in from outside. A predictor is cheap and halves the work along a smooth sweep.<br><br>Step 0 measured the tears' part by hand, and it doesn't hold as written. |
+| D6 | Warm starts | A study's or an optimiser's point starts its tears from the last point's, with a secant predictor through the last two where both exist.<br><br>A unit that can use its last answer says so with an optional interface, `Warm`, whose `calculate_from(fl, inlets, last Outcome)` takes it. `Unit` is unchanged, and a unit without it starts cold:<br>- the CSTR starts Newton from its last outlet, skipping continuation;<br>- a reactor at a duty or adiabatic brackets its T around the last;<br>- a PFR starts from its last first step.<br><br>A warm answer is checked exactly as a cold one is.<br><br>**Amended in step 0, for step 5 to settle.** A tear started from its neighbour's answer, as `SolveParams.estimates` allows today, took more passes than a cold start on the reference flowsheet with Wegstein (11.0 a point against 4.0) and with Broyden (11.8 against 8.1), and fewer only with direct substitution (24 against 29). The predictor brought Broyden's to 7.8 and Wegstein's to 8.4. So a tear's value alone isn't the warm start. Step 5 first measures what is, Broyden's Jacobian carried along with the tears above all, and a block is started warm only where that takes no more passes than cold.<br><br>**Amended in step 5.** Measured ([spike/warm](../spike/warm/spike.v)): a warm start carries the units' last answers, through `Warm`, and the specs' values, each through the predictor, b + r·(b − a), r this step over the last. The tears start warm only with direct substitution or in a block with specs: with Wegstein and Broyden alone they took more passes than cold. Broyden's Jacobian and Wegstein's slopes aren't carried: they took more passes too. | `Unit`'s promise, nothing about a solve, keeps units shareable between threads, so the last answer comes in from outside. A predictor is cheap and halves the work along a smooth sweep.<br><br>Step 0 measured the tears' part by hand, and it doesn't hold as written. |
 | D7 | Determinism | A study's points go in chunks of a fixed size, 8 unless the file says otherwise. Each chunk starts cold at its first point and warm-starts the rest in order. Workers take whole chunks. A grid of two inputs runs along its rows, alternating direction, so each point's neighbour is the last one solved. | The same chunks give the same bits whatever the number of workers (criterion 5). DWSIM's answers depend on the order of its points. |
 | D8 | Workers | Threads, with `spawn`, sharing one loaded file. The number is the CPU count unless `--workers` says otherwise. Step 7 profiles a solve's allocations and removes those in the hot path that it can. | Measured: 2.1× with 4 threads against 2.6× with 4 processes, which would each read the file and the data and need their reports merged. One process keeps one report. |
 | D9 | A point's outcome | Each point has a status (solved, failed, or solved with an output that has no value) and reasons in words, as M10a's points have. An expression that divides by zero, or takes the log of zero, at a point is NaN with its reason ("methanol's conversion: the feed has no methanol"), never ±∞. A failed point doesn't stop the study, and the next point starts cold. | Tutorial 2's −∞ is what a sweep must never do. M10a's C API already works this way, so M10b can hand it to Python unchanged. |
@@ -665,7 +666,7 @@ written up apart.
   drum and separator name a duty, the pump, compressor and expander their
   work, and each reactor its duty unless it's adiabatic.
 
-**D3 is amended,** for the owner to approve: a stream or unit whose name
+**D3 is amended,** approved on 2026-11-17: a stream or unit whose name
 isn't one word, as the reference flowsheet's `let down` and `flash gas`, is
 quoted before its dot, `'let down'.T`, as a member's key is quoted. The
 unit's names come from `Energies`, which D3 didn't say.
@@ -710,7 +711,7 @@ unit's names come from `Energies`, which D3 didn't say.
   the maker reads it to the bit; `with` checks that it did. Only the tables
   on the key's path are copied.
 
-**D4 is amended,** for the owner to approve: a key's value and dimension are
+**D4 is amended,** approved on 2026-11-17: a key's value and dimension are
 the ones its maker read, recorded as it read them, not parsed again from
 the file's text. So `27 degC` is 300.15 K where the maker read a
 temperature, and a key no maker reads as a number (`type`, `in`, a
@@ -789,7 +790,7 @@ but for a splitter, whose own calculation is less.
   and their residuals. `reflux solve` prints each spec's value, and
   `--trace` each evaluation.
 
-**D5 is amended,** for the owner to approve, in what it left open:
+**D5 is amended,** approved on 2026-11-17, in what it left open:
 - **The residual's scale:** r = (lhs − rhs)/max(|lhs|, |rhs|, s₀), s₀ the
   block's own scale for the dimension (F for a flow, F·RT for a power, RT
   for a molar enthalpy, 1 for a pure number), so that a target of 0 W is
@@ -886,15 +887,181 @@ time.
 no number moved: the golden test, which holds their numbers, passes
 unchanged.
 
-### 5. Warm starts
+### 5. Warm starts — done, with D6 amended
 - D6: the tears' predictor, `Warm`, and the CSTR, the reactors with an
   energy balance, and the PFR using it.
 - Every warm point against its cold solve.
 
-### 6. Studies and the CLI
+Steps 5 and 6 were built together, with one tcc and one gcc check, each
+written up apart.
+
+**What was built:**
+- **[flowsheet/warm.v](../flowsheet/warm.v):** `Start`, where a solve
+  starts from: a neighbouring point's solution, the one before it for a
+  secant predictor, b + r·(b − a) with r this step over the last, and
+  flags for each part, for measuring. `Loaded.solve_from(start)` solves
+  from it, and checks the answer as a cold one is checked.
+- **`Warm`,** an optional interface: `calculate_from(fl, inlets, last)`,
+  the unit from its last answer at the neighbouring point.
+  - The CSTR starts Newton from its last outlet, and from its inlet, with
+    continuation, if that fails.
+  - The Gibbs, equilibrium and conversion reactors at a duty or adiabatic
+    bracket their T from the last one by 5 K steps, not from the inlet's
+    by 50.
+  - The PFR takes its last first step as its first.
+- **The tears** start from the last answer, through the predictor, only
+  where that was measured to pay: direct substitution, and a block with
+  specs.
+- **The specs** start from their last values, through the predictor. One
+  spec alone looks for Brent's bracket near there first: met there
+  already, or secant steps out from it, each at most four times the last,
+  the first as large as the last two points' change; and the cold search
+  if that finds none.
+
+**What a warm start must carry** (D6's question,
+[spike/warm/spike.v](../spike/warm/spike.v), gcc `-prod`; passes a point,
+the most in brackets):
+
+| case | cold | tears | tears, predicted | tears and the method's Jacobian or slopes |
+|---|---|---|---|---|
+| the reference flowsheet, Wegstein, 1 K apart | 4.0 (4) | 11.0 (11) | 8.5 (11) | 12.8 (13) |
+| Wegstein, 0.1 K | 4.0 (4) | 9.7 (10) | 5.6 (10) | 11.0 (11) |
+| Wegstein, 5 K | 4.0 (4) | 12.3 (15) | 10.4 (13) | 13.3 (15) |
+| Broyden, 1 K | 8.2 (9) | 12.0 (14) | 8.1 (14) | 10.8 (12) |
+| Broyden, 0.1 K | 9.0 (9) | 12.0 (12) | 6.8 (12) | 8.8 (11) |
+| Broyden, 5 K | 7.8 (9) | 11.4 (13) | 10.8 (13) | 13.1 (15) |
+| direct substitution, 1 K | 29.0 (29) | 24.0 (24) | 19.4 (24) | 24.0 (24) |
+
+- **Carrying the method's state doesn't pay,** neither Broyden's inverse
+  Jacobian nor Wegstein's slopes, from the end of a solve or from its last
+  acceleration: it took more passes in every case, and was taken out.
+- **A tear from its neighbour costs passes with Wegstein and Broyden,**
+  even 0.1 K away, as step 0 found, and the predictor doesn't bring their
+  most below cold's. With direct substitution it saves a third, and never
+  takes more than cold.
+- **Units and specs** (milliseconds and evaluations a point):
+
+  | case | cold | warm |
+  |---|---|---|
+  | a CSTR on the owner's kinetics, 24 feed temperatures | 3.18 ms | 0.32 ms |
+  | an adiabatic Gibbs reactor, the same | 7.8 ms | 3.6 to 4.3 ms |
+  | the owner's PFR, 48 points | 568.3 steps | 567.7 steps |
+  | a heater's spec over its feed's T, 21 points | 8.0 evaluations | 4.5 |
+  | the reference flowsheet's spec over its feed's P, 11 points | 27.4 passes (29) | 11.4 (15), tears warm; 13.6 (18), tears cold |
+
+- Every warm answer is within the solves' own tolerances of its cold one:
+  2e-9 or less with tears, 1.2e-11 for the PFR, 7.4e-14 for the CSTR.
+
+**D6 is amended,** for the owner to approve: what a warm start carries is
+the units' last answers, the specs' values, and the tears only with
+direct substitution or with specs, each through the predictor; not the
+methods' Jacobians or slopes. So criterion 4's floor holds: no warm point
+takes more passes, spec evaluations or integrator steps than its cold
+solve.
+
+**What it means for the owner's study:** nothing much. Its PFR has no tear
+and no spec, and an isothermal integration from the same inlet has nothing
+to start from but its first step, which saves 0.1% of its steps. Its speed
+is step 7's (workers) and step 14's.
+
+**Tests:**
+- [study/study_test.v](../study/study_test.v),
+  `test_warm_points_against_cold`: six studies, each run warm and cold,
+  point by point: the reference flowsheet by direct substitution (outputs
+  within 1e-8) and by Wegstein (the same bits, nothing being warm there),
+  with a spec in its loop (1e-8), the owner's PFR (1e-9), a CSTR (1e-11)
+  and an adiabatic Gibbs reactor (1e-10). No warm point takes more passes,
+  spec evaluations or steps than its cold one, and each study's totals are
+  held at their measured values.
+- [flowsheet/spec_test.v](../flowsheet/spec_test.v): a unit that can't
+  start cold solves warm, and not without its units.
+- An unevenly spaced study by direct substitution, its predictor's ratio
+  in it (185 passes); a spec's study repeating a value, met there in one
+  evaluation.
+
+**Planted mistakes for steps 5 and 6:** 23, in scratch copies, one at a
+time.
+- **Caught, 18:** the `Warm` units ignored (caught by the unit that can't
+  start cold and by the studies' totals, once written to build); warm tears
+  in every block or in none with specs; either predictor's sign; the specs'
+  warm values not set; the order not alternating; a failure not starting
+  the next point cold; a no-value point called solved; the ratio taken back
+  the way it came; the JSON's null, the CSV's NaN or the table's "at every
+  point" written otherwise; the last value not `to`; the chunk 4; a spec's
+  key varied by a study; the CSTR's warm start taken without Newton; the
+  PFR's first step dropped (its steps grew).
+- **Survived at first, and new tests catch them, 2:** a spec met at its
+  warm value searched on regardless, and the predictor's ratio taken as 1.
+- **Deleted, 1:** `last_unit`'s check for a unit with no inlets, which no
+  solution reaches.
+- **Survive, explained, 2:** the ratio's check that both steps moved,
+  equivalent to the original, since a step of zero makes the ratio infinite,
+  which is refused already; and the Gibbs, equilibrium and conversion
+  reactors' warm bracket ignored, which changes only how fast their T is
+  found (2× measured), and no test counts their outlets' evaluations.
+
+### 6. Studies and the CLI — done
 - D7, D9, D16 and D17: `[study.NAME]`, chunks, each point's outcome, the
   table, JSON and CSV, and `reflux study`.
 - Tutorial 2's methanol conversion as a study output: NaN, with its reason.
+
+**What was built:**
+- **[flowsheet/studies.v](../flowsheet/studies.v):** format 3 reads
+  `[study.NAME]`: `vary`, a list of one or two `{ key, from, to, points }`
+  or `{ key, values }`, each value read as the key's maker reads it, evenly
+  spaced values ending at `to` exactly; `report`, named expressions over
+  the flowsheet; `chunk`, 8 by default. A key a spec varies is refused,
+  and so is a study of more than a million points.
+- **A new module, [study](../study/study.v):** `run` solves a study's
+  points in chunks (D7), along one input, or for two along each row,
+  alternating direction. A chunk's first point is cold and the rest start
+  from their neighbours, the predictor along one input in one direction.
+  A point is solved, solved with an output that has no value, or failed
+  (D9), each output's reason and each failure's kept; the next point after
+  a failure starts cold.
+- **Its report** ([study/report.v](../study/report.v)), a format of its own
+  (D17), documented in [report-format.md](report-format.md): every point
+  in the grid's order, with its inputs, its outputs as values or `null`
+  with their reasons, its specs' values, and what it took; a CSV of a row a
+  point, NaN where there's no value; and a table, with each output's
+  reasons said once.
+- **`reflux study FILE [NAME] [--json OUT] [--csv OUT]`**
+  ([study_command.v](../study_command.v)): exits 0 when the study ran,
+  failed points and all; 1 when its file didn't load or has no studies; 2
+  for a wrong command, a study name that isn't there included.
+- **[testdata/flowsheets/methanol_study.toml](../testdata/flowsheets/methanol_study.toml):**
+  Tutorial 2's reactor over four feed temperatures.
+
+**Tutorial 2's lesson,** from the command line:
+
+```
+methanol_study.toml, study temperature: 4 points, 0 solved, 4 with an output that has no value, 0 failed; in chunks of 8, 3 from a neighbour and 1 cold.
+
+feed.syngas.T [K]  CO_conversion  methanol_conversion       T_out
+           473.15        0.49000                    —      200.00
+           513.15        0.41800                    —      240.00
+           553.15        0.34600                    —      280.00
+           593.15        0.27400                    —      320.00
+
+Outputs with no value:
+  methanol_conversion, at every point: it divides by syngas.n[CH4O], which is zero here
+```
+
+where DWSIM plotted −∞ with no message.
+
+**Tests:**
+- [study/study_test.v](../study/study_test.v): Tutorial 2's study, CO's
+  conversion the correlation's to 1e-12, its JSON's `null` and reason, its
+  CSV's NaN and its table; the order and the predictor's ratio; a spec over
+  a study, 108 evaluations warm against 168 cold; a failed point among the
+  rest, the next starting cold; 13 refusals of a study in the file.
+- [main_test.v](../main_test.v): `reflux study` prints, writes its JSON and
+  CSV, and exits 0, 1 and 2 as D17 has it.
+- The JSON's keys against [report-format.md](report-format.md)'s study
+  section.
+
+**For 0.4.0's CHANGELOG entry:** `reflux study`, and its report, a format
+of its own (1); format 3's `[study.NAME]`.
 
 ### 7. Workers
 - D8: chunks on threads, bit for bit for any number of workers, and the
