@@ -1,7 +1,9 @@
 # Tutorial 2's methanol reactor (M9 step 10) with a study (M8 step 6): the
 # feed's T over four values, CO's conversion at each, and methanol's
 # "conversion", (in - out)/in, which DWSIM plotted as -inf: the feed has no
-# methanol, so it has no value, with its reason, at every point.
+# methanol, so it has no value, with its reason, at every point. And their
+# derivatives by the feed's T (M8 step 8): CO's is -0.0018 per K exactly,
+# the correlation being linear in T, and methanol's has none either.
 format = 3
 
 [components]
@@ -28,3 +30,4 @@ equation = "CO + 2 H2 = CH3OH"
 [study.temperature]
 vary = [{ key = "feed.syngas.T", values = ["200 degC", "240 degC", "280 degC", "320 degC"] }]
 report = { CO_conversion = "(syngas.n[CO] - product.n[CO]) / syngas.n[CO]", methanol_conversion = "(syngas.n[methanol] - product.n[methanol]) / syngas.n[methanol]", T_out = "(product.T in degC)" }
+sensitivities = { outputs = ["CO_conversion", "methanol_conversion"], inputs = ["feed.syngas.T"] }

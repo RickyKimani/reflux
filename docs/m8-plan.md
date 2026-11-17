@@ -22,7 +22,8 @@ D12). Step 0 is done and amended D6 and D18, and step 1 is done and amended
 D11, both approved on 2026-11-17. Whether equation 16 is integrated by a
 fixed rule (step 1) is still the owner's to decide. Steps 2 to 4 are done
 and amend D3, D4 and D5, and steps 5 and 6 are done and amend D6, all
-approved on 2026-11-17. Step 7 is done. Step 8 is next.
+approved on 2026-11-17. Steps 7 and 8 are done, and step 8 amends D10, for
+the owner to approve. Steps 1 to 8 meet the roadmap's exit; step 9 is next.
 
 ## Goal
 
@@ -296,7 +297,7 @@ All checked by tests in CI, as before.
 | D7 | Determinism | A study's points go in chunks of a fixed size, 8 unless the file says otherwise. Each chunk starts cold at its first point and warm-starts the rest in order. Workers take whole chunks. A grid of two inputs runs along its rows, alternating direction, so each point's neighbour is the last one solved. | The same chunks give the same bits whatever the number of workers (criterion 5). DWSIM's answers depend on the order of its points. |
 | D8 | Workers | Threads, with `spawn`, sharing one loaded file. The number is the CPU count unless `--workers` says otherwise. Step 7 profiles a solve's allocations and removes those in the hot path that it can. | Measured: 2.1× with 4 threads against 2.6× with 4 processes, which would each read the file and the data and need their reports merged. One process keeps one report. |
 | D9 | A point's outcome | Each point has a status (solved, failed, or solved with an output that has no value) and reasons in words, as M10a's points have. An expression that divides by zero, or takes the log of zero, at a point is NaN with its reason ("methanol's conversion: the feed has no methanol"), never ±∞. A failed point doesn't stop the study, and the next point starts cold. | Tutorial 2's −∞ is what a sweep must never do. M10a's C API already works this way, so M10b can hand it to Python unchanged. |
-| D10 | Sensitivities | The derivative of each output with respect to each input, at any point, by central differences of warm-started solves.<br>- The solve's tolerance is tightened to 1e-12 for them.<br>- Each step is chosen from the input's scale.<br>- The error is estimated from steps h and h/2 by Richardson's extrapolation, and reported beside the derivative.<br><br>The same derivatives are the optimiser's gradients. Exact sensitivities, by the implicit function theorem on the converged Jacobian (H1), need each unit's Jacobian, which comes with M13's residuals (J1). | Differences work for every unit, and give an error estimate that a user can judge. An optimiser needs gradients good to about 1e-6, which a solve at 1e-12 gives. The PFR's rows in T and P are themselves differences (M9 step 9), so an exact path would be partial today. |
+| D10 | Sensitivities | The derivative of each output with respect to each input, at any point, by central differences of warm-started solves.<br>- The solve's tolerance is tightened to 1e-12 for them.<br>- Each step is chosen from the input's scale.<br>- The error is estimated from steps h and h/2 by Richardson's extrapolation, and reported beside the derivative.<br><br>The same derivatives are the optimiser's gradients. Exact sensitivities, by the implicit function theorem on the converged Jacobian (H1), need each unit's Jacobian, which comes with M13's residuals (J1).<br><br>**Amended in step 8.** The error's estimate adds the solves' noise, from a fifth solve at v: |D(h/2) − D(h)| + |Δ⁴|/h, Δ⁴ the fourth difference over the five. With the two differences alone a spec's derivative underestimated its error, its noise being of their size. Each step is h = 1e-4·\|v\|; an input at 0 is refused. | Differences work for every unit, and give an error estimate that a user can judge. An optimiser needs gradients good to about 1e-6, which a solve at 1e-12 gives. The PFR's rows in T and P are themselves differences (M9 step 9), so an exact path would be partial today. |
 | D11 | Keeping K(T) and the viscosity | A reactor's rates keep each reaction's K, and each compound's viscosity, at the T they were last computed at. A new T computes them as now, so every answer keeps its bits. Whether eq. 16's Cp should integrate faster, for reactors whose T moves, is measured in step 1 and decided there.<br><br>**Amended in step 1.**<br>- Wilke's rule keeps each pair's two factors with each compound's viscosity: its powers and square roots, not the correlations, were most of its cost.<br>- At a T that moves, each species' two integrals are taken once and shared by the reactions it's in, each summing them as before: 10 integrals for the reforming model where its three reactions took 24, and the same bits. | Exact by construction. An isothermal reactor, the owner's case, never moves T. |
 | D12 | The optimiser | `numeric.sqp`, written in V, for small dense problems: minimise f(x) subject to bounds, equalities c(x) = 0 and inequalities c(x) ≥ 0.<br>- **The method:** Han and Powell's SQP. The Hessian of the Lagrangian comes from a BFGS update with Powell's damping, and each step's QP is solved by an active-set method on the bounds and the linearised constraints. Steps are accepted by an ℓ1 merit function with a backtracking line search (Nocedal and Wright, ch. 18).<br>- **What it takes:** the problem as an interface, with gradients, exact where the caller has them and D10's differences for a flowsheet.<br>- **What it returns:** an answer only once the first-order conditions hold to their tolerances, each multiplier with it. A QP with no feasible point, a line search that can't descend, or the iteration budget spent is a typed `OptimizeError` with its reason. | Every flowsheet optimisation M8 meets has a handful of inputs. SQP converges superlinearly there, takes constraints directly, and needs no dependency. Checking the conditions is how the optimiser shows its answer, as every other solver here does. DWSIM's stops when its objective stops changing. |
 | D13 | Optimising a flowsheet | `[optimize.NAME]` has four keys:<br>- `vary`, keys with bounds, as D4;<br>- `minimize` or `maximize`, an expression;<br>- `subject_to`, equations and inequalities over flowsheet variables, `"product.T <= 1100 K"`;<br>- `start`, optionally.<br><br>The path is feasible: each evaluation is a converged solve, specs included, warm-started from the last (D6), and the constraints are the SQP's. The equation reader of D5 takes `<=` and `>=` too. The report gives the optimum, the multipliers, which bounds and constraints are active, and each evaluation. | The feasible path keeps every evaluation a checked solve. The infeasible path's fewer passes come from giving the optimiser the tears, which M13's equation-oriented solve does anyway. |
@@ -1156,9 +1157,98 @@ the owner's 4-core laptop; [tools/study_bench.v](../tools/study_bench.v)):
 `thermo.Cubic.work()`; a reactor's solve allocating 17 times less, and the
 owner's study 1.3 to 2 times as fast on one thread.
 
-### 8. Sensitivities
+### 8. Sensitivities — done, with D10 amended
 - D10: central differences at a tight tolerance, Richardson's error
   estimate, and closed forms against mpmath.
+
+**What was built:**
+- **[flowsheet/studies.v](../flowsheet/studies.v):** a study's
+  `sensitivities = { outputs = [...], inputs = [...] }`, every output of the
+  report named with respect to every key given (D4); a key a spec varies is
+  refused.
+- **[study/sensitivity.v](../study/sensitivity.v):** each point's
+  derivatives. Each input is moved to v ± h, v ± h/2 and v itself, h = 1e-4
+  of its value, and the file solved at each from the point's solution at a
+  tolerance of 1e-12, specs and all. The derivative is Richardson's
+  extrapolation of the two central differences, and its error's estimate
+  their gap plus the noise a fourth difference over the five solves shows,
+  over h ([design.md](design.md#sensitivities)). An input at 0 has no
+  scale for a step, and says so; an output with no value at the point has
+  no derivative there, and says that.
+- **The report:** `sensitivities[]`, and each point's `derivatives[]`, value
+  and error or `null` and why; the CSV's two columns a derivative; the
+  table's one ([report-format.md](report-format.md)).
+- **[tools/gen_m8_sensitivities.py](../tools/gen_m8_sensitivities.py)** and
+  [testdata/m8_sensitivities.json](../testdata/m8_sensitivities.json): an
+  isothermal first-order PFR's X = 1 − exp(−kPV/F) and its derivatives by V
+  and by T, k Arrhenius, at nine points, by mpmath at 50 digits, each
+  closed form checked against mpmath's numerical derivative to 1e-30.
+
+**D10 is amended,** for the owner to approve: the error's estimate is
+|D(h/2) − D(h)| + |Δ⁴|/h, the second part from a fifth solve, at v itself.
+With the two differences alone, the spec's case underestimated its error,
+7.3e-5 W/K against 5.1e-5: a spec met at 1e-12 of its scale leaves the duty
+noise of the difference's size, and a gap between two noisy differences can
+come out small by chance. A fourth difference measures the noise apart
+from the truncation. Each input costs five solves a point, not four.
+
+**Criterion 6, measured** (each derivative against its closed form, its
+estimate's ratio to its true error; every derivative within 1e-6 of itself,
+every estimate within 1e-5 of the derivative's scale, max(|f′|, |f/v|): a
+conversion near 1 has a tiny dX/dT, beside which the solves' noise over the
+step isn't small):
+
+| case | derivatives | each estimate over the true error |
+|---|---|---|
+| the PFR, dX/dV and dX/dT, 9 points (rtol 1e-12) | 18 | 273 to 9.7·10⁶ under tcc, 85 to 5.0·10⁶ under gcc |
+| a heater, d(duty)/d(T_out) = F·Cp and d(duty)/d(T_in) = −F·Cp, 2 points | 4 | 45 to 127 |
+| the same feed with a spec holding T_out, d(duty)/d(T_in) | 2 | 3.7 |
+| Tutorial 2's CO conversion, dX/dT = −0.0018 /K exactly, 4 points | 4 | estimate under 1e-9 |
+| the reference flowsheet's gas by its cooler's T, through the recycle, against cold solves at 1e-13 | 1 | 0.4530271041 mol/(s·K), 3.5e-11 off, estimated 3.6e-8: 1,000 |
+
+The largest ratios are where the extrapolation is good to rounding and the
+estimate is D(h/2)'s truncation; the smallest where the spec's noise
+dominates, which the fourth difference catches. Cp is `thermo`'s, from F's
+analytic second derivatives: no difference in the reference.
+
+**Found:** a warm-started solve stops where its tears move by the
+tolerance, so its error is in proportion to how far it started, and so to
+the step: a bias linear in the step, which cancels from both parts of the
+estimate. Only the tight tolerance bounds it, to about 1e-8 of the
+derivative; at a study's 1e-9 it would be 1e-5, unseen. A planted mistake
+that left the tolerance as the file's survived the closed forms, which have
+no tears; the recycle's derivative against cold solves catches it.
+
+**Found by the gcc check:** the PFR's least ratio is 85 under gcc, where
+tcc's is 273, the integrator's rounding being the compilers'. The test's
+floor, 100 from tcc's run alone, is now 20: a derivative that skipped the
+extrapolation sits near 3, and is off the closed forms by more than 1e-6.
+And the table listed a derivative of an output with no value once a point,
+its reason naming the first step's input; such a derivative now says the
+output has no value here, without solving, and the table says "at 1 point".
+
+**Planted mistakes:** 15, in scratch copies, one at a time.
+- **Caught, 13:** no extrapolation (the PFR's derivatives off by more than
+  1e-6, and the heater's ratio below its floor, again at the floor of 20);
+  the noise term dropped (the spec's case underestimated); the fourth
+  difference miscounted; a step off centre; an input at 0 stepped; a
+  derivative's reason lost; a step of 1e-2; the derivative's unit inverted;
+  the JSON's value and error crossed; a spec's key, and an output twice, let
+  into sensitivities; an output with no value at the point given a step's
+  reason; "at 1 points".
+- **Survived at first, and the recycle's test catches it, 1:** the
+  tolerance not tightened.
+- **Survives, explained, 1:** the solves not skipped when no output has a
+  value at the point: every derivative is then missing for the point's own
+  reasons, which the solves can't change, so only the time differs.
+
+**Tests:**
+- [study/sensitivity_test.v](../study/sensitivity_test.v): the cases
+  above; an input at 0; seven refusals.
+- [study/study_test.v](../study/study_test.v): Tutorial 2's derivatives,
+  CO's within its estimate and methanol's with no value and its reason,
+  once in the table for every point; an output with no value at one point
+  alone; the JSON's and the CSV's new keys and columns, against the format.
 
 ### 9. The SQP
 - D12: `numeric.sqp`, the damped BFGS update, the active-set QP, the merit

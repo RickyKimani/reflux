@@ -20,6 +20,9 @@ fn load(text string) !flowsheet.Loaded {
 
 // Tutorial 2's reactor over its feed's T: CO's conversion at each point is
 // the correlation's, and methanol's has no value, never −∞, saying why.
+// CO's conversion's derivative by T is −0.0018 per K exactly, the
+// correlation being linear, so its difference has no truncation error, and
+// is within its estimate; methanol's has none, and says why.
 fn test_tutorial_2s_conversions() {
 	l := load(flowsheet_text('methanol_study.toml'))!
 	r := run(l, l.studies[0])
@@ -33,6 +36,10 @@ fn test_tutorial_2s_conversions() {
 		assert p.reasons[0] == '' && p.reasons[2] == ''
 		assert math.abs(p.outputs[2] - t_c) <= 1e-12
 		assert p.warm == (k > 0)
+		d := p.derivatives[0]
+		assert math.abs(d.value + 0.0018) <= d.error && d.error <= 1e-9, '${d.value} ± ${d.error}'
+		assert math.is_nan(p.derivatives[1].value)
+		assert p.derivatives[1].reason == 'methanol_conversion has no value here', p.derivatives[1].reason
 	}
 	rep := r.report('methanol_study.toml', [])
 	j := json2.decode[json2.Any](rep.json())!.as_map()
@@ -42,9 +49,14 @@ fn test_tutorial_2s_conversions() {
 	assert values[1].as_map()['value']! is json2.Null
 	assert values[1].as_map()['reason']!.str().starts_with('it divides by')
 	lines := rep.csv().split_into_lines()
-	assert lines[0] == 'point,feed.syngas.T [K],CO_conversion,methanol_conversion,T_out,status'
+	assert lines[0] == 'point,feed.syngas.T [K],CO_conversion,methanol_conversion,T_out,d(CO_conversion)/d(feed.syngas.T) [1/K],error of d(CO_conversion)/d(feed.syngas.T) [1/K],d(methanol_conversion)/d(feed.syngas.T) [1/K],error of d(methanol_conversion)/d(feed.syngas.T) [1/K],status'
 	assert lines[1].contains(',NaN,') && lines[1].ends_with(',no_value')
-	assert rep.table().contains('methanol_conversion, at every point: it divides by syngas.n[CH4O], which is zero here')
+	row := lines[1].split(',')
+	assert math.abs(row[5].f64() + 0.0018) <= 1e-9 && row[6].f64() <= 1e-9, lines[1]
+	assert row[7] == 'NaN' && row[8] == 'NaN'
+	table := rep.table()
+	assert table.contains('methanol_conversion, at every point: it divides by syngas.n[CH4O], which is zero here')
+	assert table.contains('d(methanol_conversion)/d(feed.syngas.T), at every point: methanol_conversion has no value here'), table
 }
 
 // documented is every key the study report's section of
@@ -74,8 +86,13 @@ fn test_the_json_is_as_documented() {
 	l := load(flowsheet_text('methanol_study.toml'))!
 	j := json2.decode[json2.Any](run(l, l.studies[0]).report('x', []).json())!.as_map()
 	assert j.keys() == doc[''], '${j.keys()}'
-	assert j['points']!.as_array()[0].as_map().keys() == doc['points[]']
-	assert doc.keys().len == 2
+	point := j['points']!.as_array()[0].as_map()
+	assert point.keys() == doc['points[]']
+	assert j['sensitivities']!.as_array()[0].as_map().keys() == doc['sensitivities[]']
+	for d in point['derivatives']!.as_array() {
+		assert d.as_map().keys() == doc['points[].derivatives[]']
+	}
+	assert doc.keys().len == 4
 }
 
 // The order (D7): along one input in order; along two, row by row,
@@ -229,19 +246,22 @@ fn test_a_spec_over_a_study() {
 
 // A point that fails doesn't stop the study (D9): the cooler's T too low
 // for its spec's target fails, its neighbours stand, and the next point
-// after it starts cold.
+// after it starts cold. The last point's flow leaves one output with no
+// value there alone.
 fn test_a_failed_point_among_the_rest() {
 	text := flowsheet_text('reference.toml').replace('format = 1', 'format = 3') +
-		'\n[study.feed]\nvary = [{ key = "feed.feed.flow", values = ["100 mol/s", "100 mol/s", "-1 mol/s", "100 mol/s", "100 mol/s"] }]\nreport = { gas = "gas.F" }\n'
+		'\n[study.feed]\nvary = [{ key = "feed.feed.flow", values = ["100 mol/s", "100 mol/s", "-1 mol/s", "100 mol/s", "50 mol/s"] }]\nreport = { gas = "gas.F", odd = "1 / (feed.F - 50 mol/s)" }\n'
 	l := load(text)!
 	r := run(l, l.studies[0])
-	assert r.points.map(it.status) == [Status.solved, .solved, .failed, .solved, .solved]
+	assert r.points.map(it.status) == [Status.solved, .solved, .failed, .solved, .no_value]
 	assert r.points[2].error.contains('flow'), r.points[2].error
 	assert math.is_nan(r.points[2].outputs[0])
 	assert r.points.map(it.warm) == [false, true, false, false, true]
 	assert r.points[3].outputs[0] == r.points[0].outputs[0]
 	rep := r.report('x.toml', [])
-	assert rep.table().contains('Failed points:\n  point 2 (feed.feed.flow = -1.0000 mol/s): ')
+	table := rep.table()
+	assert table.contains('Failed points:\n  point 2 (feed.feed.flow = -1.0000 mol/s): ')
+	assert table.contains('\n  odd, at 1 point: it divides by '), table
 }
 
 fn refused(extra string, line int, want string) {

@@ -24,7 +24,27 @@ pub:
 	outputs []OutputReport
 	specs   []string // the file's specs, whose values each point gives
 	chunk   int
-	points  []PointReport
+	// sensitivities are the derivatives each point gives (D10), in order.
+	sensitivities []SensitivityReport
+	points        []PointReport
+}
+
+// SensitivityReport is a derivative the study reports at each point: of an
+// output, with respect to an input, in SI.
+pub struct SensitivityReport {
+pub:
+	output string
+	input  string
+	unit   string // the derivative's, in SI: '' for a pure number
+}
+
+// DerivativeReport is a derivative at a point: its value and its error's
+// estimate, or null for both and why there's none.
+pub struct DerivativeReport {
+pub:
+	value  ?f64 @[json_null]
+	error  ?f64 @[json_null]
+	reason string
 }
 
 // InputReport is an input a study varies.
@@ -55,6 +75,7 @@ pub:
 	spec_evaluations int
 	steps            int
 	warm             bool
+	derivatives      []DerivativeReport // as the study's sensitivities
 }
 
 // Value is an output at a point: its value, or null and why it has none.
@@ -68,24 +89,42 @@ pub:
 pub fn (r Result) report(file string, specs []string) Report {
 	plan := r.plan
 	return Report{
-		format:  report_format
-		reflux:  flowsheet.version()
-		file:    file
-		study:   plan.name
-		status:  'ran'
-		inputs:  plan.axes.map(InputReport{
+		format:        report_format
+		reflux:        flowsheet.version()
+		file:          file
+		study:         plan.name
+		status:        'ran'
+		inputs:        plan.axes.map(InputReport{
 			key:  it.input.key
 			unit: it.unit
 		})
-		outputs: plan.outputs.map(OutputReport{
+		outputs:       plan.outputs.map(OutputReport{
 			name:       it.name
 			expression: it.expr.plain()
 			unit:       it.unit
 		})
-		specs:   specs
-		chunk:   plan.chunk
-		points:  r.points.map(point_report(it))
+		specs:         specs
+		chunk:         plan.chunk
+		sensitivities: sensitivity_reports(plan)
+		points:        r.points.map(point_report(it))
 	}
+}
+
+// sensitivity_reports are a plan's derivatives, each input's every output.
+fn sensitivity_reports(plan flowsheet.StudyPlan) []SensitivityReport {
+	mut out := []SensitivityReport{}
+	for input in plan.to {
+		for o in plan.of {
+			output := plan.outputs[o]
+			d := output.expr.dim.div(input.dim) or { input.dim }
+			out << SensitivityReport{
+				output: output.name
+				input:  input.key
+				unit:   if d.is_dimensionless() { '' } else { flowsheet.si_text(d) }
+			}
+		}
+	}
+	return out
 }
 
 fn point_report(p Point) PointReport {
@@ -113,6 +152,18 @@ fn point_report(p Point) PointReport {
 		spec_evaluations: p.evaluations
 		steps:            p.steps
 		warm:             p.warm
+		derivatives:      p.derivatives.map(if math.is_finite(it.value) {
+			DerivativeReport{
+				value: it.value
+				error: it.error
+			}
+		} else {
+			DerivativeReport{
+				value:  none
+				error:  none
+				reason: it.reason
+			}
+		})
 	}
 }
 
@@ -145,6 +196,10 @@ pub fn (r Report) csv() string {
 	mut head := ['point']
 	head << r.inputs.map(with_unit(it.key, it.unit))
 	head << r.outputs.map(with_unit(it.name, it.unit))
+	for d in r.sensitivities {
+		head << with_unit('d(${d.output})/d(${d.input})', d.unit)
+		head << with_unit('error of d(${d.output})/d(${d.input})', d.unit)
+	}
 	head << 'status'
 	mut w := csv.new_writer()
 	w.write(head) or {}
@@ -153,6 +208,11 @@ pub fn (r Report) csv() string {
 		row << p.inputs.map(it.str())
 		for v in p.outputs {
 			row << if x := v.value { x.str() } else { 'NaN' }
+		}
+		for k in 0 .. r.sensitivities.len {
+			d := p.derivatives[k] or { DerivativeReport{} }
+			row << if x := d.value { x.str() } else { 'NaN' }
+			row << if x := d.error { x.str() } else { 'NaN' }
 		}
 		row << p.status
 		w.write(row) or {}
@@ -172,6 +232,7 @@ pub fn (r Report) table() string {
 	b.writeln('${r.file}, study ${r.study}: ${r.points.len} points, ${n_solved} solved, ${none_} with an output that has no value, ${failed_} failed; in chunks of ${r.chunk}, ${warm} from a neighbour and ${r.points.len - warm} cold.')
 	mut head := r.inputs.map(with_unit(it.key, it.unit))
 	head << r.outputs.map(with_unit(it.name, it.unit))
+	head << r.sensitivities.map(with_unit('d(${it.output})/d(${it.input})', it.unit))
 	mut rows := [][]string{}
 	for p in r.points {
 		mut row := p.inputs.map(flowsheet.figures(it))
@@ -183,6 +244,10 @@ pub fn (r Report) table() string {
 			} else {
 				'—'
 			}
+		}
+		for k in 0 .. r.sensitivities.len {
+			d := p.derivatives[k] or { DerivativeReport{} }
+			row << if x := d.value { flowsheet.figures(x) } else { '—' }
 		}
 		rows << row
 	}
@@ -205,13 +270,21 @@ pub fn (r Report) table() string {
 		}
 		b.writeln(cells.join('  '))
 	}
-	// Each output's reasons, once each, with how many points had it.
+	// Each output's and derivative's reasons, once each, with how many
+	// points had it.
 	mut said := map[string]int{}
 	mut seen := []string{}
 	for p in r.points {
+		mut reasons := []string{}
 		for k, v in p.outputs {
-			if v.reason != '' {
-				key := '${r.outputs[k].name}: ${v.reason}'
+			reasons << if v.reason != '' { '${r.outputs[k].name}: ${v.reason}' } else { '' }
+		}
+		for k, d in p.derivatives {
+			s := r.sensitivities[k] or { SensitivityReport{} }
+			reasons << if d.reason != '' { 'd(${s.output})/d(${s.input}): ${d.reason}' } else { '' }
+		}
+		for key in reasons {
+			if key != '' {
 				if key !in said {
 					seen << key
 				}
@@ -221,10 +294,12 @@ pub fn (r Report) table() string {
 	}
 	if seen.len > 0 {
 		b.writeln('')
-		b.writeln('Outputs with no value:')
+		b.writeln('With no value:')
 		for key in seen {
 			where := if said[key] == r.points.len {
 				'at every point'
+			} else if said[key] == 1 {
+				'at 1 point'
 			} else {
 				'at ${said[key]} points'
 			}

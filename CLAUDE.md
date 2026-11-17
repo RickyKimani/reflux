@@ -100,7 +100,7 @@ Keep this section current: update it whenever a step is committed.
       a serpentine over two inputs, each point solved, no_value or failed
       with its reason), its own report format 1, and `reflux study`.
       Tutorial 2's methanol conversion reports why it has no value.
-  - **Step 7 is done** (not yet committed): `study.run(..., workers: N)`,
+  - **Step 7 is done** (committed at 28150ec): `study.run(..., workers: N)`,
     threads sharing the file and taking whole chunks from a queue, the same
     bits on 1 to 8 workers; `reflux study --workers N`, the processors by
     default (`cpus_*.c.v`, not vlib's `runtime`, which tcc can't build on
@@ -110,7 +110,21 @@ Keep this section current: update it whenever a step is committed.
       through it. A PFR solve allocated 9.72 MB and now 0.57; the owner's
       50-point study takes 0.71 s on 4 workers (1.74 s on one before).
       Step 0's four study checksums are unchanged.
-  - Step 8 is next: sensitivities.
+  - **Step 8 is done,** and amends D10, for the owner to approve
+    (committed): a study's `sensitivities`, each point's derivatives by
+    central differences of five solves at 1e-12 (v, ±h, ±h/2, h = 1e-4·v),
+    Richardson's extrapolation, and an error's estimate of the two
+    differences' gap plus a fourth difference's noise over h (the
+    amendment: the gap alone underestimated a spec's noisy derivative).
+    Held against a PFR's closed forms by mpmath
+    (`tools/gen_m8_sensitivities.py`), a heater's F·Cp from `thermo`, and
+    Tutorial 2's dX/dT = −0.0018 /K; each estimate 3.7 to 10⁷ times its
+    true error, recorded.
+    - Found: a warm-started solve's error is in proportion to the step, a
+      bias the estimate can't see; only the 1e-12 tolerance bounds it
+      (1e-8 of the derivative). A recycle's derivative against cold solves
+      at 1e-13 holds it.
+  - Steps 1 to 8 meet the roadmap's exit. Step 9 is next: the SQP.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -457,6 +471,8 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     PYTHONIOENCODING=utf-8 uv run --python "C:/Users/Ricky/AppData/Roaming/uv/python/cpython-3.13.17-windows-x86_64-none/python.exe" tools/gen_m3_fixtures.py
     ```
 
+  - `tools/gen_m8_sensitivities.py` writes `testdata/m8_sensitivities.json`
+    (mpmath only): a PFR's derivatives for M8's criterion 6.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the

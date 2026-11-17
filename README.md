@@ -244,6 +244,7 @@ study/              studies (M8): one or two inputs over their values, in
                     chunks, each point from its neighbour, every output at
                     every point or why it has none
   study.v           the order, the chunks and each point's outcome
+  sensitivity.v     each point's derivatives, Richardson's from five solves
   report.v          the study's report: JSON, CSV and the table
 sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
@@ -294,7 +295,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     and bench_reactor.v (reflux's side of the benchmarks),
                     gen_m9_bench.py (the owner's PFR, DWSIM and reflux in
                     turns), remake_bench.v (what remaking each unit type
-                    costs), study_bench.v (a study on 1 to 8 workers)
+                    costs), study_bench.v (a study on 1 to 8 workers),
+                    gen_m8_sensitivities.py (a PFR's derivatives by mpmath)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

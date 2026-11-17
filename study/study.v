@@ -32,6 +32,9 @@ pub:
 	evaluations int
 	steps       int
 	warm        bool
+	// derivatives are its outputs' with respect to the plan's inputs, for
+	// each input each output (D10), none where the plan asks for none.
+	derivatives []Derivative
 }
 
 // Result is a study run: its plan, and every point in the grid's order.
@@ -196,7 +199,15 @@ fn run_chunk(l flowsheet.Loaded, plan flowsheet.StudyPlan, chunk []int, params R
 			last, before = none, none
 			continue
 		}
-		out << measured(solve, sol, index, x, plan, warm)
+		p := measured(solve, sol, index, x, plan, warm)
+		out << if plan.to.len > 0 {
+			Point{
+				...p
+				derivatives: derivatives(solve, sol, plan)
+			}
+		} else {
+			p
+		}
 		before, before_x = last, last_x.clone()
 		last, last_x = sol, x.clone()
 	}

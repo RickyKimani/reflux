@@ -2060,6 +2060,43 @@ them, and in whichever order the chunks are taken. `reflux study` runs as
 many as the processors, `NUMBER_OF_PROCESSORS` on Windows and
 `sysconf(_SC_NPROCESSORS_ONLN)` elsewhere, or `--workers`.
 
+## Sensitivities
+
+A study's point gives the derivative of each output f with respect to each
+input v it's asked for (M8's D10), by central differences of whole solves:
+nothing about a unit's equations is needed, so every unit has them, specs
+met again at each step included.
+
+    h = 10⁻⁴·|v|,    D(s) = (f(v + s) − f(v − s)) / (2s),
+    f′ ≈ D(h/2) + (D(h/2) − D(h))/3                      (Richardson)
+
+The step balances the difference's truncation, h²f‴/6, against the solves'
+noise over h, ε·f/h, at ε^(1/3) for ε = 10⁻¹² (the solves' tolerance, from
+the point's own solution). Each difference is over the steps the doubles
+actually are, (v + s) − (v − s), not 2s. The error's estimate has two
+parts:
+
+    e = |D(h/2) − D(h)| + |Δ⁴|/h,
+    Δ⁴ = f(v − h) − 4f(v − h/2) + 6f(v) − 4f(v + h/2) + f(v + h)
+
+The first is three times D(h/2)'s truncation error, which the extrapolation
+removes to O(h⁴). The second measures the solves' noise: Δ⁴'s truncation is
+(h/2)⁴f⁗, so what's left is noise, about √70 times one solve's, and the
+extrapolation carries about 1.9 times one solve's over h. A spec met at
+10⁻¹² of its scale, or a unit's own tolerance (a PFR's rtol, which isn't
+tightened), shows there. An input at 0 has no scale for a step, and is
+refused with that reason; an output with no value at the point has no
+derivative there, which says so. Exact sensitivities, by the converged Jacobian,
+are M13's.
+
+**What the estimate can't see:** a solve started from the point's own
+solution stops where its tears move by the tolerance, which leaves an error
+in proportion to how far it started, and so to the step. That's a bias
+linear in the step: it cancels from both parts of the estimate, and only
+the tolerance bounds it, to about ε/10⁻⁴ of the derivative, 10⁻⁸ at
+ε = 10⁻¹². At a study's 10⁻⁹ it would be 10⁻⁵, which is why the tolerance
+is tightened (M8 step 8 found it, by a mistake planted there).
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from

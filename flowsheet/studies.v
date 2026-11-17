@@ -18,6 +18,10 @@ pub:
 	outputs []Output
 	chunk   int = 8
 	line    int
+	// sensitivities are the derivatives each point reports (D10): of each of
+	// these outputs, by index, with respect to each of these inputs.
+	of []int
+	to []Input
 }
 
 // Axis is an input a study varies, and its values in SI, in order.
@@ -104,6 +108,41 @@ fn read_studies(mut studies Section, l Loaded) ![]StudyPlan {
 		if chunk < 1 || chunk > most_points {
 			return t.fail('chunk', 'a chunk of ${chunk} points', [])
 		}
+		mut of := []int{}
+		mut to := []Input{}
+		if t.has('sensitivities') {
+			mut d := t.child('sensitivities')!
+			names := outputs.map(it.name)
+			for o in d.strings('outputs')! {
+				k := names.index(o)
+				if k < 0 {
+					return d.fail('outputs', 'no output ${o} in report', quantity.closest(o,
+						names))
+				}
+				if k in of {
+					return d.fail('outputs', '${o} is listed twice', [])
+				}
+				of << k
+			}
+			for key in d.strings('inputs')! {
+				input := l.input(key) or { return at_key(err, d.line('inputs'), d.full('inputs')) }
+				for spec in l.specs {
+					if spec.input.key == key {
+						return d.fail('inputs', "spec ${spec.name} varies ${key}, to meet its target, so it can't be a sensitivity's input",
+							[])
+					}
+				}
+				if to.any(it.key == key) {
+					return d.fail('inputs', '${key} is listed twice', [])
+				}
+				to << input
+			}
+			if of.len == 0 || to.len == 0 {
+				return d.fail('', 'sensitivities need outputs and inputs, as { outputs = ["X"], inputs = ["unit.tube.volume"] }',
+					[])
+			}
+			d.finish()!
+		}
 		t.finish()!
 		out << StudyPlan{
 			name:    name
@@ -111,6 +150,8 @@ fn read_studies(mut studies Section, l Loaded) ![]StudyPlan {
 			outputs: outputs
 			chunk:   int(chunk)
 			line:    studies.line_of_root('study.${name}')
+			of:      of
+			to:      to
 		}
 	}
 	return out

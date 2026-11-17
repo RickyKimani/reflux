@@ -498,6 +498,7 @@ report = { CO_conversion = "(syngas.n[CO] - product.n[CO]) / syngas.n[CO]", T_ou
 | `vary` | Required. A list of one input or two, each `{ key, from, to, points }`, evenly spaced from `from` to `to`, or `{ key, values }`, a list. A key is as a spec's (above), and a key a spec varies can't be. Each value is read as the key's maker reads it, in a unit of its own. |
 | `report` | Required. Named expressions over the flowsheet's variables, as a spec's `until`'s sides. |
 | `chunk` | How many points run from one cold start, 8 by default: each chunk's first point is solved cold, and the rest from their neighbours. |
+| `sensitivities` | `{ outputs = [...], inputs = [...] }`: at each point, the derivative of each of these outputs, by name, with respect to each of these keys, by central differences of solves at 1e-12, with its error's estimate ([design.md](design.md#sensitivities)). Each input costs five more solves a point. A key a spec varies can't be one. |
 
 Two inputs make a grid: the first's values outer, the second's inner. An
 expression that has no value at a point, such as a product's conversion

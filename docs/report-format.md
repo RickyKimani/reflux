@@ -236,7 +236,16 @@ points stand.
 | `outputs` | What it reports: `name`, `expression` as reflux writes it back, and `unit`. |
 | `specs` | The file's specs, whose values each point gives. |
 | `chunk` | How many points ran from one cold start. |
+| `sensitivities` | The derivatives each point gives, each input's every output, in order: empty for a study without. |
 | `points` | Every point, in the grid's order: the first input's values outer. |
+
+#### `sensitivities[]`
+
+| Key | |
+|---|---|
+| `output` | The output's name. |
+| `input` | The key it's with respect to. |
+| `unit` | The derivative's SI unit, the output's over the input's, `""` for a pure number. |
 
 #### `points[]`
 
@@ -252,9 +261,20 @@ points stand.
 | `spec_evaluations` | Its specs' evaluations. |
 | `steps` | Its integrators' accepted steps. |
 | `warm` | Whether it started from its neighbour's solution, or cold. |
+| `derivatives` | Each of `sensitivities` at this point, in its order. |
+
+#### `points[].derivatives[]`
+
+| Key | |
+|---|---|
+| `value` | The derivative, by central differences of solves at 1e-12 over steps of 1e-4 and 5e-5 of the input, Richardson's extrapolation of the two; or `null`. |
+| `error` | Its error's estimate: the two differences' gap, and the solves' own noise over the step from a fourth difference; or `null`. |
+| `reason` | Why it has no value, or `""`. |
 
 The CSV has a row for each point: `point`, each input as `KEY [unit]`,
-each output as `NAME [unit]`, NaN where it has no value, and `status`.
+each output as `NAME [unit]`, NaN where it has no value, each derivative as
+`d(NAME)/d(KEY) [unit]` and its error as `error of d(NAME)/d(KEY) [unit]`,
+and `status`.
 `reflux study` prints the points to 5 significant figures, each output's
 reasons once, and each failed point's. `--workers N` runs it on N threads,
 as many as the processors by default; the report is the same bits whatever
