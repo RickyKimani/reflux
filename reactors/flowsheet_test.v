@@ -414,3 +414,20 @@ fn test_every_reactor_number_can_be_varied() {
 	}
 	assert false
 }
+
+// A PFR reads its phase through a cubic's workspace (M8 step 7), so its
+// solve allocates little a step: step 0 measured 20.6 kB a step on the
+// owner's case, nearly all of it solve_tp's, and the workspace gives the
+// same bits, so only this shows that it's used.
+fn test_a_pfr_allocates_little_a_step() {
+	l := load(os.read_file(os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'reformer_dwsim.toml'))!)!
+	inlet := l.sheet.feeds[0].stream
+	u := l.sheet.units[0].unit
+	u.calculate(l.fluid, [inlet])!
+	before := u64(gc_heap_usage().total_bytes)
+	out := u.calculate(l.fluid, [inlet])!
+	bytes := f64(u64(gc_heap_usage().total_bytes) - before)
+	steps := (out.profile or { flowsheet.Profile{} }).points.len - 1
+	// Measured: 1,162 bytes a step over 471 steps, which can't grow.
+	assert bytes / steps <= 1200, '${bytes / steps} bytes a step'
+}

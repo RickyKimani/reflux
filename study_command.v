@@ -6,13 +6,15 @@ import reactors
 import study
 import time
 
-// study_command runs `reflux study FILE [NAME] [--json OUT] [--csv OUT]`
-// (M8's D17): a study of the file's, named or its only one, printed as a
-// table, with its JSON and CSV if asked for. It exits 0 when the study ran,
-// failed points and all, 1 when it couldn't run, and 2 for a wrong command.
+// study_command runs `reflux study FILE [NAME] [--json OUT] [--csv OUT]
+// [--workers N]` (M8's D17): a study of the file's, named or its only one,
+// on N workers, the processors by default (D8), printed as a table, with
+// its JSON and CSV if asked for. It exits 0 when the study ran, failed
+// points and all, 1 when it couldn't run, and 2 for a wrong command.
 fn study_command(args []string, mut c Console) int {
 	mut file_args := []string{}
 	mut name := ''
+	mut workers := cpus()
 	mut positional := 0
 	mut i := 0
 	for i < args.len {
@@ -24,6 +26,20 @@ fn study_command(args []string, mut c Console) int {
 				file_args << args[i]
 				i++
 			}
+			continue
+		}
+		if arg == '--workers' || arg.starts_with('--workers=') {
+			mut value := arg.all_after_first('=')
+			if !arg.contains('=') {
+				value = args[i] or { '' }
+				i++
+			}
+			n := value.int()
+			if n < 1 || n > 1024 || n.str() != value {
+				c.complain('reflux study: --workers needs a whole number from 1 to 1024, not "${value}"\n\n${usage}')
+				return 2
+			}
+			workers = n
 			continue
 		}
 		if arg == '--trace' {
@@ -75,7 +91,7 @@ fn study_command(args []string, mut c Console) int {
 		return 2
 	}
 	t0 := time.sys_mono_now()
-	result := study.run(loaded, plans[0])
+	result := study.run(loaded, plans[0], workers: workers)
 	seconds := f64(time.sys_mono_now() - t0) / 1e9
 	r := result.report(o.file, loaded.specs.map(it.name))
 	took := if seconds < 1 {
@@ -83,7 +99,8 @@ fn study_command(args []string, mut c Console) int {
 	} else {
 		'${flowsheet.figures(seconds)} s'
 	}
-	c.say(r.table() + '\nIn ${took}.')
+	on := if workers == 1 { '1 worker' } else { '${workers} workers' }
+	c.say(r.table() + '\nIn ${took}, on ${on}.')
 	if o.json != '' && !write(o.json, r.json(), mut c) {
 		return 1
 	}

@@ -155,6 +155,18 @@ the solver failed on 276 of 528 requests within 1e-6 of a pure component's
 Tc and 1e-8 of its Pc. At the critical point itself, the liquid iteration
 now stops just below Vc and the vapour one just above.
 
+**A cubic's workspace** (M8 step 7). `solve_tp` allocates 944 bytes a call
+on a five-component cubic: 704 for the volume function, its √aᵢ arrays and
+the struct boxed as an interface, and 240 for the state's n and ln φ. A
+reactor reads its phase about twenty times an integration step, so a
+study of the owner's PFR allocated 11.8 MB a point, and threads waited on
+the collector's lock. `Cubic.work()` keeps √aᵢ and ∂√aᵢ/∂T at the last T,
+Aᵢ, ln φ, and one volume function, boxed once, which each call moves to
+its composition in place. It does `solve_tp`'s arithmetic in `solve_tp`'s
+order, `attraction`, `fix`, the volume solvers and `state_at`'s ∂F/∂nᵢ − ln Z
+term by term, so it gives `solve_tp`'s bits, and allocates nothing. A
+workspace is mutable: one per thread, one per reactor's calculation.
+
 ## Phase identification
 
 `thermo.pip` ([thermo/phase.v](../thermo/phase.v)) is the phase
@@ -2040,6 +2052,13 @@ are shared out (D8's workers, step 7).
 reason kept, D9), or failed (its reason kept). The study goes on past a
 failure, and the next point starts cold. Evenly spaced values are
 from + (to − from)·i/(n − 1), the last set to `to` exactly.
+
+**Workers** (D8): threads, made with `spawn`, share the loaded file, which
+nothing changes, and take whole chunks from a queue as they come free. A
+chunk starts cold, so its points are the same bits whichever thread solves
+them, and in whichever order the chunks are taken. `reflux study` runs as
+many as the processors, `NUMBER_OF_PROCESSORS` on Windows and
+`sysconf(_SC_NPROCESSORS_ONLN)` elsewhere, or `--workers`.
 
 ## Reports
 

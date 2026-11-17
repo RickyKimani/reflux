@@ -48,6 +48,9 @@ pub:
 	// warm starts each point but a chunk's first from its neighbour (D6);
 	// without it every point is cold.
 	warm bool = true
+	// workers is how many threads take chunks (D8): 1 runs them in order on
+	// the calling thread.
+	workers int = 1
 }
 
 // order is the grid's points in the order they're solved (D7): along the
@@ -99,61 +102,105 @@ fn ratio(a []f64, b []f64, c []f64) ?f64 {
 	return if r > 0 && math.is_finite(r) { r } else { none }
 }
 
-// run runs a study (D7): the points in order, in chunks of the plan's size,
-// each chunk's first point cold and the rest from their neighbours. A point
-// that fails doesn't stop the study, and the next starts cold.
+// run runs a study (D7, D8): the points in order, in chunks of the plan's
+// size, each chunk's first point cold and the rest from their neighbours. A
+// point that fails doesn't stop the study, and the next starts cold. With
+// more than one worker, threads share the file and take whole chunks as
+// they come free; since every chunk starts cold, its points are the same
+// bits whichever thread solves them, and whenever.
 pub fn run(l flowsheet.Loaded, plan flowsheet.StudyPlan, params RunParams) Result {
 	seq := order(plan)
+	mut chunks := [][]int{}
+	for start := 0; start < seq.len; start += plan.chunk {
+		chunks << seq[start..math.min(seq.len, start + plan.chunk)]
+	}
 	mut points := []Point{len: seq.len}
-	keys := plan.axes.map(it.input)
-	for start in 0 .. (seq.len + plan.chunk - 1) / plan.chunk {
-		chunk := seq[start * plan.chunk..math.min(seq.len, (start + 1) * plan.chunk)]
-		mut last := ?flowsheet.Solution(none)
-		mut before := ?flowsheet.Solution(none)
-		mut last_x, mut before_x := []f64{}, []f64{}
-		for index in chunk {
-			x := values(plan, index)
-			solve := l.with(keys, x) or {
-				points[index] = failed(index, x, plan, err)
-				last, before = none, none
-				continue
+	workers := math.min(math.max(params.workers, 1), chunks.len)
+	if workers <= 1 {
+		for chunk in chunks {
+			for p in run_chunk(l, plan, chunk, params) {
+				points[p.index] = p
 			}
-			mut warm := false
-			mut from := flowsheet.Start{}
-			if params.warm {
-				if b := last {
-					warm = true
-					mut r := 1.0
-					mut a := ?flowsheet.Solution(none)
-					if s := before {
-						if q := ratio(before_x, last_x, x) {
-							a, r = s, q
-						}
-					}
-					from = flowsheet.Start{
-						last:   b
-						before: a
-						ratio:  r
-					}
-				}
+		}
+	} else {
+		queue := chan int{cap: chunks.len}
+		for k in 0 .. chunks.len {
+			queue <- k
+		}
+		queue.close()
+		mut threads := []thread []Point{}
+		for _ in 0 .. workers {
+			threads << spawn work(l, plan, chunks, queue, params)
+		}
+		for part in threads.wait() {
+			for p in part {
+				points[p.index] = p
 			}
-			sol := solved(solve, warm, from) or {
-				points[index] = Point{
-					...failed(index, x, plan, err)
-					warm: warm
-				}
-				last, before = none, none
-				continue
-			}
-			points[index] = measured(solve, sol, index, x, plan, warm)
-			before, before_x = last, last_x.clone()
-			last, last_x = sol, x.clone()
 		}
 	}
 	return Result{
 		plan:   plan
 		points: points
 	}
+}
+
+// work is one worker: chunks from the queue until it's empty.
+fn work(l flowsheet.Loaded, plan flowsheet.StudyPlan, chunks [][]int, queue chan int, params RunParams) []Point {
+	mut out := []Point{}
+	for {
+		k := <-queue or { break }
+		out << run_chunk(l, plan, chunks[k], params)
+	}
+	return out
+}
+
+// run_chunk solves a chunk's points in order: the first cold, each other
+// from its neighbour, and after a failure cold again.
+fn run_chunk(l flowsheet.Loaded, plan flowsheet.StudyPlan, chunk []int, params RunParams) []Point {
+	keys := plan.axes.map(it.input)
+	mut out := []Point{cap: chunk.len}
+	mut last := ?flowsheet.Solution(none)
+	mut before := ?flowsheet.Solution(none)
+	mut last_x, mut before_x := []f64{}, []f64{}
+	for index in chunk {
+		x := values(plan, index)
+		solve := l.with(keys, x) or {
+			out << failed(index, x, plan, err)
+			last, before = none, none
+			continue
+		}
+		mut warm := false
+		mut from := flowsheet.Start{}
+		if params.warm {
+			if b := last {
+				warm = true
+				mut r := 1.0
+				mut a := ?flowsheet.Solution(none)
+				if s := before {
+					if q := ratio(before_x, last_x, x) {
+						a, r = s, q
+					}
+				}
+				from = flowsheet.Start{
+					last:   b
+					before: a
+					ratio:  r
+				}
+			}
+		}
+		sol := solved(solve, warm, from) or {
+			out << Point{
+				...failed(index, x, plan, err)
+				warm: warm
+			}
+			last, before = none, none
+			continue
+		}
+		out << measured(solve, sol, index, x, plan, warm)
+		before, before_x = last, last_x.clone()
+		last, last_x = sol, x.clone()
+	}
+	return out
 }
 
 // solved is a point solved from its neighbour, or cold.

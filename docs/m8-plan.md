@@ -21,8 +21,8 @@ one milestone, as the owner decided, with its optimiser written in V (D1,
 D12). Step 0 is done and amended D6 and D18, and step 1 is done and amended
 D11, both approved on 2026-11-17. Whether equation 16 is integrated by a
 fixed rule (step 1) is still the owner's to decide. Steps 2 to 4 are done
-and amend D3, D4 and D5, approved on 2026-11-17. Steps 5 and 6 are done,
-and amend D6, for the owner to approve. Step 7 is next.
+and amend D3, D4 and D5, and steps 5 and 6 are done and amend D6, all
+approved on 2026-11-17. Step 7 is done. Step 8 is next.
 
 ## Goal
 
@@ -952,7 +952,7 @@ the most in brackets):
 - Every warm answer is within the solves' own tolerances of its cold one:
   2e-9 or less with tears, 1.2e-11 for the PFR, 7.4e-14 for the CSTR.
 
-**D6 is amended,** for the owner to approve: what a warm start carries is
+**D6 is amended,** approved on 2026-11-17: what a warm start carries is
 the units' last answers, the specs' values, and the tears only with
 direct substitution or with specs, each through the predictor; not the
 methods' Jacobians or slopes. So criterion 4's floor holds: no warm point
@@ -1063,10 +1063,98 @@ where DWSIM plotted −∞ with no message.
 **For 0.4.0's CHANGELOG entry:** `reflux study`, and its report, a format
 of its own (1); format 3's `[study.NAME]`.
 
-### 7. Workers
+### 7. Workers — done
 - D8: chunks on threads, bit for bit for any number of workers, and the
   throughput recorded. Allocations in the hot path removed where step 0's
   profile finds them.
+
+**What was built:**
+- **[study/study.v](../study/study.v):** `run(..., workers: N)`. Threads,
+  made with `spawn`, share the loaded file and take whole chunks from a
+  queue (a closed channel) as they come free; each chunk starts cold, so a
+  point's bits don't depend on which thread solves it, or when.
+- **`reflux study --workers N`** ([study_command.v](../study_command.v)),
+  the processors by default ([cpus_windows.c.v](../cpus_windows.c.v),
+  [cpus_nix.c.v](../cpus_nix.c.v)): vlib's `runtime` counts them too, but
+  tcc can't build it on Windows.
+- **[thermo/work.v](../thermo/work.v):** `Cubic.work()`, a workspace for
+  `solve_tp` at many states that allocates nothing once made: √aᵢ kept at
+  the last T, Aᵢ and ln φ in its own arrays, and one volume function, boxed
+  once, moved to each composition in place. It does `solve_tp`'s arithmetic
+  in `solve_tp`'s order. The reactors' `Source` reads its phase through it
+  for a cubic ([reactors/source.v](../reactors/source.v)), and any other
+  model as before.
+- [tools/study_bench.v](../tools/study_bench.v): the throughput below.
+
+**Where the bytes went** (step 0's profile, looked into): `solve_tp`
+allocated 944 bytes a call on the owner's five components, 704 of them in
+`volume_function` (√aᵢ's arrays and the struct boxed as an interface) and
+240 in the state (n's copy, ∂F/∂nᵢ, ln φ). A PFR reads its phase about 20
+times a step, so that was 92% of a study's allocation.
+
+**Nothing moved:** step 0's spike, built from the last commit and from this
+one, gives the same four checksums: the owner's study, the published
+model's, and each adiabatic, where the energy equation reads the phase's
+state over the workspace's arrays (218,200 numbers each). And
+[thermo/work_test.v](../thermo/work_test.v) holds the workspace to
+`solve_tp`'s bits over 8,000 states of four cubics.
+
+**What a solve allocates** (the owner's case, gcc `-prod`): 0.57 MB, 1.2 kB
+a step, where step 0 measured 9.72 MB and 20.6 kB; and a study point, all
+of it, 0.8 MB where it was 11.8. A solve takes 14 ms on one thread, where
+it took 28.9, and step 0's 48 points 896 ms, where they took 1,814: in the
+study tool below, with its remaking and warm starts, and the laptop's clock
+lower in the second run, one worker is 1.3 to 1.5 times faster.
+
+**Throughput** (the owner's 50-point study, gcc `-prod`, best of three, on
+the owner's 4-core laptop; [tools/study_bench.v](../tools/study_bench.v)):
+
+| | 1 worker | 2 | 4 | 8 |
+|---|---|---|---|---|
+| before the workspace, chunks of 8 | 1,818 ms | 1,487 (1.22×) | 1,290 (1.41×) | 1,141 (1.59×) |
+| before, chunks of 2 | 1,740 ms | 1,282 (1.36×) | 1,267 (1.37×) | 1,413 (1.23×) |
+| with it, chunks of 8 | 1,430 ms | 988 (1.45×) | 896 (1.60×) | 859 (1.66×) |
+| with it, chunks of 2 | 1,182 ms | 907 (1.30×) | 711 (1.66×) | 722 (1.64×) |
+
+- A loop that allocates nothing scaled 1.68, 2.60 and 4.03 times on 2, 4
+  and 8 threads in the first run, and 1.24, 2.13 and 3.26 in the second:
+  the laptop's own clock moves between runs. Before the workspace the study
+  scaled well below it; now it's nearer, and the times themselves fell by
+  more than the scaling rose.
+- **The owner's study** takes 0.71 s on 4 workers, where M9 took 2.1 s
+  serially and DWSIM's own sensitivity analysis 727 s (step 0).
+- Criterion 5 asks for the throughput recorded, with no target: this is it.
+
+**Tests:**
+- [study/study_test.v](../study/study_test.v),
+  `test_workers_dont_change_answers`: a CSTR's study in eight chunks and
+  the reference flowsheet's by direct substitution in four, on 1, 2, 4 and
+  8 workers: every point's outputs, specs' values, passes, steps, status
+  and reasons the same bits.
+- [thermo/work_test.v](../thermo/work_test.v): `solve_tp`'s bits over
+  random states, roots and four cubics, one workspace across temperatures;
+  the same refusals; nothing allocated over 1,000 calls.
+- [reactors/flowsheet_test.v](../reactors/flowsheet_test.v): a PFR step
+  allocates at most 1,200 bytes (1,162 measured), which shows that the
+  workspace is used: it gives the same bits, so nothing else could.
+- [main_test.v](../main_test.v): `--workers`, its refusals, and the
+  processors' count.
+
+**Planted mistakes:** 13, in scratch copies, one at a time.
+- **Caught, 12:** the workspace's √aᵢ not moved with T, its kᵢⱼ dropped, ln φ
+  with ln Z's sign turned, a liquid root asked of the vapour's iteration, a
+  pressure of zero let through, n's total off by 1e-7; the reactors'
+  `Source` not using the workspace (the PFR's bytes a step), or its energy
+  equation's state on y rather than n; the workers' points put in the wrong
+  places, or a chunk left off the queue; the processors miscounted; and
+  `--workers 2x` taken as 2.
+- **Survives, explained, 1:** the workspace's T not kept, so that √aᵢ is
+  worked out at every call: the same bits, only slower, which no test can
+  see.
+
+**For 0.4.0's CHANGELOG entry:** `reflux study --workers N`;
+`thermo.Cubic.work()`; a reactor's solve allocating 17 times less, and the
+owner's study 1.3 to 2 times as fast on one thread.
 
 ### 8. Sensitivities
 - D10: central differences at a tight tolerance, Richardson's error

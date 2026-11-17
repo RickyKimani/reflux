@@ -86,6 +86,7 @@ CHANGELOG.md        every release, what a version promises, how to make one
 main.v              the command line: reflux solve, study, kinetics, demo, version, help
 kinetics_command.v  reflux kinetics check and explain
 study_command.v     reflux study (M8)
+cpus_*.c.v          the processors, for a study's workers by default (M8)
 demo.v              reflux demo, on database components
 main_test.v         the command line, run in the test's own process
 numeric/
@@ -128,6 +129,7 @@ thermo/
                     the volume solver; P, Z, ln φ
   properties.v      P derivatives, ln φ derivatives, residual H, S, G, U, A, Cv, Cp
   cubic.v           cubic EOS (vdW, RK, SRK, PR), exact Ωa and Ωb, vdW mixing with kᵢⱼ
+  work.v            a cubic's solve_tp for many states, allocating nothing (M8)
   alpha.v           per-component α (Soave, PRSV, Twu, Mathias–Copeman)
   translated.v      Péneloux volume shift, as a wrapper around any Model
   ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
@@ -292,7 +294,7 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     and bench_reactor.v (reflux's side of the benchmarks),
                     gen_m9_bench.py (the owner's PFR, DWSIM and reflux in
                     turns), remake_bench.v (what remaking each unit type
-                    costs)
+                    costs), study_bench.v (a study on 1 to 8 workers)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

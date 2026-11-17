@@ -1,7 +1,7 @@
 // reflux's command line (M4, D11; M9, D12):
 //
 //     reflux solve plant.toml [--json results.json] [--csv streams.csv] [--trace]
-//     reflux study plant.toml [NAME] [--json study.json] [--csv study.csv]
+//     reflux study plant.toml [NAME] [--json study.json] [--csv study.csv] [--workers N]
 //     reflux kinetics check FILE [T P NAME=y ...]
 //     reflux kinetics explain FILE T P NAME=y ...
 //     reflux demo [T P]
@@ -20,9 +20,10 @@ const usage = 'usage:
       Solve a flowsheet file (docs/flowsheet-format.md) and print its stream
       table. --json writes the results (docs/report-format.md), --csv the
       streams, and --trace prints every pass of every loop.
-  reflux study FILE [NAME] [--json OUT] [--csv OUT]
+  reflux study FILE [NAME] [--json OUT] [--csv OUT] [--workers N]
       Run a study in the file, by NAME if it has more than one, and print
       its points; --json and --csv write them (docs/report-format.md).
+      --workers runs it on N threads, the processors by default.
   reflux kinetics check FILE [T P NAME=y ...]
   reflux kinetics explain FILE T P NAME=y ...
       Check the reactions in a file, or explain its rates at a state:

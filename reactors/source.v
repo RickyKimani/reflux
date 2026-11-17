@@ -29,8 +29,15 @@ mut:
 	y      []f64
 	phi    []f64
 	z      f64
-	volume f64          // the phase's volume, m³ per second of flow: m³/s
-	st     thermo.State // the phase's, from the model, at the state last read
+	volume f64   // the phase's volume, m³ per second of flow: m³/s
+	n      []f64 // the flows read, none below zero
+	// st is the phase at the state last read, for an energy equation. From
+	// a cubic's workspace its arrays are the workspace's, good until the
+	// next read.
+	st thermo.State
+	// work is a cubic's workspace, which reads the phase without allocating
+	// (M8 step 7); any other model is asked through solve_tp.
+	work ?&thermo.CubicWork
 }
 
 // per is a rate law's basis: per mass of catalyst or per volume.
@@ -65,12 +72,20 @@ fn new_source(unit string, k kinetics.Kinetics, reactions []int, loading f64, mo
 		scale << s
 		nu << row
 	}
+	mut work := ?&thermo.CubicWork(none)
+	if m := model {
+		if m is thermo.Cubic {
+			work = m.work()
+		}
+	}
 	return Source{
 		k:     k
 		rates: rates
 		scale: scale
 		nu:    nu
 		model: model
+		work:  work
+		n:     []f64{len: n}
 		pt:    k.point()
 		buf:   k.buffer()
 		out:   []f64{len: k.rates.len}
@@ -97,14 +112,33 @@ fn (mut s Source) state(t f64, p f64, flows []f64) !kinetics.State {
 		s.y[i] = math.max(f, 0) / total
 	}
 	if model := s.model {
-		n := flows.map(math.max(it, 0))
-		st := thermo.solve_tp(model, t, p, n, .vapor)!
-		for i, l in st.ln_phi {
-			s.phi[i] = math.exp(l)
+		for i, f in flows {
+			s.n[i] = math.max(f, 0)
 		}
-		s.z = st.z
-		s.volume = st.v
-		s.st = st
+		if mut w := s.work {
+			ws := w.solve_tp(t, p, s.n, .vapor)!
+			for i, l in w.ln_phi {
+				s.phi[i] = math.exp(l)
+			}
+			s.z = ws.z
+			s.volume = ws.v
+			s.st = thermo.State{
+				t:      t
+				p:      p
+				n:      s.n
+				v:      ws.v
+				z:      ws.z
+				ln_phi: w.ln_phi
+			}
+		} else {
+			st := thermo.solve_tp(model, t, p, s.n, .vapor)!
+			for i, l in st.ln_phi {
+				s.phi[i] = math.exp(l)
+			}
+			s.z = st.z
+			s.volume = st.v
+			s.st = st
+		}
 	} else {
 		s.volume = total * thermo.r_gas * t / p
 	}

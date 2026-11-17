@@ -562,6 +562,24 @@ is what the PFR uses to keep Wilke's viscosities
 ([reactors/pfr.v](../reactors/pfr.v)): `if visc is Wilke { … } else { … }`
 as an expression, with statements and a `!` call in its branches.
 
+**An interface can hold a pointer, and sees what's done to its target
+later,** as a Go interface holding a `*T` does. Boxing a struct value as an
+interface copies it to the heap, every time; boxing a pointer doesn't.
+Probed in V 0.5.2:
+
+```v
+lin := &Lin{a: 1, b: [0.0]}
+f := Fun(lin)    // boxed once
+lin.a = 3        // f.at sees it: no new box, nothing allocated a call
+```
+
+`thermo.CubicWork` keeps one volume function boxed this way and moves it
+to each composition in place, where `volume_function` boxed a new struct
+every call: 704 of the 944 bytes `solve_tp` allocated
+([thermo/work.v](../thermo/work.v)). And `if mut w := s.work { … }` on an
+Option field of type `?&T` gives the reference itself, to call its `mut`
+methods.
+
 **A method with a value receiver can still count its calls,** through a
 pointer field. `numeric.Function` is `at(x f64) f64`, with no `mut`, so a
 wrapper that counts evaluations can't increment a field of its own. It

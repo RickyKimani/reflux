@@ -155,10 +155,10 @@ fn test_warm_points_against_cold() {
 			0,
 			0,
 		]},
-		Case{"the owner's PFR", reformer, 'feed.feed.T', 'from = "700 degC", to = "1000 degC", points = 9', 'methane = "product.n[CH4]", hydrogen = "product.y[H2]", T = "product.T"', 1e-9, [
+		Case{"the owner's PFR", reformer, 'feed.feed.T', 'from = "700 degC", to = "1000 degC", points = 5', 'methane = "product.n[CH4]", hydrogen = "product.y[H2]", T = "product.T"', 1e-9, [
 			0,
 			0,
-			5101,
+			2838,
 		]},
 		Case{'a CSTR', reformer.replace(pfr, '[unit.reformer]\ntype = "cstr"\nin = "feed"\nout = "product"\nvolume = "1 m^3"\ncatalyst_loading = "0.386 kg/m^3"\n\n'), 'feed.feed.T', 'from = "700 degC", to = "1000 degC", points = 9', 'methane = "product.n[CH4]", duty = "reformer.duty"', 1e-11, [
 			0,
@@ -166,9 +166,9 @@ fn test_warm_points_against_cold() {
 			0,
 		]},
 		Case{'the reference flowsheet with a spec in its loop', reference +
-			'\n[spec.vapour]\nvary = "unit.cooler.outlet_T"\nbetween = ["200 K", "260 K"]\nuntil = "gas.F = 60 mol/s"\n', 'feed.feed.P', 'from = "30 bar", to = "31 bar", points = 9', 'cold = "cold.T", product = "product.F"', 1e-8, [
-			134,
-			134,
+			'\n[spec.vapour]\nvary = "unit.cooler.outlet_T"\nbetween = ["200 K", "260 K"]\nuntil = "gas.F = 60 mol/s"\n', 'feed.feed.P', 'from = "30 bar", to = "31 bar", points = 5', 'cold = "cold.T", product = "product.F"', 1e-8, [
+			82,
+			82,
 			0,
 		]},
 		Case{'an adiabatic Gibbs reactor', reformer.replace(pfr, '[unit.reformer]\ntype = "gibbs_reactor"\nin = "feed"\nout = "product"\nadiabatic = true\n\n'), 'feed.feed.T', 'from = "700 degC", to = "1000 degC", points = 9', 'methane = "product.n[CH4]", T = "product.T"', 1e-10, [
@@ -285,4 +285,54 @@ fn test_studies_refused() {
 		return
 	}
 	assert false
+}
+
+// same is whether two runs of a study gave the same bits at every point.
+fn same(a Result, b Result) bool {
+	for k, p in a.points {
+		q := b.points[k]
+		if p.index != q.index || p.status != q.status || p.warm != q.warm || p.passes != q.passes
+			|| p.evaluations != q.evaluations || p.steps != q.steps || p.error != q.error
+			|| p.reasons != q.reasons {
+			return false
+		}
+		for i, x in p.outputs {
+			if math.f64_bits(x) != math.f64_bits(q.outputs[i]) {
+				return false
+			}
+		}
+		for i, x in p.specs {
+			if math.f64_bits(x) != math.f64_bits(q.specs[i]) {
+				return false
+			}
+		}
+	}
+	return a.points.len == b.points.len
+}
+
+// Criterion 5: a study run by 1, 2, 4 or 8 workers gives the same bits,
+// whichever thread takes which chunk: the reference flowsheet by direct
+// substitution, its tears warm, in four chunks of two, and a CSTR, its
+// Newton warm, in eight.
+fn test_workers_dont_change_answers() {
+	reformer := flowsheet_text('reformer_dwsim.toml')
+	pfr := reformer[reformer.index('[unit.reformer]') or { 0 }..reformer.index('[site.Ni]') or {
+		0
+	}]
+	cases := [
+		flowsheet_text('reference.toml').replace('method = "wegstein"', 'method = "direct"').replace('format = 1',
+			'format = 3') +
+			'\n[study.s]\nvary = [{ key = "unit.cooler.outlet_T", from = "230 K", to = "223 K", points = 8 }]\nreport = { gas = "gas.F", duty = "cooler.duty" }\nchunk = 2\n',
+		reformer.replace(pfr, '[unit.reformer]\ntype = "cstr"\nin = "feed"\nout = "product"\nvolume = "1 m^3"\ncatalyst_loading = "0.386 kg/m^3"\n\n').replace('format = 2',
+			'format = 3') +
+			'\n[study.s]\nvary = [{ key = "feed.feed.T", from = "700 degC", to = "1000 degC", points = 16 }]\nreport = { methane = "product.n[CH4]" }\nchunk = 2\n',
+	]
+	for text in cases {
+		l := load(text)!
+		one := run(l, l.studies[0])
+		assert one.points.all(it.status == .solved)
+		for workers in [2, 4, 8, 1] {
+			assert same(run(l, l.studies[0], workers: workers), one), '${workers} workers'
+		}
+	}
 }

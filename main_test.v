@@ -99,11 +99,17 @@ fn test_study_prints_its_points_and_writes_its_reports() {
 	assert os.read_file(csv_path)!.split_into_lines().len == 5
 	named, _, _ := quiet(['study', file, 'temperature'])
 	assert named == 0
+	two, said, _ := quiet(['study', file, '--workers', '2'])
+	assert two == 0 && said.contains(', on 2 workers.'), said
 	for args, want in {
-		'temprature':  'has no study temprature (did you mean temperature?)'
-		'--trace':     "--trace is solve's"
-		'a b':         'one study at a time'
-		'--workerz 2': 'no option --workerz'
+		'temprature':     'has no study temprature (did you mean temperature?)'
+		'--trace':        "--trace is solve's"
+		'a b':            'one study at a time'
+		'--workerz 2':    'no option --workerz'
+		'--workers 0':    '--workers needs a whole number from 1 to 1024, not "0"'
+		'--workers=two':  'not "two"'
+		'--workers 1025': 'not "1025"'
+		'--workers 2x':   'not "2x"'
 	} {
 		mut full := ['study', file]
 		full << args.split(' ')
@@ -112,6 +118,14 @@ fn test_study_prints_its_points_and_writes_its_reports() {
 	}
 	none_, _, why := quiet(['study', reference])
 	assert none_ == 1 && why.contains('has no studies'), why
+}
+
+// The workers by default are the processors (M8's D8).
+fn test_the_processors() {
+	assert cpus() >= 1
+	$if windows {
+		assert cpus() == os.getenv('NUMBER_OF_PROCESSORS').int()
+	}
 }
 
 fn test_trace_prints_every_pass_after_the_table() {

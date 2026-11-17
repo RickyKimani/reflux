@@ -86,8 +86,8 @@ Keep this section current: update it whenever a step is committed.
     - Found: two specs varying each other's targets need the whole first
       Jacobian; `with_history` dropped an error's line; a V bug, an empty
       `[]` as an `or {}` block's value.
-  - **Steps 5 and 6 are done,** built together, and amend D6, for the
-    owner to approve (not yet committed).
+  - **Steps 5 and 6 are done,** built together, and amend D6, approved on
+    2026-11-17 (committed at 95743f7).
     - Step 5: `Loaded.solve_from(Start)` starts a point from its
       neighbour's solution; the optional `Warm` interface lets a unit start
       from its last answer (CSTR Newton from its last outlet, 10× faster;
@@ -100,7 +100,17 @@ Keep this section current: update it whenever a step is committed.
       a serpentine over two inputs, each point solved, no_value or failed
       with its reason), its own report format 1, and `reflux study`.
       Tutorial 2's methanol conversion reports why it has no value.
-  - Step 7 is next: workers.
+  - **Step 7 is done** (not yet committed): `study.run(..., workers: N)`,
+    threads sharing the file and taking whole chunks from a queue, the same
+    bits on 1 to 8 workers; `reflux study --workers N`, the processors by
+    default (`cpus_*.c.v`, not vlib's `runtime`, which tcc can't build on
+    Windows).
+    - `thermo.Cubic.work()`, a `solve_tp` for many states that allocates
+      nothing, `solve_tp`'s bits; the reactors' `Source` reads its phase
+      through it. A PFR solve allocated 9.72 MB and now 0.57; the owner's
+      50-point study takes 0.71 s on 4 workers (1.74 s on one before).
+      Step 0's four study checksums are unchanged.
+  - Step 8 is next: sensitivities.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -579,6 +589,9 @@ over the rest, built into a shared library for the Python package in
   - The volume solver's tier is `volume_function(t, n)`: F at fixed T and n
     as a function of V, so that the parts in T and n (a cubic's A and B) are
     computed once per root, not on every Newton step.
+  - `Cubic.work()` (M8) is `solve_tp` for many states at no allocation: one
+    volume function, boxed once, moved to each composition in place, with
+    `solve_tp`'s bits. One per thread; the reactors' `Source` uses it.
   - `Fluid` adds the ideal-gas part, for total properties.
 - **`flash` works for any `thermo.Model`** (D2).
   - `stability` is Michelsen's tangent-plane test. Its trials are Wilson's

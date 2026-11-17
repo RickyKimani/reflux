@@ -256,7 +256,9 @@ points stand.
 The CSV has a row for each point: `point`, each input as `KEY [unit]`,
 each output as `NAME [unit]`, NaN where it has no value, and `status`.
 `reflux study` prints the points to 5 significant figures, each output's
-reasons once, and each failed point's.
+reasons once, and each failed point's. `--workers N` runs it on N threads,
+as many as the processors by default; the report is the same bits whatever
+N is.
 
 ## Exit status
 
