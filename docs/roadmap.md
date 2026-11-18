@@ -408,10 +408,18 @@ third-party FMI host.
 - CPA (the proof that the `Model` contract is general), PC-SAFT, and CPC or
   PRBS if needed (C4).
 - Huron–Vidal, MHV2, PSRK and Wong–Sandler mixing rules (C3).
+- Lee–Kesler–Plöcker (C10), added on 2026-11-18. Aspen Plus, HYSYS and
+  DWSIM 9 all offer it, for light hydrocarbons, gas processing and
+  hydrocarbon enthalpies. It's a BWR-type equation in reduced variables,
+  between a simple fluid and n-octane as its reference fluid. Its residual
+  Helmholtz energy has a closed form, so it fits the `Model` contract,
+  roots and all, through M1's volume solver for models that aren't cubic.
+  Plöcker's mixing rules take a binary parameter for each pair's Tc.
 - Phase envelopes and critical points (E5).
 
-**Exit:** CPA reproduces published water–alcohol–hydrocarbon results; phase
-envelopes trace through the critical point.
+**Exit:** CPA reproduces published water–alcohol–hydrocarbon results;
+Lee–Kesler–Plöcker reproduces Lee and Kesler's published tables of Z and
+the departure functions; phase envelopes trace through the critical point.
 
 ### M13 — Equation-oriented solving and dynamics
 - Every unit operation exposes residuals and Jacobian contributions (J1).
@@ -480,6 +488,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
   flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and
   data (a flowsheet file names its model, compounds and kᵢⱼ), M5 for
   transport, and M11 for a package CAPE-OPEN can see.
+- C10 Corresponding states: Lee–Kesler–Plöcker, through the `Model`
+  contract. **M12**
 
 ### D — Component data
 - D1 Component records with identifiers and per-value provenance. **M2**

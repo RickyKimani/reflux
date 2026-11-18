@@ -25,8 +25,37 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
+- **M6 (activity models and liquid–liquid equilibrium) is under way** on
+  branch `m6-activity`. Its plan, `docs/m6-plan.md`, was approved on
+  2026-11-18: exit criteria 1–13, decisions D1–D20 and steps 0–15, ending in
+  v0.5.0.
+  - **Step 0 is done** (not yet committed), and amends D7 and criterion 8,
+    both approved on 2026-11-18:
+    - The seam (`spike/seam`): `flash`'s PT flash behind a phase-model
+      interface gives the same bits at all 10,000 sweep points, and the same
+      time to the laptop's noise (median ratio 1.01).
+    - DWSIM (`docs/spike-dwsim-activity.md`): its NRTL is τ = A/(1.98721·T)
+      on ChemSep's banks to 4e-10, so the banks keep DECHEMA's R (D7). Its
+      activity packages take enthalpies from Lee–Kesler by default. Its
+      UNIQUAC for methanol–water is 0.28 off in ln γ (unexplained), and its
+      three-phase flash misses NRTL's water–butanol split.
+    - ThermoML (`spike/thermoml`) has a public search API and covers 2003
+      to 2019, with nothing for methanol–water alone. So criterion 8 takes
+      papers' tables where it has nothing.
+  - The flash's seam moves from `thermo.Model` to a phase model (D3), which
+    a cubic's volume roots and a γ–φ liquid both give, and every cubic
+    answer from M3 to M8 keeps its bits (criterion 4).
+  - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
+    `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
+    `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as
+    `pr.ipd`.
+  - `thermo` 0.6.1 is the reference: its activity models,
+    `GibbsExcessLiquid` and `FlashVLN`. Experimental data come from NIST's
+    ThermoML archive.
+  - The roadmap gained Lee–Kesler–Plöcker in M12 on 2026-11-18,
+    uncommitted on this branch with the plan.
 - **M8 (specifications, sensitivity studies and optimisation) is done,**
-  merged in PR #7 (`44fb1c7`), with v0.4.0 dated on `main` and to be tagged.
+  merged in PR #7 (`44fb1c7`) and released as v0.4.0.
   Its plan, `docs/m8-plan.md`, was
   approved on 2026-11-16: exit criteria 1–13, decisions D1–D20 and steps
   0–16, ending in v0.4.0.
@@ -211,10 +240,10 @@ Keep this section current: update it whenever a step is committed.
     escape and a smart-cast interface's field inside `${}`; to `thermo`, its
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
     unit failures.
-- **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`, and
-  v0.2.0 (M10a), tagged on 2026-11-08, and v0.3.0 (M9), tagged on
-  2026-11-15, all on `main`: source releases, annotated tags, pushed.
-  v0.4.0 (M8) is dated 2026-11-18 on `main`, its tag still to come. The
+- **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`,
+  v0.2.0 (M10a), tagged on 2026-11-08, v0.3.0 (M9), tagged on 2026-11-15,
+  and v0.4.0 (M8), tagged on 2026-11-18 at `18eb317`, all on `main`: source
+  releases, annotated tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
 - **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, now
