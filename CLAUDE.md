@@ -20,13 +20,14 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
-- **M0 to M4, M10a and M9 are done** and merged into `main` (PRs #1 to
-  #6).
+- **M0 to M4, M10a, M9 and M8 are done** and merged into `main` (PRs #1 to
+  #7).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M8 (specifications, sensitivity studies and optimisation) is done** on
-  branch `m8-sensitivity`, not yet merged. Its plan, `docs/m8-plan.md`, was
+- **M8 (specifications, sensitivity studies and optimisation) is done,**
+  merged in PR #7 (`44fb1c7`), with v0.4.0 dated on `main` and to be tagged.
+  Its plan, `docs/m8-plan.md`, was
   approved on 2026-11-16: exit criteria 1–13, decisions D1–D20 and steps
   0–16, ending in v0.4.0.
   - One milestone, not split (D1): the optimiser is `numeric.sqp`, written
@@ -160,7 +161,7 @@ Keep this section current: update it whenever a step is committed.
       SciPy's t.ppf is off by 1.2e-12 at ν = 1, so the quantiles' reference
       is mpmath's.
   - **Steps 13 and 14 are done,** built together at the owner's word, no
-    decision amended (not yet committed, with steps 15 and 16).
+    decision amended (committed at 6c2cf76, with steps 15 and 16).
     - Step 13 (`tools/gen_m8_dwsim.py`, `study/dwsim_test.v`): the
       reference flowsheet's spec on DWSIM's constants 2.8 mK from its
       Adjust's, explained to 1e-6 K by the vapour's 1.6e-3 mol/s at DWSIM's
@@ -173,25 +174,29 @@ Keep this section current: update it whenever a step is committed.
       `benchmarks/m8.v`): the owner's study 904 s by DWSIM's own form,
       0.70 to 1.24 s by reflux; the spec 130 times faster, the optimisation
       4.8; the published model 13.4 ms a solve.
-  - **Steps 15 and 16 are done,** built together (not yet committed): M8
-    is finished, with its exit review at the end of its plan.
+  - **Steps 15 and 16 are done,** built together (committed at 6c2cf76):
+    M8 is finished, with its exit review at the end of its plan. CI passed
+    on 6c2cf76, all four jobs (run 44337209227).
     - CI first: the branch's one run (`05dd726`, run 44154785483) failed
       both gcc jobs. Step 1's test counted the collector's bytes to show a
       fill's integrals, and gcc's build of the collector counts small
       allocations in batches, so CI's counted 0 (a probe: 939 of 1,000 small
       arrays moved the count by nothing under gcc, none under tcc). A
       `kinetics.Point` now counts its `integrals` itself.
-    - Step 15: v.mod and the package at 0.4.0; the CHANGELOG entry, undated
-      until the tag; all seven golden reports written again in report
-      format 3, with no number moved. The gate refuses only for the tree, the
-      branch and the date.
+    - Step 15: v.mod and the package at 0.4.0; the CHANGELOG entry, dated
+      2026-11-18 on `main` after the merge; all seven golden reports
+      written again in report format 3, with no number moved.
     - Step 16: the README, the roadmap (D1's amendments: B6's IPOPT, H1's
       exact sensitivities and H4's data reconciliation to M13, which lists
       them), design.md's exact sensitivities to come, the V note, and the
       criterion-by-criterion review: every criterion met but CI and the tag,
       and the kᵢⱼ fit against DWSIM's regression, not possible from a script.
-  - Next, at the owner's word: commit steps 13 to 16, push (CI's first run
-    of the fix), the PR into `main`, then v0.4.0's tag on `main`.
+  - Carried forward (in its review): equation 16 by a fixed rule, the
+    owner's to decide; M13's exact sensitivities, infeasible path, IPOPT
+    and data reconciliation; fits to an integral reactor's outlets; a kᵢⱼ
+    fit against DWSIM's regression if the owner's app run gives one;
+    workers bounded by the collector's lock; studies, optimisations and
+    fits from Python (M10b); reports to V, DWSIM and SciPy.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -208,11 +213,12 @@ Keep this section current: update it whenever a step is committed.
     unit failures.
 - **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`, and
   v0.2.0 (M10a), tagged on 2026-11-08, and v0.3.0 (M9), tagged on
-  2026-11-15, both on `main`: source releases, annotated tags, pushed. The
+  2026-11-15, all on `main`: source releases, annotated tags, pushed.
+  v0.4.0 (M8) is dated 2026-11-18 on `main`, its tag still to come. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
-- **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, not
-  yet on `main`. It held the collector's `heap_size`, free blocks included,
+- **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, now
+  on `main`. It held the collector's `heap_size`, free blocks included,
   which Boehm grows in one large step when it chooses to and never gives
   back: on `main`'s merge of M10a it doubled once and failed. It now holds
   the bytes live after a full collection.

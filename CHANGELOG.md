@@ -37,7 +37,7 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
-## [0.4.0]
+## [0.4.0] — 2026-11-18
 
 Specifications, sensitivity studies, optimisation and fitting: the roadmap's
 M8. A flowsheet now answers questions as well as solving once. It can vary a
