@@ -1,0 +1,191 @@
+{
+ "provenance": "tools/gen_m8_dwsim.py: DWSIM 9.0.5 through pythonnet 3.0.5, its forms driven unshown (docs/spike-dwsim-study.md); SciPy 1.14.1 for the answers of DWSIM's own model. spec: the reference flowsheet, its recycle's tolerances scaled by 1e-8; compression: DWSIM's own compounds and kij, as testdata/flowsheets/compression_dwsim.toml has them; series: DWSIM's PFR on typed rates per kg on 1 kg/m3",
+ "dwsim": "DWSIM version 9.0.5.0 (28/10/2025 10:42:38)",
+ "spec": {
+  "T": 219.75467054089248,
+  "vapour_at_230": 65.19453435270472,
+  "slope": 0.5758292347312732,
+  "target": 60.0,
+  "bounds": [
+   200.0,
+   260.0
+  ],
+  "methods": {
+   "secant": {
+    "T": 219.75467054052268,
+    "solves": 10,
+    "residual": -7.511857802455779e-11
+   },
+   "brent": {
+    "T": 219.75467054089248,
+    "solves": 7,
+    "residual": 5.6125770697690314e-11
+   }
+  }
+ },
+ "compression": {
+  "P": 405502.5011852555,
+  "work": 106171.31750448888,
+  "curvature": 1.0402976186014711e-07,
+  "work_at": {
+   "200000": 110405.22088935411,
+   "400000": 106172.91376206957,
+   "600000": 107488.96504216103,
+   "800000": 110154.17430257368,
+   "1200000": 116406.3994792733
+  },
+  "stages_at": {
+   "200000": {
+    "c1": {
+     "work": 24770.47652944924,
+     "T": 362.3567906477966
+    },
+    "c2": {
+     "work": 85634.74435990487,
+     "T": 496.99294898855
+    }
+   },
+   "400000": {
+    "c1": {
+     "work": 53301.93792526061,
+     "T": 428.12423356041523
+    },
+    "c2": {
+     "work": 52870.97583680896,
+     "T": 428.81102762091797
+    }
+   },
+   "600000": {
+    "c1": {
+     "work": 71840.13281785103,
+     "T": 467.83094077050697
+    },
+    "c2": {
+     "work": 35648.832224310005,
+     "T": 389.93128180414345
+    }
+   },
+   "800000": {
+    "c1": {
+     "work": 85854.45735803757,
+     "T": 496.48783179914636
+    },
+    "c2": {
+     "work": 24299.7169445361,
+     "T": 362.879773146346
+    }
+   },
+   "1200000": {
+    "c1": {
+     "work": 106856.11879654975,
+     "T": 537.5228466036261
+    },
+    "c2": {
+     "work": 9550.280682723556,
+     "T": 325.651938901792
+    }
+   }
+  },
+  "slope_at_6_bar": 0.01125480488379253,
+  "efficiency": 0.75,
+  "forms": {
+   "inside": {
+    "bounds": [
+     150000.0,
+     1200000.0
+    ],
+    "P": 405502.50153779145,
+    "work": 106171.31750448889,
+    "evaluations": 18,
+    "why": ""
+   },
+   "bound": {
+    "bounds": [
+     600000.0,
+     1200000.0
+    ],
+    "P": 600000.0000015164,
+    "work": 107488.96504217817,
+    "evaluations": 55,
+    "why": ""
+   }
+  },
+  "flash_settings": {
+   "Replace_PTFlash": "False",
+   "ValidateEquilibriumCalc": "False",
+   "UsePhaseIdentificationAlgorithm": "False",
+   "CalculateBubbleAndDewPoints": "False",
+   "ValidationGibbsTolerance": "0.01",
+   "PHFlash_Maximum_Number_Of_External_Iterations": "100",
+   "PHFlash_External_Loop_Tolerance": "1E-8",
+   "PHFlash_Maximum_Number_Of_Internal_Iterations": "100",
+   "PHFlash_Internal_Loop_Tolerance": "1E-8",
+   "PTFlash_Maximum_Number_Of_External_Iterations": "100",
+   "PTFlash_External_Loop_Tolerance": "1E-8",
+   "PTFlash_Maximum_Number_Of_Internal_Iterations": "100",
+   "PTFlash_Internal_Loop_Tolerance": "1E-8",
+   "NL_FastMode": "True",
+   "IO_FastMode": "True",
+   "GM_OptimizationMethod": "IPOPT",
+   "ThreePhaseFlashStabTestSeverity": "0",
+   "ThreePhaseFlashStabTestCompIds": "",
+   "PVFlash_FixedDampingFactor": "1.0",
+   "PVFlash_MaximumTemperatureChange": "10.0",
+   "PVFlash_TemperatureDerivativeEpsilon": "0.1",
+   "ST_Number_of_Random_Tries": "20",
+   "CheckIncipientLiquidForStability": "False",
+   "PHFlash_MaximumTemperatureChange": "30.0",
+   "PTFlash_DampingFactor": "1.0",
+   "ForceEquilibriumCalculationType": "Default",
+   "ImmiscibleWaterOption": "False",
+   "HandleSolidsInDefaultEqCalcMode": "False",
+   "UseIOFlash": "False",
+   "GibbsMinimizationExternalSolver": "",
+   "GibbsMinimizationExternalSolverConfigData": "",
+   "PHFlash_Use_Interpolated_Result_In_Oscillating_Temperature_Cases": "False",
+   "PVFlash_TryIdealCalcOnFailure": "True",
+   "FailSafeCalculationMode": "1",
+   "PVFlash_FivePointStencilNumericalDerivative": "False"
+  }
+ },
+ "series": {
+  "setup": {
+   "T": 400.0,
+   "P": 100000.0,
+   "F": 1.0,
+   "A1": 70.0,
+   "E1": 50000.0,
+   "A2": 0.09,
+   "E2": 30000.0,
+   "lo": 0.1,
+   "hi": 2.0,
+   "start": 1.0
+  },
+  "dV": 0.01,
+  "outflow_at": {
+   "0.1": 0.17680617801288587,
+   "0.5": 0.47462682044815413,
+   "0.655": 0.49027504332572897,
+   "1.0": 0.44408205460993666,
+   "2.0": 0.20562893224313503
+  },
+  "near_peak": {
+   "0.64": 0.49001648213981436,
+   "0.645": 0.4901230689842011,
+   "0.65": 0.49026118005958597,
+   "0.655": 0.49027504332572897,
+   "0.66": 0.4902616601172755,
+   "0.6645221816696115": 0.49027048034270604,
+   "0.665": 0.4902203856963204,
+   "0.67": 0.4901538075494859
+  },
+  "V": 0.6645221816696115,
+  "B": 0.49027048034270604,
+  "form": {
+   "V": 0.6578810492958691,
+   "B": 0.4902704673910852,
+   "evaluations": 22,
+   "why": ""
+  }
+ }
+}

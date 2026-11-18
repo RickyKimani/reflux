@@ -1,6 +1,6 @@
 {
-  "format": 2,
-  "reflux": "0.3.0",
+  "format": 3,
+  "reflux": "0.4.0",
   "file": "testdata/flowsheets/reformer.toml",
   "status": "solved",
   "error": null,
@@ -6322,7 +6322,9 @@
       ],
       "tears": [],
       "cycles": 0,
-      "residuals": []
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
     }
   ],
   "notes": [],
@@ -6333,5 +6335,6 @@
   "worst_unit": {
     "component": 1.4635059333566244e-14,
     "energy": 6.269348471391212e-16
-  }
+  },
+  "specs": []
 }

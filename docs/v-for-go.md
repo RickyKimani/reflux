@@ -312,6 +312,29 @@ f := fn [mut calls] (x f64) f64 {
 [numeric/integrate_test.v](../numeric/integrate_test.v) counts function
 evaluations this way. My first version captured an `int` and counted zero.
 
+**Immutable, but not what it points to, by halves.** A struct whose field is
+a pointer under `mut:` can reach through it from an immutable receiver, as a
+Go method on a value receiver changes what a pointer field points at. But V
+lets only a `mut` method through: probed in V 0.5.2,
+
+```v
+struct Section {
+mut:
+	log &Readings = &Readings{}
+}
+
+fn (s Section) record(x Reading) {
+	s.log.add(x)       // fine: add is `fn (mut r Readings) add(...)`
+	s.log.list << x    // refused: "`s` is immutable"
+}
+```
+
+`numeric.brent` takes `at(x f64) !f64`, with no `mut`, so M8's spec passes
+it a struct holding `&Solver` whose `at` calls the solver's `mut` methods
+([flowsheet/spec.v](../flowsheet/spec.v)). A `Section`'s readings are shared
+with the sections made from it the same way, one `&Readings` between them
+([flowsheet/section.v](../flowsheet/section.v)).
+
 ---
 
 ## 4. Errors and options: `!T`, `?T`, and `or {}`
@@ -449,6 +472,27 @@ rec := db.find('watr') or {
   not an Option or a Result". Each call takes its own `or`, as the PFR's
   choice of integrator does ([reactors/pfr.v](../reactors/pfr.v)), or the
   `match` yields plain values from calls that already handled theirs.
+- **An error can carry an integer:** `error_with_code('…', k)`, read back
+  by `err.code()` in the caller's `or`, where Go would define an error type
+  with a field. `numeric`'s QR refuses a parameter the data don't determine
+  that way, and `least_squares` passes its index on, which a fit turns into
+  the parameter's name ([numeric/least_squares.v](../numeric/least_squares.v),
+  M8 step 11).
+- **An `or` block's value is the call's type,** so Go's `v, err := f()`,
+  keeping the error to look at, has no `e := f() or { err }`: that's "wrong
+  return type `IError` in the `or {}` block, expected `numeric.QpSolution`".
+  A test that expects an error takes it in an `if`'s `else`, where `err` is
+  in scope:
+
+```v
+if _ := qp(p) {
+	assert false, 'solved'
+} else {
+	assert err is QpError && (err as QpError).kind == .infeasible, err.msg()
+}
+```
+
+  ([numeric/qp_test.v](../numeric/qp_test.v); V 0.5.2, M8 step 9.)
 - **A function returns `!T` or `?T`, never both.** Go's `(T, bool, error)`
   has no V spelling: `fn f() !?int` is refused ("the type must be Option or
   Result"). Pick the one the caller acts on. The consistency check's search
@@ -513,6 +557,57 @@ a value of the bigger one passes where the smaller is asked: probed, a
 reached the caller's struct. `numeric.StiffOde` is `Ode` with a Jacobian,
 so `rodas4` hands its problem to the first-step code it shares with
 `dopri5` ([numeric/ode.v](../numeric/ode.v)).
+
+**A value held as one interface can be asked whether it has another's
+methods,** as Go's `if w, ok := u.(Warm); ok` asks. In V it's `is`, the
+same word as for a concrete type:
+
+```v
+fn run(u Unit) string {
+	name := u.name
+	if u is Warm {
+		return '${name}, from its last answer: ${u.calculate_from(1, 7)}'
+	}
+	return '${name}: ${u.calculate(1)}'
+}
+```
+
+Probed under tcc and gcc: a `Unit` whose struct also has `calculate_from`
+took the first branch, and one without it the second. Inside the branch `u`
+*is* a `Warm` and no longer a `Unit`, so `u.name` there is an error ("type
+`Warm` has no field named `name`"), where Go keeps `u` and gives you `w`
+beside it: take what you need from the first interface before the test.
+M8's optional interface for a unit that can start from its last answer
+(D6) rests on this. A test against a concrete type works the same way, and
+is what the PFR uses to keep Wilke's viscosities
+([reactors/pfr.v](../reactors/pfr.v)): `if visc is Wilke { … } else { … }`
+as an expression, with statements and a `!` call in its branches.
+
+**An interface can hold a pointer, and sees what's done to its target
+later,** as a Go interface holding a `*T` does. Boxing a struct value as an
+interface copies it to the heap, every time; boxing a pointer doesn't.
+Probed in V 0.5.2:
+
+```v
+lin := &Lin{a: 1, b: [0.0]}
+f := Fun(lin)    // boxed once
+lin.a = 3        // f.at sees it: no new box, nothing allocated a call
+```
+
+`thermo.CubicWork` keeps one volume function boxed this way and moves it
+to each composition in place, where `volume_function` boxed a new struct
+every call: 704 of the 944 bytes `solve_tp` allocated
+([thermo/work.v](../thermo/work.v)). And `if mut w := s.work { … }` on an
+Option field of type `?&T` gives the reference itself, to call its `mut`
+methods.
+
+**A method with a value receiver can still count its calls,** through a
+pointer field. `numeric.Function` is `at(x f64) f64`, with no `mut`, so a
+wrapper that counts evaluations can't increment a field of its own. It
+holds `n &int` instead, and writes `unsafe { (*f.n)++ }`
+([spike/eq16/spike.v](../spike/eq16/spike.v)). In Go you'd give the method
+a pointer receiver and pass `&counter`; V's interface would then need
+`mut` on the method and on every parameter that takes it.
 
 **Sum types** are what Go lacks: a *closed* set of variants, checked by the
 compiler. `Alpha` in [thermo/alpha.v](../thermo/alpha.v) is one, because the
@@ -624,6 +719,12 @@ thermo.new_cubic(.pr, comps)!                                   // no options
 thermo.new_cubic(.pr, comps, kij: [0.0, 0.02, 0.02, 0.0])!       // one by name
 thermo.new_cubic(.pr, [hexane], alphas: [thermo.prsv(0.2975, 0.05104)])!
 ```
+
+  **The named form works only for the last parameter.** A test helper
+  `refused(mut p Problem, x0 []f64, params SqpParams, kind SqpFailure, says
+  string)` can't be called `refused(mut p, x0, tol: 0.0, .bad_input, 'tol')`:
+  "expected 5 arguments, but got 4". With `params` last, it can
+  ([numeric/sqp_test.v](../numeric/sqp_test.v); M8 step 9).
 
 - **Consts can be structs and arrays,** which Go doesn't allow:
   `const butane = Component{…}` and `const kinds = [CubicKind.vdw, .rk, .srk, .pr]`.
@@ -808,6 +909,16 @@ fill it: `mut p := ?P(none)` then `if x := get() { p = x }`, as
 [flowsheet/reactions.v](../flowsheet/reactions.v) does for a species'
 formula and gas data.
 
+**Gotcha (a V bug): an empty `[]` as an `or {}` block's value.**
+`return parse(s) or { fail(err.msg(), []) }`, with `fail` taking a
+`[]string`, passes V's checker, and V 0.5.2 writes C naming an array it
+never declared (`'__arr_lit_2' undeclared`), which neither tcc nor gcc
+compiles; its fallback compiler then fails on something else entirely.
+Probed alone. Go's `nil` slice has no such step to get wrong. Give the type,
+`[]string{}`, or return from inside the block:
+`x := parse(s) or { return fail(err.msg(), []string{}) }`, as
+[flowsheet/spec.v](../flowsheet/spec.v) does for a spec's bounds.
+
 **Gotcha: a test file's function can hide its module's constant.** A
 test file is compiled into its module, as Go's internal tests are, so its
 names share the module's scope. In [kinetics](../kinetics/exact.v),
@@ -888,6 +999,15 @@ padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
   - [thermo/cubic_test.v](../thermo/cubic_test.v) has no `module` line and
     imports `thermo`, so it can only see `pub` names. That keeps the public
     API honest.
+- **Each internal test file builds alone with its module,** where
+  `go test` builds a package's test files together. So two test files in
+  `numeric` may each declare a `struct Problem`, but neither may take a name
+  the module's own files use. When `numeric/sqp.v` declared
+  `pub interface Problem`, `newton_test.v` and `stiff_test.v` stopped
+  building ("cannot register struct `Problem`, another type with this name
+  exists"), and running `sqp_test.v` alone didn't show it. The interface is
+  `Constrained` now (M8 step 9). After adding a name to a module, run all
+  of its tests, not the new file's.
 - `math.tolerance(a, b, tol)` is the relative-or-absolute float compare.
 - **An expensive fixture, computed once.** A `const` whose value is a
   function call is evaluated when the program starts, so every test function
@@ -965,6 +1085,31 @@ m := {
   array and 211,264 bytes for 1,000 arrays of ten `f64`s. M9's tape spike
   ([spike/tape/spike.v](../spike/tape/spike.v)) uses it to show that its
   evaluations allocate nothing in 1,800,000 calls.
+- **But under gcc it counts small allocations in batches.** gcc's build
+  of the collector hands out small blocks from a free list of its own, and
+  counts them only when that list refills. A probe made 1,000 arrays of ten
+  `f64`s, one at a time: under tcc each moved the count by its 112 bytes,
+  and under gcc 939 of them moved it by 0, though the total came out about
+  right, 112,784 bytes. So under gcc one call's change in the count says
+  nothing, and a test that something allocates nothing proves it only
+  under tcc. CI runs both, so tcc's build catches it. M8's test of a
+  reaction's fill counted the bytes to show how many integrals ran. On
+  CI's gcc builds the fill counted 0, so the test failed. The fill's
+  workspace now counts its integrals itself
+  ([kinetics/law_test.v](../kinetics/law_test.v)).
+- **What's live isn't the heap's size.** `gc_heap_usage().heap_size` is
+  what the collector has taken from the OS, free blocks included, like
+  Go's `MemStats.HeapSys`: it grows in large steps when the collector
+  chooses, and never shrinks. `gc_memory_use()` is that less the free
+  blocks, like `HeapInuse`, and after `gc_collect()` it's what the program
+  still holds. A test of a leak wants the second. M10a's memory test
+  watched the first, and failed on Ubuntu when the heap doubled once with
+  nothing leaked; `reflux_collect` reports the second since M8 step 0. Its
+  test ([capi/capi_test.v](../capi/capi_test.v)) shows the difference: 16
+  MiB allocated and dropped leaves the count within 1 MiB, and 8 MiB kept
+  raises it by at least 7. The garbage is made in a function of its own
+  (`@[noinline]`), because the collector reads the stack conservatively,
+  and a stale pointer left in the caller's frame would keep a piece alive.
 - **`@[direct_array_access]` turns off a function's bounds checks.** Each
   `v[i]` is normally a call to `array_get`, which panics out of range. With
   the attribute it's a bare pointer read, and an index past the end reads
@@ -1124,6 +1269,10 @@ for k in 0 .. 8 {
 }
 all := ts.wait() // [][]i64, in the order spawned
 ```
+
+A method call spawns as a function's does, `ts << spawn s.slope(sol, k)`:
+the optimiser takes each input's differences on a thread of its own that
+way ([study/optimize.v](../study/optimize.v)).
 
 **A map isn't safe for concurrent use,** as in Go, and V doesn't catch the
 misuse, as Go's runtime often does ("concurrent map writes"). `capi`'s

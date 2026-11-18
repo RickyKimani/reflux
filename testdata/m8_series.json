@@ -1,0 +1,21 @@
+{
+  "provenance": "tools/gen_m8_series.py: mpmath 1.3.0 at 50 digits; n-pentane to isopentane to neopentane in an isothermal PFR, each rate k_i p per volume, A1 = 70 mol/(m^3 s Pa), E1 = 50 kJ/mol, A2 = 0.09 mol/(m^3 s Pa), E2 = 30 kJ/mol, P = 1 bar, F = 1 mol/s of n-pentane; B's optimum inside V's bounds, on T's upper bound, and on F_C <= 0.05 mol/s",
+  "interior": {
+    "T": 400.0,
+    "V": 0.6549977762515389,
+    "B": 0.49027504327944166
+  },
+  "bound": {
+    "T": 420.0,
+    "V": 0.3626165397862,
+    "B": 0.5453423899363937,
+    "T_multiplier": 0.002598739583104442
+  },
+  "constraint": {
+    "T": 400.0,
+    "V": 0.23825903816356356,
+    "B": 0.33927667657124727,
+    "C_max": 0.05,
+    "multiplier": 2.4234581657852288
+  }
+}

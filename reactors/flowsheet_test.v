@@ -104,7 +104,7 @@ fn test_the_profile_in_the_report() {
 	l := load(chain + reactions())!
 	sol := l.solve()!
 	j := json2.decode[json2.Any](json2.encode(l.report(sol)))!.as_map()
-	assert j['format']!.int() == 2
+	assert j['format']!.int() == 3
 	units := j['units']!.as_array()
 	for u in units {
 		m := u.as_map()
@@ -329,4 +329,105 @@ pb = "P in bar"').replace('"0.85 - 0.0018*(T in degC)"',
 		return
 	}
 	assert false, 'a conversion above 1'
+}
+
+// An isothermal PFR's volume for a conversion (M8 step 4, criterion 1):
+// n-butane to isobutane, first order in p, so X = 1 − exp(−kPV/F), kP/F =
+// 2 per m³, and the volume for 90% is ln(10)/2 m³. A block of one unit and
+// one spec, met by Brent on the PFR's volume.
+fn test_a_pfrs_volume_for_a_conversion() {
+	text := 'format = 3
+
+[components]
+names = ["n-butane", "isobutane"]
+
+[model]
+equation = "PR"
+
+[feed.f]
+T = "400 K"
+P = "1 bar"
+flow = "1 mol/s"
+mole_fractions = { n-butane = 1, isobutane = 0 }
+
+[reaction.iso]
+equation = "n-butane = isobutane"
+law = "power_law"
+k = "2e-5 mol/(m^3*s*Pa)"
+orders = { n-butane = 1 }
+K = "none"
+per = "volume"
+
+[unit.tube]
+type = "pfr"
+in = "f"
+out = "product"
+volume = "1 m^3"
+rtol = 1e-10
+
+[spec.conversion]
+vary = "unit.tube.volume"
+between = ["0.1 m^3", "10 m^3"]
+' +
+		'until = "(f.n[\'n-butane\'] - product.n[\'n-butane\']) / f.n[\'n-butane\'] = 90 %"\n'
+	l := load(text)!
+	sol := l.solve()!
+	r := sol.specs[0]
+	exact := math.log(10.0) / 2.0
+	// X is met to 1e-9, and the integrator holds it to about 1e-10 more;
+	// dV/dX = F/(kP(1 − X)) = 5 m³ there.
+	x := r.lhs
+	println('V ${r.value} against ${exact}: ${r.value / exact - 1}; X − 0.9 = ${x - 0.9}; ${sol.history[0].spec_residuals.len} evaluations')
+	assert math.abs(x - 0.9) <= 1e-9
+	assert math.abs(r.value - exact) <= 5.0 * (math.abs(x - 0.9) + 1e-9), '${r.value} ${exact}'
+	assert sol.history[0].spec_residuals.len <= 11 // measured: 11, which can't grow
+}
+
+// Every number of every reactor in the chain can be varied (M8 step 3, D4):
+// remade with its own value, each reactor calculates its outlets again to
+// the bit, the PFR's catalyst loading in its nested table included. And a
+// reactor names its duty, but an adiabatic one has none (D3).
+fn test_every_reactor_number_can_be_varied() {
+	l := load(chain + reactions())!
+	sol := l.solve()!
+	mut keys := []string{}
+	for i, p in l.sheet.units {
+		for r in l.readings_of('unit', p.unit.name) {
+			input := l.input(r.key)!
+			assert input.value == r.value, r.key
+			u := l.with([input], [input.value])!.sheet.units[i].unit
+			o := u.calculate(l.fluid, sol.units[i].inlets)!
+			assert o.outlets[0].flows == sol.units[i].outlets[0].flows, r.key
+			assert o.outlets[0].t == sol.units[i].outlets[0].t, r.key
+			keys << r.key
+		}
+	}
+	for want in ['unit.convert.conversions[0].conversion', 'unit.tube.volume', 'unit.tube.length',
+		'unit.tube.catalyst.loading', 'unit.tube.pressure_drop', 'unit.tank.volume', 'unit.tank.T',
+		'unit.shift.T'] {
+		assert want in keys, '${want}: ${keys}'
+	}
+	assert l.value(l.expression('tank.duty')!, sol)! == sol.units[2].energy[0].rate
+	l.expression('gibbs.duty') or {
+		assert err.msg().contains('unit gibbs has no duty: it has no variables'), err.msg()
+		return
+	}
+	assert false
+}
+
+// A PFR reads its phase through a cubic's workspace (M8 step 7), so its
+// solve allocates little a step: step 0 measured 20.6 kB a step on the
+// owner's case, nearly all of it solve_tp's, and the workspace gives the
+// same bits, so only this shows that it's used.
+fn test_a_pfr_allocates_little_a_step() {
+	l := load(os.read_file(os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'reformer_dwsim.toml'))!)!
+	inlet := l.sheet.feeds[0].stream
+	u := l.sheet.units[0].unit
+	u.calculate(l.fluid, [inlet])!
+	before := u64(gc_heap_usage().total_bytes)
+	out := u.calculate(l.fluid, [inlet])!
+	bytes := f64(u64(gc_heap_usage().total_bytes) - before)
+	steps := (out.profile or { flowsheet.Profile{} }).points.len - 1
+	// Measured: 1,162 bytes a step over 471 steps, which can't grow.
+	assert bytes / steps <= 1200, '${bytes / steps} bytes a step'
 }

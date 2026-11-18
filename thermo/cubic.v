@@ -199,9 +199,11 @@ pub fn (c Cubic) volume_function(t f64, n []f64) VolumeFunction {
 	}
 }
 
-// CubicAtTn is a cubic at a fixed T and n: its VolumeFunction.
+// CubicAtTn is a cubic at a fixed T and n: its VolumeFunction. Its fields
+// are mutable for CubicWork, which keeps one and moves it to each n.
 struct CubicAtTn {
-	c    Cubic
+	c Cubic
+mut:
 	t    f64
 	rt   f64
 	ntot f64

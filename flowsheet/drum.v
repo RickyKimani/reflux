@@ -68,6 +68,11 @@ pub fn (d FlashDrum) outlet_ports() []string {
 	return ['vapour', 'liquid']
 }
 
+// energy_ports names its energy stream, for an expression (M8's D3).
+pub fn (d FlashDrum) energy_ports() []string {
+	return ['duty']
+}
+
 // of_phase is phase k of a two-phase flash as a stream of its own: saturated
 // at the flash's T and P, so it needs no flash. It has the form a bubble or
 // dew point's answer has, both phases with the other at no moles.

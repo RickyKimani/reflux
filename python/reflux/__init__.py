@@ -39,11 +39,13 @@ def version():
 
 
 def collect():
-    """Run a full garbage collection in the library, and return its heap's size in
-    bytes: for watching memory over many calls."""
-    heap = ctypes.c_int64()
-    check(lib.reflux_collect(ctypes.byref(heap)), None)
-    return heap.value
+    """Run a full garbage collection in the library, and return the bytes live
+    after it: what the library holds, for watching memory over many calls. Not
+    its heap's size, which the collector grows in large steps and never gives
+    back (it was that before 0.4.0)."""
+    live = ctypes.c_int64()
+    check(lib.reflux_collect(ctypes.byref(live)), None)
+    return live.value
 
 
 __version__ = version()

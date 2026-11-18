@@ -155,6 +155,18 @@ the solver failed on 276 of 528 requests within 1e-6 of a pure component's
 Tc and 1e-8 of its Pc. At the critical point itself, the liquid iteration
 now stops just below Vc and the vapour one just above.
 
+**A cubic's workspace** (M8 step 7). `solve_tp` allocates 944 bytes a call
+on a five-component cubic: 704 for the volume function, its √aᵢ arrays and
+the struct boxed as an interface, and 240 for the state's n and ln φ. A
+reactor reads its phase about twenty times an integration step, so a
+study of the owner's PFR allocated 11.8 MB a point, and threads waited on
+the collector's lock. `Cubic.work()` keeps √aᵢ and ∂√aᵢ/∂T at the last T,
+Aᵢ, ln φ, and one volume function, boxed once, which each call moves to
+its composition in place. It does `solve_tp`'s arithmetic in `solve_tp`'s
+order, `attraction`, `fix`, the volume solvers and `state_at`'s ∂F/∂nᵢ − ln Z
+term by term, so it gives `solve_tp`'s bits, and allocates nothing. A
+workspace is mutable: one per thread, one per reactor's calculation.
+
 ## Phase identification
 
 `thermo.pip` ([thermo/phase.v](../thermo/phase.v)) is the phase
@@ -952,6 +964,7 @@ writes itself back.
     power  := atom ["in" unit] ["^" factor]
     atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
               | "(" expr ")" ["[" unit "]"]
+    name   := word ["." word] | quoted "." word
 
 So ^ binds tighter than a minus sign and to the right, and · and / go left
 to right, as in Python and SymPy: −x^2 is −(x²), x^-2 is x⁻², a^b^c is
@@ -1031,6 +1044,56 @@ an offset is refused there as after a number.
 
 A name that binds to nothing is refused, with the closest names within two
 edits.
+
+**A flowsheet's names** (M8's D3) have one dot: a stream's or a unit's
+name, then one of its variables, as the file names them. A scope that
+isn't a word is quoted, `'let down'.T`, and no space goes either side of
+the dot. Each is an input slot, filled from a solution:
+
+| Name | Dimension | Its value |
+|---|---|---|
+| `s.T`, `s.P` | temperature, pressure | the stream's |
+| `s.F` | molar flow | Σ nᵢ |
+| `s.n[X]` | molar flow | X's flow nₓ |
+| `s.y[X]` | none | nₓ / Σ nᵢ, of the whole stream; none where Σ nᵢ = 0 |
+| `s.h` | molar enthalpy | the stream's, on the fluid's reference |
+| `s.vf` | none | its vapour fraction, β |
+| `u.duty`, `u.work` | power | the unit's energy stream of that name |
+
+A component answers to the file's name, its compound's name, CAS number and
+aliases, and its formula where no other component has it, which is what it
+renders as; otherwise the file's name. A unit names its energy streams
+before it calculates (`Energies`), so an adiabatic reactor has no duty to
+name, and a mixer nothing. A name that isn't there is refused by what's
+wrong: a scope that isn't there ("no stream or unit prodct here", with
+product.T offered), a variable its scope hasn't ("stream product has no TT:
+it has T, P, F, h, vf, n[…], y[…]"), a scope alone ("product is a stream:
+name one of its variables"), or a variable without its scope ("n is a
+stream's: say whose, as feed.n[CH4]"). Plain text writes a quoted scope
+back quoted; LaTeX writes a scope upright, `\mathrm{let\ down}.T`.
+
+**A value, or why there's none** (M8's D9). `Expr.value` computes what `eval`
+does, in its order and to its bits, but refuses, at the node and in words,
+where `eval` would give ±∞ or NaN:
+
+| Node | Refused when | Saying |
+|---|---|---|
+| an input | it's NaN | it has no value here, and why if the caller knows: "gas has no flow" |
+| a/b | b = 0 | it divides by b, which is zero here |
+| ln a, log10 a | the result isn't finite (a ≤ 0) | a, and that a logarithm needs a number above zero |
+| sqrt a | a < 0 | a, which is negative here |
+| a^b | 0^(b < 0), or a < 0 and b not whole | which |
+| anything else | the result isn't finite | that it's too large for a number |
+
+Tutorial 2's product conversion, (in − out)/in with none in, is the first
+division's refusal, not −∞.
+
+**Equations** are two expressions with `=`, `<=` or `>=` between them (`≤`
+and `≥` too): a spec's target (D5) or an optimisation's constraint (D13).
+The relation is found outside brackets and quotes; none, two, a strict `<`
+or `>`, or `==` is refused. Each side is parsed with the other blanked, so
+its lines and columns are the whole text's, and the two must have one
+dimension.
 
 **Definitions** name expressions for reuse, in any order. Each may use the
 others but not itself through any chain, found by a depth-first walk that
@@ -1256,6 +1319,17 @@ with T° = 298.15 K, and
 
 with R = N_A·k_B = 8.31446261815324 J/(mol·K), expr's built-in constant,
 since K appears in rates that use it. K is on activities p/1 bar.
+
+**What a rate's workspace keeps** (M8's D11,
+[kinetics/evaluate.v](../kinetics/evaluate.v)). The two integrals are
+quadratures for most compounds: 521 of the database's 640 give Cp as
+ChemSep's equation 16, A + exp(B/T + C + D·T + E·T²), which has no
+antiderivative in closed form. So `Kinetics.fill` computes each K only
+when T has moved since the workspace's last fill, which an isothermal
+reactor's never does, and at a new T it integrates each species once,
+however many reactions it's in. Each reaction then sums its species' H° and
+S° exactly as above, in the same order, so a K kept or shared is the K
+`Reaction.standard` gives, to the bit. A fill that fails keeps nothing.
 
 **The check against ΔG°f.** In a balanced equation the elements' entropies
 cancel, so a data set whose ΔG°f agrees with its ΔH°f and S° gives
@@ -1666,6 +1740,14 @@ Wilke's rule,
 
 pressure ignored. It matches `chemicals`' Wilke and EQ102 to 2.2e-16.
 
+Everything in it but the mole fractions depends on T alone: each μᵢ, and
+each pair's 1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼ and [8(1 + Mᵢ/Mⱼ)]^½. A PFR keeps those
+(`WilkeAt`) until T moves (M8's D11), so that along an isothermal reactor
+each state costs the sums alone, with no correlation, power or square
+root. The sums are the rule's own arithmetic in its own order, so the
+viscosity is the same number, to the bit, kept or not. A viscosity that
+isn't Wilke's, as a test's, is asked whole at every state.
+
 **What the tests show:** an isomerisation's exp(−kPV/F) and 1/(1 + kPV/F)
 to 3.2e-11 and 1e-12, and a dehydrogenation's −X − 2 ln(1 − X) = kPV/F₀ to
 1e-11; the Gibbs and equilibrium reactors on mpmath's equilibria to 1e-11
@@ -1856,6 +1938,364 @@ allow, and it must close to exactly that: the gap between the last pass's start
 and end, in each tear's flows and enthalpy flow, plus rounding. A solution that
 doesn't is an error, never a result.
 
+## Varying a number
+
+A study, a spec or an optimiser varies a number the file gives a feed or a
+unit, by its key (M8's D4): `unit.cooler.outlet_T`, `feed.f.T`,
+`feed.f.molar_flows.methane`, `unit.split.fractions[0]`. Nothing is set on
+a unit: the value replaces the file's in its tree, and the feed or unit is
+made again by its own maker, which checks it as it checks the file.
+
+**Readings.** A `Section` notes every number its maker reads, with its key,
+its SI value and the dimension it was read as, M4's named one where there
+is one (a temperature, or a temperature difference). A key can be varied
+only if its maker read it as a number: so `27 degC` is 300.15 K, as the
+maker had it, and `type`, `in`, or a conversion that's an expression in T
+are refused, with the keys that can be.
+
+**Writing.** A new value goes into the tree as a pure number, or as
+`value.str()` with the dimension's SI unit (K, Pa, mol/s, W, J/mol, or base
+units such as kg/m^3), each of scale 1. V's shortest decimal reads back to
+the same double (200,000 random doubles, measured), so the maker reads the
+value given to the bit, and `with` checks that it did. Only the tables and
+lists on the key's path are copied, and the rest of the file is shared.
+
+**What it costs** (gcc `-prod`, `tools/remake_bench.v`): 8 to 80 µs for a
+unit, against 0.3 µs to 8 ms for its own calculation, and 0.3 to 0.6 ms for
+a feed, which is a flash.
+
+## Specs
+
+A spec varies an input within its bounds until an equation holds (M8's D5):
+
+    r = (lhs − rhs) / s,    s = max(|lhs|, |rhs|, s₀),    |r| ≤ tol
+
+where s₀ is the block's own scale for the equation's dimension: the flow
+into the block for a flow, F·R·T_max for a power, R·T_max for a molar
+enthalpy, 1 for a pure number, and 0 otherwise, a temperature or pressure
+being far from zero. So a target of 0 W is met to tol of F·RT.
+
+**Planning.** A spec is a link from each unit that makes what its equation
+reads to the unit it varies, or the units the feed it varies enters, as if
+a stream joined them. Tarjan's components then put both in one block, and
+the link is torn already: the spec's value is the block's unknown, and the
+tears are the fewest streams that break the cycles left. A spec none of
+whose links closes a loop is refused, since nothing it reads depends on
+what it varies. A link that doesn't close one still orders the blocks, its
+reading made before its block.
+
+**One spec, no tears: Brent** (1973) within the bounds, each evaluation the
+spec's unit remade and the block calculated once. The bracket is the bounds
+if r changes sign between them; else nine values between, evenly spaced; and
+a target no pair brackets is refused with what the values reached ("gas.F
+goes from 41.99 to 76.65 mol/s, never 200 mol/s"). A value Brent asks for
+again is the sampled one, not calculated again.
+
+**Several specs, or tears: Broyden** (1965) on the tears' scaled variables
+and the specs' values together, each evaluation one pass, its residuals the
+tears' changes and each spec's r. The specs' first Jacobian J is a pass's,
+each value stepped by 1e-4 of its bounds' width from the tears' start, and
+a spec's value is
+
+    v = v₀ + m·u,    m = −J⁻¹,
+
+so that the first step in u, with Broyden's H₀ = −I, is Newton's on the
+specs, as it's direct substitution on the tears. A value is held within
+its bounds. Held at a bound three evaluations running, the target is likely
+out of reach: Broyden is stopped, and the spec is tried again nested, the
+specs' values outside (Brent for one, Broyden for more) around the tears
+converged from where the last evaluation left them. Specs whose J is
+singular can't be met together from there, and are refused.
+
+**The answer** is a solution like any other, every balance checked (M4's
+D8), and each spec checked again from the solution's streams and units:
+|r| ≤ tol, and the value within its bounds.
+
+## Warm starts
+
+A point of a study starts from its neighbour's solution (M8's D6), and its
+answer is checked as a cold one is. What it carries was measured (M8 step
+5), and is what pays:
+
+- **Units** that can, through `Warm`: the CSTR's Newton from its last
+  outlet, falling back to the inlet and continuation; an energy balance's
+  T bracketed out from its last T by steps of 5 K that double, where cold
+  it starts from the inlet's by 50 K; the PFR's first step.
+- **Specs,** from their last values. One spec alone is met or bracketed
+  near there first, by secant steps out from it, each at most four times
+  the last, the first as large as the last two points' change, before the
+  cold search over its bounds.
+- **Tears,** with direct substitution and in a block with specs only.
+  Wegstein's and Broyden's own starts beat a neighbour's tears.
+
+With two points behind it, a tear's flows, P and h and a spec's value
+start from the secant through them,
+
+    x = b + r·(b − a),    r = (this step)/(the last step),
+
+where both steps are along one input in one direction; a flow is held at
+zero, and a tear is a PH flash from b's T. Methods' own state, Broyden's
+inverse Jacobian or Wegstein's slopes, isn't carried: it took more passes.
+
+## Studies
+
+A study (M8's D7, D9) solves a grid of one or two inputs' values, each
+point remade from the file (D4), and evaluates its outputs there (D3, D9).
+
+**Order.** Along the first input's values; with two, along each row of the
+second's, alternating direction, so that each point's neighbour is the last
+solved. Points go in chunks of 8, or as the file says: each chunk's first
+point is cold and the rest warm, so the answers don't depend on how chunks
+are shared out (D8's workers, step 7).
+
+**Each point** is solved, solved with an output that has no value (its
+reason kept, D9), or failed (its reason kept). The study goes on past a
+failure, and the next point starts cold. Evenly spaced values are
+from + (to − from)·i/(n − 1), the last set to `to` exactly.
+
+**Workers** (D8): threads, made with `spawn`, share the loaded file, which
+nothing changes, and take whole chunks from a queue as they come free. A
+chunk starts cold, so its points are the same bits whichever thread solves
+them, and in whichever order the chunks are taken. `reflux study` runs as
+many as the processors, `NUMBER_OF_PROCESSORS` on Windows and
+`sysconf(_SC_NPROCESSORS_ONLN)` elsewhere, or `--workers`.
+
+## Sensitivities
+
+A study's point gives the derivative of each output f with respect to each
+input v it's asked for (M8's D10), by central differences of whole solves:
+nothing about a unit's equations is needed, so every unit has them, specs
+met again at each step included.
+
+    h = 10⁻⁴·|v|,    D(s) = (f(v + s) − f(v − s)) / (2s),
+    f′ ≈ D(h/2) + (D(h/2) − D(h))/3                      (Richardson)
+
+The step balances the difference's truncation, h²f‴/6, against the solves'
+noise over h, ε·f/h, at ε^(1/3) for ε = 10⁻¹² (the solves' tolerance, from
+the point's own solution). Each difference is over the steps the doubles
+actually are, (v + s) − (v − s), not 2s. The error's estimate has two
+parts:
+
+    e = |D(h/2) − D(h)| + |Δ⁴|/h,
+    Δ⁴ = f(v − h) − 4f(v − h/2) + 6f(v) − 4f(v + h/2) + f(v + h)
+
+The first is three times D(h/2)'s truncation error, which the extrapolation
+removes to O(h⁴). The second measures the solves' noise: Δ⁴'s truncation is
+(h/2)⁴f⁗, so what's left is noise, about √70 times one solve's, and the
+extrapolation carries about 1.9 times one solve's over h. A spec met at
+10⁻¹² of its scale, or a unit's own tolerance (a PFR's rtol, which isn't
+tightened), shows there. An input at 0 has no scale for a step, and is
+refused with that reason; an output with no value at the point has no
+derivative there, which says so. Exact sensitivities, by the converged Jacobian,
+are M13's.
+
+**What the estimate can't see:** a solve started from the point's own
+solution stops where its tears move by the tolerance, which leaves an error
+in proportion to how far it started, and so to the step. That's a bias
+linear in the step: it cancels from both parts of the estimate, and only
+the tolerance bounds it, to about ε/10⁻⁴ of the derivative, 10⁻⁸ at
+ε = 10⁻¹². At a study's 10⁻⁹ it would be 10⁻⁵, which is why the tolerance
+is tightened (M8 step 8 found it, by a mistake planted there).
+
+## The optimiser
+
+`numeric.sqp` (M8's D12) minimises f(x) subject to equalities c(x) = 0,
+inequalities c(x) ≥ 0 and bounds l ≤ x ≤ u, by Han and Powell's sequential
+quadratic programming as Nocedal and Wright give it (*Numerical
+Optimization*, ch. 18). The problem is an interface, `Constrained`: its values,
+then its gradients at the same x, so that a flowsheet differentiates from
+the solve it just made.
+
+**The QP.** At each iterate the step d solves
+
+    minimise ½·dᵀBd + ∇fᵀd
+    subject to c + ∇c·d = 0 (equalities), ≥ 0 (inequalities),
+               l − x ≤ d ≤ u − x
+
+and its multipliers λ̂ (the constraints'), μ̂ (the bounds') are the next
+estimates. `numeric.qp` solves it by Goldfarb and Idnani's dual active-set
+method (Math. Programming 27, 1983): from the unconstrained minimum −B⁻¹∇f,
+it adds each equality not met and then the most violated inequality, by its
+distance s/‖row‖. Adding row p moves d along z and the active multipliers
+along −r, where
+
+    B·z + N·r = nₚ,   Nᵀ·z = 0,
+
+N the active rows. The step is the smaller of t₂ = −sₚ/(zᵀnₚ), which meets
+p, and t₁, the least uⱼ/rⱼ over active inequalities with rⱼ > 0, which takes
+one to zero and drops it. z = 0 with no t₁ proves p can't be met: the QP has
+no point. The problems are small, so z and r come from the whole system,
+factorised at each step.
+z is taken as zero where zᵀnₚ ≤ 10⁻¹²·nₚᵀB⁻¹nₚ, its size with nothing
+active.
+
+**A QP with no point.** A linearisation can have no point though the
+problem has; then the QP is relaxed, as Powell's and Schittkowski's codes
+do: a variable δ ∈ [0, 1] scales each equality and violated inequality,
+
+    ∇cᵢ·d + (1 − δ)·cᵢ = 0 or ≥ 0,   at a cost ½·ρδ²,  ρ = 10⁴·max(1, maxᵢ Bᵢᵢ),
+
+and δ = 1, d = 0 always meets every row. A δ that comes out 1 means no step
+lowers the constraints' violation, and the problem is refused: it may have
+no feasible point near x. So is one whose relaxed QP fails too, which only
+a badly conditioned one does.
+
+**The answer.** x is returned once, with λ̂ and μ̂ from the QP at x:
+
+    max |cᵢ| (equalities), max(−cᵢ) (inequalities)   ≤ tol
+    ‖∇f − Σλᵢ∇cᵢ − μ_l + μ_u‖∞                         ≤ tol·max(1, ‖∇f‖∞)
+    λᵢ (inequalities), μ_l, μ_u                       ≥ −tol·max(1, ‖∇f‖∞)
+    |λᵢcᵢ|, μ_l·(x − l), μ_u·(u − x)                    ≤ tol·max(1, ‖∇f‖∞), the bounds' × max(1, |x|)
+
+tol is absolute on c, so the caller scales its constraints; 10⁻⁸ by default.
+
+**The step.** α·d is accepted by backtracking on the ℓ1 merit function
+
+    φ(x) = f(x) + Σ νᵢ·vᵢ(x),   vᵢ = |cᵢ| (equalities), max(0, −cᵢ) (inequalities),
+    φ(x + αd) ≤ φ(x) + 10⁻⁴·α·Dφ,   Dφ = ∇fᵀd − (1 − δ)·Σ νᵢvᵢ,
+
+with Powell's weights νᵢ = max(|λ̂ᵢ|, (νᵢ + |λ̂ᵢ|)/2), at least |λ̂ᵢ|, which
+makes Dφ ≤ −dᵀBd < 0. Each shorter α is the quadratic's minimum through
+φ(0), Dφ and φ(α), kept within [α/10, α/2]; a step where the problem can't
+be evaluated is halved. Every iterate is clamped into the bounds, which the
+QP's d already keeps it within, so the problem is never evaluated outside
+them.
+
+**B.** The Lagrangian's Hessian, from the identity, by BFGS on
+s = x₊ − x and y = ∇L(x₊, λ̂) − ∇L(x, λ̂), the bounds' part linear and so
+cancelling, with Powell's damping:
+
+    θ = 1 if sᵀy ≥ 0.2·sᵀBs, else 0.8·sᵀBs/(sᵀBs − sᵀy),
+    r = θy + (1 − θ)Bs,   B ← B − BssᵀB/(sᵀBs) + rrᵀ/(sᵀr),
+
+which keeps B positive definite. The first update scales the identity by
+yᵀy/sᵀy (Shanno and Phua) where sᵀy > 0.
+
+## Optimising a flowsheet
+
+An `[optimize.NAME]` (M8's D13) is `numeric.sqp` on the flowsheet's
+inputs, every evaluation a converged solve at 10⁻¹², specs and all,
+started from the last evaluation's solution (D6); its first evaluation, at
+the start, is cold. The problem the SQP sees is scaled:
+
+    u = (x − lo)/(hi − lo) ∈ [0, 1],
+    f = ±F/s_F,   s_F = maxₖ |∂F/∂uₖ| at the start (|F| there, or 1, if that's 0),
+    c = (lhs − rhs)/sᵢ for = and ≥,  (rhs − lhs)/sᵢ for ≤,
+    sᵢ = max(|lhs|, |rhs|) at the start, or 1 in SI if both are 0,
+
+with − to maximise. The objective's gradient so starts at about 1, and
+`optimize_tol`, 10⁻⁶, is the SQP's tol: well above the gradients' noise,
+about 10⁻⁸ of their scale. The equalities go first, as the SQP takes them.
+
+**Gradients** are the sensitivities' differences (above), of the objective
+and of each constraint's two sides, with a step of 10⁻⁴ of the largest
+value the input's bounds allow, max(|x|, |lo|, |hi|), so that an input at
+0 has one, and at most a quarter of its range. Where a bound is within the
+step, they're one-sided, at x + σ·h·k/4, k = 0 to 4, σ = ±1 into the range:
+
+    D(s) = (f(x + σs) − f(x))/(σs),
+    R₁ = 2·D(h/2) − D(h) = f′ − h²f‴/12,   R₂ = 2·D(h/4) − D(h/2) = f′ − h²f‴/48,
+    f′ ≈ R₂,   e = 4/3·|R₁ − R₂| + |Δ⁴|/h,
+
+the first part R₁'s truncation, four times R₂'s, since 4/3·|R₁ − R₂| alone
+would be R₂'s estimate with no margin. R₂ carries about 10ε/h of the
+solves' noise, twice R₁'s.
+
+`--workers` takes the inputs at once, each from the point's solution, so
+the bits are the same.
+
+**The multipliers,** unscaled, are how fast the optimum's objective
+improves (falls when minimised, rises when maximised) as each is relaxed,
+per unit of its own:
+
+    an inequality:   λᵢ·s_F/sᵢ   (≥ 0)
+    an equality:    −λᵢ·s_F/sᵢ   (as its right side grows, either sign)
+    a bound:         μ·s_F/(hi − lo)
+
+so that, by the envelope theorem, a bound's is ∂F/∂x at the optimum, and
+a constraint's ∂F/∂x over its sides' ∂/∂x there, for one input.
+
+## Least squares
+
+`numeric.least_squares` (M8's D14) minimises ½‖r(θ)‖² by Levenberg and
+Marquardt's method as Moré gives it (Lecture Notes in Mathematics 630,
+1978), over the interface `Residuals`: r and its Jacobian J at θ.
+
+**The step** minimises the linear model with a damping term,
+
+    ‖J·δ + r‖² + μ·‖D·δ‖²,   by Householder QR on [J; √μ·D]·δ = [−r; 0],
+
+so JᵀJ is never formed and its squared conditioning never paid. Dₖ is the
+largest norm of column k of J seen so far, which makes the steps
+independent of the parameters' scales; μ starts at 10⁻³.
+
+**Taking it.** With ρ the residuals' fall over the model's,
+‖r‖² − ‖r + J·δ‖², a step is taken where ρ > 0, and then
+μ ← μ·max(1/3, 1 − (2ρ − 1)³); otherwise μ ← μ·ν, ν doubling each refusal
+and back to 2 at each step taken (Nielsen). Where the model predicts a fall
+below 10⁻¹⁰·‖r‖², Σr²'s rounding, tens of ε of it, can't resolve it and ρ
+is noise: there a step is taken if the gradient test falls. Without that, a
+fit near its minimum stalls, every step refused, before the test can be met
+(M8 step 11's coverage test found it, in 1 data set of 400; the gcc check
+found a window of 8ε·‖r‖² on the actual fall too narrow).
+
+**The answer.** θ is returned once the gradient test holds,
+
+    maxₖ |Jₖᵀr| / (‖Jₖ‖·‖r‖) ≤ gtol = 10⁻¹⁰,
+
+the largest cosine between r and a column of J, zero at a minimum whatever
+the scales; or r is zero. (JᵀJ)⁻¹ comes from the QR of J with its columns
+scaled to unit length, J·S⁻¹ = Q·R:
+
+    (JᵀJ)⁻¹ = S⁻¹·R⁻¹·R⁻ᵀ·S⁻¹,
+
+and a diagonal entry of R below 10⁻¹⁰ of the largest is a parameter the data
+don't determine, refused by its index.
+
+**Student's t,** for the intervals, is the root of its CDF by bisection to
+the doubles' resolution,
+
+    P(T ≤ t) = 1 − ½·I_x(ν/2, ½),   x = ν/(ν + t²),   1 − x = t²/(ν + t²),
+
+with the regularized incomplete beta I by its continued fraction (Lentz's
+method, Numerical Recipes §6.4) and its front factor's
+ln(Γ(a + b)/(Γ(a)Γ(b))) by Stirling's series with log1p where a is large:
+the difference of two numbers near 6·10⁶ at ν = 10⁶ otherwise. It's good to
+1.2·10⁻¹⁴ of t at ν ≤ 1000, and 3.2·10⁻¹² at 10⁶.
+
+## Fitting
+
+A `[fit.NAME]` (M8's D14, D15) is least squares on weighted residuals,
+measurement less model over its error σ (σ = w·|measured| for a relative
+weight w), and the file's form of each parameter at the end:
+
+    s² = Σrᵢ²/(n − p),   C = s²·M·(JᵀJ)⁻¹·Mᵀ,   seₖ = √Cₖₖ,
+    θₖ ± t₀.₉₇₅(n − p)·seₖ,   ρₖₗ = Cₖₗ/(seₖ·seₗ),
+
+M = ∂(the file's form)/∂(θ as fitted), the delta method, which is exact for
+the linearised covariance (Bates and Watts, *Nonlinear Regression Analysis
+and Its Applications*, 1988).
+
+**Rate constants.** The kinetics are built again with the fitted numbers as
+variables in the rates' context, after T and P, so the tape's reverse sweep
+gives ∂r/∂θ exactly. Where an Arrhenius constant's A and Eₐ are both
+fitted, and it isn't centred already, it's fitted centred on the data's
+mean T, T̄:
+
+    k = k_ref·exp(−Eₐ/R·(1/T − 1/T̄)),   A = k_ref·exp(Eₐ/(R·T̄)),
+    ∂A/∂k_ref = exp(Eₐ/(R·T̄)),   ∂A/∂Eₐ = A/(R·T̄),
+
+which takes most of A's and Eₐ's correlation out of the solve: in the file's
+form, the ethylene fit's k1.A and k1.Ea correlate at 0.996. A van 't Hoff
+constant's A and ΔH are centred alike. Each row's state is the ideal gas, pᵢ = yᵢP, fᵢ = pᵢ,
+cᵢ = pᵢ/RT, as rate data from a differential reactor are.
+
+**kᵢⱼ** come from bubble points: at each row's T and liquid x, the model's
+bubble pressure and vapour composition (`flash.bubble_p`) less the
+measured P and y, each over its error. J is by central differences,
+kᵢⱼ ± 10⁻⁶, good to about 10⁻⁷: kᵢⱼ is of order 0.01 and a bubble point's
+rounding about 10⁻¹².
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from
@@ -2017,6 +2457,13 @@ satisfies them, so it's the equation-oriented solve's first point.
 
 `Unit` would gain a `residuals` method beside `calculate`, with its Jacobian
 blocks, and the sequential-modular solve stays the way in.
+
+The same Jacobian gives M8's sensitivities exactly, where its D10 takes them
+by differences of solves. At a converged point r(x, p) = 0, so
+dx/dp = −(∂r/∂x)⁻¹ ∂r/∂p, one factorisation for every input. An output
+y(x, p) then has dy/dp = ∂y/∂p + ∂y/∂x · dx/dp. An optimiser could also take
+the stream variables as its own unknowns, the infeasible path, and meet the
+residuals only at its optimum (M8's D13).
 
 ## How CPA will fit
 

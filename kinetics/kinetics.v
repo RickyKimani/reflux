@@ -26,6 +26,8 @@ pub:
 	// owners say what each definition is for: a reaction's, a site's, or
 	// the user's own.
 	owners map[string]Owner
+	// own are the user's own definitions, as given, for with_constants.
+	own []expr.Source
 }
 
 // Part is a named piece of a rate, as expression text in its context.
@@ -62,6 +64,12 @@ const per_volume = quantity.dim(0, -3, -1, 0, 1, 0)
 // and answers to that, its name, its aliases, its CAS number and its
 // formula in Hill's order where no other species shares it.
 pub fn rate_context(species []Species, reactions []Reaction) expr.Context {
+	return rate_context_with(species, reactions, [])
+}
+
+// rate_context_with is rate_context with more variables after T and P: a
+// fit's constants (M8's D14), which the tape then differentiates by.
+pub fn rate_context_with(species []Species, reactions []Reaction, extra []expr.Variable) expr.Context {
 	mut members := []string{len: species.len}
 	for r in reactions {
 		for j, k in r.species {
@@ -115,11 +123,13 @@ pub fn rate_context(species []Species, reactions []Reaction) expr.Context {
 		rkeys['r${i + 1}'] = i
 	}
 	pressure := quantity.Dimension.pressure.dim()
+	mut variables := [
+		expr.Variable{'T', quantity.Dimension.temperature.dim()},
+		expr.Variable{'P', pressure},
+	]
+	variables << extra
 	return expr.Context{
-		variables: [
-			expr.Variable{'T', quantity.Dimension.temperature.dim()},
-			expr.Variable{'P', pressure},
-		]
+		variables: variables
 		families:  [
 			expr.Family{'p', pressure, members, keys},
 			expr.Family{'f', pressure, members, keys},
@@ -227,7 +237,13 @@ fn (b &Builder) member(family string, species string, what string) !string {
 // the user's own definitions, into Kinetics: every name bound, every
 // rate's units checked against its basis, and all compiled onto one tape.
 pub fn build(species []Species, reactions []Reaction, sites []Site, laws []Rated, own []expr.Source) !Kinetics {
-	ctx := rate_context(species, reactions)
+	return build_with(species, reactions, sites, laws, own, [])
+}
+
+// build_with is build with more variables in the rates' context, after T
+// and P (rate_context_with).
+pub fn build_with(species []Species, reactions []Reaction, sites []Site, laws []Rated, own []expr.Source, extra []expr.Variable) !Kinetics {
+	ctx := rate_context_with(species, reactions, extra)
 	mut b := Builder{
 		species:   species
 		reactions: reactions
@@ -331,6 +347,7 @@ pub fn build(species []Species, reactions []Reaction, sites []Site, laws []Rated
 		k_used:    k_used
 		parts:     rated.map(b.parts[it] or { []Part{} })
 		owners:    b.owners
+		own:       own
 	}
 }
 

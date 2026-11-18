@@ -1,6 +1,6 @@
 {
-  "format": 2,
-  "reflux": "0.3.0",
+  "format": 3,
+  "reflux": "0.4.0",
   "file": "testdata/flowsheets/interlocking.toml",
   "status": "solved",
   "error": null,
@@ -889,7 +889,9 @@
         [
           2.517216545551849e-14
         ]
-      ]
+      ],
+      "specs": [],
+      "spec_residuals": []
     }
   ],
   "notes": [],
@@ -900,5 +902,6 @@
   "worst_unit": {
     "component": 1.8447865353897671e-16,
     "energy": 1.2740615051249545e-13
-  }
+  },
+  "specs": []
 }

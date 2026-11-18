@@ -50,12 +50,164 @@ fn test_solve_a_reactor() {
 	code, _, err := quiet(['solve', file, '--json', json_path])
 	assert code == 0 && err == '', err
 	r := decode(json_path)!
-	assert r.format == 2 && r.units.len == 1 && r.units[0].kind == 'pfr'
+	assert r.format == 3 && r.units.len == 1 && r.units[0].kind == 'pfr'
 	profile := r.units[0].profile or { panic('no profile') }
 	product := r.streams.filter(it.name == 'product')[0]
 	assert profile[0].volume == 0 && profile.last().volume == 1 && profile.last().length == 1
 	assert profile.last().p == product.p && profile.last().molar_flows == product.molar_flows
 	assert product.vapour_fraction == 1 && product.phases[0].phase == 'vapour'
+}
+
+// A spec (M8 step 4, format 3): `reflux solve` meets it, prints its value
+// and writes it in the report; one out of reach exits 1, at its line.
+fn test_solve_meets_a_spec() {
+	spec := '
+[spec.vapour]
+vary = "unit.cooler.outlet_T"
+between = ["200 K", "260 K"]
+until = "gas.F = 60 mol/s"
+'
+	file := scratch('spec.toml')
+	os.write_file(file, os.read_file(reference)!.replace('format = 1', 'format = 3') + spec)!
+	json_path := scratch('spec.json')
+	code, out, err := quiet(['solve', file, '--json', json_path, '--trace'])
+	assert code == 0 && err == '', err
+	assert out.contains('  Spec vapour: unit.cooler.outlet_T = 219.76 K, where gas.F = 60 mol/s, to '), out
+	assert out.contains('The specs vapour, with mixer, cooler, drum, split, pump:
+'), out
+	r := decode(json_path)!
+	assert r.specs.len == 1 && r.specs[0].vary == 'unit.cooler.outlet_T' && r.specs[0].unit == 'K'
+	os.write_file(file, os.read_file(reference)!.replace('format = 1', 'format = 3') +
+		spec.replace('60 mol/s', '200 mol/s'))!
+	code2, _, err2 := quiet(['solve', file])
+	assert code2 == 1
+	assert err2.contains('spec.toml:64: spec.vapour: its target is out of reach'), err2
+}
+
+// A study (M8 step 6): `reflux study` prints its points and why an output
+// has no value, writes its JSON and CSV, and exits 0 though an output had
+// none; a wrong study name or option exits 2, and a file with none 1.
+fn test_study_prints_its_points_and_writes_its_reports() {
+	file := os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'methanol_study.toml')
+	json_path, csv_path := scratch('study.json'), scratch('study.csv')
+	code, out, err := quiet(['study', file, '--json', json_path, '--csv', csv_path])
+	assert code == 0 && err == '', err
+	assert out.contains('study temperature: 4 points, 0 solved, 4 with an output that has no value, 0 failed; in chunks of 8, 3 from a neighbour and 1 cold.'), out
+	assert out.contains('methanol_conversion, at every point: it divides by syngas.n[CH4O], which is zero here'), out
+	j := os.read_file(json_path)!
+	assert j.contains('"format": 1') && j.contains('"value": null')
+	assert os.read_file(csv_path)!.split_into_lines().len == 5
+	named, _, _ := quiet(['study', file, 'temperature'])
+	assert named == 0
+	two, said, _ := quiet(['study', file, '--workers', '2'])
+	assert two == 0 && said.contains(', on 2 workers.'), said
+	for args, want in {
+		'temprature':     'has no study temprature (did you mean temperature?)'
+		'--trace':        "--trace is solve's"
+		'a b':            'one study at a time'
+		'--workerz 2':    'no option --workerz'
+		'--workers 0':    '--workers needs a whole number from 1 to 1024, not "0"'
+		'--workers=two':  'not "two"'
+		'--workers 1025': 'not "1025"'
+		'--workers 2x':   'not "2x"'
+	} {
+		mut full := ['study', file]
+		full << args.split(' ')
+		wrong, _, why := quiet(full)
+		assert wrong == 2 && why.contains(want), '${args}: ${why}'
+	}
+	none_, _, why := quiet(['study', reference])
+	assert none_ == 1 && why.contains('has no studies'), why
+}
+
+// An optimisation (M8 step 10): `reflux optimize` prints the optimum, its
+// active bound and constraint and its iterations, writes its JSON and CSV,
+// and exits 0; one with no feasible point exits 1, still writing its
+// report; a wrong name or a second one exits 2, and a file with none 1.
+fn test_optimize_prints_the_optimum_and_writes_its_reports() {
+	file := os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'series.toml')
+	json_path, csv_path := scratch('optimum.json'), scratch('iterations.csv')
+	code, out, err := quiet(['optimize', file, 'best', '--json', json_path, '--csv', csv_path,
+		'--workers', '2'])
+	assert code == 0 && err == '', err
+	assert out.contains('optimisation best: an optimum in '), out
+	assert out.contains('maximize product.n[isopentane] = 0.54141 mol/s'), out
+	assert out.contains('feed.f.T [K]   380.00  420.00  400.00   420.00  upper'), out
+	assert out.contains('product.n[neopentane] <= 0.2 mol/s  0.20000  0.20000     yes'), out
+	assert out.contains(', on 2 workers.'), out
+	j := json2.decode[json2.Any](os.read_file(json_path)!)!.as_map()
+	assert j['format']!.int() == 1 && j['status']!.str() == 'optimal' && j['goal']!.str() == 'maximize'
+	iterations := j['iterations']!.as_array().len
+	lines := os.read_file(csv_path)!.split_into_lines()
+	assert lines.len == iterations + 1
+	assert lines[0] == 'iteration,unit.tube.volume [m^3],feed.f.T [K],maximize [mol/s],violation,stationarity,step'
+	none_json := scratch('none.json')
+	no, _, said := quiet(['optimize', file, 'impossible', '--json', none_json])
+	assert no == 1 && said == '', said
+	failed := json2.decode[json2.Any](os.read_file(none_json)!)!.as_map()
+	assert failed['status']!.str() == 'failed' && failed['reason']!.str().contains('no feasible point')
+	for args, want in {
+		'':         'has optimisations best, impossible: name one'
+		'bset':     'has no optimisation bset (did you mean best?)'
+		'best two': 'one optimisation at a time'
+		'--trace':  "--trace is solve's"
+	} {
+		mut full := ['optimize', file]
+		if args != '' {
+			full << args.split(' ')
+		}
+		wrong, _, why := quiet(full)
+		assert wrong == 2 && why.contains(want), '${args}: ${why}'
+	}
+	none_, _, why := quiet(['optimize', reference])
+	assert none_ == 1 && why.contains('has no optimisations: add a [optimize.NAME]'), why
+}
+
+// A fit (M8 steps 11 and 12): `reflux fit` prints each parameter in the
+// file's unit with its interval and the fitted constants, writes its JSON
+// and CSV, and exits 0; a fit that fails exits 1, still writing its report;
+// a wrong name or --workers exits 2, and a file with no fits 1.
+fn test_fit_prints_the_constants_and_writes_its_reports() {
+	file := os.join_path(@VMODROOT, 'testdata', 'm8_fit', 'ethylene.toml')
+	json_path, csv_path := scratch('fit.json'), scratch('residuals.csv')
+	code, out, err := quiet(['fit', file, '--json', json_path, '--csv', csv_path])
+	assert code == 0 && err == '', err
+	assert out.contains('fit rates: 7 parameters to 80 measurements in ethylene.csv'), out
+	assert out.contains('k1.Ea      56374       2838.8          50716 to 62031            J/mol'), out
+	assert out.contains('K_E.A      4.7050e-05  1.8222e-05      1.0735e-05 to 8.3366e-05  bar^-1'), out
+	assert out.contains('{ A = "45480.71'), out
+	j := json2.decode[json2.Any](os.read_file(json_path)!)!.as_map()
+	assert j['status']!.str() == 'fitted' && j['kind']!.str() == 'rates'
+	assert os.read_file(csv_path)!.split_into_lines().len == 81
+	vle, said, _ := quiet(['fit', os.join_path(@VMODROOT, 'testdata', 'm8_fit', 'ethane_propane.toml')])
+	assert vle == 0 && said.contains('kij[ethane, propane] = 0.0115408'), said
+	// A fit whose data aren't there fails, and says why.
+	broken := scratch('broken.toml')
+	os.write_file(broken, os.read_file(file)!.replace('data = "ethylene.csv"', 'data = "none.csv"'))!
+	failed_json := scratch('failed.json')
+	no, told, _ := quiet(['fit', broken, '--json', failed_json])
+	assert no == 1 && told.contains('no fit: ') && told.contains("can't be read"), told
+	assert os.read_file(failed_json)!.contains('"status": "failed"')
+	for args, want in {
+		'rats':        'has no fit rats (did you mean rates?)'
+		'--workers 2': "--workers is study's and optimize's"
+		'rates other': 'one fit at a time'
+	} {
+		mut full := ['fit', file]
+		full << args.split(' ')
+		wrong, _, why := quiet(full)
+		assert wrong == 2 && why.contains(want), '${args}: ${why}'
+	}
+	none_, _, why := quiet(['fit', os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'series.toml')])
+	assert none_ == 1 && why.contains('has no fits: add a [fit.NAME]'), why
+}
+
+// The workers by default are the processors (M8's D8).
+fn test_the_processors() {
+	assert cpus() >= 1
+	$if windows {
+		assert cpus() == os.getenv('NUMBER_OF_PROCESSORS').int()
+	}
 }
 
 fn test_trace_prints_every_pass_after_the_table() {

@@ -84,6 +84,21 @@ pub enum Thermal {
 	duty       // a given heat, W, into the reactor
 }
 
+// energy_names is a reactor's energy streams: a duty, unless it's adiabatic.
+fn energy_names(t Thermal) []string {
+	return if t == .adiabatic { []string{} } else { ['duty'] }
+}
+
+// warm_step is the first step, K, of the bracket around a neighbour's T.
+const warm_step = 5.0
+
+// last_t is a reactor's outlet T at the last point, for a warm start (M8's
+// D6), if it was calculated there.
+fn last_t(last flowsheet.UnitResult) ?f64 {
+	o := last.outlets[0] or { return none }
+	return o.t
+}
+
 // at_tp is the outlet stream with these flows at T and P.
 fn at_tp(unit string, fl thermo.Fluid, flows []f64, t f64, p f64) !flowsheet.Stream {
 	return flowsheet.feed_tp(fl, flows, t, p) or { return named(unit, err) }
@@ -112,10 +127,10 @@ fn (b Balance) at(t f64) !f64 {
 }
 
 // solve_t finds the outlet whose enthalpy flow is target, W: Brent on
-// H_out(T) − target, bracketed outwards from a guess, between 0.5 and
-// 10,000 K. H rises with T, so the root is above the guess where H falls
-// short.
-fn solve_t(unit string, o Outlet, target f64, guess f64) !flowsheet.Stream {
+// H_out(T) − target, bracketed outwards from a guess by a first step that
+// doubles, between 0.5 and 10,000 K. H rises with T, so the root is above
+// the guess where H falls short.
+fn solve_t(unit string, o Outlet, target f64, guess f64, first f64) !flowsheet.Stream {
 	b := Balance{o, target}
 	g0 := b.at(guess) or { return failed(unit, 'no outlet at ${guess} K: ${err.msg()}') }
 	if g0 == 0 {
@@ -123,7 +138,7 @@ fn solve_t(unit string, o Outlet, target f64, guess f64) !flowsheet.Stream {
 	}
 	up := g0 < 0
 	mut lo, mut hi := guess, guess
-	mut step := 50.0
+	mut step := first
 	mut found := false
 	for _ in 0 .. 40 {
 		next := if up { math.min(1e4, hi + step) } else { math.max(0.5, lo - step) }

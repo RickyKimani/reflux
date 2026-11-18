@@ -118,17 +118,20 @@ pub fn reflux_free(id i64, buf &char, buf_len i32) i32 {
 	return ok
 }
 
-// reflux_collect runs a full collection, and gives the heap's size.
+// reflux_collect runs a full collection, and gives the bytes live after it:
+// the heap's size less its free blocks. Not the heap's size, which the
+// collector grows in a large step when it chooses to and never gives back,
+// so that it says little about what the library holds (M8 step 0).
 @[export: 'reflux_collect']
-pub fn reflux_collect(heap_bytes &i64) i32 {
+pub fn reflux_collect(live_bytes &i64) i32 {
 	r := enter()
 	defer {
 		leave(r)
 	}
 	gc_collect()
-	if heap_bytes != unsafe { nil } {
+	if live_bytes != unsafe { nil } {
 		unsafe {
-			*heap_bytes = i64(gc_heap_usage().heap_size)
+			*live_bytes = i64(gc_memory_use())
 		}
 	}
 	return ok

@@ -54,7 +54,8 @@ fn (e &Expr) form(i int, s Style) string {
 	n := e.nodes[i]
 	return match n.kind {
 		.num { number_form(n, s) }
-		.var, .def { name_form(n.text, s) }
+		.var { scoped_form(n.text, s) }
+		.def { name_form(n.text, s) }
 		.member { e.member_form(n, s) }
 		.constant { constant_form(n.index, s) }
 		.neg { e.neg_form(n, s) }
@@ -382,8 +383,10 @@ fn formula_latex(s string) string {
 }
 
 fn (e &Expr) member_form(n Node, s Style) string {
-	family := e.family_name(n)
-	return match s {
+	full := e.family_name(n)
+	scope := if full.contains('.') { scope_form(full.all_before_last('.'), s) + '.' } else { '' }
+	family := full.all_after_last('.')
+	return scope + match s {
 		.plain {
 			if n.text.len > 0 && n.text.bytes().all(it.is_letter() || it.is_digit() || it == `_`) {
 				'${family}[${n.text}]'
@@ -398,6 +401,34 @@ fn (e &Expr) member_form(n Node, s Style) string {
 			'${name_form(family, s)}_{\\mathrm{${formula_latex(n.text)}}}'
 		}
 	}
+}
+
+// scoped_form writes a variable's name, its scope as written if it has one
+// (M8's D3): product.T, 'let down'.T, \mathrm{let\ down}.T.
+fn scoped_form(name string, s Style) string {
+	if !name.contains('.') {
+		return name_form(name, s)
+	}
+	rest := name.all_after_last('.')
+	return scope_form(name.all_before_last('.'), s) + '.' +
+		if s == .plain { rest } else { name_form(rest, s) }
+}
+
+// scope_form writes a scope: quoted where it isn't a name, and upright in
+// LaTeX.
+fn scope_form(scope string, s Style) string {
+	if s != .latex {
+		return quoted_scope(scope)
+	}
+	mut out := ''
+	for c in scope.runes() {
+		out += match c {
+			`_`, `%`, `&`, `#`, `$`, `{`, `}` { '\\' + c.str() }
+			` ` { '\\ ' }
+			else { c.str() }
+		}
+	}
+	return '\\mathrm{${out}}'
 }
 
 // family_name is the name of the family a member belongs to.

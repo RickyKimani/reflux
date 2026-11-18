@@ -25,6 +25,173 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
+- **M8 (specifications, sensitivity studies and optimisation) is done** on
+  branch `m8-sensitivity`, not yet merged. Its plan, `docs/m8-plan.md`, was
+  approved on 2026-11-16: exit criteria 1–13, decisions D1–D20 and steps
+  0–16, ending in v0.4.0.
+  - One milestone, not split (D1): the optimiser is `numeric.sqp`, written
+    in V (D12), so no NLopt or IPOPT. The roadmap is amended (step 16):
+    IPOPT and data reconciliation move to M13 (B6, H4), and exact
+    sensitivities too (H1, D10).
+  - Its benchmark is the owner's 50-point reforming study; steps 1 to 8
+    meet the roadmap's exit before the optimiser begins.
+  - Research for the plan: four of the reforming case's five species give
+    Cp as ChemSep's eq. 16 (521 of 640 compounds), which has no closed-form
+    integral, so K(T) is a quadrature at every evaluation; threads with
+    `spawn` ran the 48-point study 2.1× faster on 4 workers, processes 2.6×.
+  - **Step 0 is done,** and amended D6 and D18, approved on 2026-11-17:
+    the spikes (`docs/spike-dwsim-study.md`,
+    `spike/study/spike.v`) and the `test_memory.py` fix.
+    - DWSIM's study, Adjust, optimiser and regression have no API, but a
+      script runs each form unshown ("DWSIM 9.0.5" below).
+    - Warm starts by hand: a tear started from its neighbour's answer
+      costs passes with Wegstein (11.0 against 4.0 cold) and Broyden (11.8
+      against 8.1) on the reference flowsheet. So step 5 first measures
+      what a warm start must carry, Broyden's Jacobian above all (D6).
+    - Threads sharing one `Loaded` give one thread's bits: 218,200 numbers.
+      4 threads run the owner's study about 1.6 times faster.
+    - A PFR's solve allocates 20.6 kB a step, nearly all of it
+      `Source.state`: 1,025 bytes a call. Step 7 starts there.
+    - `reflux_collect` reports the bytes live after its collection
+      (`gc_memory_use()`), for 0.4.0's CHANGELOG entry. `test_memory.py`
+      holds them within 256 KiB: they stayed within 68.
+    - V 0.5.2 tests an interface value for another interface with `is`,
+      which D6's `Warm` needs.
+  - **Step 1 is done,** and amended D11, approved on 2026-11-17: a rate's
+    workspace keeps K until T moves, and at a new T integrates each species
+    once for all its reactions; a PFR keeps what Wilke's rule needs at a T
+    (`WilkeAt`).
+    - Every answer keeps its bits: four checksums of studies, isothermal
+      and adiabatic, against the code before, and the golden reports.
+    - The published reforming model solves in about 20 ms, from 400; the
+      owner's case 1.2 to 1.4 times faster.
+    - Equation 16 by a fixed 24-node Gauss–Legendre rule holds 1e-13 for all
+      521 compounds to 1500 K and would cut a fill at a new T from 17 µs to
+      about 2 (`spike/eq16`). Whether to use it is the owner's to decide;
+      the recommendation is to leave it until an adiabatic reactor needs it.
+  - **Steps 2 to 4 are done,** built together, and amend D3, D4 and D5,
+    approved on 2026-11-17 (committed at a43d8ea).
+    - Step 2: dotted names in `expr`, `product.T`, `product.n[CH4]`,
+      `reactor.duty`, `'let down'.T` quoted; `Expr.value`, a value or why
+      there's none (D9); equations with `=`, `<=`, `>=`;
+      `flowsheet/variables.v` and the optional `Energies` interface.
+    - Step 3: a `Section` notes every number its maker reads;
+      `Loaded.input(key)` and `Loaded.with(inputs, values)` remake a feed or
+      unit by its maker, to the bit. A remake costs 8 to 80 µs a unit.
+    - Step 4: format 3's `[spec.NAME]`, specs' links in planning, Brent for
+      one spec alone, Broyden on tears and specs together with a nested
+      retry, each spec checked again from the solution; report format 3.
+      The reference flowsheet's D18 spec: 219.7574877219 K in 27 passes;
+      an isothermal PFR's volume to 1.1e-11 of its closed form.
+    - Found: two specs varying each other's targets need the whole first
+      Jacobian; `with_history` dropped an error's line; a V bug, an empty
+      `[]` as an `or {}` block's value.
+  - **Steps 5 and 6 are done,** built together, and amend D6, approved on
+    2026-11-17 (committed at 95743f7).
+    - Step 5: `Loaded.solve_from(Start)` starts a point from its
+      neighbour's solution; the optional `Warm` interface lets a unit start
+      from its last answer (CSTR Newton from its last outlet, 10× faster;
+      an energy balance's T bracket, 2×; the PFR's first step, nothing).
+      Specs start from their last values (8 → 4.5 evaluations), tears only
+      with direct substitution or specs: with Wegstein and Broyden a
+      neighbour's tears cost passes, and carrying their Jacobian or slopes
+      cost more (measured by `spike/warm`, then taken out).
+    - Step 6: format 3's `[study.NAME]`, the `study` module (chunks of 8,
+      a serpentine over two inputs, each point solved, no_value or failed
+      with its reason), its own report format 1, and `reflux study`.
+      Tutorial 2's methanol conversion reports why it has no value.
+  - **Step 7 is done** (committed at 28150ec): `study.run(..., workers: N)`,
+    threads sharing the file and taking whole chunks from a queue, the same
+    bits on 1 to 8 workers; `reflux study --workers N`, the processors by
+    default (`cpus_*.c.v`, not vlib's `runtime`, which tcc can't build on
+    Windows).
+    - `thermo.Cubic.work()`, a `solve_tp` for many states that allocates
+      nothing, `solve_tp`'s bits; the reactors' `Source` reads its phase
+      through it. A PFR solve allocated 9.72 MB and now 0.57; the owner's
+      50-point study takes 0.71 s on 4 workers (1.74 s on one before).
+      Step 0's four study checksums are unchanged.
+  - **Step 8 is done,** and amends D10, approved on 2026-11-17
+    (committed at 5166fc9): a study's `sensitivities`, each point's derivatives by
+    central differences of five solves at 1e-12 (v, ±h, ±h/2, h = 1e-4·v),
+    Richardson's extrapolation, and an error's estimate of the two
+    differences' gap plus a fourth difference's noise over h (the
+    amendment: the gap alone underestimated a spec's noisy derivative).
+    Held against a PFR's closed forms by mpmath
+    (`tools/gen_m8_sensitivities.py`), a heater's F·Cp from `thermo`, and
+    Tutorial 2's dX/dT = −0.0018 /K; each estimate 3.7 to 10⁷ times its
+    true error, recorded.
+    - Found: a warm-started solve's error is in proportion to the step, a
+      bias the estimate can't see; only the 1e-12 tolerance bounds it
+      (1e-8 of the derivative). A recycle's derivative against cold solves
+      at 1e-13 holds it.
+  - Steps 1 to 8 meet the roadmap's exit.
+  - **Steps 9 and 10 are done,** built together, and amend D12 and D13,
+    approved on 2026-11-17 (committed at 05dd726).
+    - Step 9: `numeric.qp` (Goldfarb and Idnani's dual active-set method)
+      and `numeric.sqp` (Han and Powell's SQP: damped BFGS, an ℓ1 merit
+      function, a QP with no point relaxed by δ, the first-order conditions
+      checked at the answer). 21 of Hock and Schittkowski's problems reach
+      their optima from their published starts, 206 iterations in all,
+      each answer checked from scratch against mpmath's
+      (`tools/gen_m8_hock_schittkowski.py`).
+    - Step 10: format 3's `[optimize.NAME]`, `study.optimize` (the problem
+      scaled; every evaluation a solve at 1e-12, warm; gradients by D10's
+      differences, one-sided at a bound), its report format 1 and
+      `reflux optimize`. Series reactions in a PFR reach their closed-form
+      optima inside the bounds, on a bound and on a constraint, each
+      multiplier within 1e-5 (`tools/gen_m8_series.py`).
+    - Found: a one-sided difference's estimate, R₁'s, had no margin (1.01
+      times its error), so its value is R₂; a relaxed QP at a badly
+      conditioned iterate can fail, and is then reported as infeasible.
+  - **Steps 11 and 12 are done,** built together at the owner's word, and
+    amend D14 and D15, approved on 2026-11-18 (committed at 579c12c).
+    - `numeric.least_squares` (Levenberg–Marquardt on QR, Moré's scaling,
+      Nielsen's damping, the gradient test at 1e-10) and
+      `numeric.student_t_quantile`; format 3's `[fit.NAME]`
+      (`flowsheet/fits.v`), the `fit` module (rate constants on the tape's
+      exact derivatives, centred on the data's mean T; kᵢⱼ on bubble
+      points), its report format 1 and `reflux fit`.
+    - Criterion 9: seven LHHW and power-law constants and a kᵢⱼ match
+      SciPy's fits of the same data (`tools/gen_m8_fits.py`), values to
+      1e-4 of their standard errors; over 400 seeded data sets the 95%
+      intervals hold the truth 381 and 382 times, against 380.
+    - Found: Levenberg–Marquardt stalled near a minimum, its fall below
+      Σr²'s rounding, so a step there is judged by the gradient test;
+      SciPy's t.ppf is off by 1.2e-12 at ν = 1, so the quantiles' reference
+      is mpmath's.
+  - **Steps 13 and 14 are done,** built together at the owner's word, no
+    decision amended (not yet committed, with steps 15 and 16).
+    - Step 13 (`tools/gen_m8_dwsim.py`, `study/dwsim_test.v`): the
+      reference flowsheet's spec on DWSIM's constants 2.8 mK from its
+      Adjust's, explained to 1e-6 K by the vapour's 1.6e-3 mol/s at DWSIM's
+      answer over its slope; the compression's least work 1.5 Pa from its
+      optimiser's, explained by reflux's slope at DWSIM's optimum; the
+      series reactions in DWSIM's PFR, whose optimum is 1.5% off from noise
+      in its outflow. The kij fit against DWSIM's regression stays not
+      possible from a script (step 0).
+    - Step 14 (`tools/gen_m8_bench.py`, `tools/bench_m8.v`,
+      `benchmarks/m8.v`): the owner's study 904 s by DWSIM's own form,
+      0.70 to 1.24 s by reflux; the spec 130 times faster, the optimisation
+      4.8; the published model 13.4 ms a solve.
+  - **Steps 15 and 16 are done,** built together (not yet committed): M8
+    is finished, with its exit review at the end of its plan.
+    - CI first: the branch's one run (`05dd726`, run 44154785483) failed
+      both gcc jobs. Step 1's test counted the collector's bytes to show a
+      fill's integrals, and gcc's build of the collector counts small
+      allocations in batches, so CI's counted 0 (a probe: 939 of 1,000 small
+      arrays moved the count by nothing under gcc, none under tcc). A
+      `kinetics.Point` now counts its `integrals` itself.
+    - Step 15: v.mod and the package at 0.4.0; the CHANGELOG entry, undated
+      until the tag; all seven golden reports written again in report
+      format 3, with no number moved. The gate refuses only for the tree, the
+      branch and the date.
+    - Step 16: the README, the roadmap (D1's amendments: B6's IPOPT, H1's
+      exact sensitivities and H4's data reconciliation to M13, which lists
+      them), design.md's exact sensitivities to come, the V note, and the
+      criterion-by-criterion review: every criterion met but CI and the tag,
+      and the kᵢⱼ fit against DWSIM's regression, not possible from a script.
+  - Next, at the owner's word: commit steps 13 to 16, push (CI's first run
+    of the fix), the PR into `main`, then v0.4.0's tag on `main`.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -33,8 +200,8 @@ Keep this section current: update it whenever a step is committed.
     unit uses UV yet; fix it before one does.
   - PH for 10 components is still a little slower than DWSIM's (5.9 ms
     against 5.2).
-  - Warm starts across solves (F5), and a solver callback for `--trace` as
-    it happens: M8, if its PFR needs them.
+  - Warm starts across solves (F5) came in M8 (step 5). A solver callback
+    for `--trace` as it happens is still to do.
   - Reports to make upstream: to V, the TOML parser's panic on a `\u`
     escape and a smart-cast interface's field inside `${}`; to `thermo`, its
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
@@ -44,16 +211,11 @@ Keep this section current: update it whenever a step is committed.
   2026-11-15, both on `main`: source releases, annotated tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
-- **`test_memory.py` is flaky on Ubuntu,** to fix before the next
-  milestone's first step: meant for early in M9, it wasn't done, failed M9
-  step 0's CI run, and has passed since. It holds the
-  collector's `heap_size` from `reflux_collect`, free blocks included, and
-  Boehm grows that in one large step when it chooses to and never gives it
-  back. On `main`'s merge of M10a it doubled once, 5,580 KiB to about 11 MB,
-  and failed; the rerun passed, as both PR runs had. The fix: compare the
-  bytes live after a full collection (heap size less free bytes), which
-  changes what `reflux_collect` reports, or adds an output, so the header
-  and `docs/python.md` say so.
+- **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, not
+  yet on `main`. It held the collector's `heap_size`, free blocks included,
+  which Boehm grows in one large step when it chooses to and never gives
+  back: on `main`'s merge of M10a it doubled once and failed. It now holds
+  the bytes live after a full collection.
 - **M9 (equations, kinetics and reactors) is done,** merged in PR #6 and
   released as v0.3.0, with its exit review at the end of its plan. Its plan,
   `docs/m9-plan.md`, was approved on 2026-11-08: exit criteria 1–11,
@@ -214,10 +376,10 @@ Keep this section current: update it whenever a step is committed.
     CHANGELOG entry undated until the tag, the seven golden reports written
     again (report format 2, no number moved), and the docs and the exit
     review. No source changed, so no full checks ran; CI passed on step 11.
-  - Carried forward (in its review): `test_memory.py`; K(T)
+  - Carried forward (in its review): `test_memory.py` (M8 step 0); K(T)
     and the viscosity at an unmoved T (M8); one-phase reactors (M6); the
     yield reactor; reports to DWSIM, `thermo` (a hot gas's label), SymPy and V.
-  - Next, by the roadmap: M10b (flowsheets from Python), or M5 to M8.
+  - Next: M8, chosen on 2026-11-16 (above).
 - **M10a (thermo and the flash from Python) is done,** merged in PR #5:
   steps 1–10 of `docs/m10a-plan.md`, whose exit review is at its end. CI
   passed on its tip on Windows and Linux (run 42080776945), after the run
@@ -313,6 +475,9 @@ v run tools/check.vsh -cc gcc    # with gcc, plus a -prod build: about 8 min
 v -W test flash/pt_test.v        # one test file
 v -W -stats test flash/pt_test.v # per-test results, and println output from passing tests
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
+v run . study testdata/flowsheets/methanol_study.toml              # a study: its points, and why an output has no value
+v run . optimize testdata/flowsheets/series.toml best              # an optimisation: its optimum, multipliers and iterates
+v run . fit testdata/m8_fit/ethylene.toml                          # a fit: each constant with its interval, written back
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
@@ -375,6 +540,19 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     PYTHONIOENCODING=utf-8 uv run --python "C:/Users/Ricky/AppData/Roaming/uv/python/cpython-3.13.17-windows-x86_64-none/python.exe" tools/gen_m3_fixtures.py
     ```
 
+  - `tools/gen_m8_sensitivities.py` writes `testdata/m8_sensitivities.json`
+    (mpmath only): a PFR's derivatives for M8's criterion 6.
+  - `tools/gen_m8_hock_schittkowski.py` (SymPy and mpmath) writes
+    `testdata/m8_hock_schittkowski.json`, and `tools/gen_m8_series.py`
+    (mpmath) `testdata/m8_series.json`: criteria 7 and 8.
+  - `tools/gen_m8_fits.py` (SciPy, NumPy, mpmath, thermo) writes
+    `testdata/m8_fits.json` and the CSV files in `testdata/m8_fit/`:
+    criterion 9's data, SciPy's fits of them, and t quantiles.
+  - `tools/gen_m8_dwsim.py [spec compression series]` (DWSIM, about twenty
+    minutes) writes `testdata/m8_dwsim.json`, DWSIM's answers for step 13;
+    `tools/gen_m8_bench.py` (DWSIM and V, about twenty minutes)
+    `testdata/m8_bench.json`, step 14's timings, which can't reproduce byte
+    for byte. Then `v run tools/benchmarks.vsh` writes `docs/benchmarks.md`.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
@@ -431,6 +609,36 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
       α: they differ from `thermo`'s by 3e-5.
     - Its adiabatic conversion reactor evaluates the expression at the
       inlet's T, not the outlet's.
+  - `spike/dwsim_study/run.py` is M8 step 0's spike
+    (`docs/spike-dwsim-study.md`): DWSIM's sensitivity analysis, Adjust,
+    optimiser and regression. None has an API; each is a form of the
+    classic app, run by its button's handler.
+    - `DWSIM.Automation.Automation` (the first automation class) makes the
+      app's main window unshown. A flowsheet is built with `Automation3`,
+      saved, and loaded there as a `FormFlowsheet`; a bare one can't take
+      objects. The forms read `My.Application.ActiveSimulation`.
+    - A study's failed point records the last point's numbers, with no
+      message. After a study, the restored flowsheet doesn't solve again
+      here: use one loaded fresh.
+    - The flowsheet solver doesn't run an Adjust unless it's marked
+      simultaneous; its control panel does. The simultaneous solver at a
+      tolerance it can't reach leaves the flowsheet at its derivative's
+      last point, 1% off in the varied value.
+    - Of the optimiser's 11 methods only `AL_BRENT_B`, bounded Brent's,
+      finds an optimum. An objective expression over auxiliary variables
+      throws in the nine that aren't Brent's (an index of −1 in its
+      `FunctionValue`), unbounded Brent's sets the variable to 0, and
+      the DotNumerics methods and IPOPT minimise when asked to maximise.
+    - The regression ran and fitted no kᵢⱼ, by any of its four methods.
+    - "Background parallel" solves serially.
+    - The script's process can take a minute to exit after its last line.
+    - Its PFR isn't smooth in its volume (M8 step 13): its outflow matches
+      an exact answer to 5e-11 at most volumes and is off by up to 1e-4 at
+      others, its integrator's unset 1e-3 tolerance, enough to move a flat
+      optimum by 1.5%. A PFR solve of three species at dV 0.01 takes 16 s.
+    - A compressor's work differs from reflux's by 1e-5 to 5e-5 on DWSIM's
+      own constants, scattered with T: its ideal-gas H and S, integrated
+      approximately (M3).
   - DWSIM's other reactors (M9 step 10):
     - The equilibrium reactor puts fugacities over 1 atm against K at
       1 bar. Its default tolerances, 0.01 and 1e-3, leave its answer up to
@@ -455,7 +663,8 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 (compound units, exact rational exponents of kg, m, s, K, mol, A), depends
 on nothing, and so do `release`, the release gate's logic, and `chem`
 (M9), the elements, formulas and SMILES strings. `expr` (M9), the
-expression language, uses `quantity`; `kinetics` (M9), reactions, uses
+expression language, uses `quantity`, and has M8's dotted names for a
+flowsheet's variables; `kinetics` (M9), reactions, uses
 `chem`, `expr`, `quantity` and `thermo`, and its tests `components`.
 `flowsheet` reads a file's reactions into `kinetics` (step 6).
 `equilibrium` (M9), chemical equilibrium and the rates' consistency with
@@ -464,7 +673,12 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
-`components` uses `chem` for a compound's formula. `capi` (M10a) is the C API
+`components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
+and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
+uses it for `reflux study` and `reflux optimize`. `fit` (M8) fits a file's
+constants to data over `flowsheet` (which reads `[fit.NAME]`), `kinetics`,
+`flash`, `thermo` and `numeric.least_squares`; `main` uses it for
+`reflux fit`. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
@@ -482,6 +696,9 @@ over the rest, built into a shared library for the Python package in
   - The volume solver's tier is `volume_function(t, n)`: F at fixed T and n
     as a function of V, so that the parts in T and n (a cubic's A and B) are
     computed once per root, not on every Newton step.
+  - `Cubic.work()` (M8) is `solve_tp` for many states at no allocation: one
+    volume function, boxed once, moved to each composition in place, with
+    `solve_tp`'s bits. One per thread; the reactors' `Source` uses it.
   - `Fluid` adds the ideal-gas part, for total properties.
 - **`flash` works for any `thermo.Model`** (D2).
   - `stability` is Michelsen's tangent-plane test. Its trials are Wilson's
@@ -515,7 +732,10 @@ over the rest, built into a shared library for the Python package in
   through `fscale`). Also `rachford_rice` (accurate for K from 1e-30 to 1e25),
   QAG integration and bisection, and M9's integrators, `dopri5` and `rodas4`
   (`Ode`, `StiffOde`), which return an answer only once every step has met
-  the tolerance. They take what they solve as an interface
+  the tolerance. M8's `qp` (Goldfarb and Idnani) and `sqp` (Han and Powell,
+  `Constrained`, `OptimizeError`) return an optimum only once its first-order
+  conditions hold, and `least_squares` (`Residuals`, `LeastSquaresError`) a
+  minimum only once its gradient test does. They take what they solve as an interface
   (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
   a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,
@@ -528,7 +748,7 @@ over the rest, built into a shared library for the Python package in
     Mathias–Copeman α come from its database's root (M10a's D9), never from
     the source tree behind its back.
 - **`flowsheet`** is M4's: streams, units, the graph, the solver, the file
-  and the reports.
+  and the reports, and M8's specs.
   - A `Stream` is its molar flows plus the flash that gave its state, so
     it's never half specified. Its H, S and V are its phases'.
   - A `Unit` is `calculate(fluid, inlets) !Outcome` and holds nothing about
@@ -544,6 +764,19 @@ over the rest, built into a shared library for the Python package in
     molar H, by direct substitution, Wegstein or Broyden. A `Solution` is only
     returned with every balance checked: each unit to 1e-10 on the inlets it
     used, and the whole to the gap the tears left.
+  - A `Section` notes every number its maker reads (`Readings`), so a key
+    such as `unit.cooler.outlet_T` can be varied: `Loaded.with` remakes the
+    feed or unit by its maker (M8's D4). `Variables` names each stream's and
+    unit's variables for expressions, `gas.F`, `cooler.duty` (D3).
+  - A spec (`[spec.NAME]`, format 3) is a link in planning from what it
+    reads to what it varies, so both land in one block; it's met by Brent
+    alone, or by Broyden with the tears, and checked again from the
+    solution (D5). `Loaded.solve` solves on the plan made at load.
+  - `Loaded.solve_from(Start)` starts from a neighbour's solution (M8's
+    D6); a unit implementing `Warm` starts from its last answer.
+  - `[study.NAME]` and `[optimize.NAME]` are read into `StudyPlan` and
+    `OptimizePlan` (`studies.v`, `optimize.v`); the `study` module runs
+    them.
   - A `Report` is a solution, or a failure, in SI: `Loaded.report`,
     `Loaded.failure` or `load_failure`. Its JSON and CSV come from that one
     struct, and its stream table rounds by `math.round`, never printf.
@@ -592,6 +825,9 @@ over the rest, built into a shared library for the Python package in
   - Rates become each species' source through `Source`, with exact
     derivatives; the PFR and CSTR use them in `rodas4` and `newton`. The
     CSTR continues in its volume where Newton from the inlet fails.
+  - What depends on T alone is kept until T moves (M8's D11), and is the
+    same number kept or not: each reaction's K, in the rates' `Point`, and
+    what Wilke's rule needs (`WilkeAt`), in the PFR.
   - A conversion may be an expression in T, bound in the kinetics' rate
     context with the file's definitions, evaluated at the outlet's T.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
@@ -670,6 +906,10 @@ or a test:
 - **Shared libraries** need gcc: tcc's Windows DLLs export nothing.
 - **Closures are never freed**, so nothing that runs per flash may make one:
   pass a struct with a method, as `numeric`'s interfaces ask.
+- **`gc_heap_usage().total_bytes` is batched under gcc:** small allocations
+  are counted only when a free list refills, so one call's change can be 0.
+  A test may hold an upper bound or "nothing allocated" (tcc's build
+  catches it), never a count of work. Count the work itself.
 - **A panic can't be caught.** There's no `recover`, so what a library might
   panic on must be kept from it: `toml.parse_text` on a `\u` escape, for one.
 - **Module names:** not like a vlib module's. `benchmark` broke external

@@ -1,0 +1,57 @@
+# Series reactions in a PFR, A -> B -> C: n-pentane to isopentane to
+# neopentane, each first order in its reactant's partial pressure (M8 step
+# 10). The most isopentane over the tube's volume and the feed's T: B's peak
+# rises with T, so T goes to its upper bound, and the volume to where B peaks
+# at that T, ln(K2/K1)/(K2 - K1). tools/gen_m8_series.py has the closed form.
+#
+#     reflux optimize testdata/flowsheets/series.toml best
+format = 3
+
+[components]
+names = ["n-pentane", "isopentane", "neopentane"]
+
+[model]
+equation = "PR"
+
+[feed.f]
+T = "400 K"
+P = "1 bar"
+flow = "1 mol/s"
+mole_fractions = { n-pentane = 1, isopentane = 0, neopentane = 0 }
+
+[reaction.first]
+equation = "n-pentane = isopentane"
+law = "power_law"
+k = { A = "70 mol/(m^3*s*Pa)", Ea = "50 kJ/mol" }
+orders = { n-pentane = 1 }
+K = "none"
+per = "volume"
+
+[reaction.second]
+equation = "isopentane = neopentane"
+law = "power_law"
+k = { A = "0.09 mol/(m^3*s*Pa)", Ea = "30 kJ/mol" }
+orders = { isopentane = 1 }
+K = "none"
+per = "volume"
+
+[unit.tube]
+type = "pfr"
+in = "f"
+out = "product"
+volume = "1 m^3"
+rtol = 1e-12
+
+[optimize.best]
+vary = [
+    { key = "unit.tube.volume", between = ["0.1 m^3", "2 m^3"] },
+    { key = "feed.f.T", between = ["380 K", "420 K"] },
+]
+maximize = "product.n[isopentane]"
+subject_to = ["product.n[neopentane] <= 0.2 mol/s"]
+
+# More neopentane than the feed has of anything: no point meets it.
+[optimize.impossible]
+vary = [{ key = "unit.tube.volume", between = ["0.1 m^3", "2 m^3"] }]
+maximize = "product.n[isopentane]"
+subject_to = ["product.n[neopentane] >= 2 mol/s"]

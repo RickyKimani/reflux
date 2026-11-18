@@ -7,7 +7,9 @@
 // tools/gen_m4_bench.py writes, testdata/m10a_bench.json, M10a's calls
 // from Python (criterion 10), which tools/gen_m10a_bench.py writes, and
 // testdata/m9_bench.json, M9's reforming PFR against DWSIM (criterion 9),
-// which tools/gen_m9_bench.py writes:
+// which tools/gen_m9_bench.py writes, and testdata/m8_bench.json, M8's
+// studies, optimisation and spec against DWSIM (criterion 11), which
+// tools/gen_m8_bench.py writes:
 //
 //     v run tools/benchmarks.vsh          # write the report
 //     v -prod -cc gcc run tools/benchmarks.vsh --time
@@ -23,8 +25,9 @@ fx := benchmarks.load()!
 ff := benchmarks.load_flowsheets()!
 pf := benchmarks.load_python()!
 rf := benchmarks.load_reactor()!
+mf := benchmarks.load_m8()!
 write_file(benchmarks.report_path, benchmarks.report(fx) + benchmarks.flowsheet_section(ff) +
-	benchmarks.reactor_section(rf) + benchmarks.python_section(pf))!
+	benchmarks.reactor_section(rf) + benchmarks.m8_section(mf) + benchmarks.python_section(pf))!
 println('wrote ${benchmarks.report_path}')
 if '--time' in arguments() {
 	$if !prod {

@@ -214,6 +214,40 @@ published VLE and LLE data sets.
 on a reference column. Robustness is reported across a set of specs.
 
 ### M8 — Specifications, sensitivity analysis and optimisation
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m8-plan.md](m8-plan.md), and its step 0's spike of
+DWSIM's study, Adjust, optimiser and regression in
+[spike-dwsim-study.md](spike-dwsim-study.md). It stayed one milestone (its
+D1), with three amendments to the list below:
+- the optimiser is reflux's own, an SQP written in V for the small, dense
+  problems a flowsheet gives, so there's no NLopt; IPOPT, for large sparse
+  ones, moves to M13 (B6);
+- sensitivities are by differences of tight solves, each with an estimate of
+  its error; exact ones, from the converged Jacobian, need every unit's
+  Jacobian and move to M13 (H1);
+- data reconciliation moves to M13, since it needs measured data against the
+  whole flowsheet's equations (H4).
+
+The plan went further than the exit below:
+- specs, studies, optimisations and fits in the file, every name a stream's
+  or unit's variable with its dimension, and any number a feed or unit is
+  given variable by its key;
+- each point of a study solved, failed with its reason, or with an output
+  that has no value saying why, never −∞ (Tutorial 2), and the same bits on
+  any number of workers;
+- the optimiser held to Hock and Schittkowski's problems and to closed-form
+  optima, and every optimum's first-order conditions checked;
+- rate constants and kᵢⱼ fitted to data with intervals, matching SciPy's
+  fits and covering the truth as often as they claim;
+- the spec, an optimisation and the series reactions against DWSIM's own
+  forms, every difference explained;
+- the published reforming model 29 times faster (13.4 ms a solve) with
+  every answer's bits kept, and the fourth release, v0.4.0.
+
+The owner's 50-point study takes 0.70 s on 2 workers, where DWSIM's own
+sensitivity analysis takes 904 s on the same machine
+([benchmarks.md](benchmarks.md)).
+
 - Design specs ("vary reflux ratio until purity is 99.5%"), converged
   together with the tear streams (F4).
 - Warm starts and state caching (F5).
@@ -224,8 +258,10 @@ on a reference column. Robustness is reported across a set of specs.
   quarter of a solve. Kept at the last T, the published model would run at
   about the 28 ms of the case on typed K.
 - Sensitivity sweeps with warm starts along the sweep, parallel cases via
-  `spawn`, and exact local sensitivities from the converged Jacobian (H1).
-- Optimisation: NLopt for small problems, IPOPT for large ones (B6, H3).
+  `spawn`, and local sensitivities, by differences with an error estimate
+  (H1; exact ones from the converged Jacobian moved to M13).
+- Optimisation: an SQP in V for small problems (B6, H3; IPOPT for large ones
+  moved to M13).
 
 **Exit:** the same sensitivity analysis runs faster than DWSIM 9 on the same
 machine, measured with `-prod` builds.
@@ -385,6 +421,9 @@ envelopes trace through the critical point.
   sequential-modular solution (J2).
 - Dynamics: holdups, DAEs, IDA, PID controllers (J3); FMI model-exchange
   export (J4).
+- From M8 (its D1): exact sensitivities from the converged Jacobian (H1),
+  the infeasible path for an optimisation, IPOPT for large sparse problems
+  (B6), and data reconciliation (H4).
 
 **Exit:** equation-oriented and sequential-modular solutions agree on every
 golden flowsheet; a dynamic flash drum step test matches a reference.
@@ -411,7 +450,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |
 | A8 Releases: semver, changelog, golden suite gates every release | M4 |
-| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first (done, with a reactor's conversion); then M8's specifications and objectives, and every later equation |
+| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first (done, with a reactor's conversion); then M8's specifications, objectives and constraints (done, with a study's outputs), and every later equation |
 
 ### B — Numerics
 | Item | Pure V | C backend | Needed by |
@@ -421,7 +460,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | B3 Sparse matrices | CSR/CSC, finite-difference Jacobians with column colouring | KLU (+ AMD/COLAMD, BTF) | M7 |
 | B4 Graphs | Tarjan SCC, tear selection, block-triangular ordering | none needed | M4 |
 | B5 ODE / DAE | RK45, Rosenbrock for stiff PFRs | CVODE, IDA | M9, M13 |
-| B6 Optimisation | none planned | NLopt (small), IPOPT (large NLP) | M8 |
+| B6 Optimisation | SQP (Han and Powell) on a dual active-set QP (Goldfarb and Idnani) for small dense problems; Levenberg–Marquardt for least squares | IPOPT (large NLP) | M8 (done, in V), M13 (IPOPT) |
 | B7 Continuation / homotopy | arc-length continuation | none needed | M12 |
 
 ### C — Thermodynamics and properties
@@ -464,8 +503,9 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - F1 Streams, ports, unit-operation interface, flowsheet graph. **M4**
 - F2 TOML flowsheet format, versioned; CLI. **M4**
 - F3 Sequential-modular solver: SCC, tears, Wegstein/Broyden, diagnostics. **M4**
-- F4 Design specs converged together with the tears. **M8**
-- F5 Warm starts and state caching. **M8**
+- F4 Design specs converged together with the tears. **M8** (done)
+- F5 Warm starts and state caching. **M8** (done: a unit's last answer and
+  the specs' values; a tear's only where it takes fewer passes)
 - F6 Reports: JSON, CSV, stream tables, convergence history. **M4**
 
 ### G — Unit operations
@@ -491,11 +531,15 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
     call. **M10b**
 
 ### H — Analysis
-- H1 Sensitivity analysis: warm starts, parallel cases, exact sensitivities. **M8**
-- H2 Case studies and scenario files. **M8**
-- H3 Optimisation over flowsheet variables. **M8**
+- H1 Sensitivity analysis: warm starts, parallel cases, derivatives by
+  differences with an error estimate. **M8** (done). Exact sensitivities
+  from the converged Jacobian, which needs each unit's (J1). **M13**
+- H2 Case studies and scenario files. **M8** (done, as studies)
+- H3 Optimisation over flowsheet variables. **M8** (done)
 - H4 Parameter estimation (fit kᵢⱼ or NRTL to VLE data; fit LHHW constants
-  to lab rate data, with confidence intervals); data reconciliation. **M8, M9**
+  to lab rate data, with confidence intervals). **M8** (done, on M9's
+  kinetics). Data reconciliation, against the whole flowsheet's equations.
+  **M13**
 - H5 Monte Carlo uncertainty propagation. **after M8**
 
 ### I — Interoperability
@@ -612,8 +656,8 @@ This is the same pattern `vsl` uses (`-d vsl_lapack_lapacke`). Build with
 | SUNDIALS KINSOL | large nonlinear systems | BSD-3 | MSYS2 | M7/M13 | **Probably.** reflux needs its own Newton anyway; KINSOL stays for large sparse cases until ours matches it. |
 | SuiteSparse KLU (+AMD, COLAMD, BTF) | sparse LU for flowsheet and column Jacobians | KLU/BTF LGPL-2.1+, AMD/COLAMD BSD-3 | MSYS2 | M7/M13 | **Later, maybe.** A left-looking (Gilbert–Peierls) sparse LU in V is feasible once the Jacobians are well understood. |
 | SUNDIALS CVODE / IDA | stiff ODEs (PFR), DAEs (dynamics) | BSD-3 | MSYS2 | M9/M13 | **Unlikely.** Simple PFRs can use a pure-V Rosenbrock method; IDA stays for dynamics. |
-| IPOPT | large nonlinear optimisation | EPL-2.0 | official MSVC binaries (3.14.20); has a C interface | M8 | **No.** Decades of work; keep it. |
-| NLopt | small and derivative-free optimisation | mostly MIT, some algorithms LGPL | MSYS2 | M8 | **Maybe**, for the few algorithms actually used. |
+| IPOPT | large nonlinear optimisation | EPL-2.0 | official MSVC binaries (3.14.20); has a C interface | M13 | **No.** Decades of work; keep it. |
+| NLopt | small and derivative-free optimisation | mostly MIT, some algorithms LGPL | MSYS2 | not needed | **Done:** M8's SQP, in V, takes its place for small problems. |
 | CoolProp | reference fluids, test oracle | MIT | build from source or use its DLL | M5 | **Partly.** IF97 and selected fluids go native; CoolProp stays as the test reference. |
 
 Licence policy: the core stays MIT. LGPL libraries (KLU) are fine when
@@ -679,7 +723,7 @@ the official successor. Other standards cover other needs:
 | **FMI 3.0** (Modelica Association; 3.0.2 is current) | Export flowsheets and unit operations as FMUs for Modelica, Simulink and digital-twin tools. It's a C API, cross-platform, so it suits V well. Co-simulation first (M11), model exchange once dynamics exist (M13). |
 | **C ABI + Python** | The de-facto scripting interface: NumPy, pandas, Jupyter, automation, side-by-side comparison with `thermo`, and IDAES/Pyomo users (M10a, M10b). |
 | **AMPL `.nl` files** | Hand equation-oriented models to external optimisers (IPOPT, Knitro) (M13). |
-| **ThermoML** (IUPAC/NIST XML) | Import experimental data for parameter fitting and validation (M8). |
+| **ThermoML** (IUPAC/NIST XML) | Import experimental data for parameter fitting and validation (after M8, whose fits read CSV). |
 | **JSON over stdio/HTTP** | The service API for the UI and for other programs (M14). |
 | **OPC UA** | Live plant data for digital twins (later). |
 

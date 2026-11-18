@@ -82,6 +82,13 @@ pub fn feed_ph(fl thermo.Fluid, flows []f64, p f64, h f64) !Stream {
 	return of_flash(fl, flows, r)
 }
 
+// feed_ph_from is feed_ph with the flash started from an estimate of T.
+fn feed_ph_from(fl thermo.Fluid, flows []f64, p f64, h f64, t f64) !Stream {
+	check_flows(fl, flows)!
+	r := flash.ph(fl, p, h, flows, estimate: t) or { return flash_failed('', err) }
+	return of_flash(fl, flows, r)
+}
+
 // feed_tvf is a feed at T (K) and vapour fraction β.
 pub fn feed_tvf(fl thermo.Fluid, flows []f64, t f64, beta f64) !Stream {
 	check_flows(fl, flows)!

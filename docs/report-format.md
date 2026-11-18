@@ -1,11 +1,13 @@
 # The report format
 
 `reflux solve plant.toml --json results.json` writes a flowsheet's results as
-JSON, and `--csv streams.csv` its streams as CSV. This is format 2 of the
+JSON, and `--csv streams.csv` its streams as CSV. This is format 3 of the
 JSON, and of the CSV, which is format 1's. It changes only with a new
 `format` number, so that what reads a report can rely on it. Format 2 (M9)
 adds a reactor's profile to its unit, a unit's warnings, an element balance
-where something reacts, and the failure `"reaction_failed"`.
+where something reacts, and the failure `"reaction_failed"`. Format 3 (M8)
+adds the file's specs, each block's specs and their residuals, and the
+failure `"spec_not_met"`.
 
 - **Every number is SI:** K, Pa, mol/s, kg/s, m³/s, J/mol, J/(mol·K), m³/mol
   and W.
@@ -34,7 +36,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 
 | Key | |
 |---|---|
-| `format` | 2. |
+| `format` | 3. |
 | `reflux` | The version of reflux that wrote it. |
 | `file` | The flowsheet file, as the command line named it. |
 | `status` | `"solved"` or `"failed"`. |
@@ -47,6 +49,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 | `notes` | Anything the plan has to say about its choices. |
 | `balance` | How far the whole flowsheet is from closing its balances, or `null` on a failure. |
 | `worst_unit` | The worst unit's, for each balance, or `null` on a failure. |
+| `specs` | Each spec of the file as it was met, in the file's order. Empty without specs, and on a failure. |
 
 ### `components[]`
 
@@ -141,6 +144,21 @@ The PFR's inlet, then each point its integrator stepped to.
 | `tears` | The streams torn, or none for a block of one unit. |
 | `cycles` | Its elementary cycles. |
 | `residuals` | A row for each pass, holding each tear's largest change in that pass as a fraction of its scale: a component's flow against the stream's total flow, P against itself, and H against RT. It converged when the last row is within `tol`. Empty for a block with no tears, which is calculated once, and for one in which a failure came before a pass finished. |
+| `specs` | The specs met with the block, by name: those whose links put the block together (D5 in [m8-plan.md](m8-plan.md)). |
+| `spec_residuals` | A row for each evaluation of the block's specs, each one's residual as a fraction of its scale (`specs[].residual`). Empty for a block without specs. |
+
+### `specs[]`
+
+| Key | |
+|---|---|
+| `name` | As the file names it, `[spec.NAME]`. |
+| `vary` | The key it varied, such as `"unit.cooler.outlet_T"`. |
+| `value` | The value the key took, in SI. |
+| `unit` | That value's SI unit, such as `"K"`, or `""` for a pure number. |
+| `until` | Its equation, as reflux writes it back. |
+| `lhs` | The equation's left side in the solution, in SI. |
+| `rhs` | Its right side. |
+| `residual` | lhs − rhs as a fraction of the larger of the two, or of the block's own scale for that dimension where both are near zero (a flow's F, a duty's F·RT, a pure number's 1). It's within `tol`, checked from the solution itself. |
 
 ### `balance`, `worst_unit`, `units[].balance`
 
@@ -153,7 +171,7 @@ The PFR's inlet, then each point its integrator stepped to.
 
 | Key | |
 |---|---|
-| `kind` | `"bad_file"`, `"bad_flowsheet"`, `"bad_specification"`, `"flash_failed"`, `"no_convergence"`, `"unbalanced"` or `"reaction_failed"` (a reactor's equilibrium, integration or Newton), and `"other"` for anything else. |
+| `kind` | `"bad_file"`, `"bad_flowsheet"`, `"bad_specification"`, `"flash_failed"`, `"no_convergence"`, `"unbalanced"`, `"reaction_failed"` (a reactor's equilibrium, integration or Newton) or `"spec_not_met"` (a spec's target out of reach of its bounds, or not met), and `"other"` for anything else. |
 | `message` | All of it, as one line. |
 | `unit` | The unit at fault, or `""`. |
 | `reason` | Why, in words. |
@@ -178,9 +196,10 @@ has it.
 
 ## What it prints
 
-`reflux solve` prints how the flowsheet was solved, a stream table, and each
-unit's duty and work, in K, bar, mol/s, kg/s, kJ/mol and kW, to 5 significant
-figures. `--trace` adds every pass of every loop. These are for reading, and
+`reflux solve` prints how the flowsheet was solved, each spec's value, a
+stream table, and each unit's duty and work, in K, bar, mol/s, kg/s, kJ/mol
+and kW, to 5 significant figures. `--trace` adds every pass of every loop,
+and each spec's residual at every evaluation. These are for reading, and
 their layout may change. The JSON is for programs.
 
 ## Failures
@@ -195,6 +214,203 @@ The message goes to stderr, its file and line first, as a compiler's would:
 reflux: plant.toml:26: unit.cooler.type: no unit type heatr (did you mean heater?)
 ```
 
+## The study report
+
+`reflux study plant.toml --json study.json --csv study.csv` writes a
+study's results (M8's D17): a format of its own, format 1, which changes
+only with a new number. Every number is SI. A point that fails, or an
+output with no value, is reported with its reason, and the study's other
+points stand.
+
+#### The study
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `file` | The flowsheet file, as the command line named it. |
+| `study` | The study's name. |
+| `status` | `"ran"`, even with failed points, or `"failed"` if the file didn't load. |
+| `error` | Why it failed, as the solve's `error`, or `null`. |
+| `inputs` | What it varies: `key` and `unit`, the values' SI unit, `""` for a pure number. |
+| `outputs` | What it reports: `name`, `expression` as reflux writes it back, and `unit`. |
+| `specs` | The file's specs, whose values each point gives. |
+| `chunk` | How many points ran from one cold start. |
+| `sensitivities` | The derivatives each point gives, each input's every output, in order: empty for a study without. |
+| `points` | Every point, in the grid's order: the first input's values outer. |
+
+#### `sensitivities[]`
+
+| Key | |
+|---|---|
+| `output` | The output's name. |
+| `input` | The key it's with respect to. |
+| `unit` | The derivative's SI unit, the output's over the input's, `""` for a pure number. |
+
+#### `points[]`
+
+| Key | |
+|---|---|
+| `index` | Its place in the grid's order, from 0. |
+| `inputs` | Each input's value. |
+| `status` | `"solved"`; `"no_value"`, solved, with an output that has no value; or `"failed"`. |
+| `outputs` | Each output, `{ "value": x, "reason": "" }`, or `{ "value": null, "reason": "it divides by …" }`. |
+| `error` | Why a failed point failed, or `""`. |
+| `specs` | Each spec's value there. |
+| `passes` | The passes of its blocks with tears. |
+| `spec_evaluations` | Its specs' evaluations. |
+| `steps` | Its integrators' accepted steps. |
+| `warm` | Whether it started from its neighbour's solution, or cold. |
+| `derivatives` | Each of `sensitivities` at this point, in its order. |
+
+#### `points[].derivatives[]`
+
+| Key | |
+|---|---|
+| `value` | The derivative, by central differences of solves at 1e-12 over steps of 1e-4 and 5e-5 of the input, Richardson's extrapolation of the two; or `null`. |
+| `error` | Its error's estimate: the two differences' gap, and the solves' own noise over the step from a fourth difference; or `null`. |
+| `reason` | Why it has no value, or `""`. |
+
+The CSV has a row for each point: `point`, each input as `KEY [unit]`,
+each output as `NAME [unit]`, NaN where it has no value, each derivative as
+`d(NAME)/d(KEY) [unit]` and its error as `error of d(NAME)/d(KEY) [unit]`,
+and `status`.
+`reflux study` prints the points to 5 significant figures, each output's
+reasons once, and each failed point's. `--workers N` runs it on N threads,
+as many as the processors by default; the report is the same bits whatever
+N is.
+
+## The optimisation report
+
+`reflux optimize plant.toml best --json optimum.json --csv iterations.csv`
+writes an optimisation's outcome (M8's D13, D17): a format of its own,
+format 1, which changes only with a new number. Every number is SI. An
+optimisation with no optimum still writes its report, with its reason and
+its iterates.
+
+#### The optimisation
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `file` | The flowsheet file, as the command line named it. |
+| `optimize` | The optimisation's name. |
+| `status` | `"optimal"`, with an optimum whose first-order conditions hold; or `"failed"`, with `reason`, or `error` if the file didn't load. |
+| `error` | Why the file didn't load, as the solve's `error`, or `null`. |
+| `reason` | Why there's no optimum, or `""`. |
+| `goal` | `"minimize"` or `"maximize"`. |
+| `objective` | What's minimised or maximised: `expression` as reflux writes it back, `unit`, and `value` at the optimum, or `null`. |
+| `inputs` | What it varies, each as below, in the file's order. |
+| `constraints` | What it's subject to, each as below, in the file's order. |
+| `specs` | The file's specs at the optimum: each `name` and `value`. |
+| `iterations` | Every iterate, the last the optimum, or the last before it failed. |
+| `evaluations` | The solves at points the optimiser chose. |
+| `solves` | Every solve, the gradients' included. |
+
+#### `inputs[]`
+
+| Key | |
+|---|---|
+| `key` | The input's key, as `vary` gives it. |
+| `unit` | Its values' SI unit, `""` for a pure number. |
+| `lower` | Its least value. |
+| `upper` | Its most. |
+| `start` | Where the optimisation started it. |
+| `value` | Its value at the optimum, or at the last iterate. |
+| `bound` | `"lower"` or `"upper"` where it's on a bound, else `""`. |
+| `multiplier` | The bound's multiplier: how fast the objective improves (falls when minimised, rises when maximised) as that bound is relaxed, per unit of the input; 0 off a bound. |
+
+#### `constraints[]`
+
+| Key | |
+|---|---|
+| `equation` | The constraint, as reflux writes it back. |
+| `unit` | Its sides' SI unit, `""` for a pure number. |
+| `lhs` | Its left side at the optimum, or `null`. |
+| `rhs` | Its right side, or `null`. |
+| `active` | Whether it holds with equality there: always, for an equality. |
+| `multiplier` | How fast the objective improves as the constraint is relaxed, per unit of its sides, at least 0 for an inequality; for an equality, as its right side grows, of either sign. `null` with no optimum. |
+
+#### `iterations[]`
+
+| Key | |
+|---|---|
+| `inputs` | Each input's value. |
+| `objective` | The objective's value. |
+| `violation` | The worst constraint's violation, as a fraction of its sides' size at the start. |
+| `stationarity` | The Lagrangian's gradient's largest entry, in the inputs scaled over their bounds and the objective over its largest derivative at the start: below 1e-6 at an optimum. |
+| `step` | The fraction of the QP's step the line search took from it, 0 at the last. |
+
+The CSV has a row for each iterate: `iteration` from 0, each input as
+`KEY [unit]`, the objective as `minimize [unit]` or `maximize [unit]`, and
+`violation`, `stationarity` and `step`.
+`reflux optimize` prints the optimum, each input with its bounds and any
+bound it's on, each constraint, and each iterate, to 5 significant figures.
+`--workers N` differentiates by N inputs at once, as many as the processors
+by default; the report is the same bits whatever N is.
+
+## The fit report
+
+`reflux fit reactions.toml rates --json fit.json --csv residuals.csv`
+writes a fit's outcome (M8's D14, D15, D17): a format of its own, format 1,
+which changes only with a new number. Every number is SI, each parameter
+in the file's own form: an Arrhenius constant fitted centred on the data's
+mean T is reported back as A and Eₐ.
+
+#### The fit
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `file` | The file, as the command line named it. |
+| `fit` | The fit's name. |
+| `status` | `"fitted"`; or `"failed"`, with `reason`, or `error` if the file didn't load. |
+| `error` | Why the file didn't load, as the solve's `error`, or `null`. |
+| `reason` | Why there's no fit, or `""`. |
+| `kind` | `"rates"`, rate constants to rates, or `"vle"`, kᵢⱼ to bubble points. |
+| `data` | The data's file, as the fit names it. |
+| `parameters` | Each parameter, as below, in the fit's order. |
+| `correlation` | The parameters' correlations, a row each, in the file's form. |
+| `centred` | Each constant fitted centred: `constant` and `t_ref`, the data's mean T. |
+| `measurements` | The residuals: each measured rate, or each bubble point's P and measured y. |
+| `dof` | The measurements less the parameters. |
+| `s` | The weighted residuals' standard deviation, √(Σr²/dof), about 1 where the weights are the measurements' errors; or `null`. |
+| `t` | Student's t at 0.975 on `dof`, each interval's half-width over its standard error; or `null`. |
+| `residuals` | Each measurement against the model at the answer, as below. |
+| `section` | The fitted constants as the file writes them, in its units, to 10 significant figures. |
+| `iterations` | Levenberg–Marquardt's iterations. |
+| `evaluations` | Its evaluations of the residuals. |
+
+#### `parameters[]`
+
+| Key | |
+|---|---|
+| `name` | As the fit names it: `k1.A`, `K_E.dH`, `K_H` or `kij[ethane, propane]`. |
+| `unit` | Its SI unit, `""` for a pure number. |
+| `file_unit` | The unit the file writes it in, `""` for a pure number. |
+| `start` | Where the fit started it. |
+| `value` | Its fitted value, or `null`. |
+| `standard_error` | Its standard error, by linearisation, s²·(JᵀJ)⁻¹, or `null`. |
+| `lower` | Its 95% interval's lower end, value − t·standard error, or `null`. |
+| `upper` | And its upper end, or `null`. |
+
+#### `residuals[]`
+
+| Key | |
+|---|---|
+| `row` | The measurement's row in the data, from 0. |
+| `column` | Its column: `r[hydrogenation]`, `P` or `y[ethane]`. |
+| `measured` | Its measured value. |
+| `model` | The model's at the answer. |
+| `weighted` | Their difference, model less measured, over the measurement's error. |
+
+The CSV has a row for each residual: `row`, `column`, `measured`, `model`
+and `weighted`. `reflux fit` prints each parameter in the file's unit with
+its standard error and interval, their correlations, and the fitted
+constants as the file writes them.
+
 ## Exit status
 
 | Status | |
@@ -202,3 +418,16 @@ reflux: plant.toml:26: unit.cooler.type: no unit type heatr (did you mean heater
 | 0 | It solved, and every report was written. |
 | 1 | The flowsheet didn't load or didn't solve, or a report couldn't be written. |
 | 2 | The command is wrong: an unknown option, say, or no file. |
+
+`reflux study` exits 0 when the study ran, failed points and all, which its
+table lists; 1 when its file didn't load or has no studies, or a report
+couldn't be written; and 2 for a wrong command, a study name that isn't
+there included.
+
+`reflux optimize` exits 0 with an optimum; 1 when its file didn't load or
+has no optimisations, when it found no optimum, or when a report couldn't be
+written; and 2 for a wrong command.
+
+`reflux fit` exits 0 with a fit; 1 when its file didn't load or has no
+fits, when the fit failed, or when a report couldn't be written; and 2 for a
+wrong command, `--workers` included.

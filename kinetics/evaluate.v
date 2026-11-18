@@ -21,6 +21,18 @@ pub struct Point {
 pub mut:
 	x        []f64
 	dln_k_dt []f64
+	// kept says that its K and d ln K/dT are in, at k_t, where fill keeps
+	// them until T moves (M8's D11).
+	kept bool
+	k_t  f64
+	// Each species' ideal-gas H° and S° at k_t, and whether it's in: the
+	// reactions that share a species share its two integrals.
+	h    []f64
+	s    []f64
+	have []bool
+	// integrals counts the species whose H° and S° a fill took, each two
+	// integrals of its Cp, since the point was made.
+	integrals int
 }
 
 // point makes a point's workspace, once, for fill to fill at each state.
@@ -28,6 +40,9 @@ pub fn (k &Kinetics) point() Point {
 	return Point{
 		x:        []f64{len: k.ctx.slots()}
 		dln_k_dt: []f64{len: k.reactions.len}
+		h:        []f64{len: k.species.len}
+		s:        []f64{len: k.species.len}
+		have:     []bool{len: k.species.len}
 	}
 }
 
@@ -35,6 +50,17 @@ pub fn (k &Kinetics) point() Point {
 // partial pressure pᵢ = yᵢP, fugacity fᵢ = φᵢyᵢP, concentration
 // cᵢ = yᵢP/(ZRT) and mole fraction yᵢ, then K at 1 bar of each reaction
 // some rate uses, from its standard properties at T (D7).
+//
+// K is computed only when T has moved since the point's last fill (M8's
+// D11). Each species' Cp is integrated from 298.15 K for it, by quadrature
+// for most compounds, which was 93% of a reforming PFR's solve (M9 step 11),
+// though an isothermal reactor's T never moves. The K kept is the K a new
+// point would compute, to the bit.
+//
+// At a new T, each species' two integrals are taken once, however many
+// reactions it's in, and each reaction sums them as Reaction.standard
+// does: its K, to the bit, in 10 integrals for the reforming model's five
+// species where its three reactions took 24.
 pub fn (k &Kinetics) fill(s State, mut pt Point) ! {
 	n := k.species.len
 	if s.y.len != n || (s.phi.len != 0 && s.phi.len != n) {
@@ -50,11 +76,43 @@ pub fn (k &Kinetics) fill(s State, mut pt Point) ! {
 		pt.x[k.ctx.slot(2, i)] = s.y[i] * ct
 		pt.x[k.ctx.slot(3, i)] = s.y[i]
 	}
+	if pt.kept && s.t == pt.k_t {
+		return
+	}
+	// Not kept until every K is in: a reaction that fails leaves the point
+	// to be filled again.
+	pt.kept = false
+	if pt.have.len != n {
+		// A point made by hand, without point's workspace.
+		pt.h = []f64{len: n}
+		pt.s = []f64{len: n}
+		pt.have = []bool{len: n}
+	}
+	for i in 0 .. n {
+		pt.have[i] = false
+	}
 	for r in k.k_used {
-		st := k.reactions[r].standard(k.species, s.t)!
+		rx := k.reactions[r]
+		rx.has_standard(s.t)!
+		mut dh := 0.0
+		mut ds := 0.0
+		for j, q in rx.species {
+			if !pt.have[q] {
+				h, e := rx.species_standard(k.species[q], j, s.t)!
+				pt.h[q] = h
+				pt.s[q] = e
+				pt.have[q] = true
+				pt.integrals++
+			}
+			dh += rx.nu[j] * pt.h[q]
+			ds += rx.nu[j] * pt.s[q]
+		}
+		st := standard_of(s.t, dh, ds)
 		pt.x[k.ctx.slot(4, r)] = math.exp(st.ln_k)
 		pt.dln_k_dt[r] = st.dln_k_dt
 	}
+	pt.k_t = s.t
+	pt.kept = true
 }
 
 // buffer makes an evaluation's workspace.

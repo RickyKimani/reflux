@@ -21,7 +21,7 @@ pub fn (r Report) table() string {
 pub fn (r Report) trace() string {
 	mut b := strings.new_builder(1024)
 	loops := r.blocks.filter(it.tears.len > 0)
-	if loops.len == 0 {
+	if loops.len == 0 && !r.blocks.any(it.specs.len > 0) {
 		b.writeln('No loops, so nothing was iterated.')
 	}
 	for blk in loops {
@@ -41,6 +41,23 @@ pub fn (r Report) trace() string {
 		}
 		if blk.residuals.len == 0 {
 			b.writeln('  (no pass finished)')
+		}
+	}
+	// Each spec's residual at every evaluation (M8's D5).
+	for blk in r.blocks.filter(it.specs.len > 0) {
+		b.writeln('The specs ${blk.specs.join(', ')}, with ${blk.units.join(', ')}:')
+		widths := blk.specs.map(math.max(10, it.runes().len))
+		mut head := '  ${'try':6}'
+		for i, name in blk.specs {
+			head += '  ${pad_left(name, widths[i])}'
+		}
+		b.writeln(head)
+		for k, row in blk.spec_residuals {
+			mut line := '  ${k + 1:6}'
+			for i, x in row {
+				line += '  ${pad_left(scientific(x, 3), widths[i] or { 10 })}'
+			}
+			b.writeln(line)
 		}
 	}
 	return b.str()
@@ -65,6 +82,11 @@ fn (r Report) summary(mut b strings.Builder) {
 	}
 	for blk in loops {
 		b.writeln('  The loop of ${blk.units.join(', ')}: torn at ${blk.tears.join(', ')}, ${blk.residuals.len} passes.')
+	}
+	for s in r.specs {
+		evaluations := r.blocks.filter(s.name in it.specs).map(it.spec_residuals.len)
+		unit := if s.unit == '' { '' } else { ' ${s.unit}' }
+		b.writeln('  Spec ${s.name}: ${s.vary} = ${figures(s.value)}${unit}, where ${s.until}, to ${scientific(math.abs(s.residual), 2)} of its scale, in ${evaluations[0] or { 0 }} evaluations.')
 	}
 	for note in r.notes {
 		b.writeln('  ${note}')
@@ -191,7 +213,7 @@ fn pad_right(s string, width int) string {
 
 // figures is x to 5 significant figures: as a decimal from a thousandth up to a
 // million, and as a power of ten outside that.
-fn figures(x f64) string {
+pub fn figures(x f64) string {
 	if x == 0.0 || !math.is_finite(x) {
 		return if x == 0.0 { '0' } else { '${x}' }
 	}

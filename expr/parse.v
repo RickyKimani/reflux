@@ -15,6 +15,11 @@ import strconv
 //     power  := atom ["in" unit] ["^" factor]
 //     atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
 //               | "(" expr ")" ["[" unit "]"]
+//     name   := word ["." word] | quoted "." word
+//
+// A name may have one dot, a scope before it (M8's D3): product.T,
+// product.n[CH4], reactor.duty. A scope that isn't a word is quoted, as
+// 'let down'.T, and no space goes either side of the dot.
 //
 // A number's unit follows it after a space and runs to the next space, or
 // to a ) or , that isn't its own: "240.1 kJ/mol / (R*T)". Or it's in
@@ -281,6 +286,9 @@ fn (mut p Parser) atom() !int {
 	if is_letter(c) || c == `_` {
 		return p.name()
 	}
+	if c == `'` || c == `"` {
+		return p.quoted_name()
+	}
 	return match c {
 		`)` { p.fail(p.pos, 'a ) with no ( before it, or nothing inside') }
 		`]` { p.fail(p.pos, 'a ] with no [ before it') }
@@ -417,6 +425,7 @@ fn (mut p Parser) word() string {
 	return p.runes[from..p.pos].string()
 }
 
+// leading_name is the name a word starts with, a dotted one included.
 fn leading_name(word string) string {
 	mut i := 0
 	for i < word.len && (word[i].is_letter() || word[i].is_digit() || word[i] == `_`) {
@@ -424,6 +433,12 @@ fn leading_name(word string) string {
 	}
 	if i == 0 || word[0].is_digit() {
 		return ''
+	}
+	if i + 1 < word.len && word[i] == `.` && (word[i + 1].is_letter() || word[i + 1] == `_`) {
+		i++
+		for i < word.len && (word[i].is_letter() || word[i].is_digit() || word[i] == `_`) {
+			i++
+		}
 	}
 	return word[..i]
 }
@@ -594,7 +609,55 @@ fn (mut p Parser) name() !int {
 	for p.pos < p.runes.len && is_name_char(p.runes[p.pos]) {
 		p.pos++
 	}
-	name := p.runes[start..p.pos].string()
+	mut name := p.runes[start..p.pos].string()
+	if p.at_dot() {
+		name += '.' + p.after_dot()
+	}
+	return p.named(start, name)
+}
+
+// at_dot is whether a dot and a word start here, a dotted name's second part.
+fn (p &Parser) at_dot() bool {
+	return p.pos + 1 < p.runes.len && p.runes[p.pos] == `.`
+		&& (is_letter(p.runes[p.pos + 1]) || p.runes[p.pos + 1] == `_`)
+}
+
+// after_dot reads the dot and the word after it.
+fn (mut p Parser) after_dot() string {
+	p.pos++
+	from := p.pos
+	for p.pos < p.runes.len && is_name_char(p.runes[p.pos]) {
+		p.pos++
+	}
+	return p.runes[from..p.pos].string()
+}
+
+// quoted_name reads a dotted name whose scope is quoted: 'let down'.T.
+fn (mut p Parser) quoted_name() !int {
+	start := p.pos
+	q := p.peek()
+	p.pos++
+	from := p.pos
+	for p.pos < p.runes.len && p.runes[p.pos] != q {
+		p.pos++
+	}
+	if p.pos >= p.runes.len {
+		return p.fail(start, 'a quote with no quote to close it')
+	}
+	scope := p.runes[from..p.pos].string()
+	p.pos++
+	if scope == '' {
+		return p.fail(start, 'empty quotes where a name should be')
+	}
+	if !p.at_dot() {
+		return p.fail(p.pos, "a name in quotes is a stream's or a unit's, with one of its variables after a dot, as ${quoted_scope(scope)}.T")
+	}
+	return p.named(start, scope + '.' + p.after_dot())
+}
+
+// named binds a name read from start: a function's call, a family's member,
+// a variable, a constant or a definition.
+fn (mut p Parser) named(start int, name string) !int {
 	after := p.pos
 	p.skip()
 	next := p.peek()
@@ -609,14 +672,15 @@ fn (mut p Parser) name() !int {
 	}
 	if next == `(` {
 		if p.known(name) {
-			return p.fail(p.pos, "${name} isn't a function: write ${name}*(…) to multiply")
+			return p.fail(p.pos, "${scoped_plain(name)} isn't a function: write ${scoped_plain(name)}*(…) to multiply")
 		}
-		return p.fail_with(start, 'no function ${name}', quantity.closest(name, functions[..]))
+		return p.fail_with(start, 'no function ${scoped_plain(name)}', quantity.closest(name,
+			functions[..]))
 	}
 	for f, family in p.ctx.families {
 		if family.name == name {
 			if next != `[` {
-				return p.fail(start, '${name} is a family of variables: say which, as ${name}[${family.members[0] or {
+				return p.fail(start, '${scoped_plain(name)} is a family of variables: say which, as ${scoped_plain(name)}[${family.members[0] or {
 					'…'
 				}}]')
 			}
@@ -624,7 +688,13 @@ fn (mut p Parser) name() !int {
 		}
 	}
 	if next == `[` {
-		families := p.ctx.families.map(it.name)
+		if name.contains('.') {
+			return p.unknown_scoped(start, name)
+		}
+		if hint := p.whose(name) {
+			return p.fail(start, hint)
+		}
+		families := p.ctx.families.map(it.name).filter(!it.contains('.'))
 		if families.len == 0 {
 			return p.fail(p.pos, "nothing here is a family of variables, so there's nothing to choose with [ ]")
 		}
@@ -658,13 +728,92 @@ fn (mut p Parser) name() !int {
 			text:  name
 		}, start)
 	}
+	if name.contains('.') {
+		return p.unknown_scoped(start, name)
+	}
+	what := scope_of(p.ctx, name)
+	if what != '' {
+		has := in_scope(p.ctx, name)
+		if has.len == 0 {
+			return p.fail(start, '${name} is a ${what}, with no variables')
+		}
+		return p.fail(start, '${name} is a ${what}: name one of its variables, as ${quoted_scope(name)}.${has[0].all_before('[')}')
+	}
+	if hint := p.whose(name) {
+		return p.fail(start, hint)
+	}
 	mut every := []string{}
-	every << p.ctx.variables.map(it.name)
-	every << p.ctx.families.map(it.name)
+	every << p.ctx.variables.map(it.name).filter(!it.contains('.'))
+	every << p.ctx.families.map(it.name).filter(!it.contains('.'))
+	every << p.ctx.scopes.map(it.name).filter(is_identifier(it))
 	every << constants[..].map(it.name)
 	every << p.defs
 	every << functions[..]
 	return p.fail_with(start, 'no name ${name} here', quantity.closest(name, every))
+}
+
+// whose explains a name that is only a scope's, n for product.n[CH4]: it
+// needs its scope before it.
+fn (p &Parser) whose(name string) ?string {
+	mut full := ''
+	mut example := ''
+	for v in p.ctx.variables {
+		if v.name.contains('.') && v.name.all_after_last('.') == name {
+			full = v.name
+			example = scoped_plain(v.name)
+			break
+		}
+	}
+	if full == '' {
+		for f in p.ctx.families {
+			if f.name.contains('.') && f.name.all_after_last('.') == name {
+				full = f.name
+				example = '${scoped_plain(f.name)}[${f.members[0] or { '…' }}]'
+				break
+			}
+		}
+	}
+	if full == '' {
+		return none
+	}
+	what := scope_of(p.ctx, full.all_before_last('.'))
+	whose := if what != '' { 'a ${what}' } else { 'a scope' }
+	return "${name} is ${whose}'s: say whose, as ${example}"
+}
+
+// unknown_scoped refuses a dotted name that isn't there: its scope's
+// names, if the scope is there, or else the scopes like it.
+fn (p &Parser) unknown_scoped(start int, name string) IError {
+	scope := name.all_before_last('.')
+	rest := name.all_after_last('.')
+	has := in_scope(p.ctx, scope)
+	what := scope_of(p.ctx, scope)
+	if has.len == 0 && what != '' {
+		return p.fail(start, '${what} ${quoted_scope(scope)} has no ${rest}: it has no variables')
+	}
+	if has.len > 0 {
+		whose := if what != '' { '${what} ${quoted_scope(scope)}' } else { quoted_scope(scope) }
+		mut names := []string{}
+		names << p.ctx.variables.map(it.name).filter(it.contains('.')
+			&& it.all_before_last('.') == scope)
+		names << p.ctx.families.map(it.name).filter(it.contains('.')
+			&& it.all_before_last('.') == scope)
+		return p.fail_with(start, '${whose} has no ${rest}: it has ${has.join(', ')}', quantity.closest(name,
+			names).map(scoped_plain(it)))
+	}
+	mut whats := []string{}
+	for s in p.ctx.scopes {
+		for w in s.what.split(' and ') {
+			if w !in whats {
+				whats << w
+			}
+		}
+	}
+	if whats.len == 0 {
+		return p.fail(start, 'no name ${scoped_plain(name)} here: nothing here has a dot in its name')
+	}
+	near := quantity.closest(scope, p.ctx.scopes.map(it.name)).map(scoped_plain('${it}.${rest}'))
+	return p.fail_with(start, 'no ${whats.join(' or ')} ${quoted_scope(scope)} here', near)
 }
 
 // call reads a function's argument, in parentheses.
@@ -700,6 +849,7 @@ fn (mut p Parser) call(start int, name string) !int {
 // member reads a family member's key, in brackets.
 fn (mut p Parser) member(start int, f int) !int {
 	family := p.ctx.families[f]
+	fname := scoped_plain(family.name)
 	open := p.pos
 	p.pos++
 	p.skip()
@@ -729,18 +879,18 @@ fn (mut p Parser) member(start int, f int) !int {
 			return p.fail(open, 'a [ with no ] to close it')
 		}
 		if key == '' {
-			return p.fail(p.pos, '${family.name}[ ] needs a name inside, as ${family.name}[${family.members[0] or {
+			return p.fail(p.pos, '${fname}[ ] needs a name inside, as ${fname}[${family.members[0] or {
 				'…'
 			}}]')
 		}
-		return p.fail(p.pos, "a key with ${p.peek()} in it must be quoted, as ${family.name}['${key}${p.peek()}…']")
+		return p.fail(p.pos, "a key with ${p.peek()} in it must be quoted, as ${fname}['${key}${p.peek()}…']")
 	}
 	p.pos++
 	if key == '' {
-		return p.fail(key_at, '${family.name}[ ] needs a name inside')
+		return p.fail(key_at, '${fname}[ ] needs a name inside')
 	}
 	m := family.keys[key] or {
-		return p.fail_with(key_at, 'no ${key} in ${family.name}[ ]', quantity.closest(key, family.keys.keys()))
+		return p.fail_with(key_at, 'no ${key} in ${fname}[ ]', quantity.closest(key, family.keys.keys()))
 	}
 	return p.add(Node{
 		kind:  .member

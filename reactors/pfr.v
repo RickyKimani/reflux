@@ -150,6 +150,11 @@ pub fn (r Pfr) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (r Pfr) energy_ports() []string {
+	return energy_names(r.thermal)
+}
+
 // PfrOde is a PFR's equations, for the integrators: the state is the flows,
 // then T if it moves, then P under Ergun's drop. A given drop's P is a line
 // in V.
@@ -174,6 +179,9 @@ mut:
 	f1     []f64
 	f2     []f64
 	y1     []f64
+	// What Wilke's rule needs at the T last asked, kept until T moves
+	// (M8's D11).
+	wilke WilkeAt
 }
 
 // tp is T and P at V and the state.
@@ -193,7 +201,15 @@ fn (o PfrOde) tp(v f64, y []f64) (f64, f64) {
 fn (mut o PfrOde) ergun(t f64, p f64, flows []f64) !f64 {
 	c := o.r.catalyst
 	visc := o.r.viscosity or { return error('no viscosity') }
-	mu := visc.viscosity(t, p, o.src.y)!
+	// Wilke's rule mixes what depends on T alone, each compound's viscosity
+	// and each pair's factors: an isothermal reactor's are computed once
+	// (M8's D11). Any other viscosity is asked whole.
+	mu := if visc is Wilke {
+		visc.at(t, mut o.wilke)!
+		visc.mixed(o.wilke, o.src.y)
+	} else {
+		visc.viscosity(t, p, o.src.y)!
+	}
 	qv := o.src.volume // m³/s
 	mut mass := 0.0
 	for i, f in flows {
@@ -308,6 +324,24 @@ fn (mut o PfrOde) jacobian(v f64, y []f64, mut jac []f64, mut dfdt []f64) ! {
 // the energy balance, held to the integrated T. The profile is the inlet
 // and every point the integrator stepped to.
 pub fn (r Pfr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return r.integrate(fl, inlets, 0)
+}
+
+// calculate_from integrates from the last point's first step (M8's D6), so
+// the integrator needn't choose one.
+pub fn (r Pfr) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	mut h0 := 0.0
+	if p := last.profile {
+		if p.points.len > 1 {
+			h0 = p.points[1].volume - p.points[0].volume
+		}
+	}
+	return r.integrate(fl, inlets, h0)
+}
+
+// integrate solves the PFR, from a first step of h0 m³, or one the
+// integrator chooses where h0 is 0.
+fn (r Pfr) integrate(fl thermo.Fluid, inlets []flowsheet.Stream, h0 f64) !flowsheet.Outcome {
 	n := r.k.species.len
 	inlet := one_inlet(r.name, fl, inlets, n)!
 	src := new_source(r.name, r.k, r.reactions, r.catalyst.loading, fl.model)!
@@ -335,6 +369,11 @@ pub fn (r Pfr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.
 		f2:     []f64{len: m}
 		y1:     []f64{len: m}
 	}
+	if visc := r.viscosity {
+		if visc is Wilke {
+			o.wilke = visc.room()
+		}
+	}
 	if r.drop == .given && !(inlet.p - r.pressure_drop > 0) {
 		return spec_error(r.name, 'a drop of ${r.pressure_drop} Pa from ${inlet.p} Pa leaves no pressure')
 	}
@@ -353,6 +392,7 @@ pub fn (r Pfr) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.
 		rtol:   r.rtol
 		atols:  atols
 		record: true
+		h0:     h0
 	}
 	sol := if r.integrator == .rodas4 {
 		numeric.rodas4(mut o, 0, y0, r.volume, params) or {

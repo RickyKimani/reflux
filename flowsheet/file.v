@@ -10,9 +10,10 @@ import thermo
 import toml
 import toml.ast
 
-// The formats this reflux reads (D9): 1, M4's, and 2, which adds M9's
-// reactions and reactors (D11). A later one comes with a migration.
-const file_formats = [1, 2]
+// The formats this reflux reads (D9): 1, M4's; 2, which adds M9's
+// reactions and reactors (D11); and 3, which adds M8's specs (D16). A later
+// one comes with a migration.
+const file_formats = [1, 2, 3]
 
 // How deep arrays and inline tables may nest. No flowsheet goes past 2, and
 // V's parser recurses, so it's what stops a file overflowing the stack.
@@ -56,11 +57,18 @@ pub:
 	names []string
 	types []string
 	plan  Plan
-}
-
-// solve solves the flowsheet with the file's own solver settings.
-pub fn (l Loaded) solve() !Solution {
-	return l.sheet.solve(l.fluid, l.params)
+	// What remaking a feed or unit needs (M8's D4): the file's text, for its
+	// lines, the makers and what they're given.
+	text    string
+	makers  map[string]Maker
+	context Context
+	// What an expression over the flowsheet may name (M8's D3), and the
+	// file's specs (D5).
+	variables Variables
+	specs     []Spec
+	studies   []StudyPlan // the file's [study.NAME], for the study module (D16)
+	// The file's [optimize.NAME], for the study module (D13).
+	optimizations []OptimizePlan
 }
 
 // load reads a flowsheet file. See load_text.
@@ -91,7 +99,7 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 	}
 	given := top.integer('format')!
 	if given !in file_formats.map(i64(it)) {
-		return top.fail('format', 'this reflux reads format 1 or 2, not ${given}', [])
+		return top.fail('format', 'this reflux reads format 1, 2 or 3, not ${given}', [])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!
@@ -120,7 +128,7 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		species << species_of(r)
 	}
 	mut built := ?kinetics.Kinetics(none)
-	if given == 2 && (top.has('reaction') || top.has('site') || top.has('definitions')) {
+	if given >= 2 && (top.has('reaction') || top.has('site') || top.has('definitions')) {
 		built = read_reactions(mut top, species)!
 	}
 	context := Context{
@@ -168,29 +176,70 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 		s.context = context
 		types << read_unit(mut s, name, makers, mut sheet)!
 	}
-	top.finish()!
-
 	solve_params := SolveParams{
 		...settings
 		estimates: estimates
 	}
+	members, keys := member_names(component_names, species)
+	mut loaded := Loaded{
+		fluid:     fl
+		sheet:     sheet
+		params:    solve_params
+		root:      root
+		names:     component_names
+		types:     types
+		text:      text
+		makers:    makers
+		context:   context
+		variables: sheet.variables(members, keys)
+	}
+	if top.has('spec') {
+		if given < 3 {
+			return top.fail('spec', 'specs need format 3', [])
+		}
+		mut specs := top.child('spec')!
+		loaded = Loaded{
+			...loaded
+			specs: read_specs(mut specs, loaded)!
+		}
+	}
+	if top.has('study') {
+		if given < 3 {
+			return top.fail('study', 'studies need format 3', [])
+		}
+		mut studies := top.child('study')!
+		loaded = Loaded{
+			...loaded
+			studies: read_studies(mut studies, loaded)!
+		}
+	}
+	if top.has('optimize') {
+		if given < 3 {
+			return top.fail('optimize', 'optimisations need format 3', [])
+		}
+		mut tables := top.child('optimize')!
+		loaded = Loaded{
+			...loaded
+			optimizations: read_optimizations(mut tables, loaded)!
+		}
+	}
+	top.finish()!
+
 	mut torn := solve_params.tears.clone()
 	torn << estimates.keys()
-	plan := sheet.plan(tears: torn) or {
+	plan := sheet.plan(tears: torn, links: loaded.links()!) or {
 		if err is FlowsheetError && err.unit != '' {
 			mut s := units.child(err.unit)!
 			return s.located(err)
 		}
+		if err is FlowsheetError && err.key.starts_with('spec.') {
+			return err
+		}
 		return top.located(err)
 	}
 	return Loaded{
-		fluid:  fl
-		sheet:  sheet
-		params: solve_params
-		root:   root
-		names:  component_names
-		types:  types
-		plan:   plan
+		...loaded
+		plan: plan
 	}
 }
 
@@ -524,6 +573,14 @@ fn read_flows(mut s Section, fl thermo.Fluid) ![]f64 {
 
 // read_unit builds one unit and adds it to the flowsheet, and returns its type.
 fn read_unit(mut s Section, name string, makers map[string]Maker, mut sheet Flowsheet) !string {
+	u, kind, ports := make_unit(mut s, name, makers)!
+	sheet.add_unit(u, ports) or { return s.located(err) }
+	return kind
+}
+
+// make_unit builds a unit from its table by its type's maker: the unit, its
+// type, and the stream on each port.
+fn make_unit(mut s Section, name string, makers map[string]Maker) !(Unit, string, map[string]string) {
 	kind := s.text('type')!
 	maker := makers[kind] or {
 		return s.fail('type', 'no unit type ${kind}', quantity.closest(kind, makers.keys()))
@@ -532,6 +589,5 @@ fn read_unit(mut s Section, name string, makers map[string]Maker, mut sheet Flow
 	u := maker(mut s) or { return s.located(err) }
 	ports := s.ports(u)!
 	s.finish()!
-	sheet.add_unit(u, ports) or { return s.located(err) }
-	return kind
+	return u, kind, ports
 }

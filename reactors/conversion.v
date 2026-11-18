@@ -143,6 +143,11 @@ pub fn (c ConversionReactor) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its duty, which an adiabatic reactor hasn't (M8's D3).
+pub fn (c ConversionReactor) energy_ports() []string {
+	return energy_names(c.thermal)
+}
+
 // flows_out runs the steps on the inlet's flows at the outlet's T: each
 // step's extent is its conversion of its key as it enters the step, over the
 // key's coefficient. A step that would take a reactant below zero beyond
@@ -176,9 +181,20 @@ fn (c ConversionReactor) flows_out(flows []f64, t f64) ![]f64 {
 // calculate finds the outlet at T or by the energy balance, the steps run at
 // the outlet's T, and warns of any reaction it takes past equilibrium.
 pub fn (c ConversionReactor) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+	return c.outcome(fl, inlets, none)
+}
+
+// calculate_from brackets the energy balance's T around the last point's
+// (M8's D6).
+pub fn (c ConversionReactor) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+	return c.outcome(fl, inlets, last_t(last))
+}
+
+fn (c ConversionReactor) outcome(fl thermo.Fluid, inlets []flowsheet.Stream, from ?f64) !flowsheet.Outcome {
 	inlet := one_inlet(c.name, fl, inlets, c.species.len)!
 	at := ConversionAt{c, fl, inlet.flows, pressure_out(c.name, inlet, c.drop)!}
-	o := thermal_outcome(c.name, at, inlet, c.thermal, c.t, c.duty, element_rows(c.species))!
+	o := thermal_outcome(c.name, at, inlet, c.thermal, c.t, c.duty, element_rows(c.species),
+		from)!
 	return flowsheet.Outcome{
 		...o
 		warnings: c.past_equilibrium(o.outlets[0])
