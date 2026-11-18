@@ -55,8 +55,9 @@ pub fn load_kinetics_text(text string, params LoadParams) !KineticsFile {
 		text:  text
 	}
 	given := top.integer('format')!
-	if given != reactions_format {
-		return top.fail('format', 'reactions need format ${reactions_format}, not ${given}', [])
+	if given != reactions_format && given != 3 {
+		return top.fail('format', 'reactions need format ${reactions_format} or 3, not ${given}',
+			[])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!
@@ -82,6 +83,15 @@ pub fn load_kinetics_text(text string, params LoadParams) !KineticsFile {
 	for s in flowsheet_sections {
 		if top.has(s) {
 			top.used << s
+		}
+	}
+	// Format 3's own sections are its readers': a file's fits (fits.v), and
+	// a flowsheet's specs, studies and optimisations.
+	if given == 3 {
+		for s in ['fit', 'spec', 'study', 'optimize'] {
+			if top.has(s) {
+				top.used << s
+			}
 		}
 	}
 	k := read_reactions(mut top, species)!

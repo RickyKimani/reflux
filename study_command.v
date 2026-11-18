@@ -76,15 +76,27 @@ fn parse_named(command string, args []string, mut c Console) ?Named {
 
 // runs is what a command runs, as its messages name it.
 fn runs(command string) string {
-	return if command == 'study' { 'study' } else { 'optimisation' }
+	return match command {
+		'study' { 'study' }
+		'fit' { 'fit' }
+		else { 'optimisation' }
+	}
 }
 
 // pick is the section a command names, or the file's only one, or none
 // after a complaint: the exit status, 1 for a file with none, 2 for a name
 // it doesn't have or one left out among several.
 fn pick(command string, file string, names []string, name string, mut c Console) !int {
-	plural := if command == 'study' { 'studies' } else { 'optimisations' }
-	table := if command == 'study' { 'study' } else { 'optimize' }
+	plural := match command {
+		'study' { 'studies' }
+		'fit' { 'fits' }
+		else { 'optimisations' }
+	}
+	table := match command {
+		'study' { 'study' }
+		'fit' { 'fit' }
+		else { 'optimize' }
+	}
 	if names.len == 0 {
 		c.complain('reflux: ${file} has no ${plural}: add a [${table}.NAME] (docs/flowsheet-format.md)')
 		return error('1')

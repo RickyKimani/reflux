@@ -163,6 +163,45 @@ fn test_optimize_prints_the_optimum_and_writes_its_reports() {
 	assert none_ == 1 && why.contains('has no optimisations: add a [optimize.NAME]'), why
 }
 
+// A fit (M8 steps 11 and 12): `reflux fit` prints each parameter in the
+// file's unit with its interval and the fitted constants, writes its JSON
+// and CSV, and exits 0; a fit that fails exits 1, still writing its report;
+// a wrong name or --workers exits 2, and a file with no fits 1.
+fn test_fit_prints_the_constants_and_writes_its_reports() {
+	file := os.join_path(@VMODROOT, 'testdata', 'm8_fit', 'ethylene.toml')
+	json_path, csv_path := scratch('fit.json'), scratch('residuals.csv')
+	code, out, err := quiet(['fit', file, '--json', json_path, '--csv', csv_path])
+	assert code == 0 && err == '', err
+	assert out.contains('fit rates: 7 parameters to 80 measurements in ethylene.csv'), out
+	assert out.contains('k1.Ea      56374       2838.8          50716 to 62031            J/mol'), out
+	assert out.contains('K_E.A      4.7050e-05  1.8222e-05      1.0735e-05 to 8.3366e-05  bar^-1'), out
+	assert out.contains('{ A = "45480.71'), out
+	j := json2.decode[json2.Any](os.read_file(json_path)!)!.as_map()
+	assert j['status']!.str() == 'fitted' && j['kind']!.str() == 'rates'
+	assert os.read_file(csv_path)!.split_into_lines().len == 81
+	vle, said, _ := quiet(['fit', os.join_path(@VMODROOT, 'testdata', 'm8_fit', 'ethane_propane.toml')])
+	assert vle == 0 && said.contains('kij[ethane, propane] = 0.0115408'), said
+	// A fit whose data aren't there fails, and says why.
+	broken := scratch('broken.toml')
+	os.write_file(broken, os.read_file(file)!.replace('data = "ethylene.csv"', 'data = "none.csv"'))!
+	failed_json := scratch('failed.json')
+	no, told, _ := quiet(['fit', broken, '--json', failed_json])
+	assert no == 1 && told.contains('no fit: ') && told.contains("can't be read"), told
+	assert os.read_file(failed_json)!.contains('"status": "failed"')
+	for args, want in {
+		'rats':        'has no fit rats (did you mean rates?)'
+		'--workers 2': "--workers is study's and optimize's"
+		'rates other': 'one fit at a time'
+	} {
+		mut full := ['fit', file]
+		full << args.split(' ')
+		wrong, _, why := quiet(full)
+		assert wrong == 2 && why.contains(want), '${args}: ${why}'
+	}
+	none_, _, why := quiet(['fit', os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'series.toml')])
+	assert none_ == 1 && why.contains('has no fits: add a [fit.NAME]'), why
+}
+
 // The workers by default are the processors (M8's D8).
 fn test_the_processors() {
 	assert cpus() >= 1

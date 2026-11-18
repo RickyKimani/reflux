@@ -1,8 +1,8 @@
 # The flowsheet file format
 
 A flowsheet is a [TOML](https://toml.io) file, format 1, 2 or 3: format 2
-(M9) adds reactions and reactors, and format 3 (M8) adds specs, studies
-and optimisations. Each reads
+(M9) adds reactions and reactors, and format 3 (M8) adds specs, studies,
+optimisations and fits. A file of reactions alone may be format 2 or 3. Each reads
 every earlier format's sections as that format does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
@@ -538,6 +538,50 @@ constraints or its iterations run out, says why, and its report gives each
 iterate. [testdata/flowsheets/series.toml](../testdata/flowsheets/series.toml)
 has series reactions in a PFR, whose optimum sits on a bound and a
 constraint at once.
+
+## Fits (format 3)
+
+A fit finds a file's constants that best match measured data, with each
+constant's standard error and 95% interval (M8's D14, D15). It's in a
+format-3 file with the reactions whose constants it fits, the `[model]`
+whose kᵢⱼ it fits, or both; a flowsheet file's fits read too.
+`reflux fit file.toml [NAME]` runs it ([report-format.md](report-format.md)).
+
+```toml
+[fit.rates]
+data = "ethylene.csv"
+parameters = ["k1.A", "k1.Ea", "K_E.A", "K_E.dH", "K_H"]
+weights = { "r[hydrogenation]" = "5 %" }
+
+[fit.kij]
+data = "ethane_propane.csv"
+parameters = ["kij[ethane, propane]"]
+weights = { P = "0.5 %", "y[ethane]" = "0.003" }
+```
+
+| Key | |
+|---|---|
+| `data` | Required. A CSV file, beside this one unless its path is absolute (below). |
+| `parameters` | Required. What the fit varies, all of one kind. A reaction's named constant (`k1`, the rate constant of the first reaction, or the law's own `k_name`; a site term's constant by its `name`; a fitted K, `K1` or its own name) by its part: `NAME.A` and `NAME.Ea` of an Arrhenius constant, `NAME.A` and `NAME.dH` of a van 't Hoff one, `NAME` of a number with its unit. Or a pair's kᵢⱼ, `kij[a, b]`, which needs a `[model]`. |
+| `start` | Where to start a parameter, by name, a number with its unit; the file's value if not given. |
+| `weights` | Each measured column's error: `"5 %"` of each measurement, or a number with the column's unit. A rate fit's columns are unweighted (an error of 1 in SI) where none is given; a kᵢⱼ fit needs P's and each y's, since they're of different kinds. |
+
+**Rate data** have a row for each state: `T [K]` and `P [bar]` (any unit of
+each), `y[species]`, each species' mole fraction (0 if its column is left
+out), and `r[reaction] [mol/(kg*s)]`, each measured rate in its rate's
+dimension, empty where it wasn't measured. Each row's rates are on the ideal
+gas, p = yP, as from a differential reactor. An Arrhenius or van 't Hoff
+constant whose A and energy are both fitted is fitted centred on the data's
+mean T, and reported back in the file's own form.
+
+**VLE data** have a row for each bubble point: `T`, `P`, `x[component]`
+for every component of the liquid but one, which makes up the rest, and
+`y[component]` for each measured vapour fraction.
+
+A fit that can't be made says why: data it can't read, a parameter the data
+don't determine (an Arrhenius constant's A and Eₐ from data at one T), or a
+solver that couldn't meet its test. [testdata/m8_fit/](../testdata/m8_fit/)
+has one of each kind.
 
 ## What it refuses that TOML allows
 

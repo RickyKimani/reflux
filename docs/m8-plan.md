@@ -25,7 +25,8 @@ and amend D3, D4 and D5, and steps 5 and 6 are done and amend D6, all
 approved on 2026-11-17. Steps 7 and 8 are done, and step 8 amends D10,
 approved on 2026-11-17. Steps 1 to 8 meet the roadmap's exit. Steps 9
 and 10 are done, built together, and amend D12 and D13, approved on
-2026-11-17. Step 11 is next.
+2026-11-17. Steps 11 and 12 are done, built together, and amend D14 and
+D15, approved on 2026-11-18. Step 13 is next.
 
 ## Goal
 
@@ -303,8 +304,8 @@ All checked by tests in CI, as before.
 | D11 | Keeping K(T) and the viscosity | A reactor's rates keep each reaction's K, and each compound's viscosity, at the T they were last computed at. A new T computes them as now, so every answer keeps its bits. Whether eq. 16's Cp should integrate faster, for reactors whose T moves, is measured in step 1 and decided there.<br><br>**Amended in step 1.**<br>- Wilke's rule keeps each pair's two factors with each compound's viscosity: its powers and square roots, not the correlations, were most of its cost.<br>- At a T that moves, each species' two integrals are taken once and shared by the reactions it's in, each summing them as before: 10 integrals for the reforming model where its three reactions took 24, and the same bits. | Exact by construction. An isothermal reactor, the owner's case, never moves T. |
 | D12 | The optimiser | `numeric.sqp`, written in V, for small dense problems: minimise f(x) subject to bounds, equalities c(x) = 0 and inequalities c(x) ≥ 0.<br>- **The method:** Han and Powell's SQP. The Hessian of the Lagrangian comes from a BFGS update with Powell's damping, and each step's QP is solved by an active-set method on the bounds and the linearised constraints. Steps are accepted by an ℓ1 merit function with a backtracking line search (Nocedal and Wright, ch. 18).<br>- **What it takes:** the problem as an interface, with gradients, exact where the caller has them and D10's differences for a flowsheet.<br>- **What it returns:** an answer only once the first-order conditions hold to their tolerances, each multiplier with it. A QP with no feasible point, a line search that can't descend, or the iteration budget spent is a typed `OptimizeError` with its reason.<br><br>**Amended in step 9,** approved on 2026-11-17:<br>- **The QP** is Goldfarb and Idnani's dual active-set method (`numeric.qp`), from the unconstrained minimum, each step's system factorised afresh: the problems are small.<br>- **A QP with no point is relaxed** first, as Powell's and Schittkowski's codes do: δ ∈ [0, 1] scales each equality and violated inequality, at a cost ½ρδ². A linearisation can have no point where the problem has, so the problem is refused as infeasible only when δ comes out 1, no step lowering the violation, or the relaxed QP fails too.<br>- **The problem** gives its values, then its gradients at the same x, so that a flowsheet differentiates from the solve it just made.<br>- **tol** is absolute on c and relative to max(1, ‖∇f‖∞) on the Lagrangian's gradient, so the caller scales its constraints. | Every flowsheet optimisation M8 meets has a handful of inputs. SQP converges superlinearly there, takes constraints directly, and needs no dependency. Checking the conditions is how the optimiser shows its answer, as every other solver here does. DWSIM's stops when its objective stops changing. |
 | D13 | Optimising a flowsheet | `[optimize.NAME]` has four keys:<br>- `vary`, keys with bounds, as D4;<br>- `minimize` or `maximize`, an expression;<br>- `subject_to`, equations and inequalities over flowsheet variables, `"product.T <= 1100 K"`;<br>- `start`, optionally.<br><br>The path is feasible: each evaluation is a converged solve, specs included, warm-started from the last (D6), and the constraints are the SQP's. The equation reader of D5 takes `<=` and `>=` too. The report gives the optimum, the multipliers, which bounds and constraints are active, and each evaluation.<br><br>**Amended in step 10,** approved on 2026-11-17:<br>- **`start`** is each input's own, `{ key, between, start }`, the file's value if not given.<br>- **The problem is scaled:** each input over its bounds to [0, 1], the objective over its largest derivative at the start, each constraint over its sides' size there; the SQP's tol is 1e-6, above the gradients' noise.<br>- **The gradients** are D10's differences with a step of 1e-4 of the largest value the bounds allow, at most a quarter of the range, and one-sided where a bound is within the step: a pump's efficiency at 1 can't be stepped past. `--workers` takes the inputs at once.<br>- **The multipliers** are reported as how fast the optimum improves as each bound or constraint is relaxed, per unit of its own.<br>- **The first evaluation** is cold, and every later one starts from the last. | The feasible path keeps every evaluation a checked solve. The infeasible path's fewer passes come from giving the optimiser the tears, which M13's equation-oriented solve does anyway. |
-| D14 | Fitting kinetics | `[fit.NAME]` in a reactions file has four keys:<br>- `data`, a CSV whose header gives each column with its unit (`T [K]`, `P [bar]`, `y[CH4]`, `r[reforming] [mol/(kg*s)]`);<br>- `parameters`, by name: constants and definitions such as `k1.A`, `k1.Ea` or `K_CO.dH`;<br>- `start`, if not the file's values;<br>- `weights`, each rate's absolute or relative error.<br><br>The residuals are the measured rates less the model's. The fit is least squares by Gauss–Newton with a Levenberg–Marquardt shift (`numeric.least_squares`), on ∂r/∂θ from the tape, exactly: the fitted constants become the tape's inputs. An Arrhenius or van 't Hoff constant is fitted centred on the data's mean T, and reported in the file's own form.<br><br>The report gives each value, its standard error and 95% interval by linearisation, the correlation matrix, the residuals, and the fitted section as file text. Rate data only, as from a differential reactor; outlet data from an integral reactor, a PFR solved per evaluation, comes later. | M9's exact derivatives make the fit exact to rounding in its Jacobian. Centring removes most of A's and Eₐ's correlation (kinetics.md), and the correlation matrix shows what's left. Rate data is how kinetics is measured for fitting, and needs no reactor model. |
-| D15 | Fitting kᵢⱼ | `[fit.NAME]` with VLE data (T, P, x, y), the kᵢⱼ of named pairs as parameters, and residuals in bubble pressure and vapour composition, each weighted. The derivatives are by differences, and the solver and report are D14's. | The data DWSIM's regression and thermo's users fit. kᵢⱼ is one number a pair, so differences are cheap and enough. |
+| D14 | Fitting kinetics | `[fit.NAME]` in a reactions file has four keys:<br>- `data`, a CSV whose header gives each column with its unit (`T [K]`, `P [bar]`, `y[CH4]`, `r[reforming] [mol/(kg*s)]`);<br>- `parameters`, by name: constants and definitions such as `k1.A`, `k1.Ea` or `K_CO.dH`;<br>- `start`, if not the file's values;<br>- `weights`, each rate's absolute or relative error.<br><br>The residuals are the measured rates less the model's. The fit is least squares by Gauss–Newton with a Levenberg–Marquardt shift (`numeric.least_squares`), on ∂r/∂θ from the tape, exactly: the fitted constants become the tape's inputs. An Arrhenius or van 't Hoff constant is fitted centred on the data's mean T, and reported in the file's own form.<br><br>The report gives each value, its standard error and 95% interval by linearisation, the correlation matrix, the residuals, and the fitted section as file text. Rate data only, as from a differential reactor; outlet data from an integral reactor, a PFR solved per evaluation, comes later.<br><br>**Amended in step 11,** approved on 2026-11-18:<br>- **The file:** a fit is in a format-3 file with its reactions, a file of reactions alone now format 2 or 3; `flowsheet` reads it (`load_fits`), as it reads studies, so `fit` imports `flowsheet` (D2). A parameter is `NAME.A`, `NAME.Ea` or `NAME.dH` of a named constant, or `NAME` of a number with its unit, quoted or not; `start` is by parameter; a column with no weight is unweighted, an error of 1 in SI.<br>- **The states** are the ideal gas, p = yP, f = p, c = p/RT; a species left out has y = 0, a rate left empty wasn't measured.<br>- **The solver** is Levenberg–Marquardt as Moré gives it: QR on [J; √μD], D the columns' norms, Nielsen's damping, and a step whose fall is within Σr²'s rounding judged by the gradient test, which must reach 1e-10.<br>- **The intervals** are Student's t at 0.975 on n − p, the covariance s²(JᵀJ)⁻¹ moved to the file's form by the delta method, and the correlations there too. A parameter the data don't determine is refused by name.<br>- **The fitted section** is each constant as file text, in its own units, to 10 significant figures. | M9's exact derivatives make the fit exact to rounding in its Jacobian. Centring removes most of A's and Eₐ's correlation (kinetics.md), and the correlation matrix shows what's left. Rate data is how kinetics is measured for fitting, and needs no reactor model. |
+| D15 | Fitting kᵢⱼ | `[fit.NAME]` with VLE data (T, P, x, y), the kᵢⱼ of named pairs as parameters, and residuals in bubble pressure and vapour composition, each weighted. The derivatives are by differences, and the solver and report are D14's.<br><br>**Amended in step 12,** approved on 2026-11-18: a pair is `kij[a, b]`, starting from the `[model]`'s own; the liquid needs every component but one, which makes up the rest; P's error and each measured y's must be given, since they're of different kinds; and the differences are central, kᵢⱼ ± 1e-6. | The data DWSIM's regression and thermo's users fit. kᵢⱼ is one number a pair, so differences are cheap and enough. |
 | D16 | The file | Format 3 adds `[spec.NAME]`, `[study.NAME]`, `[optimize.NAME]` and `[fit.NAME]`.<br><br>A study has:<br>- `vary`, one or two, each a key with `from`, `to` and `points`, or `values`;<br>- `report`, named expressions;<br>- optionally `chunk` and `sensitivities` (which outputs, with respect to which inputs).<br><br>Formats 1 and 2 read as before. | A new section is a new format, by the CHANGELOG's rules. |
 | D17 | The CLI and reports | `reflux solve FILE` converges the file's specs, and its report gains each spec's value and residual.<br><br>`reflux study FILE [NAME]`, `reflux optimize FILE [NAME]` and `reflux fit FILE [NAME]` each print a table, with `--json OUT` and `--csv OUT`, and the first two `--workers N`. The JSON gives every point or iteration, with its passes and reasons, and the CSV one row a point, NaN where an output has no value.<br><br>The exit status:<br>- 0 when the command ran, even with failed points, which the table says;<br>- 1 when it couldn't run, or found no optimum or fit;<br>- 2 for a wrong command.<br><br>Each report is a format of its own, documented beside the solve's. | A study that ran with some failed points is still a result. Each point's reason is in the report. |
 | D18 | Comparing with DWSIM | <br>- The owner's 50-point study against DWSIM 9's own sensitivity analysis, if step 0 can drive it headless, else against M9 step 11's loop of solves.<br>- A spec on the reference flowsheet (M4) against its Adjust, its tolerance set to 1e-10.<br>- An optimisation within bounds against its optimiser.<br>- A kᵢⱼ fit against its regression, if step 0 can drive it.<br><br>Each is compared by state, as M4 compared.<br><br>**Amended in step 0** ([spike-dwsim-study.md](spike-dwsim-study.md)): a script can run each of its forms, unshown.<br>- The study: against its own form.<br>- The spec: the cooler's outlet T until the first drum's vapour is 60 mol/s, against a single Adjust's secant and Brent's at 1e-10, with the recycle's tolerances scaled by 1e-8. Not the simultaneous solver at that tolerance, which leaves the flowsheet 1% off its answer.<br>- The optimisation: one variable within bounds, against bounded Brent's, the only one of its 11 methods that found an optimum. The pressure between two compression stages, which step 0 ran, and criterion 8's series reactions if its PFR takes them.<br>- The kᵢⱼ fit: its regression ran and fitted nothing, so the comparison is recorded as not possible, unless the owner's run of the same nine points in the app gives the kᵢⱼ. | The comparison is of the same question asked of both, and its differences are each explained. |
@@ -1446,15 +1447,158 @@ below: each estimate 3.99 to 4.09 times its true error.
 - [main_test.v](../main_test.v): `reflux optimize`, its table, JSON, CSV
   and exit status, and five wrong commands.
 
-### 11. Fitting kinetics
+### 11. Fitting kinetics — done, with D14 amended
 - D14: `numeric.least_squares`, fitted constants as the tape's inputs, the
   centring, the data's CSV with units, `[fit.NAME]` and `reflux fit`.
 - Against SciPy's fits of the same data, and the intervals' coverage over
   seeded synthetic data.
 
-### 12. Fitting kᵢⱼ
+Steps 11 and 12 were built together, at the owner's word.
+
+**What was built:**
+- **[numeric/least_squares.v](../numeric/least_squares.v):** Levenberg–
+  Marquardt over the `Residuals` interface, as Moré gives it: QR on
+  [J; √μ·D], D the columns' norms, Nielsen's damping, and the gradient test,
+  max |Jₖᵀr|/(‖Jₖ‖·‖r‖) ≤ 1e-10, before an answer; (JᵀJ)⁻¹ from J's scaled
+  QR; a parameter the data don't determine refused by its index
+  ([design.md](design.md#least-squares)).
+- **[numeric/student_t.v](../numeric/student_t.v):** Student's t quantile,
+  by bisection on its CDF through the incomplete beta function.
+- **[kinetics/constants.v](../kinetics/constants.v):** a set of rates'
+  named constants (k1, K_E, K1), and the rates built again with some
+  replaced and more variables in the context after T and P
+  (`build_with`), which is how a fit's constants become the tape's inputs.
+- **[flowsheet/fits.v](../flowsheet/fits.v):** `load_fits`, a format-3
+  file's components, `[model]`, reactions and `[fit.NAME]`, every parameter
+  found and every key checked at its line; a reactions file may now be
+  format 2 or 3.
+- **The [fit](../fit/) module:** `data.v`, the CSV with each column's unit;
+  `rates.v`, the residuals and their exact derivatives from the tape, an
+  Arrhenius or van 't Hoff pair centred on the data's mean T; `fit.v`, the
+  statistics in the file's form by the delta method; `report.v`, fit
+  report format 1 and the fitted constants as file text
+  ([design.md](design.md#fitting), [report-format.md](report-format.md)).
+- **`reflux fit FILE [NAME] [--json] [--csv]`**
+  ([fit_command.v](../fit_command.v)), which shares its arguments with
+  `study` and `optimize` and exits 0 with a fit.
+- **[tools/gen_m8_fits.py](../tools/gen_m8_fits.py):** rate data from known
+  constants with 5% noise, seeded, SciPy's fit of them with its covariance
+  from J taken again in the file's form by mpmath, and t quantiles by mpmath
+  ([testdata/m8_fits.json](../testdata/m8_fits.json),
+  [testdata/m8_fit/](../testdata/m8_fit/)).
+
+**D14 is amended,** approved on 2026-11-18: the file is format 3, read by
+`flowsheet`; the parameters' names; the states on the ideal gas; the
+solver's details; t intervals and the delta method; and the fitted
+section's figures (the table above).
+
+**Criterion 9, measured** (`fit/fit_test.v`, `fit/coverage_test.v`):
+- **Against SciPy:** seven constants, an LHHW rate's k1.A, k1.Ea, K_E.A,
+  K_E.dH and K_H and a power law's k2.A and k2.Ea, to 80 rates at 40
+  states. Each value is within 1e-4 of its standard error of SciPy's, each
+  standard error and correlation within 1e-6, Σr² within 1e-9: s = 0.995
+  on 73 degrees of freedom, in 10 iterations and 12.8 ms. The same rates in
+  mol/(kg·h) give the same fit.
+- **Coverage:** over 400 seeded data sets of a power law's two constants,
+  the 95% intervals hold the true A 381 times and the true Eₐ 382, against
+  the 380 they claim; binomially ± 4.4, the test allows 366 to 394.
+- **Student's t:** within 1.2e-14 of mpmath's quantile at ν ≤ 1000, and
+  3.2e-12 at 10⁶.
+- **Least squares alone** (`numeric/least_squares_test.v`): a cubic against
+  the normal equations, within a bound the gradient test sets; an
+  exponential from exact data to 1e-12 (9 iterations); Rosenbrock's
+  residuals (22); a column repeated, a column dependent to 1e-13, too few
+  residuals, a gtol of 0, a start that isn't finite, a failure at the start
+  and the budget spent, each refused.
+- **Refused:** 19 of the file's mistakes at their lines, and 17 of the data's
+  with their reasons (`fit/refusals_test.v`).
+
+**Found:**
+- **Levenberg–Marquardt stalled near a minimum.** In one coverage data set
+  of 400, the residuals' fall over the last steps was below Σr²'s own
+  rounding, so ρ was noise: every step was refused, μ grew until a step no
+  longer moved θ, and the fit stopped at a gradient test of 1.2e-8. A step
+  whose predicted fall is below 1e-10 of Σr² is now judged by the gradient
+  test, which J and r give to full precision. The first version judged a
+  step so where its actual fall was within 8ε of Σr²; the gcc check found
+  that too narrow, gcc's rounding leaving Σr² about 20ε of noise, and a
+  data set stalling again at 5.4e-9.
+- **SciPy's t quantile isn't exact to 1e-12.** At ν = 1, t(0.6) is tan(π/10)
+  exactly: reflux had 0.3249196962329064, SciPy 0.32491969623407446. The
+  reference is mpmath's at 40 digits.
+- **reflux's own quantile lost digits at ν = 10⁶,** 6e-11 of t: ln Γ(a + ½)
+  − ln Γ(a) near a = 5·10⁵ is a difference of numbers near 6·10⁶. It's
+  taken by Stirling's series with log1p, and 1 − x as t²/(ν + t²).
+- **A quoted constant is an expression** to the reactions' reader, even
+  "0.3 bar^-1", so a fit takes one that reads as a number with its unit.
+- **The tcc check found** `flowsheet/reactions_test.v` still refusing a
+  format-3 reactions file; it now reads the same reactions, and 1 and 4 are
+  refused.
+- **A V lesson** (docs/v-for-go.md): an error can carry an integer,
+  `error_with_code`, which `least_squares` uses to name a parameter.
+
+**Planted mistakes:** 34, in scratch copies, one at a time, for steps 11
+and 12 together.
+- **Caught, 32:**
+  - least squares: no damping's fall; none's rise; D the identity; the
+    gradient test eased a thousandfold; no judging within rounding (the
+    coverage test's fits stalled; planted again on the final test, and
+    caught again); the inverse's scaling wrong off its diagonal; the
+    predicted fall miscounted;
+  - Student's t: Stirling's tail dropped; log in place of log1p; the
+    continued fraction on the slow side;
+  - the file: rates and kij mixed; a start's unit unchecked; a percentage
+    taken as a whole number; a kij not starting from the model; every start
+    1;
+  - the rate fit: no centring; the delta method's cross term dropped; A
+    reported as k_ref; a relative weight as an absolute; the inputs off by
+    1e-6; ∂r/∂P for ∂r/∂θ; mole fractions to 2 let through; T̄ taken as
+    500 K;
+  - the kij fit: kij not symmetric; the liquid's y; a step of 1e-2;
+  - the statistics: s² over n, not n − p; t at 0.95; the correlations'
+    scaling;
+  - the data and the report: a column's unit's scale dropped (the new
+    hourly test); the fitted section to 6 figures; the table in SI.
+- **Survived at first, and a new test catches it, 1:** the undetermined
+  threshold at 1e-20 (both refusals had an exact zero; a column dependent
+  to 1e-13 now).
+- **Code merged, 1:** a `Fixed` constant's part check, which no file can
+  reach (a quoted constant is `Written`), now shares `Written`'s.
+
+**Tests:**
+- [numeric/least_squares_test.v](../numeric/least_squares_test.v),
+  [fit/fit_test.v](../fit/fit_test.v),
+  [fit/coverage_test.v](../fit/coverage_test.v) and
+  [fit/refusals_test.v](../fit/refusals_test.v), as above.
+- [main_test.v](../main_test.v): `reflux fit` on both files, its table,
+  JSON and CSV, a fit that fails, and three wrong commands.
+
+### 12. Fitting kᵢⱼ — done, with D15 amended
 - D15: VLE data, bubble points as residuals, and the same report.
 - Against SciPy with `thermo`'s PR on the same data.
+
+**What was built:** [fit/vle.v](../fit/vle.v): each row's bubble point at
+its T and liquid composition (`flash.bubble_p`) on the file's cubic with
+the fitted kᵢⱼ, its P and each measured y less the data's over their
+errors, J by central differences, and the same statistics and report. The
+reference ([tools/gen_m8_fits.py](../tools/gen_m8_fits.py)): nine bubble
+points of ethane and propane at 250 K by thermo's PRMIX on reflux's own
+constants with kᵢⱼ = 0.012, solved to 1e-14 on thermo's ln φ, P with 0.5%
+noise and y with 0.003, and SciPy's fit of kᵢⱼ on the same bubble points.
+
+**D15 is amended,** approved on 2026-11-18: the pair's name, its start
+from the model, the liquid's last component, the weights required, and the
+central differences (the table above).
+
+**Criterion 9, measured:** kᵢⱼ = 0.0115409 ± 0.00072, against SciPy's to
+1.8e-7 of the standard error (the test holds 1e-3, both Jacobians being
+differences), the standard error to 1e-4 and Σr² to 1e-6: s² = 1.42 on 17
+degrees of freedom, 4 iterations, 140 ms. The kᵢⱼ fit against DWSIM's
+regression is step 13's: step 0 found that it fitted nothing (D18).
+
+**Tests and planted mistakes:** with step 11's, above: the fit against
+SciPy, its start, four refusals of the file and four of the data, and three
+planted mistakes.
 
 ### 13. DWSIM references
 - D18: the study, the spec, the optimisation and, if it runs, the kᵢⱼ fit

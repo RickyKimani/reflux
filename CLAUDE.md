@@ -126,7 +126,7 @@ Keep this section current: update it whenever a step is committed.
       at 1e-13 holds it.
   - Steps 1 to 8 meet the roadmap's exit.
   - **Steps 9 and 10 are done,** built together, and amend D12 and D13,
-    approved on 2026-11-17 (committed).
+    approved on 2026-11-17 (committed at 05dd726).
     - Step 9: `numeric.qp` (Goldfarb and Idnani's dual active-set method)
       and `numeric.sqp` (Han and Powell's SQP: damped BFGS, an ℓ1 merit
       function, a QP with no point relaxed by δ, the first-order conditions
@@ -143,9 +143,24 @@ Keep this section current: update it whenever a step is committed.
     - Found: a one-sided difference's estimate, R₁'s, had no margin (1.01
       times its error), so its value is R₂; a relaxed QP at a badly
       conditioned iterate can fail, and is then reported as infeasible.
-  - Step 11 is next: fitting kinetics. On 2026-11-17 the owner had steps 9
-    and 10 built together; pairing the rest likewise (11 and 12, 13 and 14,
-    15 and 16) was proposed, not yet chosen.
+  - **Steps 11 and 12 are done,** built together at the owner's word, and
+    amend D14 and D15, approved on 2026-11-18 (committed).
+    - `numeric.least_squares` (Levenberg–Marquardt on QR, Moré's scaling,
+      Nielsen's damping, the gradient test at 1e-10) and
+      `numeric.student_t_quantile`; format 3's `[fit.NAME]`
+      (`flowsheet/fits.v`), the `fit` module (rate constants on the tape's
+      exact derivatives, centred on the data's mean T; kᵢⱼ on bubble
+      points), its report format 1 and `reflux fit`.
+    - Criterion 9: seven LHHW and power-law constants and a kᵢⱼ match
+      SciPy's fits of the same data (`tools/gen_m8_fits.py`), values to
+      1e-4 of their standard errors; over 400 seeded data sets the 95%
+      intervals hold the truth 381 and 382 times, against 380.
+    - Found: Levenberg–Marquardt stalled near a minimum, its fall below
+      Σr²'s rounding, so a step there is judged by the gradient test;
+      SciPy's t.ppf is off by 1.2e-12 at ν = 1, so the quantiles' reference
+      is mpmath's.
+  - Step 13 is next: the DWSIM references, with step 14 if the owner
+    bundles them as proposed (13 and 14, 15 and 16).
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -431,6 +446,7 @@ v -W -stats test flash/pt_test.v # per-test results, and println output from pas
 v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (docs/report-format.md)
 v run . study testdata/flowsheets/methanol_study.toml              # a study: its points, and why an output has no value
 v run . optimize testdata/flowsheets/series.toml best              # an optimisation: its optimum, multipliers and iterates
+v run . fit testdata/m8_fit/ethylene.toml                          # a fit: each constant with its interval, written back
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
@@ -498,6 +514,9 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
   - `tools/gen_m8_hock_schittkowski.py` (SymPy and mpmath) writes
     `testdata/m8_hock_schittkowski.json`, and `tools/gen_m8_series.py`
     (mpmath) `testdata/m8_series.json`: criteria 7 and 8.
+  - `tools/gen_m8_fits.py` (SciPy, NumPy, mpmath, thermo) writes
+    `testdata/m8_fits.json` and the CSV files in `testdata/m8_fit/`:
+    criterion 9's data, SciPy's fits of them, and t quantiles.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
@@ -613,7 +632,10 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `main` gives `flowsheet.load` its makers.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
 and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
-uses it for `reflux study` and `reflux optimize`. `capi` (M10a) is the C API
+uses it for `reflux study` and `reflux optimize`. `fit` (M8) fits a file's
+constants to data over `flowsheet` (which reads `[fit.NAME]`), `kinetics`,
+`flash`, `thermo` and `numeric.least_squares`; `main` uses it for
+`reflux fit`. `capi` (M10a) is the C API
 over the rest, built into a shared library for the Python package in
 `python/`.
 `sweep`, the flash robustness sweep, is the one module that uses both
@@ -669,7 +691,8 @@ over the rest, built into a shared library for the Python package in
   (`Ode`, `StiffOde`), which return an answer only once every step has met
   the tolerance. M8's `qp` (Goldfarb and Idnani) and `sqp` (Han and Powell,
   `Constrained`, `OptimizeError`) return an optimum only once its first-order
-  conditions hold. They take what they solve as an interface
+  conditions hold, and `least_squares` (`Residuals`, `LeastSquaresError`) a
+  minimum only once its gradient test does. They take what they solve as an interface
   (`Function`, `FallibleFunction`, `System`, `Equations`, `Objective`), never
   a closure: V 0.5.2 never frees a closure, and one per flash leaked kilobytes.
 - **`components`** runs the data pipeline: ChemSep XML, a strict importer,

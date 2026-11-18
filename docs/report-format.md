@@ -350,6 +350,67 @@ bound it's on, each constraint, and each iterate, to 5 significant figures.
 `--workers N` differentiates by N inputs at once, as many as the processors
 by default; the report is the same bits whatever N is.
 
+## The fit report
+
+`reflux fit reactions.toml rates --json fit.json --csv residuals.csv`
+writes a fit's outcome (M8's D14, D15, D17): a format of its own, format 1,
+which changes only with a new number. Every number is SI, each parameter
+in the file's own form: an Arrhenius constant fitted centred on the data's
+mean T is reported back as A and Eₐ.
+
+#### The fit
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `file` | The file, as the command line named it. |
+| `fit` | The fit's name. |
+| `status` | `"fitted"`; or `"failed"`, with `reason`, or `error` if the file didn't load. |
+| `error` | Why the file didn't load, as the solve's `error`, or `null`. |
+| `reason` | Why there's no fit, or `""`. |
+| `kind` | `"rates"`, rate constants to rates, or `"vle"`, kᵢⱼ to bubble points. |
+| `data` | The data's file, as the fit names it. |
+| `parameters` | Each parameter, as below, in the fit's order. |
+| `correlation` | The parameters' correlations, a row each, in the file's form. |
+| `centred` | Each constant fitted centred: `constant` and `t_ref`, the data's mean T. |
+| `measurements` | The residuals: each measured rate, or each bubble point's P and measured y. |
+| `dof` | The measurements less the parameters. |
+| `s` | The weighted residuals' standard deviation, √(Σr²/dof), about 1 where the weights are the measurements' errors; or `null`. |
+| `t` | Student's t at 0.975 on `dof`, each interval's half-width over its standard error; or `null`. |
+| `residuals` | Each measurement against the model at the answer, as below. |
+| `section` | The fitted constants as the file writes them, in its units, to 10 significant figures. |
+| `iterations` | Levenberg–Marquardt's iterations. |
+| `evaluations` | Its evaluations of the residuals. |
+
+#### `parameters[]`
+
+| Key | |
+|---|---|
+| `name` | As the fit names it: `k1.A`, `K_E.dH`, `K_H` or `kij[ethane, propane]`. |
+| `unit` | Its SI unit, `""` for a pure number. |
+| `file_unit` | The unit the file writes it in, `""` for a pure number. |
+| `start` | Where the fit started it. |
+| `value` | Its fitted value, or `null`. |
+| `standard_error` | Its standard error, by linearisation, s²·(JᵀJ)⁻¹, or `null`. |
+| `lower` | Its 95% interval's lower end, value − t·standard error, or `null`. |
+| `upper` | And its upper end, or `null`. |
+
+#### `residuals[]`
+
+| Key | |
+|---|---|
+| `row` | The measurement's row in the data, from 0. |
+| `column` | Its column: `r[hydrogenation]`, `P` or `y[ethane]`. |
+| `measured` | Its measured value. |
+| `model` | The model's at the answer. |
+| `weighted` | Their difference, model less measured, over the measurement's error. |
+
+The CSV has a row for each residual: `row`, `column`, `measured`, `model`
+and `weighted`. `reflux fit` prints each parameter in the file's unit with
+its standard error and interval, their correlations, and the fitted
+constants as the file writes them.
+
 ## Exit status
 
 | Status | |
@@ -366,3 +427,7 @@ there included.
 `reflux optimize` exits 0 with an optimum; 1 when its file didn't load or
 has no optimisations, when it found no optimum, or when a report couldn't be
 written; and 2 for a wrong command.
+
+`reflux fit` exits 0 with a fit; 1 when its file didn't load or has no
+fits, when the fit failed, or when a report couldn't be written; and 2 for a
+wrong command, `--workers` included.

@@ -472,6 +472,12 @@ rec := db.find('watr') or {
   not an Option or a Result". Each call takes its own `or`, as the PFR's
   choice of integrator does ([reactors/pfr.v](../reactors/pfr.v)), or the
   `match` yields plain values from calls that already handled theirs.
+- **An error can carry an integer:** `error_with_code('…', k)`, read back
+  by `err.code()` in the caller's `or`, where Go would define an error type
+  with a field. `numeric`'s QR refuses a parameter the data don't determine
+  that way, and `least_squares` passes its index on, which a fit turns into
+  the parameter's name ([numeric/least_squares.v](../numeric/least_squares.v),
+  M8 step 11).
 - **An `or` block's value is the call's type,** so Go's `v, err := f()`,
   keeping the error to look at, has no `e := f() or { err }`: that's "wrong
   return type `IError` in the `or {}` block, expected `numeric.QpSolution`".

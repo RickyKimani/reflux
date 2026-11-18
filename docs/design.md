@@ -2215,6 +2215,87 @@ per unit of its own:
 so that, by the envelope theorem, a bound's is ∂F/∂x at the optimum, and
 a constraint's ∂F/∂x over its sides' ∂/∂x there, for one input.
 
+## Least squares
+
+`numeric.least_squares` (M8's D14) minimises ½‖r(θ)‖² by Levenberg and
+Marquardt's method as Moré gives it (Lecture Notes in Mathematics 630,
+1978), over the interface `Residuals`: r and its Jacobian J at θ.
+
+**The step** minimises the linear model with a damping term,
+
+    ‖J·δ + r‖² + μ·‖D·δ‖²,   by Householder QR on [J; √μ·D]·δ = [−r; 0],
+
+so JᵀJ is never formed and its squared conditioning never paid. Dₖ is the
+largest norm of column k of J seen so far, which makes the steps
+independent of the parameters' scales; μ starts at 10⁻³.
+
+**Taking it.** With ρ the residuals' fall over the model's,
+‖r‖² − ‖r + J·δ‖², a step is taken where ρ > 0, and then
+μ ← μ·max(1/3, 1 − (2ρ − 1)³); otherwise μ ← μ·ν, ν doubling each refusal
+and back to 2 at each step taken (Nielsen). Where the model predicts a fall
+below 10⁻¹⁰·‖r‖², Σr²'s rounding, tens of ε of it, can't resolve it and ρ
+is noise: there a step is taken if the gradient test falls. Without that, a
+fit near its minimum stalls, every step refused, before the test can be met
+(M8 step 11's coverage test found it, in 1 data set of 400; the gcc check
+found a window of 8ε·‖r‖² on the actual fall too narrow).
+
+**The answer.** θ is returned once the gradient test holds,
+
+    maxₖ |Jₖᵀr| / (‖Jₖ‖·‖r‖) ≤ gtol = 10⁻¹⁰,
+
+the largest cosine between r and a column of J, zero at a minimum whatever
+the scales; or r is zero. (JᵀJ)⁻¹ comes from the QR of J with its columns
+scaled to unit length, J·S⁻¹ = Q·R:
+
+    (JᵀJ)⁻¹ = S⁻¹·R⁻¹·R⁻ᵀ·S⁻¹,
+
+and a diagonal entry of R below 10⁻¹⁰ of the largest is a parameter the data
+don't determine, refused by its index.
+
+**Student's t,** for the intervals, is the root of its CDF by bisection to
+the doubles' resolution,
+
+    P(T ≤ t) = 1 − ½·I_x(ν/2, ½),   x = ν/(ν + t²),   1 − x = t²/(ν + t²),
+
+with the regularized incomplete beta I by its continued fraction (Lentz's
+method, Numerical Recipes §6.4) and its front factor's
+ln(Γ(a + b)/(Γ(a)Γ(b))) by Stirling's series with log1p where a is large:
+the difference of two numbers near 6·10⁶ at ν = 10⁶ otherwise. It's good to
+1.2·10⁻¹⁴ of t at ν ≤ 1000, and 3.2·10⁻¹² at 10⁶.
+
+## Fitting
+
+A `[fit.NAME]` (M8's D14, D15) is least squares on weighted residuals,
+measurement less model over its error σ (σ = w·|measured| for a relative
+weight w), and the file's form of each parameter at the end:
+
+    s² = Σrᵢ²/(n − p),   C = s²·M·(JᵀJ)⁻¹·Mᵀ,   seₖ = √Cₖₖ,
+    θₖ ± t₀.₉₇₅(n − p)·seₖ,   ρₖₗ = Cₖₗ/(seₖ·seₗ),
+
+M = ∂(the file's form)/∂(θ as fitted), the delta method, which is exact for
+the linearised covariance (Bates and Watts, *Nonlinear Regression Analysis
+and Its Applications*, 1988).
+
+**Rate constants.** The kinetics are built again with the fitted numbers as
+variables in the rates' context, after T and P, so the tape's reverse sweep
+gives ∂r/∂θ exactly. Where an Arrhenius constant's A and Eₐ are both
+fitted, and it isn't centred already, it's fitted centred on the data's
+mean T, T̄:
+
+    k = k_ref·exp(−Eₐ/R·(1/T − 1/T̄)),   A = k_ref·exp(Eₐ/(R·T̄)),
+    ∂A/∂k_ref = exp(Eₐ/(R·T̄)),   ∂A/∂Eₐ = A/(R·T̄),
+
+which takes most of A's and Eₐ's correlation out of the solve: in the file's
+form, the ethylene fit's k1.A and k1.Ea correlate at 0.996. A van 't Hoff
+constant's A and ΔH are centred alike. Each row's state is the ideal gas, pᵢ = yᵢP, fᵢ = pᵢ,
+cᵢ = pᵢ/RT, as rate data from a differential reactor are.
+
+**kᵢⱼ** come from bubble points: at each row's T and liquid x, the model's
+bubble pressure and vapour composition (`flash.bubble_p`) less the
+measured P and y, each over its error. J is by central differences,
+kᵢⱼ ± 10⁻⁶, good to about 10⁻⁷: kᵢⱼ is of order 0.01 and a bubble point's
+rounding about 10⁻¹².
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from

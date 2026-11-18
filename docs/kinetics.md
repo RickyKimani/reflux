@@ -161,14 +161,22 @@ the factor table.
 
 ## Fitting parameters
 
-Fitting LHHW constants to lab data is as common as using them, so it is
-planned alongside them (roadmap H4). There are two parts:
+Fitting LHHW constants to lab data is as common as using them, so it came
+alongside them (roadmap H4, M8 steps 11 and 12): a `[fit.NAME]` in the
+reactions file names the constants to fit, `k1.A`, `k1.Ea`, `K_E.dH`, and a
+CSV file of rates with their units ([flowsheet-format.md](flowsheet-format.md#fits-format-3)).
+`reflux fit` fits them by least squares on the tape's exact derivatives.
 
-- k_ref and Eₐ are fitted around a reference temperature, which removes the
-  strong correlation between A and Eₐ that makes plain Arrhenius fits
-  ill-conditioned.
-- Each fit reports confidence intervals and parameter correlations. The
-  Python API (M10) lets you drive it from NumPy and pandas.
+- k_ref and Eₐ are fitted around the data's mean temperature, which removes
+  the strong correlation between A and Eₐ that makes plain Arrhenius fits
+  ill-conditioned, and are reported back as the file writes them.
+- Each fit reports its 95% intervals and the parameters' correlations, and
+  writes the fitted constants back as file text. Over seeded synthetic data
+  the intervals hold the true values 381 and 382 times in 400, against the
+  380 they claim ([design.md](design.md#fitting)).
+
+`testdata/m8_fit/ethylene.toml` fits an LHHW rate and a power law to 40
+states, and matches SciPy's fit of the same data.
 
 ## How it maps onto V
 

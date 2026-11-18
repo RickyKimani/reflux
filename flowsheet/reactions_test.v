@@ -249,7 +249,7 @@ fn with(old string, new string) string {
 fn test_refused() {
 	assert refused_text(xu_froment_text) == 'loaded 3 rates'
 	cases := [
-		['format = 2', 'format = 1', 'flowsheet: line 6: format: reactions need format 2, not 1'],
+		['format = 2', 'format = 1', 'flowsheet: line 6: format: reactions need format 2 or 3, not 1'],
 		['equation = "CH4 + H2O = CO + 3 H2"', 'equation = "CH4 + H2O = CO + H2"',
 			"flowsheet: line 22: reaction.reforming.equation: CH4 + H2O = CO + H2 doesn't balance: H: 6 on the left, 2 on the right; balanced, it would be CH4 + H2O = CO + 3 H2"],
 		['equation = "CH4 + H2O = CO + 3 H2"', 'equation = "CH4 + H2O = CO + 3 H3"',
@@ -426,10 +426,13 @@ basis = "mole_fraction"
 		'Eley–Rideal on site S on fugacities, per mass of catalyst, irreversible',
 		'an expression on mole fractions, per mass of catalyst',
 	]
-	// A format other than 2 is refused, whichever way it's off.
-	for n in ['1', '3'] {
+	// Format 3 (M8) reads the same reactions; any other is refused,
+	// whichever way it's off.
+	three := load_kinetics_text(text.replace_once('format = 2', 'format = 3'))!
+	assert three.kinetics.rates.len == k.rates.len && three.kinetics.rates.len > 0
+	for n in ['1', '4'] {
 		g := load_kinetics_text(text.replace_once('format = 2', 'format = ${n}')) or {
-			assert err.msg() == 'flowsheet: line 1: format: reactions need format 2, not ${n}'
+			assert err.msg() == 'flowsheet: line 1: format: reactions need format 2 or 3, not ${n}'
 			continue
 		}
 		assert false, '${g.names}'
