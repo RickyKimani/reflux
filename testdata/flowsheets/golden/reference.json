@@ -1,6 +1,6 @@
 {
-  "format": 2,
-  "reflux": "0.3.0",
+  "format": 3,
+  "reflux": "0.4.0",
   "file": "testdata/flowsheets/reference.toml",
   "status": "solved",
   "error": null,
@@ -987,7 +987,9 @@
         [
           6.085889833289834e-12
         ]
-      ]
+      ],
+      "specs": [],
+      "spec_residuals": []
     },
     {
       "units": [
@@ -995,7 +997,9 @@
       ],
       "tears": [],
       "cycles": 0,
-      "residuals": []
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
     },
     {
       "units": [
@@ -1003,7 +1007,9 @@
       ],
       "tears": [],
       "cycles": 0,
-      "residuals": []
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
     }
   ],
   "notes": [],
@@ -1014,5 +1020,6 @@
   "worst_unit": {
     "component": 7.017259567330849e-17,
     "energy": 1.6064253760269905e-13
-  }
+  },
+  "specs": []
 }

@@ -135,6 +135,31 @@ Each reflux point is its median of three solves. Every seventh point, and the la
 | 957.1 °C | 11.4 s | 35.8 ms | 0.980413 | 0.981046 |
 | 1000 °C | 13.0 s | 40.2 ms | 0.986559 | 0.987041 |
 
+## Studies, an optimisation and a spec
+
+M8 step 14, exit criterion 11: what M8 added, each against DWSIM's own form for it, driven unshown (M8 step 0). `tools/gen_m8_bench.py` writes `testdata/m8_bench.json`, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-18, with DWSIM 9.0.5.0 and reflux built with gcc 16.2.0 -prod. reflux ran everything before DWSIM's runs and again after, each the best of three after an untimed run, since a laptop's clock moves DWSIM's solve between 9.4 and 29 s (M9 step 0); the faster of the two is shown.
+
+### The owner's study: 50 feed temperatures, 700 to 1000 °C
+
+| | All 50 | DWSIM over it |
+|---|---|---|
+| DWSIM's sensitivity analysis, the owner's setup (dV = 0.05, Radau) | 15.1 min | 1 |
+| reflux, cold | 1.24 s | 730 |
+| reflux, warm | 1.14 s | 790 |
+| reflux, warm, 2 workers | 703 ms | 1300 |
+| reflux, warm, 4 workers | 722 ms | 1300 |
+
+reflux solves `testdata/flowsheets/reformer_dwsim.toml`, the same case on DWSIM's rates as typed, in chunks of 8: cold, every point from the feed; warm, each chunk's points from their neighbours (D6, D7); and warm on 2 and 4 threads (D8). The answers are the same bits on any number of workers. One solve of the published model, `testdata/flowsheets/reformer.toml`, whose K(T) is kept until T moves (step 1), takes 13.4 ms: it took 393 ms in M9.
+
+### An optimisation and a spec
+
+| | DWSIM | Its solves | reflux | Its solves | DWSIM over reflux |
+|---|---|---|---|---|---|
+| Two-stage compression, the least work (`compression_dwsim.toml`) | 1.32 s, bounded Brent | 18 | 273 ms, SQP | 57 | 4.8 |
+| The reference flowsheet's spec (`reference_dwsim.toml`) | 17.2 s, an Adjust's secant at 1e-4 | 7 | 137 ms, with its recycle | 18 passes | 130 |
+
+DWSIM's optimiser and Adjust solve the whole flowsheet at each evaluation. reflux's SQP counts every solve, its gradients' included, five a gradient; its spec is met with the recycle's tears, by Broyden on both, so its count is the block's passes, each one pass of its units.
+
 ## From Python
 
 M10a step 7, exit criterion 10: what a call from Python costs over V's own loop doing the same work. Methane, ethane and n-butane, 30/30/40, at 20 bar, from 220 to 400 K (one point at 300 K), with Peng–Robinson and the database's kᵢⱼ. `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, timing V and Python alternately, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-05, with Python 3.13.17 and NumPy 2.5.4.

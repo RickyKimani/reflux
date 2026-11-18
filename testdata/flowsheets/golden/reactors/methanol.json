@@ -1,6 +1,6 @@
 {
-  "format": 2,
-  "reflux": "0.3.0",
+  "format": 3,
+  "reflux": "0.4.0",
   "file": "testdata/flowsheets/methanol.toml",
   "status": "solved",
   "error": null,
@@ -157,7 +157,9 @@
       ],
       "tears": [],
       "cycles": 0,
-      "residuals": []
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
     }
   ],
   "notes": [],
@@ -168,5 +170,6 @@
   "worst_unit": {
     "component": 9.227465511685296e-17,
     "energy": 0
-  }
+  },
+  "specs": []
 }

@@ -37,6 +37,149 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
+## [0.4.0]
+
+Specifications, sensitivity studies, optimisation and fitting: the roadmap's
+M8. A flowsheet now answers questions as well as solving once. It can vary a
+unit until a target is met, sweep its inputs with each point's derivatives,
+find an optimum under constraints, and fit rate constants and kᵢⱼ to data
+with confidence intervals. Each answer is shown to be right, as a solve's
+is. The owner's 50-point reforming study takes 0.70 s, where DWSIM 9's own
+form takes 15 minutes. Like 0.3.0, it's a source release
+(`v -prod -cc gcc -o reflux .`).
+
+### Added
+
+- **Flowsheet variables in expressions:** a stream's `product.T`, `.P`,
+  `.F`, `.n[CH4]`, `.y[CH4]`, `.h` and `.vf`, and a unit's energy streams,
+  `reactor.duty`. A name whose stream or unit isn't one word is quoted,
+  `'let down'.T`. A name that isn't there is refused with the closest names,
+  and every one has its dimension.
+- **Equations,** `=`, `<=` and `>=` between two expressions of one dimension.
+  An expression with no value at a state says why, never ±∞: "the feed has
+  no methanol".
+- **Specs,** `[spec.NAME]` ([flowsheet-format.md](docs/flowsheet-format.md)).
+  A spec varies any number the file gives a feed or a unit, by its key,
+  within bounds, until an equation holds.
+  - The key is `unit.cooler.outlet_T` or `feed.syngas.T`, and the feed or
+    unit is remade by its own maker, with its own checks.
+  - A spec is met with its block's tears, by Broyden on both, or by Brent
+    alone where it has none. A nested retry takes over where that fails.
+  - Each spec is checked again from the solution. A target the bounds can't
+    reach is refused, with the range they reach.
+  - `reflux solve` meets a file's specs, and its report gives each one.
+- **Studies,** `[study.NAME]`, and `reflux study FILE [NAME]`.
+  - One or two inputs, over values with units, and named outputs.
+  - Each point is solved, or failed with its reason, or solved with an output
+    that has no value, with why. The table, `--json` and `--csv` give every
+    point.
+  - Each point starts from its neighbour's answer. A unit that can use its
+    last answer does: the CSTR's Newton starts from its last outlet, 10
+    times faster, and an energy balance brackets its T around the last.
+  - `--workers N` runs the points on threads, the processors by default. The
+    answers are the same bits on any number of workers.
+- **Sensitivities:** a study's `sensitivities`, each point's derivatives by
+  central differences of solves at 1e-12, extrapolated by Richardson's rule.
+  Each derivative comes with an estimate of its error, which the tests hold
+  above the true error against closed forms.
+- **Optimisation,** `[optimize.NAME]`, and `reflux optimize FILE [NAME]`.
+  - It minimises or maximises an expression, over inputs with bounds, subject
+    to equations and inequalities over flowsheet variables.
+  - The optimiser is `numeric.sqp`, Han and Powell's SQP, written in V, on
+    `numeric.qp`, Goldfarb and Idnani's dual active-set QP. Every evaluation
+    is a converged solve.
+  - An optimum is returned only once its first-order conditions hold. It
+    comes with each bound's and constraint's multiplier, as how fast the
+    optimum improves as each is relaxed, and every iterate.
+  - 21 of Hock and Schittkowski's problems reach their published optima.
+    Series reactions in a PFR reach their closed-form optima inside the
+    bounds, on a bound and on a constraint.
+- **Fitting,** `[fit.NAME]` with a CSV of data, and `reflux fit FILE [NAME]`.
+  - Rate constants are fitted to rate data on the tape's exact derivatives,
+    an Arrhenius or van 't Hoff pair centred on the data's mean T. kᵢⱼ are
+    fitted to bubble points.
+  - The solver is `numeric.least_squares`, Levenberg–Marquardt on QR.
+  - Each constant comes with its standard error, its 95% interval by
+    Student's t (`numeric.student_t_quantile`) and the correlations, all in
+    the file's own form. The fitted section is written back as file text.
+  - It matches SciPy's fits of the same data, and over 400 seeded data sets
+    the 95% intervals held the truth 381 and 382 times, against 380.
+- **Flowsheet file format 3:** specs, studies, optimisations and fits. A
+  file of reactions alone may be format 2 or 3. Formats 1 and 2 read as
+  before.
+- **Report format 3:** the file's `specs`, each block's `specs` and
+  `spec_residuals`, and the failure `"spec_not_met"`. The study, the
+  optimisation and the fit each have a report format of their own, format 1
+  ([report-format.md](docs/report-format.md)).
+- **Compared with DWSIM 9** (`testdata/m8_dwsim.json`), every difference
+  explained by a number a test checks:
+  - the reference flowsheet's spec is 2.8 mK from its Adjust's, which is
+    reflux's vapour 1.6e-3 mol/s short at DWSIM's answer, over the slope;
+  - a two-stage compression's least work is 1.5 Pa from its optimiser's;
+  - the series reactions in DWSIM's PFR give an optimum 1.5% off, from the
+    noise in its outflow.
+- **Speed** ([benchmarks.md](docs/benchmarks.md)): the owner's study
+  in 1.24 s cold, 1.14 s warm and 0.70 s on 2 workers, against 904 s by DWSIM's
+  sensitivity analysis. The spec is 130 times faster than DWSIM's Adjust, and
+  the optimisation 4.8 times faster than its optimiser.
+
+### Changed
+
+- **The published reforming model solves in 13.4 ms,** from 393. A rate
+  keeps each reaction's K until T moves, and at a new T integrates each
+  species' Cp once for all its reactions. The PFR keeps what Wilke's rule
+  needs at a T, and its states' volume roots allocate nothing
+  (`thermo.Cubic.work()`): a PFR solve allocated 9.72 MB, and now 0.57 MB.
+  Every answer keeps its bits.
+- **The report is format 3.** It has `specs` beside format 2's keys, and
+  each block has `specs` and `spec_residuals`.
+- **The V API,** as 0.x allows. Everything is added and nothing removed:
+  - `flowsheet.Loaded` has `input`, `with`, `solve_from`, `expression` and
+    `value`, and the file's `specs`, `studies` and `optimizations`, and
+    `flowsheet.load_fits` reads a file's fits;
+  - a `Section` notes each number its maker reads;
+  - a unit may implement `Warm` and `Energies`;
+  - `flowsheet.Solution` has `specs`;
+  - there are new modules: `study` and `fit`.
+- **`reflux_collect` gives the bytes live after its collection,** in the C
+  API and as `reflux.collect()` in Python, where it gave the collector's heap
+  size. The heap's size grows in large steps when the collector chooses to,
+  and is never given back, so it said little about what the library holds.
+  The call is the same, so the ABI version is still 1.
+- **The golden flowsheets' reports** were written again, all seven
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json`, `saturated_loop.json`, and `reactors/reformer.json`
+  and `reactors/methanol.json`), in report format 3 and for this version.
+  Each gains an empty `specs` and its blocks empty `specs` and
+  `spec_residuals`. No number in them moved.
+
+### Fixed
+
+- **`python/tests/test_memory.py` failed now and then on Ubuntu.** It held
+  the collector's heap size, which doubled once in a step and failed it. It
+  now holds the bytes live after a full collection within 256 KiB: they
+  stay within 68.
+
+### Known limitations
+
+- **Sensitivities and gradients are by differences.** Exact sensitivities,
+  from the converged Jacobian, need each unit's Jacobian, which comes with
+  M13's equation-oriented solve.
+- **The optimiser is for small, dense problems,** a handful of inputs, on
+  the feasible path: each evaluation is a whole solve. IPOPT, for large
+  sparse problems, and data reconciliation are M13's.
+- **Fits take rate data,** as from a differential reactor, and VLE as
+  bubble points. Outlet data from an integral reactor comes later. A kᵢⱼ fit
+  isn't compared with DWSIM's regression, which fitted nothing when a script
+  ran it.
+- **Workers are bounded by the collector's lock,** which every allocation
+  takes: the owner's study runs about 1.6 times faster on 2 or 4 threads than
+  on one.
+- **Reactors work in one phase,** as in 0.3.0. There are no heat exchangers,
+  and no flowsheets, studies or fits from Python (M10b).
+- **Two phases in a flash,** and cubic equations of state only, as in 0.3.0.
+- **Windows and Linux,** with V 0.5.2 (eab77e7).
+
 ## [0.3.0] — 2026-11-15
 
 Equations, kinetics and reactors: the roadmap's M9. Every equation a user

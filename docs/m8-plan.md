@@ -26,7 +26,10 @@ approved on 2026-11-17. Steps 7 and 8 are done, and step 8 amends D10,
 approved on 2026-11-17. Steps 1 to 8 meet the roadmap's exit. Steps 9
 and 10 are done, built together, and amend D12 and D13, approved on
 2026-11-17. Steps 11 and 12 are done, built together, and amend D14 and
-D15, approved on 2026-11-18. Step 13 is next.
+D15, approved on 2026-11-18. Steps 13 and 14 are done, built together, with
+no decision amended. Steps 15 and 16 are done, built together, after a fix
+for the branch's first CI run: v0.4.0 is ready to tag once M8 is merged,
+and the exit review is at the end.
 
 ## Goal
 
@@ -605,7 +608,9 @@ laptop's clock moves between runs):
   overwritten by hand left at an unmoved T and replaced at another; a fill
   at −1 K refused twice and nothing kept; and a fill at a new T allocating
   2,752 bytes where its reactions one by one allocate 6,048, held under
-  0.6 of it, and nothing at an unmoved T.
+  0.6 of it, and nothing at an unmoved T. That count failed on CI's gcc
+  builds, where the collector counts small allocations in batches, so the
+  fill now counts its species itself (step 15).
 - `test_kept_and_mixed_is_the_whole` and `test_refused`
   ([reactors/viscosity_test.v](../reactors/viscosity_test.v)): the same for
   `WilkeAt`.
@@ -1600,21 +1605,226 @@ regression is step 13's: step 0 found that it fitted nothing (D18).
 SciPy, its start, four refusals of the file and four of the data, and three
 planted mistakes.
 
-### 13. DWSIM references
+### 13. DWSIM references — done
 - D18: the study, the spec, the optimisation and, if it runs, the kᵢⱼ fit
   against DWSIM 9, every difference explained.
 
-### 14. Speed
+Steps 13 and 14 were built together, at the owner's word.
+
+**What was built:**
+- **[tools/gen_m8_dwsim.py](../tools/gen_m8_dwsim.py)** and
+  [testdata/m8_dwsim.json](../testdata/m8_dwsim.json): DWSIM 9.0.5's answers,
+  through step 0's spike, which drives its forms unshown, and SciPy on its
+  solves for its own model's answers. Its parts are `spec`, `compression`
+  and `series`, and each repeats to the last digit from run to run.
+- **[testdata/flowsheets/compression_dwsim.toml](../testdata/flowsheets/compression_dwsim.toml):**
+  step 0's two-stage compression on DWSIM's constants and kᵢⱼ, with its
+  two optimisations.
+- **[study/dwsim_test.v](../study/dwsim_test.v):** each comparison, each
+  difference explained by a number the test checks.
+
+**The spec** (D18): the reference flowsheet on DWSIM's constants, the
+cooler's outlet T between 200 and 260 K until the first drum's vapour is
+60 mol/s, the recycle's tolerances scaled by 1e-8.
+- DWSIM: 219.7546705409 K by brentq on its solves; an Adjust's secant at
+  1e-10 reaches it in 10 whole solves, its Brent in 7.
+- reflux: 219.7574877222 K, 2.8172 mK above, in 18 passes of the loop.
+- **Explained:** at DWSIM's answer, reflux's vapour is 1.6222e-3 mol/s
+  short of 60, the difference M4 found between the two flowsheets (DWSIM's
+  pump's liquid density, through the recycle; at 230 K, 65.19310 against
+  65.19453 mol/s, 2.2e-5). Over DWSIM's slope there, 0.575829 mol/(s·K),
+  that's 2.81724 mK, against the 2.81718 found.
+
+**The optimisation** (D18, criterion 8): the two-stage compression's
+least work, the middle pressure between 1.5 and 12 bar.
+- DWSIM: 4.05502501 bar and 106171.3175 W by SciPy on its solves; its
+  optimiser's bounded Brent, the one method of its 11 that finds it (step
+  0), reaches 4.05502502 bar in 18 evaluations, and on a bound (6 to
+  12 bar) 6 bar in 55.
+- reflux: 405503.960 Pa and 106172.909 W in 9 iterations and 57 solves; on
+  the bound, 6 bar exactly in 13, its multiplier 0.011252 W/Pa against
+  DWSIM's slope there, 0.0112548, by differences.
+- **Explained:** the two optima are 1.459 Pa apart, 3.6e-6 of the pressure.
+  reflux's own slope at DWSIM's optimum, over the work's curvature,
+  1.04e-7 W/Pa², predicts 1.456 Pa. The works differ by 1.5e-5 to 3.2e-5,
+  each stage's by 1.4e-5 to 5.4e-5 and its outlet by 0.1 to 4.6 mK,
+  scattered with the pressure, where a Cp would give a smooth difference.
+  M3 found DWSIM's ideal-gas H up to 1e-5 off an exact quadrature of its own
+  Cp, and its S alike: given DWSIM's own outlets, reflux's H gives works
+  within 1e-6 to 1.4e-5 of DWSIM's, so its isentropic outlets carry the
+  rest.
+
+**Criterion 8's series reactions in DWSIM's PFR**, "if its PFR takes
+them" (D18): it does, each rate typed as a heterogeneous catalytic rate per
+kg on 1 kg/m³, so per volume; isothermal at 400 K, isobaric, sections of
+dV = 0.01. Each solve takes it about 16 s.
+- Its isopentane is the closed form's to 5e-11 at 7 of 12 volumes, and off
+  by up to 1.32e-4 at the others: 1.3e-4 low at 0.64 m³, 4.5e-5 high at
+  0.6645 m³.
+- Its optimum: 0.66452 m³ by SciPy on its solves, 1.5% from the exact
+  V* = 0.654998 m³; 0.65788 m³ by its optimiser's bounded Brent, 0.44%, in
+  22 evaluations. reflux's is within 1e-5 of V* (step 10).
+- **Explained:** DWSIM's PFR integrates each section at a relative tolerance
+  of 1e-3 that nothing sets (M9 step 0), and where that tolerance lets a
+  step through, the outflow jumps. On a peak this flat, B″ = −1.11
+  mol/(s·m⁶), an error e can move an apparent maximum by up to √(2e/|B″|),
+  0.0155 m³ for 1.32e-4; the two searches ended 0.0095 and 0.0029 m³ off.
+
+**The kᵢⱼ fit against DWSIM's regression:** not possible from a script.
+Step 0 found its regression fitting nothing on these data by any of its
+four methods (D18, as amended); the owner's run of the same nine points in
+the app could still settle it.
+
+**The study against DWSIM's own form** is step 14's, where it's timed.
+
+**Found:**
+- **DWSIM's PFR isn't smooth in its volume,** at about 1e-4 of the outflow,
+  which sends both SciPy's and DWSIM's own search off a flat optimum.
+- **DWSIM's ideal-gas H and S show in a compressor's work** at 1e-5 to
+  5e-5: M3's quadrature finding, through an isentropic flash.
+
+**Tests:** [study/dwsim_test.v](../study/dwsim_test.v), the three above.
+
+### 14. Speed — done
 - The owner's study warm, cold and on workers; the published model with K
   kept; an optimisation's solves; against DWSIM, in `docs/benchmarks.md`.
 
-### 15. Release v0.4.0
+**What was built:** [tools/bench_m8.v](../tools/bench_m8.v), reflux timed by
+mode (a study cold, warm or on workers, a solve, an optimisation, a spec),
+and [tools/gen_m8_bench.py](../tools/gen_m8_bench.py), which runs it with
+gcc `-prod` before DWSIM's runs and again after, DWSIM's by its own forms,
+into [testdata/m8_bench.json](../testdata/m8_bench.json);
+[benchmarks/m8.v](../benchmarks/m8.v), its section of
+[docs/benchmarks.md](benchmarks.md).
+
+**Criterion 11, measured** (on the owner's laptop, a Ryzen 5 PRO 3500U, in
+one session; reflux the best of three, before or after DWSIM's runs):
+
+| | DWSIM 9 | reflux | DWSIM over reflux |
+|---|---|---|---|
+| The owner's 50-point study, by DWSIM's own sensitivity analysis | 904 s (15.1 min) | 1.24 s cold, 1.14 s warm, 0.70 s warm on 2 workers, 0.72 s on 4 | 730 to 1300 |
+| The compression's least work, by its optimiser's bounded Brent | 1.32 s, 18 solves | 273 ms, 57 solves, by SQP | 4.8 |
+| The reference flowsheet's spec, by an Adjust's secant at 1e-4 | 17.2 s, 7 whole solves | 137 ms, 18 passes | 130 |
+| One solve of the published model | | 13.4 ms, from M9's 393 | |
+
+- **The study:** DWSIM's form took 904 s here and 727 s in step 0, as a
+  laptop's clock moves it, and the owner measured 30 minutes in the app.
+  reflux's answers are within 2.29e-3 of DWSIM's methane, of the feed's, as
+  M9 found them (DWSIM's sections' error and reflux's own viscosity).
+- **The optimisation** is where DWSIM's edge is least: its compressors'
+  flowsheet solves in about 70 ms, and bounded Brent needs one solve an
+  evaluation, where reflux's SQP takes five for each gradient and shows its
+  answer an optimum. Brent is the one method of DWSIM's 11 that finds it.
+- **Workers:** 4 were no faster than 2 in this run; step 7 measured 0.71 s
+  on 4 against 1.18 on one. The collector's lock, which every allocation
+  takes, and the laptop's four cores bound it.
+
+**Planted mistakes:** 4 in the report's section (the best of the two
+rounds, the ratio's order, the studies' order, a round left out), each
+caught by the committed report's test.
+
+**Tests:** [benchmarks/m8_test.v](../benchmarks/m8_test.v): reflux solved
+what it says (the study's methane now within 1e-9 of the fixture's, on 1, 2
+and 4 workers the same bits, cold and warm within 1e-8); DWSIM solved the
+same case; reflux is faster at each, before and after; and the committed
+report shows the fixture.
+
+### 15. Release v0.4.0 — done
 - The CHANGELOG entry, the versions, and the release gate, as for v0.3.0.
 
-### 16. Docs and exit review
+Steps 15 and 16 were built together, after the fix CI asked for (below).
+
+**What was done:**
+- **v.mod and the package are 0.4.0:** `v.mod`, which the library and the
+  reports read through `@VMOD_FILE`, and `python/pyproject.toml`, which
+  `python/tests/test_library.py` holds to it.
+- **[CHANGELOG.md](../CHANGELOG.md)'s entry for 0.4.0:**
+  - what was added: flowsheet variables, equations, specs, studies,
+    sensitivities, optimisation, fitting, file and report format 3, and the
+    comparison with DWSIM and the speed;
+  - what changed: the published model's speed with its bits kept, report
+    format 3, the V API, `reflux_collect`'s live bytes and the golden
+    reports;
+  - what was fixed: `test_memory.py`;
+  - the known limitations.
+
+  The C API keeps ABI version 1: `reflux_collect`'s call is the same, its
+  number now the bytes live. The entry is undated until the tag, which
+  comes on `main` after the merge, as v0.3.0's did.
+- **The golden reports, written again** by `v run tools/golden.vsh`, all
+  seven, in report format 3 for 0.4.0. Each gains an empty `specs` and its
+  blocks empty `specs` and `spec_residuals`. A script compared every value
+  in each before and after: no number moved in any. The entry names each,
+  as the gate asks.
+- **The gate,** `v run tools/release.vsh`, refuses for three reasons, each
+  the merge's or the tag's to settle: the tree has changes (steps 13 to 16,
+  until they're committed), the branch is `m8-sensitivity`, not `main`, and
+  the entry has no date. It found every changed golden report named.
+
+**CI, before the release.** The branch's first CI run, on steps 9 and 10
+(`05dd726`, run 44154785483), failed in both gcc jobs, Ubuntu's and
+Windows', in one test: step 1's `test_a_fill_integrates_each_species_once`.
+It counted the collector's bytes to show how many integrals a fill took,
+and CI's gcc builds counted 0. A probe found why: gcc's build of the
+collector hands out small blocks from a free list of its own and counts
+them only when the list refills. Of 1,000 arrays of ten `f64`s made one at
+a time, 939 moved the count by nothing under gcc, and none under tcc
+([v-for-go.md](v-for-go.md), §10). Locally the fill happened to refill
+its list, so the local gcc checks passed.
+- **The fix:** a `kinetics.Point` counts the species whose H° and S° its
+  fills took (`integrals`). The test holds it at 5 after the first fill and
+  10 after a fill at a new T, where the reactions taken one by one would
+  take 12. It holds no new ones at an unmoved T, and nothing allocated
+  there, which tcc's build shows.
+- **Two notices** every job printed are gone. A test unit's unused
+  parameters in `flowsheet/spec_test.v` are `_` now. `magnitude` in
+  `kinetics/law.v` shadowed a function of `kinetics/standard_test.v`, which
+  builds with the module, and is `unsigned` now.
+- **Planted mistakes, 4,** in a scratch copy, all caught:
+  - the count dropped;
+  - each species integrated again for every reaction, the mistake the
+    test is for;
+  - the species not cleared at a new T;
+  - a fill at an unmoved T.
+- **Tests:** `v run tools/python.vsh test`, which the failed run skipped:
+  83 passed, the bit-for-bit tests included.
+
+### 16. Docs and exit review — done
 - README, roadmap (D1's amendments of B6, H1 and H4), design notes,
   kinetics.md's fitting, the file and report formats, the V notes, and a
   criterion-by-criterion review.
+- **[README.md](../README.md):**
+  - M8 in the status, with what it built;
+  - `reflux study`, `optimize` and `fit` among the first commands;
+  - its plan beside the others;
+  - v0.3.0 tagged;
+  - `fit_command.v` in the layout.
+- **[roadmap.md](roadmap.md):** M8's entry is done, with D1's three
+  amendments and what the plan did beyond the roadmap's exit.
+  - B6 is M8's SQP in V, with IPOPT in M13.
+  - H1's exact sensitivities and H4's data reconciliation are M13's, which
+    lists them.
+  - F4, F5, H1 to H4 and A9's specifications and objectives are marked
+    done.
+  - NLopt isn't needed, and ThermoML's import is after M8, whose fits read
+    CSV.
+- **[design.md](design.md):** how the equation-oriented solve would give
+  the sensitivities exactly, dx/dp = −(∂r/∂x)⁻¹ ∂r/∂p, and the infeasible
+  path. The rest was written in its steps: varying a number, specs, warm
+  starts, studies, sensitivities, the optimiser, optimising a flowsheet,
+  least squares and fitting.
+- **[v-for-go.md](v-for-go.md):** the collector's batched count under gcc,
+  probed under both compilers.
+- **Checked against the code, already written in their steps:**
+  - [kinetics.md](kinetics.md)'s fitting;
+  - [flowsheet-format.md](flowsheet-format.md) and
+    [report-format.md](report-format.md), format 3 and the three new
+    reports;
+  - [python.md](python.md)'s `reflux.collect()`;
+  - [benchmarks.md](benchmarks.md), [testdata/README.md](../testdata/README.md)
+    and [tools/README.md](../tools/README.md).
+- **The checks:** the full tcc and gcc checks, after steps 13 to 16 together
+  (below).
 
 ## Risks
 
@@ -1628,6 +1838,151 @@ planted mistakes.
 | An SQP written from scratch has bugs a library wouldn't | a wrong optimum | Hock and Schittkowski's problems, the conditions checked at every answer, and planted mistakes, as every solver here has had |
 | A fit's parameters are too correlated to estimate | huge intervals, or no convergence | centred Arrhenius forms; the correlation matrix and each interval reported, so the user sees it; a singular JᵀJ refused with the parameters it can't separate |
 | DWSIM's sensitivity analysis, optimiser or regression can't be driven headless | no like-for-like comparison | M9 step 11's loop of solves for the study; for the rest, the comparison is recorded as not possible, with why |
+
+## Exit review
+
+Checked on 2026-11-18 at the tip of `m8-sensitivity`, `579c12c` with steps
+13 to 16 on it, under V 0.5.2 (eab77e7) and gcc 16.2 on Windows 11.
+- **Locally:** the full checks, `v run tools/check.vsh` with tcc and with
+  gcc (and its `-prod` build), passed on steps 13 to 16 together, with each
+  check's run of the CLI: 104 test files in all, 14 of them new in M8. And
+  `v run tools/python.vsh test`, 83 passed, the bit-for-bit tests included.
+- **In CI:** the branch's one run, on `05dd726`, steps 9 and 10 (run
+  44154785483), passed both tcc jobs and failed both gcc jobs in one test,
+  step 1's count of a fill's integrals. Step 15 fixed it, and the Python
+  tests those jobs skipped pass locally. Steps 11 to 16 get their run when
+  they're pushed.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Specs are met | **met** | `flowsheet/spec_test.v` (step 4): an isothermal PFR's volume for 90% is ln(10)/2 m³ to 1.1e-11, a heater's duty for 250 K is the flash's within F·Cp·\|T − 250 K\|, and a feed's flow for a duty is Q/(h_out − h_in) to 1e-9, each by Brent; two heaters each varying what the other reads by Broyden; the reference flowsheet's cooler for 60 mol/s of gas with its tear, 219.7574877219 K against Brent on whole solves' …222. Each spec is checked again from the solution, to its tolerance and within its bounds, and every balance as before (M4's D8). A target out of reach is refused with the range the bounds reach: 200 mol/s, against 41.99 to 76.65. 13 refusals of a spec in the file, each at its line. |
+| 2 | Flowsheet variables bind | **met** | `expr/scoped_test.v` (step 2): every dotted name binds to its slot with its dimension; 22 refusals, each at its column with its suggestion; each renders back, plain text reading back to the same tree; `value` gives eval's bits at 1,000 seeded points, and says where and why it has none. `flowsheet/spec_test.v`: every variable of the reference flowsheet's every stream and unit against the solution's own numbers. Specs, outputs, objectives and constraints all bind through it (steps 4, 6 and 10). |
+| 3 | Studies report | **met** | `study/study_test.v` (step 6): one or two inputs over values with units, every output at every point with its status. A failed point gives its reason, the next starts cold, and the rest stand. Tutorial 2's methanol conversion has no value at any point, with its reason, `null` in the JSON and NaN in the CSV, where DWSIM plotted −∞; CO's conversion is the correlation's to 1e-12. |
+| 4 | Warm starts are checked | **met** | `study/study_test.v`, `test_warm_points_against_cold` (step 5): six studies, each warm and cold, point by point, the reference flowsheet by direct substitution and by Wegstein, with a spec in its loop, the owner's PFR, a CSTR and an adiabatic Gibbs reactor, within 1e-8 to 1e-11. No warm point takes more passes, spec evaluations or steps than its cold one, and each study's totals are held at their measured values. What a warm start carries was measured first (`spike/warm`, D6 as amended). |
+| 5 | Workers don't change answers | **met** | `study/study_test.v`, `test_workers_dont_change_answers` (step 7): on 1, 2, 4 and 8 workers, every point's outputs, specs' values, passes, steps, status and reasons are the same bits; `benchmarks/m8_test.v` holds the owner's study's on 1, 2 and 4 the same. Throughput, recorded: 1.14 s warm on one worker, 0.70 s on 2 and 0.72 s on 4 (step 14). |
+| 6 | Sensitivities are honest | **met** | `study/sensitivity_test.v` (step 8): a PFR's derivatives against mpmath's closed forms (`testdata/m8_sensitivities.json`), a heater's against F·Cp from `thermo`, and Tutorial 2's dX/dT = −0.0018 /K, each within its own estimate. Each estimate is 3.7 to 10⁷ times its true error, recorded, with a floor of 20 under the PFR's (85 under gcc, 273 under tcc). A recycle's derivative against cold solves at 1e-13 holds the warm solves' bias, which the estimate can't see. |
+| 7 | The optimiser is right | **met** | `numeric/sqp_test.v` (step 9): 21 of Hock and Schittkowski's problems reach their published optima from their published starts, each answer checked from scratch against mpmath's (`testdata/m8_hock_schittkowski.json`): feasibility, the Lagrangian's gradient, the multipliers' signs and complementarity. 206 iterations in all, each problem's recorded. A problem with no feasible point, and one out of iterations, are refused with their reasons. `numeric/qp_test.v`: the QP on random convex problems and its refusals. |
+| 8 | Flowsheet optimisation is right | **met** | `study/optimize_test.v` (step 10): series reactions in a PFR reach their closed-form optima (`testdata/m8_series.json`, mpmath) inside the bounds, on a bound and on a constraint, each multiplier within 1e-5, each verified as in criterion 7. Against DWSIM's optimiser (`study/dwsim_test.v`, step 13): the compression's least work 1.5 Pa from bounded Brent's, explained by reflux's slope at DWSIM's optimum to 0.3 Pa; the series reactions in DWSIM's PFR give an optimum 1.5% off, within what the noise in its outflow allows. |
+| 9 | Fits are right | **met**, but for DWSIM's regression | `fit/fit_test.v` (steps 11 and 12): seven LHHW and power-law constants and a kᵢⱼ match SciPy's fits of the same data (`testdata/m8_fits.json`), values to 1e-4 of their standard errors, intervals likewise. `fit/coverage_test.v`: over 400 seeded data sets the 95% intervals hold the truth 381 and 382 times, against 380, within the binomial bounds. DWSIM's regression fitted no kᵢⱼ by any of its four methods when a script ran it (step 0), so that comparison is recorded as not possible (D18). |
+| 10 | Nothing a reactor keeps changes an answer | **met** | Step 1: every answer keeps its bits, four checksums of studies, isothermal and adiabatic, against the code before, and every golden report. `kinetics/law_test.v` and `reactors/viscosity_test.v`: K and Wilke's factors kept and not, the same bits. The published model, recorded: 393 ms a solve in M9, 13.4 ms now (`docs/benchmarks.md`). The golden reports written again in step 15 moved no number. |
+| 11 | The owner's study against DWSIM 9 | **met** | `benchmarks/m8_test.v` (step 14), gcc `-prod`, in one session: the 50-point study 904 s by DWSIM's own sensitivity analysis, and reflux 1.24 s cold, 1.14 s warm, 0.70 s on 2 workers: 730 to 1,300 times faster. The spec against DWSIM's Adjust at 1e-10 (`study/dwsim_test.v`, step 13): 2.8 mK apart, which is reflux's vapour 1.6e-3 mol/s short at DWSIM's answer, M4's difference between them, over the slope, to 1e-6 K. |
+| 12 | Files and the CLI | **met** | Format 3's `[spec.NAME]`, `[study.NAME]`, `[optimize.NAME]` and `[fit.NAME]` ([flowsheet-format.md](flowsheet-format.md)), every key checked: 13 refusals of a spec, 13 of a study, 15 of an optimisation and eight of a fit and its data, each at its line. `main_test.v`: `reflux solve` meets specs; `reflux study`, `optimize` and `fit` each print a table, write JSON and CSV, and exit 0, 1 and 2 as D17 has it. Each report's keys are held against [report-format.md](report-format.md). |
+| 13 | CI green, docs updated, v0.4.0 | **met locally**; CI and the tag to come | The docs: README, roadmap, design notes, kinetics.md, the file and report formats, python.md, benchmarks.md, testdata/README.md, tools/README.md and the V notes. v0.4.0's entry, versions and golden reports are ready, and the gate refuses only for the tree, the branch and the date (step 15). CI's last run failed on what step 15 fixed. |
+
+**Planted mistakes.** 200 were planted across steps 0 to 15, one change at
+a time, in scratch copies, and 171 were caught at once. Every survivor got a
+new test, had its code deleted, or is explained in its step.
+- **New tests, 14:**
+  - `reflux_collect` without its collection (step 0);
+  - a fill integrating every species for every reaction again, by two
+    mistakes (step 1; the test is now step 15's count);
+  - a scope with a dot in its name, a key in double quotes, a unit's name a
+    prefix of another's, and Brent re-evaluating the bounds (steps 2 to 4);
+  - a spec searched on from its warm value, and the predictor's ratio
+    taken as 1 (steps 5 and 6);
+  - the tolerance not tightened for a derivative (step 8);
+  - the side at a lower bound, the objective scaled by its size, and a
+    constraint scaled by 1 (step 10);
+  - the undetermined threshold at 1e-20 (steps 11 and 12).
+- **Code deleted or merged, 3:** `last_unit`'s check for a unit with no
+  inlets (step 5), the QP's polish (step 9), and a `Fixed` constant's part
+  check, now `Written`'s (step 11).
+- **Explained, 12:**
+  - S° off by 1e-15 and Wilke's sum regrouped (step 1);
+  - `with`'s check of what the maker read, Brent's re-evaluation at its
+    root, the probe's step, and a link from outside its block (steps 2
+    to 4);
+  - the ratio's check that both steps moved, and the reactors' warm bracket
+    (steps 5 and 6);
+  - the workspace's T not kept (step 7);
+  - the solves not skipped for an output with no value (step 8);
+  - complementarity's check (step 9);
+  - the optimiser's warm starts off (step 10).
+
+  Each changes only the time, or a last digit below every reference, or
+  can't be reached by a wrong answer.
+
+**Bugs found along the way,** each fixed in its step:
+- **in `flowsheet`:** `with_history` dropped an error's line and key
+  (step 4). Two specs that each vary what the other reads needed the whole
+  first Jacobian, which D5's amendment gives (step 4).
+- **in `study`:** a one-sided difference's estimate, R₁'s, had no margin,
+  1.01 times its error, so the value is R₂ (step 10).
+- **in `numeric`:**
+  - a relaxed QP at a badly conditioned iterate can fail, and is now
+    reported as infeasible (step 9);
+  - Levenberg–Marquardt stalled near a minimum, its fall below Σr²'s
+    rounding, and is now judged by the gradient test (step 11, its window
+    widened by the gcc check);
+  - Student's t lost digits at ν = 10⁶ (step 11).
+- **in the tests:**
+  - an interface named like other tests' structs (step 9);
+  - a reactions test still refusing format 3 (step 11);
+  - a PFR's ratio floor that gcc's rounding broke (step 8);
+  - the collector's byte count, which CI's gcc builds batch (step 15);
+  - `test_memory.py`, flaky on Ubuntu since M10a: it now holds the bytes
+    live after a collection (step 0).
+
+**What M8 found outside reflux:**
+- **DWSIM 9.0.5** (step 0, [spike-dwsim-study.md](spike-dwsim-study.md),
+  and step 13):
+  - its study, Adjust, optimiser and regression have no API, though a
+    script runs each form unshown;
+  - a study's failed point records the last point's numbers with no
+    message;
+  - an Adjust isn't run unless it's marked simultaneous, and the
+    simultaneous solver at a tolerance it can't reach stops 1% off;
+  - of its optimiser's 11 methods only bounded Brent finds an optimum:
+    others throw on auxiliary variables, set the variable to 0, or minimise
+    when asked to maximise;
+  - its regression fitted no kᵢⱼ by any of its four methods;
+  - "Background parallel" solves serially;
+  - its PFR's outflow isn't smooth in the volume, at 1e-4, enough to move a
+    flat optimum by 1.5%;
+  - its ideal-gas H and S show in a compressor's work at 1e-5 to 5e-5.
+- **SciPy 1.14.1's** t quantile is off by 1.2e-12 at ν = 1, so the
+  reference is mpmath's (step 11).
+- **V 0.5.2:**
+  - an empty `[]` as an `or {}` block's value writes C no compiler takes
+    (step 4);
+  - a `@[params]` struct's named form works only as the last parameter, and
+    an `or` block's value must be the call's type (step 9);
+  - vlib's `runtime` can't be built by tcc on Windows, so `cpus_*.c.v` count
+    the processors (step 7);
+  - its collector's byte count is batched under gcc (step 15).
+
+**Changed from the plan along the way,** each approved by the owner and
+marked in its table:
+- **Decisions amended:** D3 (step 2), D4 (step 3), D5 (step 4), D6 (steps 0
+  and 5), D10 (step 8), D11 (step 1), D12 (step 9), D13 (step 10), D14
+  (step 11), D15 (step 12) and D18 (step 0).
+- **Steps built together,** at the owner's word: 2 to 4, 5 and 6, 9 and 10,
+  11 and 12, 13 and 14, and 15 and 16.
+
+**Carried forward, not done in M8:**
+- **v0.4.0's tag,** after the merge: date its CHANGELOG entry, run
+  `tools/release.vsh` on `main`, then tag and push.
+- **CI on steps 11 to 16,** when they're pushed.
+- **Equation 16 by a fixed rule,** 24-node Gauss–Legendre, 1e-13 for all 521
+  compounds and a fill at a new T 17 µs to about 2 (step 1): the owner's to
+  decide. The recommendation is to leave it until an adiabatic reactor
+  needs it.
+- **M13's, from D1:** exact sensitivities, the infeasible path, IPOPT and
+  data reconciliation.
+- **Fitting to an integral reactor's outlets,** and ThermoML's import:
+  later.
+- **A kᵢⱼ fit against DWSIM's regression,** if the owner's run of the same
+  nine points in the app gives the kᵢⱼ (D18).
+- **Workers bounded by the collector's lock,** about 1.6 times on 2 or 4
+  threads.
+- **Studies, optimisations and fits from Python:** M10b, over D9's
+  per-point outcomes.
+- **Reports to make upstream:** to V, the empty `[]` in an `or` block; to
+  DWSIM, its optimiser's methods, its regression and its PFR's noise; to
+  SciPy, t.ppf at ν = 1.
+- **Still carried from M3, M4 and M10a:** faster PH for 10 components,
+  `flash.uv` on cold liquids, and V's code running slower inside the
+  library.
 
 ## Not in M8
 

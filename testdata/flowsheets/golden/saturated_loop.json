@@ -1,6 +1,6 @@
 {
-  "format": 2,
-  "reflux": "0.3.0",
+  "format": 3,
+  "reflux": "0.4.0",
   "file": "testdata/flowsheets/saturated_loop.toml",
   "status": "solved",
   "error": null,
@@ -342,7 +342,9 @@
         [
           1.1842378929335e-16
         ]
-      ]
+      ],
+      "specs": [],
+      "spec_residuals": []
     }
   ],
   "notes": [],
@@ -353,5 +355,6 @@
   "worst_unit": {
     "component": 0,
     "energy": 3.732770990878404e-15
-  }
+  },
+  "specs": []
 }

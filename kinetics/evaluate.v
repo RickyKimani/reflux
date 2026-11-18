@@ -30,6 +30,9 @@ pub mut:
 	h    []f64
 	s    []f64
 	have []bool
+	// integrals counts the species whose H° and S° a fill took, each two
+	// integrals of its Cp, since the point was made.
+	integrals int
 }
 
 // point makes a point's workspace, once, for fill to fill at each state.
@@ -99,6 +102,7 @@ pub fn (k &Kinetics) fill(s State, mut pt Point) ! {
 				pt.h[q] = h
 				pt.s[q] = e
 				pt.have[q] = true
+				pt.integrals++
 			}
 			dh += rx.nu[j] * pt.h[q]
 			ds += rx.nu[j] * pt.s[q]

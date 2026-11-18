@@ -475,11 +475,14 @@ fn test_k_is_kept_until_t_moves() {
 }
 
 // At a new T a fill integrates each species once, however many reactions
-// it's in. The quadrature's panels are all that either allocates, so the
-// collector's count says how many integrals ran: the reforming model's
-// fill, ten integrals for five species, allocates under 0.6 of what its
-// three reactions' standard properties do taken one by one, 24 integrals
-// (measured: 2,752 bytes against 6,048, 0.46; water's are closed forms).
+// it's in: the reforming model's five species, where its three reactions'
+// standard properties taken one by one would take them 12 times, a species
+// to a reaction. And at an unmoved T, none.
+//
+// Until M8's CI this counted the collector's bytes, the quadrature's panels
+// being all that allocates; but the collector counts a small allocation only
+// when a thread's free list refills, and on CI's gcc builds the fill at a
+// new T counted 0. The point counts its species itself now.
 fn test_a_fill_integrates_each_species_once() {
 	sp := species_from(['74-82-8', '7732-18-5', '1333-74-0', '630-08-0', '124-38-9'])
 	rs := reforming_reactions(sp)
@@ -491,20 +494,20 @@ fn test_a_fill_integrates_each_species_once() {
 	}
 	mut pt := k.point()
 	k.fill(s, mut pt)!
-	mut before := gc_heap_usage().total_bytes
+	assert pt.integrals == 5
 	k.fill(with_t(s, 901), mut pt)!
-	shared := gc_heap_usage().total_bytes - before
-	before = gc_heap_usage().total_bytes
+	assert pt.integrals == 10
+	mut apart := 0
 	for r in k.k_used {
-		rs[r].standard(sp, 901)!
+		apart += rs[r].species.len
 	}
-	apart := gc_heap_usage().total_bytes - before
-	println('a fill at a new T allocates ${shared} bytes; its reactions one by one, ${apart}')
-	assert shared > 0 && apart > 0
-	assert f64(shared) < 0.6 * f64(apart), '${shared} bytes against ${apart}'
-	// And at an unmoved T, nothing.
-	before = gc_heap_usage().total_bytes
+	assert apart == 12, '${apart}'
 	k.fill(with_p(with_t(s, 901), 2e5), mut pt)!
+	assert pt.integrals == 10
+	// And a fill at a new T allocates nothing beyond the quadrature's own
+	// panels: at an unmoved T, nothing at all.
+	before := gc_heap_usage().total_bytes
+	k.fill(with_p(with_t(s, 901), 3e5), mut pt)!
 	assert gc_heap_usage().total_bytes - before == 0
 }
 

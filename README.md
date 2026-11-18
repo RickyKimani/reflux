@@ -13,6 +13,18 @@ v run . kinetics check testdata/kinetics/xu_froment.toml   # a file's reactions:
 ```
 
 ```bash
+v run . study testdata/flowsheets/methanol_study.toml   # a study: every point, and why an output has no value
+```
+
+```bash
+v run . optimize testdata/flowsheets/series.toml best   # an optimum, its multipliers and its iterates
+```
+
+```bash
+v run . fit testdata/m8_fit/ethylene.toml   # rate constants fitted to data, each with its interval, written back
+```
+
+```bash
 v run . demo          # n-butane at 350 K and 9.4573 bar, Mathias–Copeman water, a mixture, H, S, Cp, w, μ_JT, a flash
 ```
 
@@ -35,14 +47,17 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m3-plan.md](docs/m3-plan.md), the flash, and
   [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet, and
   [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python,
-  and [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors.
+  [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors, and
+  [docs/m8-plan.md](docs/m8-plan.md), specifications, studies, optimisation
+  and fitting.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
   10,000 random mixtures from the database, every answer checked, and
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
   `thermo` and DWSIM 9 on the same flashes, and against DWSIM on the
-  reference flowsheet and on the owner's reforming PFR.
+  reference flowsheet, on the owner's reforming PFR and its 50-point study,
+  and on a spec and an optimisation.
 - [CHANGELOG.md](CHANGELOG.md) is every release, and what a version
   promises.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
@@ -53,7 +68,7 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   calling reflux from Python and NumPy, and the rules M10a follows.
 - [docs/flowsheet-format.md](docs/flowsheet-format.md) is the flowsheet file
   format, and [docs/report-format.md](docs/report-format.md) the results
-  `reflux solve` writes: JSON and CSV.
+  `reflux solve`, `study`, `optimize` and `fit` write: JSON and CSV.
 - [docs/spike-dwsim.md](docs/spike-dwsim.md) is what we learned driving
   DWSIM 9 from Python, and how M3 compares reflux with it.
   [docs/spike-dwsim-flowsheet.md](docs/spike-dwsim-flowsheet.md) does the
@@ -83,9 +98,11 @@ These goals come from what went wrong with DWSIM:
 ```
 v.mod               module manifest (Go's go.mod), with reflux's version
 CHANGELOG.md        every release, what a version promises, how to make one
-main.v              the command line: reflux solve, study, kinetics, demo, version, help
+main.v              the command line: reflux solve, study, optimize, fit,
+                    kinetics, demo, version, help
 kinetics_command.v  reflux kinetics check and explain
-study_command.v     reflux study (M8)
+study_command.v     reflux study and reflux optimize (M8)
+fit_command.v       reflux fit (M8)
 cpus_*.c.v          the processors, for a study's workers by default (M8)
 demo.v              reflux demo, on database components
 main_test.v         the command line, run in the test's own process
@@ -275,8 +292,8 @@ sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
-                    flowsheet and on the owner's reforming PFR
-                    (docs/benchmarks.md)
+                    flowsheet, on the owner's reforming PFR, and on M8's
+                    study, optimisation and spec (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
 capi/               the C API (M10a): reflux.h, and the functions it declares,
@@ -325,7 +342,9 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m8_hock_schittkowski.py (Hock and Schittkowski's
                     problems, their optima again by mpmath), gen_m8_series.py
                     (series reactions' optima by mpmath), gen_m8_fits.py
-                    (data to fit, and SciPy's fits of them)
+                    (data to fit, and SciPy's fits of them), gen_m8_dwsim.py
+                    (DWSIM 9's spec, optimiser and PFR on M8's problems),
+                    gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in
@@ -354,11 +373,13 @@ at the edges, i.e. input files and printed output.
 ## Status
 
 **M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash), M4
-(the first flowsheet), M10a (thermo and the flash from Python) and M9
-(equations, kinetics and reactors) are done.** The exit reviews are at the
-ends of [docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
+(the first flowsheet), M10a (thermo and the flash from Python), M9
+(equations, kinetics and reactors) and M8 (specifications, studies,
+optimisation and fitting) are done.** The exit reviews are at the ends of
+[docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
 [docs/m3-plan.md](docs/m3-plan.md), [docs/m4-plan.md](docs/m4-plan.md),
-[docs/m10a-plan.md](docs/m10a-plan.md) and [docs/m9-plan.md](docs/m9-plan.md).
+[docs/m10a-plan.md](docs/m10a-plan.md), [docs/m9-plan.md](docs/m9-plan.md)
+and [docs/m8-plan.md](docs/m8-plan.md).
 What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
@@ -517,11 +538,44 @@ And from M9, equations, kinetics and reactors
 - [x] The owner's case in 28 ms against DWSIM's 10.7 s, and its 50-point
       study in 2.1 s against 11.7 minutes
       ([docs/benchmarks.md](docs/benchmarks.md)).
-- [x] A third release, v0.3.0, to be tagged on `main` after M9's merge
+- [x] A third release, v0.3.0, tagged on `main` after M9's merge
       ([CHANGELOG.md](CHANGELOG.md)).
 
-By the roadmap, next is M10b, flowsheets from Python, or M5 to M8: steam,
-activity models, columns, and specifications with sensitivity studies.
+And from M8, specifications, studies, optimisation and fitting:
+
+- [x] Every stream's and unit's variables in expressions, `product.T`,
+      `product.n[CH4]`, `reactor.duty`, each with its dimension, and any
+      number a feed or unit is given variable by its key,
+      `unit.cooler.outlet_T`, the unit remade by its own maker.
+- [x] Specs, `[spec.NAME]`: vary a number within bounds until an equation
+      holds, met with the recycle's tears by Broyden, or by Brent alone,
+      and checked again from the solution.
+- [x] `reflux study`: one or two inputs over their values, each point
+      solved, failed with its reason, or with an output that has no value
+      saying why, never −∞; each point started from its neighbour's
+      answer, and the same bits on any number of workers.
+- [x] Each point's derivatives by differences of tight solves, each with
+      an estimate of its error, held against closed forms.
+- [x] `reflux optimize`: an SQP written in V, on Goldfarb and Idnani's QP,
+      with bounds, equations and inequalities over flowsheet variables.
+      Every optimum's first-order conditions are checked, and 21 of Hock
+      and Schittkowski's problems reach their published optima.
+- [x] `reflux fit`: rate constants fitted to rate data on the tape's exact
+      derivatives, and kᵢⱼ to bubble points, each constant with its 95%
+      interval in the file's own form, and the fitted section written back.
+      They match SciPy's fits, and the intervals cover the truth as often
+      as they claim.
+- [x] Compared with DWSIM 9's own forms, every difference explained: its
+      Adjust, its optimiser, and the series reactions in its PFR.
+- [x] The owner's 50-point study in 0.70 s on 2 workers against DWSIM's
+      904 s, and the published reforming model in 13.4 ms a solve, from
+      393, every answer keeping its bits
+      ([docs/benchmarks.md](docs/benchmarks.md)).
+- [x] A fourth release, v0.4.0, to be tagged on `main` after M8's merge
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10b, flowsheets from Python, or M5 to M7: steam,
+activity models and columns.
 
 ## Roadmap
 
@@ -531,8 +585,9 @@ how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
 (ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
-✓ → **M10a** thermo and flash from Python ✓. Next, **M10b** makes the
-flowsheets callable from Python.
+✓ → **M10a** thermo and flash from Python ✓. **M9** equations, kinetics and
+reactors ✓ and **M8** specifications, studies and optimisation ✓ build on
+M4. Next, **M10b** makes the flowsheets callable from Python.
 
 ## Development
 

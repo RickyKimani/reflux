@@ -25,14 +25,14 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M8 (specifications, sensitivity studies and optimisation) is under
-  way** on branch `m8-sensitivity`. Its plan, `docs/m8-plan.md`, was approved on
-  2026-11-16: exit criteria 1–13, decisions D1–D20 and steps 0–16, ending
-  in v0.4.0.
+- **M8 (specifications, sensitivity studies and optimisation) is done** on
+  branch `m8-sensitivity`, not yet merged. Its plan, `docs/m8-plan.md`, was
+  approved on 2026-11-16: exit criteria 1–13, decisions D1–D20 and steps
+  0–16, ending in v0.4.0.
   - One milestone, not split (D1): the optimiser is `numeric.sqp`, written
-    in V (D12), so no NLopt or IPOPT. The roadmap is to be amended: IPOPT
-    and data reconciliation move to M13 (B6, H4), and exact sensitivities
-    too (H1, D10).
+    in V (D12), so no NLopt or IPOPT. The roadmap is amended (step 16):
+    IPOPT and data reconciliation move to M13 (B6, H4), and exact
+    sensitivities too (H1, D10).
   - Its benchmark is the owner's 50-point reforming study; steps 1 to 8
     meet the roadmap's exit before the optimiser begins.
   - Research for the plan: four of the reforming case's five species give
@@ -144,7 +144,7 @@ Keep this section current: update it whenever a step is committed.
       times its error), so its value is R₂; a relaxed QP at a badly
       conditioned iterate can fail, and is then reported as infeasible.
   - **Steps 11 and 12 are done,** built together at the owner's word, and
-    amend D14 and D15, approved on 2026-11-18 (committed).
+    amend D14 and D15, approved on 2026-11-18 (committed at 579c12c).
     - `numeric.least_squares` (Levenberg–Marquardt on QR, Moré's scaling,
       Nielsen's damping, the gradient test at 1e-10) and
       `numeric.student_t_quantile`; format 3's `[fit.NAME]`
@@ -159,8 +159,39 @@ Keep this section current: update it whenever a step is committed.
       Σr²'s rounding, so a step there is judged by the gradient test;
       SciPy's t.ppf is off by 1.2e-12 at ν = 1, so the quantiles' reference
       is mpmath's.
-  - Step 13 is next: the DWSIM references, with step 14 if the owner
-    bundles them as proposed (13 and 14, 15 and 16).
+  - **Steps 13 and 14 are done,** built together at the owner's word, no
+    decision amended (not yet committed, with steps 15 and 16).
+    - Step 13 (`tools/gen_m8_dwsim.py`, `study/dwsim_test.v`): the
+      reference flowsheet's spec on DWSIM's constants 2.8 mK from its
+      Adjust's, explained to 1e-6 K by the vapour's 1.6e-3 mol/s at DWSIM's
+      answer over its slope; the compression's least work 1.5 Pa from its
+      optimiser's, explained by reflux's slope at DWSIM's optimum; the
+      series reactions in DWSIM's PFR, whose optimum is 1.5% off from noise
+      in its outflow. The kij fit against DWSIM's regression stays not
+      possible from a script (step 0).
+    - Step 14 (`tools/gen_m8_bench.py`, `tools/bench_m8.v`,
+      `benchmarks/m8.v`): the owner's study 904 s by DWSIM's own form,
+      0.70 to 1.24 s by reflux; the spec 130 times faster, the optimisation
+      4.8; the published model 13.4 ms a solve.
+  - **Steps 15 and 16 are done,** built together (not yet committed): M8
+    is finished, with its exit review at the end of its plan.
+    - CI first: the branch's one run (`05dd726`, run 44154785483) failed
+      both gcc jobs. Step 1's test counted the collector's bytes to show a
+      fill's integrals, and gcc's build of the collector counts small
+      allocations in batches, so CI's counted 0 (a probe: 939 of 1,000 small
+      arrays moved the count by nothing under gcc, none under tcc). A
+      `kinetics.Point` now counts its `integrals` itself.
+    - Step 15: v.mod and the package at 0.4.0; the CHANGELOG entry, undated
+      until the tag; all seven golden reports written again in report
+      format 3, with no number moved. The gate refuses only for the tree, the
+      branch and the date.
+    - Step 16: the README, the roadmap (D1's amendments: B6's IPOPT, H1's
+      exact sensitivities and H4's data reconciliation to M13, which lists
+      them), design.md's exact sensitivities to come, the V note, and the
+      criterion-by-criterion review: every criterion met but CI and the tag,
+      and the kᵢⱼ fit against DWSIM's regression, not possible from a script.
+  - Next, at the owner's word: commit steps 13 to 16, push (CI's first run
+    of the fix), the PR into `main`, then v0.4.0's tag on `main`.
 - **M3, the flash,** carried forward (in its review): VLLE is M6; reports
   to make upstream to V, `thermo` and DWSIM. Its PH speed was M4 step 9's,
   which made it 2–4× faster.
@@ -169,8 +200,8 @@ Keep this section current: update it whenever a step is committed.
     unit uses UV yet; fix it before one does.
   - PH for 10 components is still a little slower than DWSIM's (5.9 ms
     against 5.2).
-  - Warm starts across solves (F5), and a solver callback for `--trace` as
-    it happens: M8, if its PFR needs them.
+  - Warm starts across solves (F5) came in M8 (step 5). A solver callback
+    for `--trace` as it happens is still to do.
   - Reports to make upstream: to V, the TOML parser's panic on a `\u`
     escape and a smart-cast interface's field inside `${}`; to `thermo`, its
     flash at a vapour fraction; to DWSIM, its two-inlet drum and its silent
@@ -517,6 +548,11 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
   - `tools/gen_m8_fits.py` (SciPy, NumPy, mpmath, thermo) writes
     `testdata/m8_fits.json` and the CSV files in `testdata/m8_fit/`:
     criterion 9's data, SciPy's fits of them, and t quantiles.
+  - `tools/gen_m8_dwsim.py [spec compression series]` (DWSIM, about twenty
+    minutes) writes `testdata/m8_dwsim.json`, DWSIM's answers for step 13;
+    `tools/gen_m8_bench.py` (DWSIM and V, about twenty minutes)
+    `testdata/m8_bench.json`, step 14's timings, which can't reproduce byte
+    for byte. Then `v run tools/benchmarks.vsh` writes `docs/benchmarks.md`.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
@@ -596,6 +632,13 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     - The regression ran and fitted no kᵢⱼ, by any of its four methods.
     - "Background parallel" solves serially.
     - The script's process can take a minute to exit after its last line.
+    - Its PFR isn't smooth in its volume (M8 step 13): its outflow matches
+      an exact answer to 5e-11 at most volumes and is off by up to 1e-4 at
+      others, its integrator's unset 1e-3 tolerance, enough to move a flat
+      optimum by 1.5%. A PFR solve of three species at dV 0.01 takes 16 s.
+    - A compressor's work differs from reflux's by 1e-5 to 5e-5 on DWSIM's
+      own constants, scattered with T: its ideal-gas H and S, integrated
+      approximately (M3).
   - DWSIM's other reactors (M9 step 10):
     - The equilibrium reactor puts fugacities over 1 atm against K at
       1 bar. Its default tolerances, 0.01 and 1e-3, leave its answer up to
@@ -863,6 +906,10 @@ or a test:
 - **Shared libraries** need gcc: tcc's Windows DLLs export nothing.
 - **Closures are never freed**, so nothing that runs per flash may make one:
   pass a struct with a method, as `numeric`'s interfaces ask.
+- **`gc_heap_usage().total_bytes` is batched under gcc:** small allocations
+  are counted only when a free list refills, so one call's change can be 0.
+  A test may hold an upper bound or "nothing allocated" (tcc's build
+  catches it), never a count of work. Count the work itself.
 - **A panic can't be caught.** There's no `recover`, so what a library might
   panic on must be kept from it: `toml.parse_text` on a `\u` escape, for one.
 - **Module names:** not like a vlib module's. `benchmark` broke external

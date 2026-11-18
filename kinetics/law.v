@@ -52,12 +52,12 @@ pub type TempFn = Arrhenius | Fixed | VantHoff | Written
 fn exponential(c string, e string, t_ref string) string {
 	energy := e.trim_space()
 	negative := energy.starts_with('-') || energy.starts_with('−')
-	magnitude := if negative { energy.runes()[1..].string().trim_space() } else { energy }
+	unsigned := if negative { energy.runes()[1..].string().trim_space() } else { energy }
 	sign := if negative { '' } else { '-' }
 	if t_ref.trim_space() == '' {
-		return '${c} * exp(${sign}${magnitude} / (R*T))'
+		return '${c} * exp(${sign}${unsigned} / (R*T))'
 	}
-	return '${c} * exp(${sign}${magnitude} / R * (1/T - 1/(${t_ref})))'
+	return '${c} * exp(${sign}${unsigned} / R * (1/T - 1/(${t_ref})))'
 }
 
 // text is the constant as expression text.

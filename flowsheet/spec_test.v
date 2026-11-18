@@ -487,11 +487,11 @@ fn (h Hot) outlet_ports() []string {
 	return ['out']
 }
 
-fn (h Hot) calculate(fl thermo.Fluid, inlets []flowsheet.Stream) !flowsheet.Outcome {
+fn (h Hot) calculate(_ thermo.Fluid, _ []flowsheet.Stream) !flowsheet.Outcome {
 	return error('Hot starts only from a neighbour')
 }
 
-fn (h Hot) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
+fn (h Hot) calculate_from(_ thermo.Fluid, inlets []flowsheet.Stream, last flowsheet.UnitResult) !flowsheet.Outcome {
 	assert last.outlets.len == 1
 	return flowsheet.Outcome{
 		outlets: inlets

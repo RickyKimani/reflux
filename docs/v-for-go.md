@@ -1085,6 +1085,18 @@ m := {
   array and 211,264 bytes for 1,000 arrays of ten `f64`s. M9's tape spike
   ([spike/tape/spike.v](../spike/tape/spike.v)) uses it to show that its
   evaluations allocate nothing in 1,800,000 calls.
+- **But under gcc it counts small allocations in batches.** gcc's build
+  of the collector hands out small blocks from a free list of its own, and
+  counts them only when that list refills. A probe made 1,000 arrays of ten
+  `f64`s, one at a time: under tcc each moved the count by its 112 bytes,
+  and under gcc 939 of them moved it by 0, though the total came out about
+  right, 112,784 bytes. So under gcc one call's change in the count says
+  nothing, and a test that something allocates nothing proves it only
+  under tcc. CI runs both, so tcc's build catches it. M8's test of a
+  reaction's fill counted the bytes to show how many integrals ran. On
+  CI's gcc builds the fill counted 0, so the test failed. The fill's
+  workspace now counts its integrals itself
+  ([kinetics/law_test.v](../kinetics/law_test.v)).
 - **What's live isn't the heap's size.** `gc_heap_usage().heap_size` is
   what the collector has taken from the OS, free blocks included, like
   Go's `MemStats.HeapSys`: it grows in large steps when the collector

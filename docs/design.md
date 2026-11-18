@@ -2458,6 +2458,13 @@ satisfies them, so it's the equation-oriented solve's first point.
 `Unit` would gain a `residuals` method beside `calculate`, with its Jacobian
 blocks, and the sequential-modular solve stays the way in.
 
+The same Jacobian gives M8's sensitivities exactly, where its D10 takes them
+by differences of solves. At a converged point r(x, p) = 0, so
+dx/dp = −(∂r/∂x)⁻¹ ∂r/∂p, one factorisation for every input. An output
+y(x, p) then has dy/dp = ∂y/∂p + ∂y/∂x · dx/dp. An optimiser could also take
+the stream variables as its own unknowns, the infeasible path, and meet the
+residuals only at its optimum (M8's D13).
+
 ## How CPA will fit
 
 ```v
