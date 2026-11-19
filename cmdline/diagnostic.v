@@ -14,18 +14,15 @@ pub:
 	usage   string
 }
 
+// render is the diagnostic as text, and writes it nowhere. Its kind is a
+// word as well as a colour, so it reads the same copied into an editor.
 pub fn (d Diagnostic) render(style Style) string {
-	label := match d.kind {
-		.error { style.failure('Error:') }
-		.warning { style.warning('Warning:') }
-		.info { style.accent('Info:') }
-	}
-	mut output := '${label} ${d.message}\n'
+	mut output := '${style.label(d.kind)} ${d.message}\n'
 	if d.hint != '' {
 		output += '${style.muted('Hint:')} ${d.hint}\n'
 	}
 	if d.usage != '' {
-		output += '${style.muted('Usage:')} ${d.usage}\n'
+		output += '${style.muted('Usage:')} ${highlight(d.usage, true, style)}\n'
 	}
 	return output
 }

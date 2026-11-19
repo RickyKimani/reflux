@@ -1,17 +1,20 @@
 module cmdline
 
 // validate checks command metadata before the application starts accepting
-// user input.
+// user input. An error names the command by its path, `reflux kinetics`.
 pub fn (app App) validate() ! {
-	validate_command(app.root, 'root')!
+	validate_command(app.root, if app.root.name == '' { 'root' } else { app.root.name })!
 	mut paths := [][]string{}
 	for registered in app.commands {
 		if registered.path.len == 0 {
 			return error('a handler must have a command path')
 		}
-		canonical := canonical_path(app.root, registered.path)!
+		canonical, command := canonical_path(app.root, registered.path)!
 		if canonical != registered.path {
 			return error('handler path ${registered.path.join(' ')} is not canonical; use ${canonical.join(' ')}')
+		}
+		if command.commands.len > 0 {
+			return error('handler path ${canonical.join(' ')} names a group of commands, which parse never returns')
 		}
 		if paths.any(it == canonical) {
 			return error('duplicate handler for ${canonical.join(' ')}')
@@ -20,7 +23,7 @@ pub fn (app App) validate() ! {
 	}
 }
 
-fn canonical_path(root Command, path []string) ![]string {
+fn canonical_path(root Command, path []string) !([]string, Command) {
 	mut command := root
 	mut canonical := []string{}
 	for token in path {
@@ -31,12 +34,15 @@ fn canonical_path(root Command, path []string) ![]string {
 		command = command.commands[index]
 		canonical << command.name
 	}
-	return canonical
+	return canonical, command
 }
 
 fn validate_command(command Command, location string) ! {
 	if command.name == '' {
 		return error('${location}: command name is empty')
+	}
+	if command.name.starts_with('-') {
+		return error('${location}: command name ${command.name} starts with a dash')
 	}
 	if command.commands.len > 0 && command.arguments.len > 0 {
 		return error('${location}: command groups cannot define positional arguments')
@@ -44,26 +50,32 @@ fn validate_command(command Command, location string) ! {
 	if command.commands.len > 0 && command.flags.len > 0 {
 		return error('${location}: command groups cannot define flags')
 	}
-	mut names := [command.name]
-	names << command.aliases
-	for i, name in names {
-		if name == '' {
-			return error('${location}: command alias ${i} is empty')
+	// An alias can be the name with dashes, `--version` for `version`; any
+	// other two names that differ only in dashes are one name twice.
+	mut keys := [command.name]
+	for i, alias in command.aliases {
+		if alias == '' {
+			return error('${location}: command alias ${i + 1} is empty')
 		}
-		if name.contains(' ') {
-			return error('${location}: command name ${name} contains a space')
+		if alias.contains(' ') {
+			return error('${location}: command name ${alias} contains a space')
 		}
-		for previous in names[..i] {
-			if i == 1 && name.starts_with('-') && normalize_name(previous) == normalize_name(name) {
-				continue
-			}
-			if normalize_name(previous) == normalize_name(name) {
-				return error('${location}: duplicate command name ${name}')
-			}
+		dashed_name := alias.starts_with('-') && normalize_name(alias) == command.name
+		if alias == command.name || command.aliases[..i].contains(alias)
+			|| (!dashed_name && normalize_name(alias) in keys) {
+			return error('${location}: duplicate command name ${alias}')
+		}
+		if !dashed_name {
+			keys << normalize_name(alias)
 		}
 	}
 	for i, child in command.commands {
-		validate_command(child, '${location} ${command.name}[${i}]')!
+		child_location := if child.name == '' {
+			'${location} [${i}]'
+		} else {
+			'${location} ${child.name}'
+		}
+		validate_command(child, child_location)!
 		for previous in command.commands[..i] {
 			if command_conflicts(previous, child) {
 				return error('${location}: duplicate child command ${child.name}')
@@ -77,7 +89,7 @@ fn validate_command(command Command, location string) ! {
 fn validate_arguments(command Command, location string) ! {
 	mut names := []string{}
 	mut optional_seen := false
-	for argument in command.arguments {
+	for i, argument in command.arguments {
 		if argument.name == '' {
 			return error('${location}: argument name is empty')
 		}
@@ -91,6 +103,9 @@ fn validate_arguments(command Command, location string) ! {
 			optional_seen = true
 		} else if optional_seen {
 			return error('${location}: required argument ${argument.name} follows an optional argument')
+		}
+		if argument.variadic && i != command.arguments.len - 1 {
+			return error('${location}: variadic argument ${argument.name} is not the last')
 		}
 		names << argument.name
 	}
@@ -122,18 +137,12 @@ fn validate_flags(command Command, location string) ! {
 }
 
 fn command_conflicts(left Command, right Command) bool {
-	if normalize_name(left.name) == normalize_name(right.name) {
+	mut left_names := [normalize_name(left.name)]
+	for alias in left.aliases {
+		left_names << normalize_name(alias)
+	}
+	if normalize_name(right.name) in left_names {
 		return true
 	}
-	for name in left.aliases {
-		if normalize_name(name) == normalize_name(right.name) || right.aliases.any(normalize_name(it) == normalize_name(name)) {
-			return true
-		}
-	}
-	for name in right.aliases {
-		if normalize_name(left.name) == normalize_name(name) {
-			return true
-		}
-	}
-	return false
+	return right.aliases.any(normalize_name(it) in left_names)
 }

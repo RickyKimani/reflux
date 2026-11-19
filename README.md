@@ -100,6 +100,7 @@ v.mod               module manifest (Go's go.mod), with reflux's version
 CHANGELOG.md        every release, what a version promises, how to make one
 main.v              the command line: reflux solve, study, optimize, fit,
                     kinetics, demo, version, help
+commands.v          the command tree, which the help is rendered from
 kinetics_command.v  reflux kinetics check and explain
 study_command.v     reflux study and reflux optimize (M8)
 fit_command.v       reflux fit (M8)
@@ -296,6 +297,9 @@ benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     study, optimisation and spec (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
+cmdline/            the command-line framework (cmdline/milestones.md): the
+                    command tree, its parser and dispatch, and help and
+                    diagnostics in reflux's colours, plain in a pipe or a file
 capi/               the C API (M10a): reflux.h, and the functions it declares,
   capi.v            each registering its thread with the collector
   registry.v        handles: ids into a registry behind a lock

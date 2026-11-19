@@ -10,31 +10,10 @@ import kinetics
 import math
 import quantity
 
-const kinetics_usage = "usage:
-  reflux kinetics check FILE [T P NAME=y ...]
-      Read a file's reactions (docs/flowsheet-format.md), which refuses an
-      equation that does not balance or a rate in the wrong units, and print
-      what every other check finds. Given a state, a fitted K is judged at its
-      T, each typed constant says how far it moves the rates there, and each
-      reversible rate is held to zero at the equilibrium the reactions reach
-      from it, in the ideal gas, and to running towards it at the state.
-  reflux kinetics explain FILE T P NAME=y ...
-      Print each rate as reflux read it, and its factor table at the state.
-
-A state is a temperature and a pressure with their units, then each
-species' mole fraction by name, formula or CAS number, summing to 1:
-  reflux kinetics explain plant.toml '900 K' '15 bar' CH4=0.2 H2O=0.45 H2=0.2 CO=0.1 CO2=0.05
-
-The exit status is 0 when the file was read, 1 when it was not or the state
-is wrong, and 2 when the command is wrong."
-
 // kinetics_command runs a kinetics subcommand, and returns its exit status.
+// Its help is run's, from the command tree (commands.v).
 fn kinetics_command(args []string, mut c Console) int {
 	sub := args[0] or { '' }
-	if sub in ['help', '--help', '-h'] {
-		c.say(kinetics_usage)
-		return 0
-	}
 	if sub !in ['check', 'explain'] {
 		what := if sub == '' {
 			'it needs check or explain'

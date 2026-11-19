@@ -8,60 +8,38 @@
 //     reflux kinetics explain FILE T P NAME=y ...
 //     reflux demo [T P]
 //
-// From the source, `v run . solve testdata/flowsheets/reference.toml`.
+// From the source, `v run . solve testdata/flowsheets/reference.toml`. Its
+// help is commands.v's command tree, rendered by cmdline.
 module main
 
+import cmdline
 import flowsheet
 import os
 import quantity
 import reactors
 import strings
 
-const usage = 'usage:
-  reflux solve FILE [--json OUT] [--csv OUT] [--trace]
-      Solve a flowsheet file (docs/flowsheet-format.md) and print its stream
-      table. --json writes the results (docs/report-format.md), --csv the
-      streams, and --trace prints every pass of every loop.
-  reflux study FILE [NAME] [--json OUT] [--csv OUT] [--workers N]
-      Run a study in the file, by NAME if it has more than one, and print
-      its points; --json and --csv write them (docs/report-format.md).
-      --workers runs it on N threads, the processors by default.
-  reflux optimize FILE [NAME] [--json OUT] [--csv OUT] [--workers N]
-      Run an optimisation in the file, by NAME if it has more than one, and
-      print its optimum and iterations; --json and --csv write them
-      (docs/report-format.md). --workers differentiates by N inputs at once,
-      the processors by default.
-  reflux fit FILE [NAME] [--json OUT] [--csv OUT]
-      Fit constants in the file to its data, by NAME if it has more than
-      one fit: rate constants to rates, or kij to bubble points. It prints
-      each with its 95% interval; --json and --csv write the fit and its
-      residuals (docs/report-format.md).
-  reflux kinetics check FILE [T P NAME=y ...]
-  reflux kinetics explain FILE T P NAME=y ...
-      Check the reactions in a file, or explain its rates at a state:
-      reflux kinetics help says more.
-  reflux demo [T P]
-      The thermodynamics and the flash, on compounds from the database:
-      n-butane at T in K and P in bar, by default 350 K and 9.4573 bar.
-  reflux version
-  reflux help
-
-The exit status is 0 when it worked, 1 when the flowsheet failed or a report
-could not be written, and 2 when the command is wrong. A study that ran is 0,
-even with failed points, which its table lists; an optimisation is 0 only
-with an optimum, and a fit only with a fit.'
-
 fn main() {
 	mut c := Console{
-		live: true
+		live:      true
+		style:     cmdline.Style{
+			terminal: cmdline.terminal()
+		}
+		err_style: cmdline.Style{
+			terminal: cmdline.stderr_terminal()
+		}
 	}
 	exit(run(os.args[1..], mut c))
 }
 
 // Console is where a command's output goes: printed as it comes when the
-// program runs, and kept for main_test.v to read when it doesn't.
+// program runs, and kept for main_test.v to read when it doesn't. Its styles
+// are what stdout and stderr can show: colour in a terminal, and plain text
+// in a file, a pipe or a test.
 struct Console {
-	live bool
+	live      bool
+	style     cmdline.Style
+	err_style cmdline.Style
 mut:
 	out strings.Builder = strings.new_builder(1024)
 	err strings.Builder = strings.new_builder(256)
@@ -83,9 +61,19 @@ fn (mut c Console) complain(s string) {
 	}
 }
 
-// run runs the command in args, and returns its exit status.
+// run runs the command in args, and returns its exit status. Help comes
+// from the command tree, for `reflux help solve`, `reflux solve --help` and
+// `reflux kinetics help` alike.
 fn run(args []string, mut c Console) int {
 	command := args[0] or { '' }
+	if command != '' && cmdline.wants_help(reflux_app().root, args) {
+		text := help_text(args, c.style) or {
+			c.complain('reflux: ${err.msg()}\n\n${usage}')
+			return 2
+		}
+		c.say(text)
+		return 0
+	}
 	match command {
 		'solve' {
 			return solve(args[1..], mut c)
@@ -109,12 +97,8 @@ fn run(args []string, mut c Console) int {
 			c.say('reflux ${flowsheet.version()}')
 			return 0
 		}
-		'help', '--help', '-h' {
-			c.say(usage)
-			return 0
-		}
 		'' {
-			c.complain(usage)
+			c.complain(help_text([]string{}, c.err_style) or { usage })
 			return 2
 		}
 		else {

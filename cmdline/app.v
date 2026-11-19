@@ -25,7 +25,7 @@ pub fn (app App) run(args []string, style Style) !Outcome {
 			text: app.version
 		}
 	}
-	if args.len == 0 || is_help_request(args) {
+	if args.len == 0 || wants_help(app.root, args) {
 		return Outcome{
 			kind: .help
 			text: app.help(args, style)!
@@ -37,19 +37,4 @@ pub fn (app App) run(args []string, style Style) !Outcome {
 		kind: .executed
 		code: dispatch(invocation, app.commands)!
 	}
-}
-
-fn is_help_request(args []string) bool {
-	if args.len > 0 && args[0] == 'help' {
-		return true
-	}
-	for arg in args {
-		if arg == '--help' || arg == '-h' {
-			return true
-		}
-		if arg == '--' {
-			return false
-		}
-	}
-	return false
 }

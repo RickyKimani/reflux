@@ -290,7 +290,7 @@ fn test_a_demo_that_fails_exits_1() {
 
 fn test_a_wrong_command_exits_2() {
 	for args, want in {
-		'':                               'usage:'
+		'':                               usage
 		'solv':                           'reflux: no command solv (did you mean solve?)'
 		'solve':                          'reflux solve: it needs a flowsheet file'
 		'solve a.toml b.toml':            'reflux solve: one flowsheet at a time, not a.toml and b.toml'
@@ -359,6 +359,35 @@ fn test_help_and_version() {
 	assert code == 0 && out == 'reflux ${flowsheet.version()}\n'
 	code2, out2, _ := quiet(['--version'])
 	assert code2 == 0 && out2 == out
+}
+
+// Every command has its help, from `help` or from --help or -h after it, and
+// a command's help doesn't mind its arguments. A test's console is plain, so
+// none of it is coloured.
+fn test_help_for_every_command() ! {
+	reflux_app().validate()!
+	for path in [['solve'], ['study'], ['optimize'], ['fit'], ['kinetics'], ['kinetics', 'check'],
+		['kinetics', 'explain'], ['demo'], ['version']] {
+		mut asked := ['help']
+		asked << path
+		code, out, err := quiet(asked)
+		assert code == 0 && err == '', asked.str()
+		assert out.contains('USAGE\n\n  reflux ${path.join(' ')}'), out
+		assert !out.contains('\x1b'), asked.str()
+		for flag in ['--help', '-h'] {
+			mut flagged := path.clone()
+			flagged << flag
+			c, o, _ := quiet(flagged)
+			assert c == 0 && o == out, flagged.str()
+		}
+	}
+	code, out, _ := quiet(['solve', 'plant.toml', '--json', 'out.json', '--help'])
+	assert code == 0 && out.starts_with('Solve a flowsheet file'), out
+	// After `--`, --help is an argument.
+	code2, _, err2 := quiet(['solve', '--', '--help'])
+	assert code2 == 2 && err2.starts_with('reflux solve: '), err2
+	code3, _, err3 := quiet(['help', 'solv'])
+	assert code3 == 2 && err3 == 'reflux: no command solv (did you mean solve?)\n\n${usage}\n', err3
 }
 
 const kinetics_dir = os.join_path(@VMODROOT, 'testdata', 'kinetics')
@@ -443,5 +472,5 @@ fn test_kinetics_failures() {
 	_, _, e2 := quiet(['kinetics', 'chek', file])
 	assert e2.starts_with('reflux kinetics: no kinetics command chek (did you mean check?)')
 	c3, out3, _ := quiet(['kinetics', 'help'])
-	assert c3 == 0 && out3.starts_with('usage:\n  reflux kinetics check FILE')
+	assert c3 == 0 && out3 == '${kinetics_usage}\n'
 }

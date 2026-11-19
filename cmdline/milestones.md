@@ -8,17 +8,18 @@ The migration is incremental: existing commands must remain usable after
 every milestone.
 
 Framework experiments may use the ignored root `cli_test/` harness. It is for
-generic CLI behavior only; committed module tests belong in `cli/`, and
+generic CLI behavior only; committed module tests belong in `cmdline/`, and
 application integration tests remain in the repository root or their owning
 module. No experiment in `cli_test/` may require changes to `main.v`.
 
 ## Scope and boundaries
 
-The module lives at `cli/` and declares `module cli`. Code in the repository
-imports it as:
+The module lives at `cmdline/` and declares `module cmdline`, not `cli`: V
+prefers a module in the project to vlib's, and `cli` would hide vlib's `cli`.
+Code in the repository imports it as:
 
 ```v
-import cli
+import cmdline
 ```
 
 The CLI module owns command metadata, parsing, dispatch, help rendering and
@@ -56,7 +57,7 @@ terminate the process.
    closure on every invocation.
 6. Every completed milestone has focused tests and leaves the full CLI usable.
 
-## Milestone 0 — Contract and baseline
+## C0 — Contract and baseline
 
 Before changing command behavior:
 
@@ -73,7 +74,7 @@ Before changing command behavior:
 - The command list and syntax are written down in this file.
 - No new parser behavior is introduced yet.
 
-## Milestone 1 — Terminal and presentation foundation
+## C1 — Terminal and presentation foundation
 
 Add the smallest presentation layer needed by help and diagnostics:
 
@@ -89,7 +90,7 @@ the compatibility layer while this work is developed.
 A possible internal shape is:
 
 ```v
-module cli
+module cmdline
 
 pub struct Terminal {
 pub:
@@ -121,13 +122,29 @@ so it can change without touching command handlers.
 - Windows output remains readable.
 - Tests cover color enabled, color disabled and plain output.
 
-## Milestone 2 — Command metadata and help
+**Status — done**
+
+- `Theme` names an SGR code for each part of the output, and `reflux_theme`
+  is reflux's, in xterm's 256 colours: copper for the heat (headings, drawn
+  as labels, and the program's name), teal for the cooling water (commands),
+  cornflower blue for flags, and greys for placeholders, comments and
+  punctuation. Fang's layout, not Charm's colours.
+- `terminal()` and `stderr_terminal()` detect each stream on its own, since
+  stdout can be a file while stderr is the terminal. `NO_COLOR` turns colour
+  off, and `CLICOLOR_FORCE` on into a pipe (`reflux help | less -R`). On
+  Windows, V's runtime turns on escape processing only when stdout is a
+  console, and `term` reads that mode, so stderr never gets escapes it can't
+  show.
+- A row's width is its plain label's, in visible characters, so escapes and
+  non-ASCII labels don't misalign help.
+
+## C2 — Command metadata and help
 
 Define a command tree as data before implementing the parser. The first
 version only needs to render help.
 
 ```v
-module cli
+module cmdline
 
 pub struct Command {
 pub:
@@ -165,12 +182,16 @@ reflux
 
 Help should have deterministic sections:
 
-1. usage;
-2. description;
+1. description;
+2. usage;
 3. commands;
 4. arguments;
 5. options;
-6. examples.
+6. examples;
+7. the command's own sections, such as its exit status.
+
+The description comes first, as in Fang, and has no heading; every other
+section has one, in capitals (`USAGE`), drawn as a label in colour.
 
 **Exit criteria**
 
@@ -186,12 +207,20 @@ Help should have deterministic sections:
 - All documented sections are covered: usage, description, commands,
   arguments, options and examples.
 - Plain, styled and `--help`/`-h` command-specific rendering is covered by
-  committed tests in `cli/cli_test.v`; visual output remains covered by the
+  committed tests in `cmdline/cmdline_test.v`; visual output remains covered by the
   ignored `cli_test/` harness.
 - No production files were changed; `main.v` and `main_test.v` remain the
   application migration boundary.
+- Later: a `Section` is a titled block after the examples, an `Argument` can
+  be `variadic` (the last only), and a `Flag` has a `value_name`. Usage
+  lines and examples are highlighted: the program, then its commands, flags,
+  and in a usage line its placeholders; an example's `#` line is a comment.
+- Help follows the commands a request names and stops at the first word
+  that isn't one, so `reflux solve plant.toml --help` is solve's help, not
+  an unknown command `plant.toml`. `help` where a command is expected is a
+  request too: `reflux help solve`, `reflux kinetics help check`.
 
-## Milestone 3 — Parser core
+## C3 — Parser core
 
 Implement parsing independently from application execution.
 
@@ -210,7 +239,7 @@ Start with:
 The parser should return data or a typed error:
 
 ```v
-module cli
+module cmdline
 
 pub struct Invocation {
 pub:
@@ -253,20 +282,46 @@ adapter decides whether an error is a usage error and how it is displayed.
 - Parser failures are typed `ParseError` values through the repository's
   `IError` convention; their messages remain stable for the application
   adapter and tests.
-- Committed tests in `cli/cli_test.v` cover valid and invalid parser forms;
+- Committed tests in `cmdline/cmdline_test.v` cover valid and invalid parser forms;
   the ignored `cli_test/` harness demonstrates the parsed invocation and
   errors without process termination.
 - The parser returns result errors and performs no output or process
   termination. Production exit-code mapping remains intentionally deferred to
   the `main.v` migration boundary.
 
-## Milestone 4 — Dispatcher and application adapter
+**Bugs fixed after it was marked done**, each with a test:
+
+- An unknown option was an untyped error, not a `ParseError`; now every
+  failure is one, and carries its command's usage line for a diagnostic.
+- A negative number (`reflux demo 300 -1`) and a lone `-` were taken for
+  unknown options, so "negative values" held only for a flag's value.
+- A flag that takes a value swallowed the next flag (`--csv --trace` set
+  csv to `--trace`); a flag there now means the value is missing, as
+  `main.v` has it.
+- `--trace=` was accepted: an empty inline value on a switch went unseen.
+- A group with no command (`reflux kinetics`) parsed, and failed only at
+  dispatch, as "no handler for kinetics": now it is a ParseError, and a
+  handler can't be registered for a group.
+- `-- solve` said "unknown command solve (did you mean solve?)".
+- Aliases matched with their dashes stripped and names didn't, so `--run`
+  ran the command aliased `run`, and `-version` ran `version`. Commands now
+  match exactly; a long flag is `--name` and a short one `-alias` only.
+- Suggestions took the one nearest name within three edits, so `zzz`
+  suggested `fit` and any one-letter flag the first long one. Now up to
+  three within two edits, as `main.v`'s did, against long flags only.
+- Messages follow `main.v`'s: "no command", "no option".
+- Validation allowed a command's dashed name (`--version`) only as its first
+  alias, and named a nested command by its parent and index (`root
+  reflux[0]`); now anywhere in the list, and by its path (`reflux kinetics
+  check`).
+
+## C4 — Dispatcher and application adapter
 
 Add execution after parsing is stable. A handler receives a typed invocation
 and an explicit context rather than raw process arguments.
 
 ```v
-module cli
+module cmdline
 
 pub struct Context {
 pub:
@@ -320,9 +375,9 @@ fn run(args []string, mut c Console) int {
   missing-handler errors; the ignored harness demonstrates the same behavior
   with visible mock output.
 - Production `main.v` and `main_test.v` remain unchanged, so the existing
-  `Console` contract is preserved until Milestone 5 migration.
+  `Console` contract is preserved until the C5 migration.
 
-## Milestone 5 — Incremental command migration
+## C5 — Incremental command migration
 
 Migrate commands in increasing complexity:
 
@@ -331,7 +386,8 @@ Migrate commands in increasing complexity:
 3. `demo`;
 4. `solve`;
 5. `kinetics check`;
-6. `kinetics explain`.
+6. `kinetics explain`;
+7. `study`, `optimize` and `fit`, which M8 added after this plan was written.
 
 For each command:
 
@@ -358,7 +414,23 @@ For each command:
 - Machine-readable output contains no styling.
 - Old parser code has been removed only after tests prove it is unused.
 
-## Milestone 6 — Diagnostics and polish
+**Progress**
+
+- Help is migrated. `commands.v` holds reflux's whole tree, every command
+  with its summary, description, usage, arguments, flags and examples, and
+  `run()` renders help from it for `reflux help solve`, `reflux solve
+  --help`, `reflux kinetics help` and the rest: in colour on a terminal,
+  plain in `main_test.v`. `reflux` alone prints it to stderr and exits 2, as
+  before. The hand-written `usage` and `kinetics_usage` are gone: both are
+  now the tree's help without colour, which errors still print after what
+  was wrong, so `main_test.v`'s checks of them hold unchanged.
+- `reflux solve --help` and the like were errors, exit 2; now they are help.
+- `version` prints what it did; it doesn't need the framework yet.
+- The commands still parse their own arguments, so every error message is
+  `main.v`'s. `main_test.v` changed only where it read the old help's first
+  line, `usage:`, and gained a test of every command's help.
+
+## C6 — Diagnostics and polish
 
 Once behavior is migrated, improve presentation:
 
@@ -386,7 +458,7 @@ Current framework progress:
 - Command aliases are checked symmetrically, while dashed aliases such as
   `--version` remain allowed for their canonical command.
 - The ignored `cli_test/` harness covers visual behavior, and committed
-  `cli/cli_test.v` covers deterministic help, parsing, validation and
+  `cmdline/cmdline_test.v` covers deterministic help, parsing, validation and
   diagnostics without requiring the application entry point.
 - The committed tests also cover the application boundary's help/version
   outcomes, typed handler dispatch and missing-handler errors.
@@ -400,7 +472,7 @@ Current framework progress:
 - Existing file and line locations are unchanged.
 - Output is stable enough for deterministic tests.
 
-## Milestone 7 — Executable integration and optional features
+## C7 — Executable integration and optional features
 
 Add a small number of process-level tests for the actual executable. Keep most
 tests in-process for speed and precise output capture.
@@ -434,7 +506,7 @@ These are not prerequisites for the CLI migration.
 
 The first practical sequence is:
 
-1. create `cli/cli_test.v`;
+1. create `cmdline/cmdline_test.v`;
 2. define minimal command metadata;
 3. register the current command tree;
 4. render root help;
@@ -452,7 +524,7 @@ small and reversible.
 Create files only when their responsibility has become real:
 
 ```text
-cli/
+cmdline/
 ├── milestones.md       # this roadmap
 ├── command.v           # command and metadata types
 ├── help.v              # help rendering
@@ -460,9 +532,9 @@ cli/
 ├── style.v             # styling primitives
 ├── parser.v            # argument and flag parsing
 ├── error.v             # parser and framework errors
-└── cli_test.v          # framework tests
+└── cmdline_test.v      # framework tests
 ```
 
 `Console` should remain in `main.v` until there is a demonstrated need for a
-shared terminal abstraction. If it later moves into `cli/`, make that a
+shared terminal abstraction. If it later moves into `cmdline/`, make that a
 separate migration with tests rather than combining it with parser work.
