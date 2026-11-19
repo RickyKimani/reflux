@@ -86,9 +86,13 @@ fn test_pip_and_labels_match_thermo() {
 	// vapour and supercritical, either side of the saturation curve and the
 	// critical point, and liquids squeezed to within 0.02% of the covolume.
 	// The volume is M1's 1e-9. Π uses finite differences for its second
-	// derivatives (D6), so 1e-7; it agrees to about 5e-9.
+	// derivatives (D6), so 1e-7; it agrees to about 5e-9. Every label is
+	// `thermo`'s but for 17 supercritical states, 1.3 to 2.5 times their Tc,
+	// more than four covolumes large with Π from 1.004 to 1.17, which are
+	// vapour (M3's D6, as amended in M9 step 9).
 	f := read_pip_fixture()!
 	mut roots := 0
+	mut relabelled := 0
 	for c in f.cases {
 		m := model_for(f, c)!
 		for r in c.roots {
@@ -98,11 +102,55 @@ fn test_pip_and_labels_match_thermo() {
 			p := thermo.pip(m, c.t, st.v, c.n)
 			assert agree(p, r.pip, 1e-7, 0.0), '${at}: Π ${p} vs ${r.pip}'
 			label := thermo.phase_label(m, st)
-			assert label == if r.label == 'liquid' { thermo.PhaseLabel.liquid } else { .vapor }, '${at}: ${label} vs ${r.label}'
+			// A phase more than four covolumes large is vapour, whatever Π
+			// and `thermo` say (M3's D6, as amended in M9 step 9).
+			if st.v > 4 * m.min_volume(c.n) && r.label == 'liquid' {
+				assert label == .vapor, at
+				relabelled++
+			} else {
+				assert label == if r.label == 'liquid' { thermo.PhaseLabel.liquid } else { .vapor }, '${at}: ${label} vs ${r.label}'
+			}
 			roots++
 		}
 	}
 	assert roots == 1327
+	assert relabelled == 17
+}
+
+// A hot gas at low pressure is vapour, though its Π is above 1: above its
+// Joule–Thomson inversion temperature, B − T·dB/dT > 0 and Π − 1 ≈
+// (B − T·dB/dT)/V. Hydrogen at 1000 K and nitrogen at 700 K, each at 1 bar
+// on PR; a reformer's gas at 1000 K (M9 step 9 found it labelled liquid).
+fn test_a_hot_gas_is_vapour() {
+	h2 := Component{
+		name:  'hydrogen'
+		tc:    33.19
+		pc:    1.313e6
+		omega: -0.216
+		mw:    0.00201588
+	}
+	n2 := Component{
+		name:  'nitrogen'
+		tc:    126.2
+		pc:    3.3958e6
+		omega: 0.0372
+		mw:    0.0280134
+	}
+	ch4 := Component{
+		name:  'methane'
+		tc:    190.56
+		pc:    4.599e6
+		omega: 0.011
+		mw:    0.0160425
+	}
+	for c in [[Component(h2)], [n2], [h2, ch4]] {
+		m := thermo.new_cubic(.pr, c)!
+		t := if c.len == 1 && c[0].name == 'nitrogen' { 700.0 } else { 1000.0 }
+		n := if c.len == 1 { [1.0] } else { [0.7, 0.3] }
+		st := thermo.solve_tp(m, t, 1e5, n, .vapor)!
+		assert thermo.pip(m, t, st.v, n) > 1, '${c.map(it.name)}'
+		assert thermo.phase_label(m, st) == .vapor, '${c.map(it.name)}'
+	}
 }
 
 fn test_soave_zero_matches_thermo() {

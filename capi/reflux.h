@@ -99,9 +99,11 @@ int32_t reflux_version(char *buf, int32_t len);
 /* reflux_free drops a handle. */
 int32_t reflux_free(int64_t id, char *err, int32_t err_len);
 
-/* reflux_collect runs a full garbage collection, and writes the collector's
-   heap size in bytes to heap_bytes unless it's NULL: for tests of memory. */
-int32_t reflux_collect(int64_t *heap_bytes);
+/* reflux_collect runs a full garbage collection, and writes the bytes live
+   after it to live_bytes unless it's NULL: the collector's heap less its free
+   blocks, for tests of memory. Before 0.4.0 it wrote the heap's size, which
+   the collector grows in large steps and never gives back. */
+int32_t reflux_collect(int64_t *live_bytes);
 
 /* ---- Component data (docs/data-format.md) ---- */
 

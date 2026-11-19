@@ -34,23 +34,32 @@ pub:
 // in Solution.streams.
 pub struct UnitResult {
 pub:
-	name    string
-	inlets  []Stream
-	outlets []Stream
-	energy  []EnergyStream
+	name      string
+	inlets    []Stream
+	outlets   []Stream
+	energy    []EnergyStream
+	conserved [][]f64 // what a unit that reacts conserves: see Outcome
+	profile   ?Profile
+	warnings  []string
 }
 
-// TearHistory is how a block's tears converged.
+// TearHistory is how a block's tears converged, and its specs (M8's D5).
 pub struct TearHistory {
 pub:
 	tears []string
 	// residuals has a row for each pass, with each tear's largest change as a
 	// fraction of its scale.
 	residuals [][]f64
+	specs     []string
+	// spec_residuals has a row for each evaluation of the specs: each one's
+	// residual, as a fraction of its scale (SpecResult).
+	spec_residuals [][]f64
 }
 
 // Balance is how far a balance is from closing: the worst component's
 // imbalance as a fraction of the flow, and the energy's as a fraction of F·RT.
+// Where something reacts, the worst element's, in atoms, takes the
+// component's place.
 pub struct Balance {
 pub:
 	component f64
@@ -66,8 +75,9 @@ pub:
 	products []string
 	plan     Plan
 	history  []TearHistory
-	balance  Balance // of the whole flowsheet
-	worst    Balance // of the worst unit, for each balance
+	balance  Balance      // of the whole flowsheet
+	worst    Balance      // of the worst unit, for each balance
+	specs    []SpecResult // each spec met, in the file's order (M8's D5)
 }
 
 // How far a unit's own balances may be from closing (criterion 2), and how
@@ -92,18 +102,54 @@ pub fn (f Flowsheet) solve(fl thermo.Fluid, params SolveParams) !Solution {
 		named << name
 	}
 	plan := f.plan(tears: named, work: params.work)!
+	return f.run(fl, params, plan, none, none)
+}
+
+// solve solves the flowsheet with the file's own solver settings, and its
+// specs (M8's D5), on the plan made when it was read.
+pub fn (l Loaded) solve() !Solution {
+	if l.specs.len == 0 {
+		return l.sheet.solve(l.fluid, l.params)
+	}
+	return l.sheet.run(l.fluid, l.params, l.plan, l, none)
+}
+
+// solve_from solves the file from a neighbouring point's solution (M8's
+// D6): its tears, its specs' values and its units each start from there,
+// and the answer is checked as a cold one is.
+pub fn (l Loaded) solve_from(start Start) !Solution {
+	file := if l.specs.len > 0 { ?Loaded(l) } else { none }
+	return l.sheet.run(l.fluid, l.params, l.plan, file, start)
+}
+
+// run solves a flowsheet on a plan, with a file's specs if there are any,
+// from a start if there is one.
+fn (f Flowsheet) run(fl thermo.Fluid, params SolveParams, plan Plan, file ?Loaded, start ?Start) !Solution {
 	mut s := Solver{
 		sheet:  f
 		fl:     fl
 		params: params
 		nc:     fl.model.components().len
 		runs:   []UnitResult{len: f.units.len}
+		file:   file
+		start:  start
 	}
-	for feed in f.feeds {
+	if l := file {
+		// A spec remakes what it varies, so the solve has its own lists.
+		s.sheet = Flowsheet{
+			units: f.units.clone()
+			feeds: f.feeds.clone()
+		}
+		s.values = l.specs.map(it.input.value)
+		s.floors = [][]f64{len: l.specs.len}
+	}
+	for feed in s.sheet.feeds {
 		s.streams[feed.name] = feed.stream
 	}
 	for b in plan.blocks {
-		if b.tears.len == 0 {
+		if b.specs.len > 0 {
+			s.with_specs(b)!
+		} else if b.tears.len == 0 {
 			s.pass(b) or { return s.with_history(err) }
 		} else {
 			s.converge(b)!
@@ -114,11 +160,13 @@ pub fn (f Flowsheet) solve(fl thermo.Fluid, params SolveParams) !Solution {
 
 // Solver is one solve. It's its own numeric.Equations, for Broyden.
 struct Solver {
-	sheet  Flowsheet
 	fl     thermo.Fluid
 	params SolveParams
 	nc     int
+	file   ?Loaded // with specs: what they vary is remade from it
+	start  ?Start  // a neighbouring point's solution, to start from (M8's D6)
 mut:
+	sheet   Flowsheet
 	streams map[string]Stream
 	runs    []UnitResult
 	history []TearHistory
@@ -134,6 +182,20 @@ mut:
 	g_last     []f64
 	gap_flow   f64
 	gap_energy f64
+	// Specs (M8's D5): each one's value now, the floor of its scale's flow
+	// and T, and the block in hand's evaluations of them.
+	values        []f64
+	floors        [][]f64
+	spec_rows     [][]f64
+	samples       []Sample
+	inner_started bool
+	t_in          f64
+	// Broyden on tears and specs together: the specs' values are base +
+	// m·u, u their unknowns after the tears'.
+	joint bool
+	base  []f64
+	m     []f64
+	held  int // evaluations in a row that held a spec at a bound
 }
 
 // pass calculates a block's units once, in order.
@@ -141,7 +203,7 @@ fn (mut s Solver) pass(b Block) ! {
 	for i in b.units {
 		p := s.sheet.units[i]
 		inlets := p.inlets.map(s.streams[it])
-		o := p.unit.calculate(s.fl, inlets)!
+		o := s.calculated(i, p.unit, inlets)!
 		if o.outlets.len != p.outlets.len {
 			return bad_spec(p.unit.name, 'it gave ${o.outlets.len} outlets for ${p.outlets.len} ports')
 		}
@@ -149,10 +211,13 @@ fn (mut s Solver) pass(b Block) ! {
 			s.streams[name] = o.outlets[k]
 		}
 		s.runs[i] = UnitResult{
-			name:    p.unit.name
-			inlets:  inlets
-			outlets: o.outlets
-			energy:  o.energy
+			name:      p.unit.name
+			inlets:    inlets
+			outlets:   o.outlets
+			energy:    o.energy
+			conserved: o.conserved
+			profile:   o.profile
+			warnings:  o.warnings
 		}
 	}
 }
@@ -180,9 +245,11 @@ fn (mut s Solver) begin(b Block) ! {
 	s.flow = mix.total
 	s.rows = [][]f64{}
 	for name in b.tears {
-		s.streams[name] = s.params.estimates[name] or {
-			inlets := s.sheet.units.filter(name in it.inlets)[0].inlets
-			if inlets.any(it !in b.tears) { empty } else { full }
+		s.streams[name] = s.warm_tear(name) or {
+			s.params.estimates[name] or {
+				inlets := s.sheet.units.filter(name in it.inlets)[0].inlets
+				if inlets.any(it !in b.tears) { empty } else { full }
+			}
 		}
 	}
 }
@@ -228,20 +295,29 @@ fn (mut s Solver) failed(err IError) IError {
 fn (s Solver) with_history(err IError) IError {
 	if err is FlowsheetError {
 		return FlowsheetError{
-			kind:    err.kind
-			unit:    err.unit
-			reason:  err.reason
-			cause:   err.cause
-			history: s.history
+			kind:        err.kind
+			unit:        err.unit
+			reason:      err.reason
+			cause:       err.cause
+			history:     s.history
+			line:        err.line
+			key:         err.key
+			suggestions: err.suggestions
 		}
 	}
 	return err
 }
 
 fn (mut s Solver) keep_history() {
+	mut names := []string{}
+	if l := s.file {
+		names = s.block.specs.map(l.specs[it].name)
+	}
 	s.history << TearHistory{
-		tears:     s.block.tears
-		residuals: s.rows
+		tears:          s.block.tears
+		residuals:      s.rows
+		specs:          names
+		spec_residuals: s.spec_rows
 	}
 }
 
@@ -316,22 +392,38 @@ fn (mut s Solver) set_tears(x []f64) ! {
 	}
 }
 
-// wegstein is the next x from the last two passes, variable by variable
-// (Wegstein, Commun. ACM 1, 1958). With s the slope of g, q = s/(s − 1) gives
+// wegstein_by is Wegstein's next x, variable by variable, from each one's
+// slope s through the last two passes, slopes_of's (Wegstein, Commun. ACM 1,
+// 1958). q = s/(s − 1) gives
 // x ← q·x + (1 − q)·g(x), held to q in [−5, 0] so that it only ever
 // accelerates, and by no more than 5 times the step (D7).
-fn wegstein(x0 []f64, g0 []f64, x []f64, g []f64) []f64 {
+fn wegstein_by(slopes []f64, x []f64, g []f64) []f64 {
 	mut next := g.clone()
 	for i in 0 .. x.len {
-		dx := x[i] - x0[i]
-		if dx == 0.0 {
+		slope := slopes[i] or { 0.0 }
+		if slope == 0.0 {
 			continue
 		}
-		slope := (g[i] - g0[i]) / dx
 		q := math.max(-5.0, math.min(0.0, slope / (slope - 1.0)))
 		next[i] = q * x[i] + (1.0 - q) * g[i]
 	}
 	return next
+}
+
+// slopes_of is each variable's slope through two passes, x0 → g0 and
+// x → g, for Wegstein: 0 where x didn't move.
+fn slopes_of(x0 []f64, g0 []f64, x []f64, g []f64) []f64 {
+	mut out := []f64{len: x.len}
+	if x0.len != x.len {
+		return out
+	}
+	for i in 0 .. x.len {
+		dx := x[i] - x0[i]
+		if dx != 0.0 {
+			out[i] = (g[i] - g0[i]) / dx
+		}
+	}
+	return out
 }
 
 // by_substitution is direct substitution, with Wegstein's step every other
@@ -350,7 +442,7 @@ fn (mut s Solver) by_substitution() ! {
 			return
 		}
 		if s.params.method == .wegstein && k >= 3 && k % 2 == 1 {
-			s.set_tears(wegstein(x0, g0, x, g))!
+			s.set_tears(wegstein_by(slopes_of(x0, g0, x, g), x, g))!
 		}
 		x0 = x.clone()
 		g0 = g.clone()
@@ -400,20 +492,44 @@ fn (mut s Solver) by_broyden() ! {
 	}
 }
 
-// eval is one pass, for numeric.broyden: the tears' changes, at y.
+// eval is one pass, for numeric.broyden: the tears' changes, at y. With
+// specs together (M8's D5), y has each spec's unknown after the tears', and
+// f each spec's residual.
 fn (mut s Solver) eval(y []f64, mut f []f64) ! {
+	nt := s.scale.len
 	if s.fresh {
 		s.fresh = false
 	} else {
-		mut x := []f64{len: y.len}
-		for i, v in y {
-			x[i] = v * s.scale[i]
+		mut x := []f64{len: nt}
+		for i in 0 .. nt {
+			x[i] = y[i] * s.scale[i]
+		}
+		if s.joint {
+			// Pushed against a bound three times running, a target is likely out
+			// of reach: every step then fails at once, Broyden stops, and the
+			// nested retry's bracket says what the bounds reach.
+			if s.held >= 3 {
+				return error('a spec is held at its bound')
+			}
+			s.held = if s.set_values(y[nt..], s.base, s.m) { s.held + 1 } else { 0 }
 		}
 		s.set_tears(x)!
+		if s.joint {
+			s.apply()!
+		}
 	}
 	x := s.tear_values()
 	s.pass(s.block)!
 	s.compare(x, s.tear_values(), mut f)
+	if s.joint {
+		mut row := []f64{}
+		for j, k in s.block.specs {
+			_, _, r := s.residual(k)!
+			f[nt + j] = r
+			row << r
+		}
+		s.spec_rows << row
+	}
 }
 
 // products is the streams that leave the flowsheet.
@@ -436,8 +552,9 @@ fn (f Flowsheet) products() []string {
 }
 
 // imbalance is the worst component's imbalance, and the energy's, from the
-// streams in and out and the energy added.
-fn imbalance(inlets []Stream, outlets []Stream, added f64, nc int) (f64, f64) {
+// streams in and out and the energy added. Given conserved rows, it's the
+// worst row's instead: an element's, in atoms, where something reacts.
+fn imbalance(inlets []Stream, outlets []Stream, added f64, nc int, conserved [][]f64) (f64, f64) {
 	mut comp := []f64{len: nc}
 	mut energy := added
 	for s in inlets {
@@ -453,10 +570,32 @@ fn imbalance(inlets []Stream, outlets []Stream, added f64, nc int) (f64, f64) {
 		}
 	}
 	mut worst := 0.0
-	for c in comp {
-		worst = math.max(worst, math.abs(c))
+	if conserved.len == 0 {
+		for c in comp {
+			worst = math.max(worst, math.abs(c))
+		}
+	} else {
+		for row in conserved {
+			mut x := 0.0
+			for i, c in row {
+				x += c * comp[i]
+			}
+			worst = math.max(worst, math.abs(x))
+		}
 	}
 	return worst, math.abs(energy)
+}
+
+// most_atoms is the most a component counts in any conserved row, which a
+// tear's gap in one component can move a row by: 1 with none.
+fn most_atoms(conserved [][]f64) f64 {
+	mut most := 1.0
+	for row in conserved {
+		for c in row {
+			most = math.max(most, math.abs(c))
+		}
+	}
+	return most
 }
 
 // added is the sum of some energy streams.
@@ -481,7 +620,8 @@ pub fn (r UnitResult) balance() Balance {
 	if flow == 0.0 {
 		return Balance{}
 	}
-	comp, energy := imbalance(r.inlets, r.outlets, added(r.energy), r.inlets[0].flows.len)
+	comp, energy := imbalance(r.inlets, r.outlets, added(r.energy), r.inlets[0].flows.len,
+		r.conserved)
 	return Balance{comp / flow, energy / (flow * thermo.r_gas * t)}
 }
 
@@ -513,13 +653,24 @@ fn (s Solver) solution(plan Plan) !Solution {
 		t_flow += x.total() * x.t
 	}
 	rt := thermo.r_gas * t_flow / flow
-	open_flow := s.gap_flow + round_off * flow * f64(s.runs.len)
+	// Where something reacts, the whole is checked on what every reactor
+	// conserves, its elements: each reactor gives the same rows, the
+	// elements of the file's components.
+	mut conserved := [][]f64{}
+	for r in s.runs {
+		if r.conserved.len > 0 {
+			conserved = r.conserved.clone()
+			break
+		}
+	}
+	atoms := most_atoms(conserved)
+	open_flow := atoms * (s.gap_flow + round_off * flow * f64(s.runs.len))
 	open_energy := s.gap_energy + unit_tolerance * flow * rt * f64(s.runs.len)
 	mut q := 0.0
 	for r in s.runs {
 		q += added(r.energy)
 	}
-	comp, energy := imbalance(feeds, outs, q, s.nc)
+	comp, energy := imbalance(feeds, outs, q, s.nc, conserved)
 	if comp > open_flow || energy > open_energy {
 		return FlowsheetError{
 			kind:    .unbalanced
@@ -527,7 +678,7 @@ fn (s Solver) solution(plan Plan) !Solution {
 			history: s.history
 		}
 	}
-	return Solution{
+	sol := Solution{
 		streams:  s.streams
 		units:    s.runs
 		products: products
@@ -535,5 +686,12 @@ fn (s Solver) solution(plan Plan) !Solution {
 		history:  s.history
 		balance:  Balance{comp / flow, energy / (flow * rt)}
 		worst:    Balance{worst_comp, worst_energy}
+	}
+	if s.file == none {
+		return sol
+	}
+	return Solution{
+		...sol
+		specs: s.spec_results(sol)!
 	}
 }

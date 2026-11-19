@@ -94,6 +94,72 @@ Medians, but for the fastest. What each solved, the products in mol/s after the 
 | reflux, Wegstein | 65.193098 | 9.91116 | 24.895742 |
 | reflux, direct substitution | 65.193098 | 9.91116 | 24.895742 |
 
+## The owner's reforming PFR
+
+M9 step 11, exit criterion 9: the owner's coursework case (M9 step 0), one isothermal packed bed of 1 m³ on three LHHW rates, with Ergun's drop, its feed at 1000 K and 1 atm. `tools/gen_m9_bench.py` writes `testdata/m9_bench.json`, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-13, the two programs taking turns: the single solve in five turns, and each point of the study solved by DWSIM and then by reflux before the next, since a laptop's clock moved DWSIM's solve between 9.4 and 29 s in step 0.
+
+- **DWSIM 9.0.5.0** as the owner's file sets it up: sections of dV = 0.05, Ergun's drop, its default integrator (Radau); and for the single solve its explicit Runge–Kutta 4(5), which step 0 found seven times faster.
+- **reflux,** built with gcc 16.2.0 -prod, on `testdata/flowsheets/reformer_dwsim.toml`, the same case on DWSIM's rates as typed, with reflux's own viscosity: at its default rtol of 1e-8, and at 1e-4. And on `testdata/flowsheets/reformer.toml`, the published model. A solve includes the feed's flash; reading the file, the data and the fluid took 77.6 ms, once.
+
+### A single solve, at 1000 K
+
+| | A solve | Fastest | DWSIM's default over it | Methane's conversion | Steps |
+|---|---|---|---|---|---|
+| DWSIM, Radau, dV = 0.05 | 10.7 s | 9.87 s | 1 | 0.760346 | — |
+| DWSIM, explicit Runge–Kutta | 3.27 s | 2.99 s | 3.3 | 0.760344 | — |
+| reflux | 27.8 ms | 24.5 ms | 380 | 0.76262 | 471 |
+| reflux at rtol 1e-4 | 3.46 ms | 2.89 ms | 3100 | 0.762618 | 59 |
+| reflux, the published model | 393 ms | 361 ms | 27 | 0.760266 | 471 |
+
+Medians, but for the fastest. DWSIM's conversion is 1.3e-3 below the exact answer of its own equations with Ergun's drop, its sections' error (step 0). reflux's at 1e-8 is that exact answer to 2.3e-10 when it's given DWSIM's viscosity (step 10); on its own, Wilke's rule, it's 9.4e-4 above. Its steps are its integrator's accepted ones.
+
+### The study: 50 feed temperatures, 700 to 1000 °C
+
+| | All 50 | A point | Slowest point | Over reflux at 1e-8 |
+|---|---|---|---|---|
+| DWSIM, Radau, dV = 0.05 | 11.7 min | 14.2 s | 17.1 s | 330 |
+| reflux | 2.12 s | 37.9 ms | 83.4 ms | 1.0 |
+| reflux at rtol 1e-4 | 273 ms | 4.87 ms | 11.1 ms | 0.13 |
+| reflux, the published model | 28.2 s | 554 ms | 844 ms | 13 |
+
+Each reflux point is its median of three solves. Every seventh point, and the last, with each program's conversion:
+
+| Feed | DWSIM | reflux | DWSIM's conversion | reflux's |
+|---|---|---|---|---|
+| 700.0 °C | 12.8 s | 28.0 ms | 0.680214 | 0.682453 |
+| 742.9 °C | 14.7 s | 29.5 ms | 0.801577 | 0.803776 |
+| 785.7 °C | 14.2 s | 36.8 ms | 0.883652 | 0.885451 |
+| 828.6 °C | 13.9 s | 38.2 ms | 0.929782 | 0.93118 |
+| 871.4 °C | 14.6 s | 38.0 ms | 0.955356 | 0.956447 |
+| 914.3 °C | 15.9 s | 53.0 ms | 0.970778 | 0.971613 |
+| 957.1 °C | 11.4 s | 35.8 ms | 0.980413 | 0.981046 |
+| 1000 °C | 13.0 s | 40.2 ms | 0.986559 | 0.987041 |
+
+## Studies, an optimisation and a spec
+
+M8 step 14, exit criterion 11: what M8 added, each against DWSIM's own form for it, driven unshown (M8 step 0). `tools/gen_m8_bench.py` writes `testdata/m8_bench.json`, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-18, with DWSIM 9.0.5.0 and reflux built with gcc 16.2.0 -prod. reflux ran everything before DWSIM's runs and again after, each the best of three after an untimed run, since a laptop's clock moves DWSIM's solve between 9.4 and 29 s (M9 step 0); the faster of the two is shown.
+
+### The owner's study: 50 feed temperatures, 700 to 1000 °C
+
+| | All 50 | DWSIM over it |
+|---|---|---|
+| DWSIM's sensitivity analysis, the owner's setup (dV = 0.05, Radau) | 15.1 min | 1 |
+| reflux, cold | 1.24 s | 730 |
+| reflux, warm | 1.14 s | 790 |
+| reflux, warm, 2 workers | 703 ms | 1300 |
+| reflux, warm, 4 workers | 722 ms | 1300 |
+
+reflux solves `testdata/flowsheets/reformer_dwsim.toml`, the same case on DWSIM's rates as typed, in chunks of 8: cold, every point from the feed; warm, each chunk's points from their neighbours (D6, D7); and warm on 2 and 4 threads (D8). The answers are the same bits on any number of workers. One solve of the published model, `testdata/flowsheets/reformer.toml`, whose K(T) is kept until T moves (step 1), takes 13.4 ms: it took 393 ms in M9.
+
+### An optimisation and a spec
+
+| | DWSIM | Its solves | reflux | Its solves | DWSIM over reflux |
+|---|---|---|---|---|---|
+| Two-stage compression, the least work (`compression_dwsim.toml`) | 1.32 s, bounded Brent | 18 | 273 ms, SQP | 57 | 4.8 |
+| The reference flowsheet's spec (`reference_dwsim.toml`) | 17.2 s, an Adjust's secant at 1e-4 | 7 | 137 ms, with its recycle | 18 passes | 130 |
+
+DWSIM's optimiser and Adjust solve the whole flowsheet at each evaluation. reflux's SQP counts every solve, its gradients' included, five a gradient; its spec is met with the recycle's tears, by Broyden on both, so its count is the block's passes, each one pass of its units.
+
 ## From Python
 
 M10a step 7, exit criterion 10: what a call from Python costs over V's own loop doing the same work. Methane, ethane and n-butane, 30/30/40, at 20 bar, from 220 to 400 K (one point at 300 K), with Peng–Robinson and the database's kᵢⱼ. `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, timing V and Python alternately, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-05, with Python 3.13.17 and NumPy 2.5.4.

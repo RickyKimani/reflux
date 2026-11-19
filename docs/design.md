@@ -155,6 +155,18 @@ the solver failed on 276 of 528 requests within 1e-6 of a pure component's
 Tc and 1e-8 of its Pc. At the critical point itself, the liquid iteration
 now stops just below Vc and the vapour one just above.
 
+**A cubic's workspace** (M8 step 7). `solve_tp` allocates 944 bytes a call
+on a five-component cubic: 704 for the volume function, its √aᵢ arrays and
+the struct boxed as an interface, and 240 for the state's n and ln φ. A
+reactor reads its phase about twenty times an integration step, so a
+study of the owner's PFR allocated 11.8 MB a point, and threads waited on
+the collector's lock. `Cubic.work()` keeps √aᵢ and ∂√aᵢ/∂T at the last T,
+Aᵢ, ln φ, and one volume function, boxed once, which each call moves to
+its composition in place. It does `solve_tp`'s arithmetic in `solve_tp`'s
+order, `attraction`, `fix`, the volume solvers and `state_at`'s ∂F/∂nᵢ − ln Z
+term by term, so it gives `solve_tp`'s bits, and allocates nothing. A
+workspace is mutable: one per thread, one per reactor's calculation.
+
 ## Phase identification
 
 `thermo.pip` ([thermo/phase.v](../thermo/phase.v)) is the phase
@@ -163,8 +175,27 @@ identification parameter of Venkatarathnam and Oellrich (2011):
     Π = V·[(∂²P/∂T∂V)/(∂P/∂T) − (∂²P/∂V²)/(∂P/∂V)]
 
 `phase_label` calls a single phase liquid when Π > 1 and vapour otherwise,
-as Caleb Bell's `thermo` does. It needs no saturation curve or critical
+as Caleb Bell's `thermo` does, but for a phase more than four covolumes
+large, less dense than its critical density, which is vapour whatever Π
+says (amended in M9 step 9). It needs no saturation curve or critical
 point, so it works for any mixture, supercritical ones included.
+
+**Why the covolumes.** At low density
+
+    Π ≈ 1 + (B − T·dB/dT)/V,
+
+B the second virial coefficient, and B − T·dB/dT is above zero for a gas
+above its Joule–Thomson inversion temperature at zero pressure: hydrogen's
+is about 200 K, nitrogen's 620 K, methane's 950 K. So Π alone calls such a
+gas liquid however dilute, and M9's reformer gas at 1000 K came out of the
+flash a liquid, which a drum would have sent out of its liquid port. A
+cubic's critical volume is 3 (van der Waals) to 3.95 (Peng–Robinson)
+covolumes, and Kay's rule on the components' is the mixture's covolume times
+the same ratio, so four covolumes is less dense than the pseudo-critical
+density on any cubic: no liquid is that dilute. Of M3's 1,327 fixture roots,
+17 supercritical ones, 1.3 to 2.5 times their Tc with Π from 1.004 to 1.17,
+are vapour where `thermo` calls them liquid; every other label is
+`thermo`'s.
 
 ∂P/∂V and ∂P/∂T are analytic. The second derivatives are third derivatives
 of F, which the `Model` contract doesn't have, so they're central
@@ -816,8 +847,22 @@ flash found first and refused. One of its phases must have a tpd below
 
 ## Units of measure
 
-`quantity` is where numbers with units come in (M4's D10). Each unit is a
-row of one table, and
+`quantity` is where numbers with units come in (M4's D10). Since M9 (its
+D3) it has a dimension algebra, so a unit can be compound and every unit
+knows its dimension.
+
+**A dimension** is the exponent of each SI base unit, kg, m, s, K, mol and
+A: a pressure is kg·m⁻¹·s⁻². The exponents are exact rationals p/q in
+lowest terms, with |p| and q at most 10⁶, so that bar^0.5 squared is bar
+again exactly, and no sum or product of two in range overflows 64 bits; one
+out of range is refused. The ampere is there for the coulomb, and so for the
+Faraday constant. Each of M4's named dimensions is one of these, and a
+difference has its absolute quantity's: ΔT is K, ΔP is kg·m⁻¹·s⁻². A
+dimension is written in base units, its positive powers over its negative
+ones, as kg/(m·s²), mol/(kg·s), kg^(1/2)/(m^(1/2)·s) or 1, and that text
+reads back as the same dimension with scale 1.
+
+**A unit** is a scale on a dimension. Each symbol is a row of one table,
 
     SI = (x + pre)·scale + post,        x = (SI − post)/scale − pre
 
@@ -850,9 +895,45 @@ number typed in:
 | US gallon | 231 in³ |
 | horsepower | 550 ft·lbf/s = 745.699871… W |
 | pound-mole | 453.59237 mol: a pound's worth of moles |
+| IT calorie | 4.1868 J |
+| metric ton (t) | 1000 kg |
+| day (d) | 86400 s |
+| poise (P) | 0.1 Pa·s, for the centipoise |
 
-SP 811 prints seven of the factors built from them (psi, mmHg, torr, lb/h,
-gal/min, Btu/h, hp) to 7 figures, and reflux's values round to them.
+SP 811 prints some of the factors built from them (psi, mmHg, torr, lb/h,
+gal/min, Btu, Btu/h, hp) to 7 figures, and reflux's values round to them.
+
+The symbols are the SI units m, kg and g, s, K, mol, A, C, L, N, J, W, Pa
+and P; in, ft, t, lb, min, h, d, lbmol, gal, cal, kcal, Btu, hp, bar, atm,
+psi, psia, mmHg and torr; the temperatures degC, °C, degF, °F and R; the
+gauge pressures barg and psig; and %. Of these, m, g, s, K, mol, A, C, L,
+N, J, W, Pa, bar and P take the prefixes G, M, k, h, d, c, m, µ (or μ, or
+u) and n. The kilogram is a symbol of its own, so that it is exactly 1. Pico and smaller are left out, so
+that "ps" can't read as a picosecond where psi was meant.
+
+**A compound unit** is read by
+
+    unit     := factor (("*" | "·") factor | "/" factor)*
+    factor   := ("1" | symbol | "(" unit ")") [exponent]
+    exponent := digits right after a symbol (m3), superscripts (m³, s⁻¹),
+                or "^" and an integer, a decimal or "(p/q)" (bar^-2, bar^0.5)
+
+- **Its scale** is the product of its numerator's scales over the product of
+  its denominator's, in one division at the end, as M4's table computed
+  kmol/h = 1e3/3600. A whole power is a repeated product, so cm³ is
+  0.01·0.01·0.01, the same bits on every platform; a fractional one is
+  `math.pow`, the C library's. (From the fourth power, `math.pow` is
+  sometimes an ulp nearer the exact value, but Windows' and Linux's
+  libraries differ.) So every unit M4 read, read now through the algebra,
+  gives M4's bits.
+- **Division goes left to right,** so J/mol/K is J/(mol·K). A * after a / is
+  refused as ambiguous: kmol/kg*h might mean kmol/(kg·h) or kmol·h/kg.
+- **Offsets only standing alone.** °C, °F, barg and psig keep their offsets
+  only as a whole unit of an absolute temperature or pressure. In a compound
+  unit °C is a kelvin of difference and °F 5/9 K, as in kJ/(kg·°C), and a
+  gauge pressure is refused.
+- A scale must be finite and above zero, and parentheses nest at most 16
+  deep.
 
 Reading is strict:
 - the text is a number, whitespace and one unit;
@@ -860,9 +941,819 @@ Reading is strict:
 - only a fraction may be a bare number;
 - an absolute T or P must be above zero.
 
-A unit that isn't the dimension's gets the closest of its units: those
-within two edits (Levenshtein, ignoring case), nearest first, at most
-three. A unit of another dimension is named as one.
+A unit that isn't one gets the closest of the dimension's common units
+(M4's): those within two edits (Levenshtein, ignoring case), nearest first,
+at most three. A unit of another dimension is named by what it is a unit
+of: a named dimension, a common one (energy, viscosity, molar entropy, …),
+or else its base units, as in "kmol/(kg*h) is a unit of mol/(kg·s), not
+molar flow". A unit that doesn't parse says why and at which character.
+
+## Expressions
+
+`expr` is reflux's one expression language (M9's D1, D2 and A9): a rate
+law, a rate constant, an adsorption term, later a pressure drop or a design
+specification. An expression is parsed into a tree and never evaluated as
+text. Every name in it is bound, every node has a dimension, and the tree
+writes itself back.
+
+**The grammar,** loosest first:
+
+    expr   := term (("+" | "-") term)*
+    term   := factor (("*" | "·" | "×" | "/") factor)*
+    factor := ("-" | "+") factor | power
+    power  := atom ["in" unit] ["^" factor]
+    atom   := number [unit] | name | name "[" key "]" | function "(" expr ")"
+              | "(" expr ")" ["[" unit "]"]
+    name   := word ["." word] | quoted "." word
+
+So ^ binds tighter than a minus sign and to the right, and · and / go left
+to right, as in Python and SymPy: −x^2 is −(x²), x^-2 is x⁻², a^b^c is
+a^(b^c), and a/b·c is (a/b)·c. − (U+2212) is a minus too. Whitespace,
+line breaks included, goes anywhere between tokens.
+
+**A number's unit** follows it after a space and runs to the next space, or
+to a ) or , that isn't its own: `exp(-240.1 kJ/mol / (R*T))`. Or it's in
+brackets, `240.1 [kJ/mol]`. The number becomes its SI value as it's read,
+by `quantity`'s scale, and its node has the unit's dimension. A word after a
+number that is also a name here is refused rather than guessed: "2 R" could
+be two rankines or twice the gas constant, so it asks for 2*R or 2 [R]. A
+unit with an offset (°C, °F, barg, psig) after a number is refused, since in
+arithmetic its offset would be wrong; in a compound, °C is a kelvin of
+difference and reads. Two values side by side, with no operator, are
+refused: "2T", "2 T", "T (P)".
+
+**A reading** (D2, as amended before M9 step 10) is a value's number on a
+unit's scale, a pure number, so that a correlation goes in as its source
+prints it: `0.85 - 0.0018*(T in degC)` is the tutorial's X = 0.85 − 0.0018 T
+with T in °C, and `log10(P in mmHg)` is Antoine's. With `quantity`'s
+SI = (x + pre)·scale + post, the reading of a value v is
+
+    x = (v − post)/scale − pre,
+
+T in °C being T − 273.15 K over 1 K, and P in barg (P − 101325 Pa)/10⁵ Pa.
+It's the one place an offset applies, and these rules keep it there:
+- `in` takes the name, member or bracketed group just before it, as a unit
+  binds to its number: `0.0018*T in degC` is `0.0018*(T in degC)`, and
+  `T in degC ^ 2` squares the reading. A number before `in` is refused,
+  as "2 in degC" (after a number, `in` alone is still the inch).
+- The unit must have the value's dimension.
+- A unit with an offset reads only a context variable, T or P, which is
+  absolute: `(T - 300 K) in degC` is refused, since a difference reads in
+  K, and so are a family member and a definition, which may be differences.
+- A reading renders as `(T in degC)` in plain text, `(T in °C)` in Unicode
+  and `\left(T\ \mathrm{in}\ \mathrm{{}^{\circ}C}\right)` in LaTeX,
+  always in parentheses, so that it reads as one value wherever it stands.
+- `in` is reserved, so no definition can take it. A reading that repeats
+  is named once by a definition, `t = "T in degC"`; there is no declaration
+  for a whole expression, which would rebind T and let `T/300` through.
+- A sum of a pure number and a temperature or pressure, or a pure number
+  asked for and a temperature given, is refused with the reading
+  suggested: likeliest, a correlation typed as printed without one.
+
+The tape computes a reading as the tree does, the three operations in
+order, skipping only x − 0 and x/1, which change no bit; its derivative is
+1/scale.
+
+**A group may take a unit** in brackets after it, `(85 - 0.18*(T in degC))
+[%]`: the group's value times the unit's scale, with the group's dimension
+times the unit's, as a number's unit does for a number. Only in brackets,
+so that a word after a group is still two values side by side; a unit with
+an offset is refused there as after a number.
+
+**Names** are letters, digits and _, starting with a letter, and bind to:
+- the context's variables, such as T and P, and its families' members, by
+  any key the context gives a member, so p[CH4], p[Methane] and
+  p['74-82-8'] are the same input. A key with other characters is quoted;
+- a definition, by name;
+- a built-in constant, at the 2019 SI's exact value:
+
+| Name | Value | Unit |
+|---|---|---|
+| R | N_A·k_B = 8.31446261815324, exactly | J/(mol·K) |
+| N_A | 6.02214076e23 | 1/mol |
+| k_B | 1.380649e-23 | J/K |
+| h | 6.62607015e-34 | J·s |
+| F | N_A·e = 96485.3321233100184…, exactly | C/mol |
+| c | 299792458 | m/s |
+| g_n | 9.80665, standard gravity | m/s² |
+| p_std | 1e5, the standard pressure, 1 bar | Pa |
+| pi | π | |
+
+- the functions exp, ln, log10, sqrt and abs, each of one argument. log is
+  refused as ambiguous, with ln and log10 offered.
+
+A name that binds to nothing is refused, with the closest names within two
+edits.
+
+**A flowsheet's names** (M8's D3) have one dot: a stream's or a unit's
+name, then one of its variables, as the file names them. A scope that
+isn't a word is quoted, `'let down'.T`, and no space goes either side of
+the dot. Each is an input slot, filled from a solution:
+
+| Name | Dimension | Its value |
+|---|---|---|
+| `s.T`, `s.P` | temperature, pressure | the stream's |
+| `s.F` | molar flow | Σ nᵢ |
+| `s.n[X]` | molar flow | X's flow nₓ |
+| `s.y[X]` | none | nₓ / Σ nᵢ, of the whole stream; none where Σ nᵢ = 0 |
+| `s.h` | molar enthalpy | the stream's, on the fluid's reference |
+| `s.vf` | none | its vapour fraction, β |
+| `u.duty`, `u.work` | power | the unit's energy stream of that name |
+
+A component answers to the file's name, its compound's name, CAS number and
+aliases, and its formula where no other component has it, which is what it
+renders as; otherwise the file's name. A unit names its energy streams
+before it calculates (`Energies`), so an adiabatic reactor has no duty to
+name, and a mixer nothing. A name that isn't there is refused by what's
+wrong: a scope that isn't there ("no stream or unit prodct here", with
+product.T offered), a variable its scope hasn't ("stream product has no TT:
+it has T, P, F, h, vf, n[…], y[…]"), a scope alone ("product is a stream:
+name one of its variables"), or a variable without its scope ("n is a
+stream's: say whose, as feed.n[CH4]"). Plain text writes a quoted scope
+back quoted; LaTeX writes a scope upright, `\mathrm{let\ down}.T`.
+
+**A value, or why there's none** (M8's D9). `Expr.value` computes what `eval`
+does, in its order and to its bits, but refuses, at the node and in words,
+where `eval` would give ±∞ or NaN:
+
+| Node | Refused when | Saying |
+|---|---|---|
+| an input | it's NaN | it has no value here, and why if the caller knows: "gas has no flow" |
+| a/b | b = 0 | it divides by b, which is zero here |
+| ln a, log10 a | the result isn't finite (a ≤ 0) | a, and that a logarithm needs a number above zero |
+| sqrt a | a < 0 | a, which is negative here |
+| a^b | 0^(b < 0), or a < 0 and b not whole | which |
+| anything else | the result isn't finite | that it's too large for a number |
+
+Tutorial 2's product conversion, (in − out)/in with none in, is the first
+division's refusal, not −∞.
+
+**Equations** are two expressions with `=`, `<=` or `>=` between them (`≤`
+and `≥` too): a spec's target (D5) or an optimisation's constraint (D13).
+The relation is found outside brackets and quotes; none, two, a strict `<`
+or `>`, or `==` is refused. Each side is parsed with the other blanked, so
+its lines and columns are the whole text's, and the two must have one
+dimension.
+
+**Definitions** name expressions for reuse, in any order. Each may use the
+others but not itself through any chain, found by a depth-first walk that
+reports the chain: "u uses itself: u → v → w → u". A definition can't take
+the name of a function, a constant, a variable or a family. Definitions are
+checked in an order where each follows what it uses.
+
+**Dimensions,** node by node, in the tree's order, where every operand
+comes before its use:
+
+| Node | Dimension |
+|---|---|
+| number | its unit's, or none |
+| a + b, a − b | a's, which must be b's |
+| a·b, a/b | a's times or over b's |
+| −a, abs(a) | a's |
+| sqrt(a) | a's to the ½ |
+| exp(a), ln(a), log10(a) | none, and a must have none |
+| a^b | b must have none. If a has none, none. If a has one, b must be a fixed value, folded from numbers, constants and fixed definitions, and a fraction p/q with q ≤ 10⁶ within 1e-12 (by continued fractions: 1/3, 2.5, 1.37), and the result is a's to the p/q |
+
+A place that needs a dimension asks with `must_be`: "a rate per mass of
+catalyst must be a mol/(kg·s), but this is a mol/(m³·s)". DWSIM's
+`exp(-240100/8.314/T)` is refused here: its argument is in 1/K.
+
+**A number that looks like a constant** is flagged, not refused: one with a
+constant's dimension within 1% of it but not equal, such as 8.314
+J/(mol·K) for R, with how far it is. A paper fitted with 8.314 may still
+write it (D2). The standard pressure is left out, since a pressure near
+1 bar, 1 atm say, usually means what it says.
+
+**Writing back.** Three styles from one walk, with the same precedence:
+- **plain,** in the language's own syntax, which reads back to the same
+  tree, node for node. So it keeps the tree's grouping, not just its value:
+  a + (b + c) and a·(b/c) keep their parentheses, being other trees than
+  a + b + c and a·b/c;
+- **Unicode,** for a terminal: · for a product, superscripts for a whole
+  power (x², x⁻¹), a trailing number in a name as a subscript (k₁), a
+  formula's digits as subscripts (p_CH₄), Greek names as letters (θ), π, p°
+  and gₙ. 4.22e15 is 4.22·10¹⁵, so it binds as a product and keeps its
+  parentheses as a divisor or a base. A number with a unit keeps its
+  parentheses as an operand of ·, / or a minus sign, so that its unit never
+  runs into the operator after it: (4.22·10¹⁵ kmol/(kg·h))·exp(−(240.1
+  kJ/mol)/(R·T));
+- **LaTeX,** for a notebook: \frac, \cdot, ^{}, \left( \right), \exp, \ln,
+  \log_{10}, \sqrt, \left| \right|, 4.22 \times 10^{15}, units in
+  \mathrm{}, species as p_{\mathrm{CH_{4}}}.
+
+**Powers** are a^b by `raise`: a whole power up to 16 as a repeated
+product, a negative one as 1 over that, and any other by `math.pow`. The
+product's bits are the same on every platform, where `math.pow` is the C
+library's, and the tree and the tape both raise this way.
+
+### The tape
+
+Expressions are compiled for speed into a tape (D5, as step 0 amended it):
+a flat array of operations on slots, one slot per operation, every operand
+before its use. Several expressions compile onto one tape, so what they
+share is computed once.
+
+**Compiling,** node by node:
+- **Folding:** an operation whose operands are all constants is computed
+  as eval would, and becomes a constant.
+- **Merging:** an operation identical to one already there (its kind, its
+  operands, its constants) is that one. + and · put their operands in
+  order first, which IEEE arithmetic allows exactly. A definition is
+  compiled once, whatever uses it, so a chain of definitions each using the
+  next twice compiles in linear time.
+- **Fusing,** each keeping the tree's arithmetic to the bit:
+
+| Tree | Tape | Why the bits are the same |
+|---|---|---|
+| x + c, c + x | addc(x; c) | + commutes exactly |
+| x − c | addc(x; −c) | x − c is x + (−c), and negation is exact |
+| c − x | csub(x; c) | the same operation |
+| c·x, x·c | mulc(x; c) | · commutes exactly |
+| x/c, c/x | divc(x; c), cdiv(x; c) | the same operations |
+| exp(d/x) | aexp(x; 1, d) | 1·y is y |
+| c·exp(d/x) | aexp(x; c, d), if the exponential isn't scaled already | the same operations |
+| exp(c + d/x), exp(c − d/x) | expl(x; c, ±d) | c − d/x is c + (−d)/x, exactly |
+| a^c, c fixed | powc(a; c) | `raise` both ways |
+
+  So Arrhenius' A·exp(−E/(R·T)) is one operation on the slot of R·T, which
+  every such term shares, and an equilibrium constant's exp(30.42 −
+  27106 K/T) is one operation on T's.
+- **Pruning:** what no output uses is dropped. Then the constants go
+  first, the inputs used next, and the operations after, in order.
+
+**Evaluating** writes each slot's value into a buffer the caller owns,
+whose constants were put in place once when it was made. Nothing is
+allocated. The tape's value is eval's, to the bit.
+
+**The gradient** comes from one reverse sweep after an evaluation, carrying
+an adjoint per output in each slot, so every output's derivative with
+respect to every input comes at once. Each operation adds its adjoint times
+its local derivatives to its operands':
+
+| Operation, v its value | ∂v/∂a | ∂v/∂b |
+|---|---|---|
+| a + b, a − b | 1 | 1, −1 |
+| a·b | b | a |
+| a/b | 1/b | −v/b |
+| a^b | b·v/a (b·a^(b−1) at a = 0) | v·ln a (0 where v = 0) |
+| −a | −1 | |
+| exp(a), ln(a), log10(a) | v, 1/a, 1/(a·ln 10) | |
+| √a, \|a\| | 1/(2v), sign(a) | |
+| a^c | c·v/a (c·a^(c−1) at a = 0) | |
+| a + c, c − a, c·a, a/c, c/a | 1, −1, c, 1/c, −v/a | |
+| c·exp(d/a), exp(c + d/a) | −v·d/a² | |
+
+An input no output uses has a derivative of 0.
+
+## Reactions
+
+M9 step 4: a compound's formula, equations read and balanced, a set's
+independence, and each reaction's standard properties and K(T).
+
+### Formulas
+
+[chem/](../chem/chem.v) knows the elements: their symbols, and CIAAW's
+standard atomic weights of 2021, abridged, with the conventional value for
+an element whose weight is an interval. A formula is element counts, by
+atomic number, read from:
+
+- **a formula,** element symbols each with a whole count after it if not 1,
+  and groups in ( ) or [ ] with a count after them: CH3OH, C2H5OH,
+  CH3(CH2)2CH3. Case matters, so Co is cobalt and CO carbon monoxide. A
+  fractional count is refused: no compound has a fraction of an atom.
+- **a SMILES string** ([chem/smiles.v](../chem/smiles.v)): atoms in the
+  organic subset (B C N O P S F Cl Br I, aromatic b c n o p s) and in
+  brackets (isotope, element, chirality, hydrogens, charge, class), bonds,
+  branches, ring bonds (`1`, `%12`) and dots. An organic-subset atom takes
+  OpenSMILES' implicit hydrogens: enough to bring the sum of its bond orders
+  v to its lowest normal valence that holds them (B 3; C 4; N 3, 5; O 2;
+  P 3, 5; S 2, 4, 6; halogens 1), and none if none does. An aromatic atom
+  gives one bond to its ring, so it takes max(0, V₀ − v − 1), V₀ its lowest
+  valence: benzene's c one, pyridine's n none, furan's o and thiophene's s
+  none. A bracket atom has the hydrogens it says. The net charge is the
+  bracket atoms' charges summed.
+
+A formula is written in Hill's order: carbon, then hydrogen, then the rest
+by symbol; without carbon, every element by symbol, hydrogen among them.
+
+**A compound's formula** ([components/formula.v](../components/formula.v))
+comes from its file's three sources: its structure (ChemSep's, with the -
+that marks a ring's ends and the spaces between groups dropped), its SMILES
+string, and its molar mass. It's the formula two of them agree on: the
+structure's and the SMILES's if they're equal, otherwise whichever of them
+weighs the file's molar mass, to
+
+    |Σ nₑ Aₑ − M| ≤ 2·10⁻⁴ M,
+
+which is the most ChemSep's older atomic weights move a mass (sulfur's
+32.065 against 32.06). A hydrogen more or less is beyond that below
+5,000 g/mol. A compound with no formula two agree on, a mixture's
+pseudo-compound, can't react.
+
+### Equations
+
+[kinetics/equation.v](../kinetics/equation.v) reads an equation, `CH4 +
+H2O = CO + 3 H2`: terms joined by + on each side of one =, each a species
+with a coefficient before it if not 1. An arrow is refused: whether a
+reaction runs both ways is its rate law's to say.
+
+- **A coefficient** is a whole number, a decimal or a fraction, read
+  exactly, and may touch its species (3H2) unless the whole term is a
+  species' name (1-butene).
+- **A species** is found ([kinetics/species.v](../kinetics/species.v)) by
+  its name or an alias, ignoring case, by its CAS number, or by its
+  formula, read as above, so CH3OH, CH4O and HOCH3 are methanol. A name
+  that two species answer to, or a formula two share (ethanol's and
+  dimethyl ether's), is refused, and so is a name not found, with the
+  closest names and formulas. Quotes hold a name with a + or an = in it.
+- Each species appears once: twice on one side, or on both sides, is
+  refused.
+
+The coefficients ν are signed, below zero on the left, and exact.
+
+**Balance.** For each element e, and for the charge z where any species
+has one,
+
+    Σ_left |νᵢ| nₑᵢ = Σ_right νᵢ nₑᵢ,
+
+exactly. An equation that doesn't balance is refused with each element's
+counts on each side, and a suggestion from the element matrix's null
+space. With A the matrix of counts (an element per row, the charge last, a
+species per column), the balanced coefficients are the vectors ν with
+A·ν = 0, found by exact elimination to reduced row echelon form:
+
+- **one direction:** scaled to the smallest whole numbers, signed so that
+  the first species keeps its side, and suggested. A species with 0 is left
+  out, and one whose sign changed is moved, each said;
+- **none:** no coefficients would balance it. An element on one side only
+  is named;
+- **more than one:** the species balance in that many independent ways, so
+  there's no one equation to suggest.
+
+### Independence
+
+A set of reactions is independent if its stoichiometric matrix (a reaction
+per row) has full rank. [kinetics/dependence.v](../kinetics/dependence.v)
+eliminates one reaction at a time, exactly, against the independent ones
+before it, carrying each row's makeup, the combination of reactions it is.
+A reaction reduced to nothing is a combination of earlier ones:
+
+    0 = Σⱼ mⱼ νⱼ,  mₖ = 1   ⇒   νₖ = Σ_{j<k} (−mⱼ) νⱼ
+
+so the owner's overall reforming reaction is steam reforming plus the
+shift. That's fine for kinetics, each reaction having its own rate, and
+refused for an equilibrium over reactions (step 7).
+
+### Standard properties and K(T)
+
+At a standard state of the ideal gas at 1 bar (D7),
+[kinetics/standard.v](../kinetics/standard.v) takes each species' H and S
+as thermo's `Fluid` does,
+
+    H°ᵢ(T) = ΔH°f,i + ∫_T°^T Cp,i dT,    S°ᵢ(T) = S°ᵢ + ∫_T°^T Cp,i/T dT,
+
+with T° = 298.15 K, and
+
+    ΔH° = Σ νᵢ H°ᵢ,   ΔS° = Σ νᵢ S°ᵢ,   ΔG° = ΔH° − TΔS°,
+    ln K = −ΔG°/RT,   d ln K/dT = ΔH°/RT²,
+
+with R = N_A·k_B = 8.31446261815324 J/(mol·K), expr's built-in constant,
+since K appears in rates that use it. K is on activities p/1 bar.
+
+**What a rate's workspace keeps** (M8's D11,
+[kinetics/evaluate.v](../kinetics/evaluate.v)). The two integrals are
+quadratures for most compounds: 521 of the database's 640 give Cp as
+ChemSep's equation 16, A + exp(B/T + C + D·T + E·T²), which has no
+antiderivative in closed form. So `Kinetics.fill` computes each K only
+when T has moved since the workspace's last fill, which an isothermal
+reactor's never does, and at a new T it integrates each species once,
+however many reactions it's in. Each reaction then sums its species' H° and
+S° exactly as above, in the same order, so a K kept or shared is the K
+`Reaction.standard` gives, to the bit. A fill that fails keeps nothing.
+
+**The check against ΔG°f.** In a balanced equation the elements' entropies
+cancel, so a data set whose ΔG°f agrees with its ΔH°f and S° gives
+
+    Σ νᵢ ΔG°f,i = ΔH°(T°) − T°ΔS°(T°),
+
+and `formation_gap` is the difference. For a compound alone
+([components/formation.v](../components/formation.v)) the gap is
+
+    ΔG°f − [ΔH°f − T°(S° − Σₑ nₑ S°ₑ)],
+
+with the elements' entropies in their reference states from CODATA's key
+values (H₂, N₂, O₂, F₂ and Cl₂ gases, Br₂ liquid, I₂ solid, each per atom;
+graphite, rhombic sulfur, silicon, liquid mercury, and the noble gases).
+The data-quality report lists every compound over 1 kJ/mol.
+
+**ChemSep's standard states are mixed.** Its S° for H₂, H₂O, CO, CO₂, N₂ and
+NH₃ are 0.10 to 0.11 J/(mol·K) below thermo's 1-bar values, as 1-atm values
+are (R ln 1.01325 = 0.109), while methane's and methanol's are at 1 bar.
+reflux takes the files as they are, so reforming's K is about 4% below
+what consistent 1-bar data would give. The differences from thermo's data
+are recorded in the tests.
+
+### Rate laws and sites
+
+M9 step 5 ([kinetics/law.v](../kinetics/law.v),
+[kinetics/kinetics.v](../kinetics/kinetics.v)), as
+[kinetics.md](kinetics.md) designs it (D4, D6).
+
+**A rate's context** has T and P; each species' partial pressure p,
+fugacity f, concentration c and mole fraction y; and each reaction's K at
+1 bar from its Gibbs energies (D7), `Keq[reforming]`, a pure number. Not
+`K`, which would make every number in kelvins ambiguous by D2's rule. A
+species is a member by the name it's written with in the equations, so
+methanol written CH3OH renders as p_CH₃OH, and answers to that, its name,
+its aliases, its CAS number and its formula in Hill's order where no other
+species shares it.
+
+**Structured forms write text.** Each form keeps its structure, for its
+checks and for a site every reaction on it shares, and writes the
+expression a user would type for it, which `expr` parses. So a structured
+rate and the same rate typed are the same tree (D4), and the constants keep
+the numbers and units as written, rendering as the paper prints them. Each
+constant becomes a definition:
+
+| Form | Text |
+|---|---|
+| Arrhenius | A·exp(−Eₐ/(R·T)), or centred: k_ref·exp(−Eₐ/R·(1/T − 1/T_ref)) |
+| van 't Hoff | A·exp(−ΔH/(R·T)), or centred; a ΔH below zero written as exp(\|ΔH\|/(R·T)) |
+| fixed, written | the number, or the expression, as given |
+| a site's term | K·Π aᵢ^eᵢ, a negative power divided: K_H2O·p_H2O/p_H2 |
+| a site | θ = 1 + Σ terms, defined once (`theta_` and its name, or its symbol) |
+
+**The driving force,** with orders α and coefficients ν:
+
+| Form | k·(driving force) |
+|---|---|
+| irreversible | k·Π aᵢ^αᵢ |
+| approach (Vanden Bussche and Froment) | k·Π aᵢ^αᵢ·(1 − Q/K), Q = Π aᵢ^νᵢ |
+| difference (Xu and Froment) | k·Π_{αᵢ<0} aᵢ^αᵢ·(Π_{αᵢ>0} aᵢ^αᵢ − Π aᵢ^(αᵢ⁺+νᵢ)/K) |
+
+The two reversible forms are the same function: the difference's backward
+term is its forward one times Q. **K in the rate's activities** is
+K°·p°^Δn on partial pressures or fugacities, K°·(p°/RT)^Δn on
+concentrations and K°·(p°/P)^Δn on mole fractions, with K° = Keq[...] and
+p° = `p_std`; or a correlation the paper fitted, refused unless its
+dimension is the activity's to the Δn (bar² for steam reforming).
+
+**The forms:**
+- **power law:** k·(driving force);
+- **LHHW:** k·(driving force)/θⁿ. A reaction may override its site's term
+  with terms of its own, defined as its own θ (`DEN_2`), sharing the site's
+  constants where their texts are the same and refused where a name would
+  mean two;
+- **Eley–Rideal:** k·K_A·a_A·a_B·(1 − Q/K)/θ, K_A the adsorbed species' own
+  term on the site, K_A·a_A¹;
+- **expression:** any expression in the context.
+
+Every rate must be a mol/(kg·s), per mass of catalyst, or a mol/(m³·s),
+per volume, as its law says.
+
+**Evaluating.** A point holds a state's inputs, made once and filled at
+each state ([kinetics/evaluate.v](../kinetics/evaluate.v)):
+
+    pᵢ = yᵢP,   fᵢ = φᵢyᵢP,   cᵢ = yᵢP/(ZRT),   yᵢ,   Keq_r = exp(ln K_r(T)),
+
+K only for the reactions some rate uses. The rates are the tape's outputs,
+into the caller's buffer. Their derivatives with respect to T, P and each
+yⱼ, with φ and Z held fixed (exact for the ideal gas; a reactor that knows
+their derivatives adds their terms), follow from the tape's gradient g by
+the chain rule:
+
+    dr/dT  = g_T − Σᵢ g_cᵢ cᵢ/T + Σ_r g_Keq_r Keq_r ΔH°_r/(RT²)
+    dr/dP  = g_P + Σᵢ (g_pᵢ + g_fᵢ φᵢ) yᵢ + g_cᵢ yᵢ/(ZRT)
+    dr/dyⱼ = (g_pⱼ + g_fⱼ φⱼ) P + g_cⱼ P/(ZRT) + g_yⱼ
+
+### Checks and the factor table
+
+M9 step 6 ([kinetics/check.v](../kinetics/check.v),
+[kinetics/explain.v](../kinetics/explain.v)), `reflux kinetics check` and
+`explain` (D12). Reading a file refuses what's wrong: an equation that
+doesn't balance, a rate or a constant in the wrong units, a name that isn't
+there. The checks are on what's legal but worth a look, each a note or a
+warning:
+
+| Finding | When |
+|---|---|
+| a reaction that combines others (note) | `dependence`: fine for kinetics, not for an equilibrium over reactions |
+| ΔG°f against ΔH°f and S° (warning) | a reaction's Σν ΔG°f more than 1 kJ/mol from ΔH°(T°) − T°ΔS°(T°) |
+| a fitted K against the Gibbs energies' | ln K_fit − (ln K° + Δn ln a°), a° the basis's standard state (p°, p°/RT or 1), at the state's T if there is one, else from 300 to 1500 K; a warning past a factor of 2 |
+| a negative activation energy (warning) | Eₐ < 0 in an Arrhenius constant: an apparent one can be, from lumped constants |
+| an adsorption enthalpy above zero (warning) | ΔH > 0 in a site term's van 't Hoff constant: K rising with T |
+| a constant at or below zero (warning) | A, or a fixed value, ≤ 0 |
+| a reaction's own adsorption term (note) | an override, with the terms it lacks or adds |
+| a look-alike constant (warning) | a number within 1% of a built-in constant of its dimension (expr's lint), and, at a state, how far it moves each rate: the trees evaluated with the number swapped for the constant, r_typed/r_constant − 1 |
+
+**The factor table** evaluates each rate's parts at a state, as the rate
+law recorded them when it was built: its constant; K in its activities, Q
+and Q/K for a reversible rate; its site's term and each of that term's
+terms. Then every definition the rate uses, directly or through others,
+with its value, and the rate. Values are in SI, a part's unit written over
+the rate's bases (mol/(kg·s), mol/(m³·s), or none) times Pa or mol/m³ to a
+power, mol·Pa^0.5/(kg·s) rather than its base units. Numbers are written to
+five significant figures from their digits rounded to a whole number by
+`math.round`, so the text is the same whichever compiler built reflux.
+
+## Chemical equilibrium
+
+M9 step 7 ([equilibrium/rand.v](../equilibrium/rand.v),
+[equilibrium/equilibrium.v](../equilibrium/equilibrium.v)), D9 and D10.
+
+**What's minimised,** at T and P, in one phase (D9):
+
+    G/RT = Σⱼ nⱼ μⱼ/RT,   μⱼ/RT = gⱼ + ln(P/p°) + ln(nⱼ/n) + ln φⱼ,
+    gⱼ = μ°ⱼ/RT = (H°ⱼ − TS°ⱼ)/RT,
+
+with H° and S° along Cp as kinetics' standard properties take them, R
+exact and p° = 1 bar, subject to C·n = b, b = C·n⁰. A Gibbs minimisation's
+C is the element matrix, a row per element of the feed's species, with a
+row of its own for each species held inert or without a formula. Before
+anything else, what the feed can't make goes: a row whose coefficients
+share a sign, with nothing of it in the feed (an element the feed hasn't),
+fixes its species at zero, and they and it are dropped. What's left is
+reduced to independent rows.
+
+**The RAND method in CEA's form** (Gordon and McBride, NASA RP-1311, 1994):
+Newton on the constraints' potentials π and on ln n, the total amount a
+variable of its own, every species in log space, so that a vanishing one is
+a large negative ln nⱼ and never a negative nⱼ. Each step solves
+
+    Σᵢ (Σⱼ cₖⱼcᵢⱼnⱼ) πᵢ + (Σⱼ cₖⱼnⱼ) Δln n = bₖ − Σⱼ cₖⱼnⱼ + Σⱼ cₖⱼnⱼ μⱼ/RT
+    Σᵢ (Σⱼ cᵢⱼnⱼ) πᵢ + (Σⱼ nⱼ − n) Δln n = n − Σⱼ nⱼ + Σⱼ nⱼ μⱼ/RT
+
+then Δln nⱼ = −μⱼ/RT + Σᵢ cᵢⱼπᵢ + Δln n, damped by CEA's control factor
+
+    λ = min(1, 2/max(5|Δln n|, |Δln nⱼ| over majors), λ₂),
+    λ₂ = min over traces rising of |(−ln(nⱼ/n) − 9.2103404)/(Δln nⱼ − Δln n)|,
+
+a trace being below 1e-8 of the total, so no trace rises past 1e-4 of it in
+one step. Every species starts at an equal share of the feed's total. A
+full step that moves no species' ln n by more than 1e-10 has converged,
+Newton's error after it being of the order of its square; 500 steps
+haven't. A step that small is never damped.
+
+**A cubic** (D9): φ at the answer's amounts, from the model's stable root,
+held fixed inside RAND and updated outside it until ln φ moves by no more
+than 1e-12, at most 100 times. The answer's phase is then tested by
+Michelsen's stability test, and one that would split is refused: a second
+phase is M6's.
+
+**Over chosen reactions** (D10, as amended in step 7), the same
+minimisation with other constraints and potentials. C is what the
+reactions conserve, a basis of the null space of their coefficients ν (the
+vectors c with c·νᵣ = 0 for every reaction), by reduction to row echelon
+form. The potentials are stand-ins,
+
+    g = −νᵀ(ννᵀ)⁻¹ ln K,
+
+the least-norm g with Σⱼ νᵣⱼ gⱼ = −ln Kᵣ for every reaction. At a
+stationary point μⱼ/RT = Σᵢ cᵢⱼπᵢ, so each reaction's Σⱼ νᵣⱼ μⱼ/RT = 0:
+ln Q = ln K, Q on fugacities at 1 bar. A species no reaction touches is a
+conserved quantity of its own, held at its feed. The null space's basis
+mixes the elements, so the element rows, which every balanced equation
+conserves, are looked at too for what the feed can't make. The reactions
+must be independent (`kinetics.dependence`).
+
+**Shown right before it's returned:** every conserved row holds the feed's
+to 1e-12 of its largest term; a Gibbs minimisation's every species present
+has μⱼ/RT = Σᵢ cᵢⱼπᵢ to 1e-9, G at a minimum over what the elements allow;
+an equilibrium over reactions has each ln Q its ln K to 1e-9; and a
+cubic's phase is stable. A species held alone by a row, an inert one, is
+set to the feed's amount exactly. The answers match mpmath's at 50 digits
+by another method (Newton on ln n, `tools/gen_m9_equilibrium.py`) to
+6.0e-13 in ln y, combustion's traces at 1e-29 included.
+
+### The consistency check
+
+Kinetics.md's check 4 ([equilibrium/consistency.v](../equilibrium/consistency.v)):
+from a state's T, P and mole fractions, taken as amounts, the equilibrium
+over the kinetics' independent reactions, K from the Gibbs energies. Then
+each reversible rate, a structured law with a K or an expression, is
+followed along its own reaction from there,
+
+    n(ξ) = n_eq + νᵣ ξ,
+
+to where it's zero: probing outwards both ways, 2⁻⁵⁰ of the way to where a
+species runs out and doubling, then halving what's left, the way it runs
+first, until its sign changes, then bisecting to rounding. Both ways,
+because a rate with its sign reversed is zero at equilibrium but runs away
+from it. Its reaction's ΔG/RT = ln(Q/K) there, Q on fugacities, is where it
+stops:
+
+| Rate | Stops at ΔG/RT |
+|---|---|
+| consistent with the Gibbs energies | 0, within 1e-10 (2.7e-15 at worst on Xu and Froment's) |
+| a fitted K, in the ideal gas | ln K_fit − (ln K° + Δn ln a°), check_fitted's distance |
+| on partial pressures in a gas that isn't ideal | Σν ln φ, where Q on pressures is K |
+| on concentrations in such a gas | Σν ln φ + Δn ln Z |
+| on mole fractions without (p°/P)^Δn | Δn ln(P/p°) |
+
+A consistent rate is zero where its own Q is K, whatever the equilibrium's
+accuracy, so the tolerance is rounding's. A stop past 1e-10 is a note, past
+a factor of 2 in Q/K a warning, as a fitted K's distance is. At the state,
+a rate that runs against its reaction's ΔG (r·ΔG > 0, |ΔG/RT| past 1e-10),
+and not because it stops beyond equilibrium as a fitted K can, is warned
+of. A rate never zero along its reaction is a warning for a structured law
+and a note for an expression, irreversible as written. A reaction whose
+species the state can't make isn't judged, with a note saying so.
+`reflux kinetics check` runs it in the ideal gas when given a state.
+
+## The integrators
+
+M9 step 8 ([numeric/ode.v](../numeric/ode.v),
+[numeric/dopri5.v](../numeric/dopri5.v),
+[numeric/rodas4.v](../numeric/rodas4.v)), D8: `dopri5` for what isn't stiff,
+`rodas4` for what is. Both follow Hairer's codes, DOPRI5 and RODAS, in
+their steps, error norm and step control, and take the problem as an
+interface: `Ode`, y' = f(t, y), and `StiffOde`, with ∂f/∂y and ∂f/∂t.
+
+**The error norm** is Hairer's: a step is accepted when
+
+    ‖e‖ = √(Σᵢ (eᵢ/sᵢ)²/n) ≤ 1,   sᵢ = atolᵢ + rtol·max(|y₀ᵢ|, |y₁ᵢ|),
+
+e the error estimate, y₀ and y₁ the step's ends. rtol must be above 10
+units of roundoff and every atol above zero, as Hairer's codes ask.
+
+**The first step** is Hairer's HINIT: with d₀ = ‖y₀‖ and d₁ = ‖f(t₀, y₀)‖
+in the norm above, h₀ = 0.01·d₀/d₁ (1e-6 where either is below 1e-5), one
+Euler step of h₀ estimates d₂ = ‖f(t₀ + h₀, y₀ + h₀f₀) − f₀‖/h₀, and
+
+    h = min(100·h₀, (0.01/max(d₁, d₂))^(1/p), hmax),
+
+p the method's order, 5 or 4.
+
+**Dormand and Prince's 5(4) pair** (Hairer's CDOPRI coefficients, SciPy's
+RK45's too): seven stages, the last f at the new point and the next step's
+first (FSAL). The fifth-order solution goes on; the error estimate is its
+difference from the fourth-order one, e = h·Σ eᵢkᵢ. The step control is
+Hairer's PI controller, with β = 0.04:
+
+    h_new = h / max(1/10, min(5, ‖e‖^(0.2 − 0.75β) / ‖e_prev‖^β / 0.9)),
+
+‖e_prev‖ the last accepted step's, at least 1e-4. A rejected step shrinks
+by min(5, ‖e‖^(0.2−0.75β)/0.9) and the step after a rejection can't grow.
+**Stiffness:** every 1000 accepted steps, and on each step while it
+suspects stiffness, |hλ| ≈ |h|·‖k₇ − k₆‖₂/‖y₁ − y₆‖₂, the last two stages
+at the same t. Above 3.25 for 15 steps in a row is stiff, and refused for
+rodas4; 6 steps below clear the suspicion.
+
+**RODAS4** (Hairer and Wanner II, §IV.7; the coefficients ROCOE's, METH =
+1): six stages of
+
+    (I/(hγ) − J)·kᵢ = f(t + cᵢh, y + Σⱼ<ᵢ aᵢⱼkⱼ) + Σⱼ<ᵢ (cᵢⱼ/h)kⱼ + h·dᵢ·∂f/∂t,
+
+γ = 1/4, J and ∂f/∂t at the step's start, one LU of I/(hγ) − J for all six.
+y₅ = y + Σ a₅ⱼkⱼ, y₆ = y₅ + k₅, y_new = y₆ + k₆: stiffly accurate, so
+L-stable, with y₆ the embedded solution of order 3 and k₆ the error
+estimate. The step control is Gustafsson's predictive controller, as
+RODAS's:
+
+    h_new = h / max(1/6, min(5, ‖e‖^(1/4)/0.9)),
+    and after the first step, h / max(that, (h_prev/h)·(‖e‖²/‖e_prev‖)^(1/4)/0.9),
+
+‖e_prev‖ at least 0.01. A singular I/(hγ) − J halves the step, five times
+in all at most, as RODAS counts them.
+
+**Failures:** an evaluation that fails, or isn't finite, rejects the step
+and halves it, so a problem can refuse a point outside its domain (a
+negative flow) and the integrator steps back. A step that falls to 10
+units of roundoff in t, or more than max_steps, is an `OdeError`, with
+the last accepted point.
+
+**What the tests show** ([numeric/ode_test.v](../numeric/ode_test.v),
+[numeric/stiff_test.v](../numeric/stiff_test.v)):
+- Each solution's order, by one step at halving sizes: RODAS4's 4 and its
+  embedded 3, Dormand–Prince's 5 and 4, within 0.35 (0.14 and 0.29 at
+  worst).
+- RODAS4's |R(z)| ≤ 1 over the left half-plane, and R(−1e12) = 8.8e-12.
+- Closed forms: a linear system with eigenvalues −1, −1e3 and −1e6, and
+  Prothero and Robinson's problem, within 0.16 tolerance units; Kepler's
+  orbit and Arenstorf's, whose errors grow along the orbit (730 to 24,000
+  units), each recorded.
+- The Test Set for IVP Solvers' HIRES, Robertson, van der Pol, Oregonator
+  and pollution problems within 0.13 tolerance units of the reference, the
+  Oregonator's within 2.9, at rtol 1e-4 to 1e-10, the steps recorded.
+- **E5 is beyond RODAS4 in double precision.** y₂ − y₃ − y₄ is conserved
+  exactly, and any Rosenbrock method keeps a linear invariant in exact
+  arithmetic. But a Rosenbrock stage solves for its whole increment from
+  f's values, so its rounding is relative to f's terms, where an implicit
+  method's Newton solves for small corrections. While E5's y₂ and y₃ are
+  1e-10 their rates' terms are 1e-7 and cancel, and the 1e-22 lost then
+  stays when they have fallen to 9e-23 at t = 1e13. RODAS4's y₂ and y₃ end
+  51% from the reference under tcc and a factor of 20 under gcc, whose last
+  bits differ, the drift 7.9e-23 and 1.9e-21; SciPy's Radau 3.4e-4; the
+  reference, in 128-bit arithmetic, keeps the invariant to 1.3e-25. The
+  test holds y₁'s and y₄'s decay and the drift below 1e-20. A PFR's flows
+  don't fall a dozen orders below their rates' terms.
+
+## The reactors
+
+M9 step 9 ([reactors/](../reactors/pfr.v)), D10: five flowsheet units with
+makers for the file (D1), each with one inlet and one outlet, its outlet a
+flash at its state, in one phase.
+
+**Balances on the elements.** A unit that reacts reports what it conserves
+(`Outcome.conserved`): a row per element of the file's components, with a
+row of its own for a component without a formula, which can't react. The
+flowsheet's solver checks such a unit on those rows instead of each
+component, to 1e-10 of its flow, and the whole flowsheet too where it has a
+reactor, a tear's gap in one component allowed to move an element's
+balance by the most atoms a component has. The energy needs nothing new: H
+is referred to the elements (§ Ideal gas), so each stream's H holds its
+heats of formation.
+
+**Temperature.** Every reactor is isothermal (at its `T`, or its inlet's),
+adiabatic, or at a given duty. An isothermal reactor's duty is F·H out
+less F·H in. For an equilibrium, conversion or Gibbs reactor out of
+isothermal, the outlet's T solves F·H(T) = F·H_in + Q by Brent, bracketed
+outwards from the inlet's T by doubling steps from 50 K, between 0.5 and
+10,000 K, the outlet recomputed at each T; the CSTR and the PFR carry T
+themselves.
+
+**The reactors:**
+
+| Reactor | Its outlet |
+|---|---|
+| Gibbs | `equilibrium.gibbs` over every component (D9) |
+| equilibrium | `equilibrium.over_reactions`, K from the Gibbs energies, its reactions independent |
+| conversion | each step in order: extent ξ = X·n_key/(−ν_key), on the key as it enters the step; a reactant taken below zero beyond 1e-12 of the flow is refused, and within it is zero. X is a number or an expression in T, evaluated at the outlet's T (an adiabatic or a duty's found with the energy balance), which must give 0 to 1 there |
+| CSTR | Fᵢ,in − Fᵢ + V·Sᵢ = 0, and where T moves F·H(T, P, F) = F·H_in + Q, by `numeric.newton` from the inlet; where that fails, by continuation in V, from 10⁻⁶ of it to the whole, each solve from the last, the step in ln V doubled on success and halved on failure (fast rates near equilibrium, as in reforming at 1000 K, make the balances too steep for Newton from the inlet) |
+| PFR | dFᵢ/dV = Sᵢ, with T and P where they move, by `rodas4` (or `dopri5`) |
+
+**A conversion reactor past equilibrium** (D10, as amended before step
+10) is warned of, not refused, since its conversion is the user's to give:
+for each step's reaction, at the outlet,
+
+    ln(Q/K) = Σᵢ νᵢ (ln yᵢ + ln φᵢ + ln(P/1 bar)) − ln K(T) > 10⁻⁸,
+
+K at 1 bar from the Gibbs energies (D7) and φ from the outlet's flash, the
+tolerance being what the two's rounding allows. The warning gives Q/K, T
+and P; a reaction whose species lack formation data is noted as unchecked.
+The owner's Tutorial 2 at 320 °C holds 27.4% at 30 bar, where Q/K = 4.56.
+
+**A reactor's source of each species,** from the kinetics' rates
+([reactors/source.v](../reactors/source.v)):
+
+    Sᵢ = Σⱼ sⱼ νᵢⱼ rⱼ(T, P, y),   mol/(m³·s),
+
+sⱼ the catalyst loading (kg/m³) for a rate per mass of catalyst and 1 for
+one per volume. φ, Z and the phase's volume come from the fluid's model at
+each state. A flow that rounding takes below zero is read as zero in the
+rates, as DWSIM reads it. Its derivatives by the flows follow from the
+rates' by the chain rule through yₗ = Fₗ/ΣF:
+
+    ∂Sᵢ/∂Fₖ = Σⱼ sⱼνᵢⱼ [∂rⱼ/∂yₖ − Σₗ yₗ ∂rⱼ/∂yₗ]/ΣF,
+
+with φ and Z held fixed, as kinetics' `jacobian` holds them.
+
+**The PFR** ([reactors/pfr.v](../reactors/pfr.v)): the state is the flows,
+then T where it moves, then P under Ergun's drop; a given drop's P is a
+line in V. Where T moves, F·H rises by the duty per volume q, and with
+h̄ᵢ = H°ᵢ(T) − RT²(∂ln φᵢ/∂T) each species' partial molar enthalpy, and
+(∂H/∂P)_T = −Cp·μ_JT,
+
+    dT/dV = (q − Σᵢ h̄ᵢSᵢ + Cp·μ_JT·dP/dV)/Cp.
+
+Ergun's drop, with u = Q_v/A the superficial velocity, A = V/L, ρ the gas's
+density and μ its viscosity:
+
+    dP/dV = −[150 μ(1 − ε)²u/(ε³d²) + 1.75 ρ(1 − ε)u²/(ε³d)]/A.
+
+`rodas4` takes the flows' block of the Jacobian exactly, from the rates;
+the rows of T and P, and a given drop's ∂f/∂V, are central differences of
+the right-hand side, each column's step 6e-6 of its value (about ε^(1/3)).
+The absolute tolerances are 1e-6·rtol of the inlet's flow for each flow,
+rtol·T_in and rtol·P_in. At the outlet, an isothermal PFR is flashed at its
+T and P; otherwise the outlet is a PH flash on the energy balance, and the
+integrated T must agree with its T to 100·rtol of T (plus 1e-9 of it), or
+the energy equation and the fluid disagree and the PFR fails. The profile
+is the inlet and every accepted step.
+
+**The gas viscosity** ([reactors/viscosity.v](../reactors/viscosity.v)),
+for Ergun (D10, as amended in step 0): each component's from its file's
+vapour-viscosity correlation (ChemSep's equation 102) at T, mixed by
+Wilke's rule,
+
+    μ = Σᵢ yᵢμᵢ / Σⱼ yⱼΦᵢⱼ,   Φᵢⱼ = [1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼]² / [8(1 + Mᵢ/Mⱼ)]^½,
+
+pressure ignored. It matches `chemicals`' Wilke and EQ102 to 2.2e-16.
+
+Everything in it but the mole fractions depends on T alone: each μᵢ, and
+each pair's 1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼ and [8(1 + Mᵢ/Mⱼ)]^½. A PFR keeps those
+(`WilkeAt`) until T moves (M8's D11), so that along an isothermal reactor
+each state costs the sums alone, with no correlation, power or square
+root. The sums are the rule's own arithmetic in its own order, so the
+viscosity is the same number, to the bit, kept or not. A viscosity that
+isn't Wilke's, as a test's, is asked whole at every state.
+
+**What the tests show:** an isomerisation's exp(−kPV/F) and 1/(1 + kPV/F)
+to 3.2e-11 and 1e-12, and a dehydrogenation's −X − 2 ln(1 − X) = kPV/F₀ to
+1e-11; the Gibbs and equilibrium reactors on mpmath's equilibria to 1e-11
+in ln y; Ergun's drop within 3.3e-4 of its ideal-gas closed form; a long
+PFR on fugacities within 2.8e-14 of the Gibbs reactor's equilibrium; and
+every reactor in a chain closing its elements to 1e-10.
 
 ## Streams and units
 
@@ -1047,6 +1938,364 @@ allow, and it must close to exactly that: the gap between the last pass's start
 and end, in each tear's flows and enthalpy flow, plus rounding. A solution that
 doesn't is an error, never a result.
 
+## Varying a number
+
+A study, a spec or an optimiser varies a number the file gives a feed or a
+unit, by its key (M8's D4): `unit.cooler.outlet_T`, `feed.f.T`,
+`feed.f.molar_flows.methane`, `unit.split.fractions[0]`. Nothing is set on
+a unit: the value replaces the file's in its tree, and the feed or unit is
+made again by its own maker, which checks it as it checks the file.
+
+**Readings.** A `Section` notes every number its maker reads, with its key,
+its SI value and the dimension it was read as, M4's named one where there
+is one (a temperature, or a temperature difference). A key can be varied
+only if its maker read it as a number: so `27 degC` is 300.15 K, as the
+maker had it, and `type`, `in`, or a conversion that's an expression in T
+are refused, with the keys that can be.
+
+**Writing.** A new value goes into the tree as a pure number, or as
+`value.str()` with the dimension's SI unit (K, Pa, mol/s, W, J/mol, or base
+units such as kg/m^3), each of scale 1. V's shortest decimal reads back to
+the same double (200,000 random doubles, measured), so the maker reads the
+value given to the bit, and `with` checks that it did. Only the tables and
+lists on the key's path are copied, and the rest of the file is shared.
+
+**What it costs** (gcc `-prod`, `tools/remake_bench.v`): 8 to 80 µs for a
+unit, against 0.3 µs to 8 ms for its own calculation, and 0.3 to 0.6 ms for
+a feed, which is a flash.
+
+## Specs
+
+A spec varies an input within its bounds until an equation holds (M8's D5):
+
+    r = (lhs − rhs) / s,    s = max(|lhs|, |rhs|, s₀),    |r| ≤ tol
+
+where s₀ is the block's own scale for the equation's dimension: the flow
+into the block for a flow, F·R·T_max for a power, R·T_max for a molar
+enthalpy, 1 for a pure number, and 0 otherwise, a temperature or pressure
+being far from zero. So a target of 0 W is met to tol of F·RT.
+
+**Planning.** A spec is a link from each unit that makes what its equation
+reads to the unit it varies, or the units the feed it varies enters, as if
+a stream joined them. Tarjan's components then put both in one block, and
+the link is torn already: the spec's value is the block's unknown, and the
+tears are the fewest streams that break the cycles left. A spec none of
+whose links closes a loop is refused, since nothing it reads depends on
+what it varies. A link that doesn't close one still orders the blocks, its
+reading made before its block.
+
+**One spec, no tears: Brent** (1973) within the bounds, each evaluation the
+spec's unit remade and the block calculated once. The bracket is the bounds
+if r changes sign between them; else nine values between, evenly spaced; and
+a target no pair brackets is refused with what the values reached ("gas.F
+goes from 41.99 to 76.65 mol/s, never 200 mol/s"). A value Brent asks for
+again is the sampled one, not calculated again.
+
+**Several specs, or tears: Broyden** (1965) on the tears' scaled variables
+and the specs' values together, each evaluation one pass, its residuals the
+tears' changes and each spec's r. The specs' first Jacobian J is a pass's,
+each value stepped by 1e-4 of its bounds' width from the tears' start, and
+a spec's value is
+
+    v = v₀ + m·u,    m = −J⁻¹,
+
+so that the first step in u, with Broyden's H₀ = −I, is Newton's on the
+specs, as it's direct substitution on the tears. A value is held within
+its bounds. Held at a bound three evaluations running, the target is likely
+out of reach: Broyden is stopped, and the spec is tried again nested, the
+specs' values outside (Brent for one, Broyden for more) around the tears
+converged from where the last evaluation left them. Specs whose J is
+singular can't be met together from there, and are refused.
+
+**The answer** is a solution like any other, every balance checked (M4's
+D8), and each spec checked again from the solution's streams and units:
+|r| ≤ tol, and the value within its bounds.
+
+## Warm starts
+
+A point of a study starts from its neighbour's solution (M8's D6), and its
+answer is checked as a cold one is. What it carries was measured (M8 step
+5), and is what pays:
+
+- **Units** that can, through `Warm`: the CSTR's Newton from its last
+  outlet, falling back to the inlet and continuation; an energy balance's
+  T bracketed out from its last T by steps of 5 K that double, where cold
+  it starts from the inlet's by 50 K; the PFR's first step.
+- **Specs,** from their last values. One spec alone is met or bracketed
+  near there first, by secant steps out from it, each at most four times
+  the last, the first as large as the last two points' change, before the
+  cold search over its bounds.
+- **Tears,** with direct substitution and in a block with specs only.
+  Wegstein's and Broyden's own starts beat a neighbour's tears.
+
+With two points behind it, a tear's flows, P and h and a spec's value
+start from the secant through them,
+
+    x = b + r·(b − a),    r = (this step)/(the last step),
+
+where both steps are along one input in one direction; a flow is held at
+zero, and a tear is a PH flash from b's T. Methods' own state, Broyden's
+inverse Jacobian or Wegstein's slopes, isn't carried: it took more passes.
+
+## Studies
+
+A study (M8's D7, D9) solves a grid of one or two inputs' values, each
+point remade from the file (D4), and evaluates its outputs there (D3, D9).
+
+**Order.** Along the first input's values; with two, along each row of the
+second's, alternating direction, so that each point's neighbour is the last
+solved. Points go in chunks of 8, or as the file says: each chunk's first
+point is cold and the rest warm, so the answers don't depend on how chunks
+are shared out (D8's workers, step 7).
+
+**Each point** is solved, solved with an output that has no value (its
+reason kept, D9), or failed (its reason kept). The study goes on past a
+failure, and the next point starts cold. Evenly spaced values are
+from + (to − from)·i/(n − 1), the last set to `to` exactly.
+
+**Workers** (D8): threads, made with `spawn`, share the loaded file, which
+nothing changes, and take whole chunks from a queue as they come free. A
+chunk starts cold, so its points are the same bits whichever thread solves
+them, and in whichever order the chunks are taken. `reflux study` runs as
+many as the processors, `NUMBER_OF_PROCESSORS` on Windows and
+`sysconf(_SC_NPROCESSORS_ONLN)` elsewhere, or `--workers`.
+
+## Sensitivities
+
+A study's point gives the derivative of each output f with respect to each
+input v it's asked for (M8's D10), by central differences of whole solves:
+nothing about a unit's equations is needed, so every unit has them, specs
+met again at each step included.
+
+    h = 10⁻⁴·|v|,    D(s) = (f(v + s) − f(v − s)) / (2s),
+    f′ ≈ D(h/2) + (D(h/2) − D(h))/3                      (Richardson)
+
+The step balances the difference's truncation, h²f‴/6, against the solves'
+noise over h, ε·f/h, at ε^(1/3) for ε = 10⁻¹² (the solves' tolerance, from
+the point's own solution). Each difference is over the steps the doubles
+actually are, (v + s) − (v − s), not 2s. The error's estimate has two
+parts:
+
+    e = |D(h/2) − D(h)| + |Δ⁴|/h,
+    Δ⁴ = f(v − h) − 4f(v − h/2) + 6f(v) − 4f(v + h/2) + f(v + h)
+
+The first is three times D(h/2)'s truncation error, which the extrapolation
+removes to O(h⁴). The second measures the solves' noise: Δ⁴'s truncation is
+(h/2)⁴f⁗, so what's left is noise, about √70 times one solve's, and the
+extrapolation carries about 1.9 times one solve's over h. A spec met at
+10⁻¹² of its scale, or a unit's own tolerance (a PFR's rtol, which isn't
+tightened), shows there. An input at 0 has no scale for a step, and is
+refused with that reason; an output with no value at the point has no
+derivative there, which says so. Exact sensitivities, by the converged Jacobian,
+are M13's.
+
+**What the estimate can't see:** a solve started from the point's own
+solution stops where its tears move by the tolerance, which leaves an error
+in proportion to how far it started, and so to the step. That's a bias
+linear in the step: it cancels from both parts of the estimate, and only
+the tolerance bounds it, to about ε/10⁻⁴ of the derivative, 10⁻⁸ at
+ε = 10⁻¹². At a study's 10⁻⁹ it would be 10⁻⁵, which is why the tolerance
+is tightened (M8 step 8 found it, by a mistake planted there).
+
+## The optimiser
+
+`numeric.sqp` (M8's D12) minimises f(x) subject to equalities c(x) = 0,
+inequalities c(x) ≥ 0 and bounds l ≤ x ≤ u, by Han and Powell's sequential
+quadratic programming as Nocedal and Wright give it (*Numerical
+Optimization*, ch. 18). The problem is an interface, `Constrained`: its values,
+then its gradients at the same x, so that a flowsheet differentiates from
+the solve it just made.
+
+**The QP.** At each iterate the step d solves
+
+    minimise ½·dᵀBd + ∇fᵀd
+    subject to c + ∇c·d = 0 (equalities), ≥ 0 (inequalities),
+               l − x ≤ d ≤ u − x
+
+and its multipliers λ̂ (the constraints'), μ̂ (the bounds') are the next
+estimates. `numeric.qp` solves it by Goldfarb and Idnani's dual active-set
+method (Math. Programming 27, 1983): from the unconstrained minimum −B⁻¹∇f,
+it adds each equality not met and then the most violated inequality, by its
+distance s/‖row‖. Adding row p moves d along z and the active multipliers
+along −r, where
+
+    B·z + N·r = nₚ,   Nᵀ·z = 0,
+
+N the active rows. The step is the smaller of t₂ = −sₚ/(zᵀnₚ), which meets
+p, and t₁, the least uⱼ/rⱼ over active inequalities with rⱼ > 0, which takes
+one to zero and drops it. z = 0 with no t₁ proves p can't be met: the QP has
+no point. The problems are small, so z and r come from the whole system,
+factorised at each step.
+z is taken as zero where zᵀnₚ ≤ 10⁻¹²·nₚᵀB⁻¹nₚ, its size with nothing
+active.
+
+**A QP with no point.** A linearisation can have no point though the
+problem has; then the QP is relaxed, as Powell's and Schittkowski's codes
+do: a variable δ ∈ [0, 1] scales each equality and violated inequality,
+
+    ∇cᵢ·d + (1 − δ)·cᵢ = 0 or ≥ 0,   at a cost ½·ρδ²,  ρ = 10⁴·max(1, maxᵢ Bᵢᵢ),
+
+and δ = 1, d = 0 always meets every row. A δ that comes out 1 means no step
+lowers the constraints' violation, and the problem is refused: it may have
+no feasible point near x. So is one whose relaxed QP fails too, which only
+a badly conditioned one does.
+
+**The answer.** x is returned once, with λ̂ and μ̂ from the QP at x:
+
+    max |cᵢ| (equalities), max(−cᵢ) (inequalities)   ≤ tol
+    ‖∇f − Σλᵢ∇cᵢ − μ_l + μ_u‖∞                         ≤ tol·max(1, ‖∇f‖∞)
+    λᵢ (inequalities), μ_l, μ_u                       ≥ −tol·max(1, ‖∇f‖∞)
+    |λᵢcᵢ|, μ_l·(x − l), μ_u·(u − x)                    ≤ tol·max(1, ‖∇f‖∞), the bounds' × max(1, |x|)
+
+tol is absolute on c, so the caller scales its constraints; 10⁻⁸ by default.
+
+**The step.** α·d is accepted by backtracking on the ℓ1 merit function
+
+    φ(x) = f(x) + Σ νᵢ·vᵢ(x),   vᵢ = |cᵢ| (equalities), max(0, −cᵢ) (inequalities),
+    φ(x + αd) ≤ φ(x) + 10⁻⁴·α·Dφ,   Dφ = ∇fᵀd − (1 − δ)·Σ νᵢvᵢ,
+
+with Powell's weights νᵢ = max(|λ̂ᵢ|, (νᵢ + |λ̂ᵢ|)/2), at least |λ̂ᵢ|, which
+makes Dφ ≤ −dᵀBd < 0. Each shorter α is the quadratic's minimum through
+φ(0), Dφ and φ(α), kept within [α/10, α/2]; a step where the problem can't
+be evaluated is halved. Every iterate is clamped into the bounds, which the
+QP's d already keeps it within, so the problem is never evaluated outside
+them.
+
+**B.** The Lagrangian's Hessian, from the identity, by BFGS on
+s = x₊ − x and y = ∇L(x₊, λ̂) − ∇L(x, λ̂), the bounds' part linear and so
+cancelling, with Powell's damping:
+
+    θ = 1 if sᵀy ≥ 0.2·sᵀBs, else 0.8·sᵀBs/(sᵀBs − sᵀy),
+    r = θy + (1 − θ)Bs,   B ← B − BssᵀB/(sᵀBs) + rrᵀ/(sᵀr),
+
+which keeps B positive definite. The first update scales the identity by
+yᵀy/sᵀy (Shanno and Phua) where sᵀy > 0.
+
+## Optimising a flowsheet
+
+An `[optimize.NAME]` (M8's D13) is `numeric.sqp` on the flowsheet's
+inputs, every evaluation a converged solve at 10⁻¹², specs and all,
+started from the last evaluation's solution (D6); its first evaluation, at
+the start, is cold. The problem the SQP sees is scaled:
+
+    u = (x − lo)/(hi − lo) ∈ [0, 1],
+    f = ±F/s_F,   s_F = maxₖ |∂F/∂uₖ| at the start (|F| there, or 1, if that's 0),
+    c = (lhs − rhs)/sᵢ for = and ≥,  (rhs − lhs)/sᵢ for ≤,
+    sᵢ = max(|lhs|, |rhs|) at the start, or 1 in SI if both are 0,
+
+with − to maximise. The objective's gradient so starts at about 1, and
+`optimize_tol`, 10⁻⁶, is the SQP's tol: well above the gradients' noise,
+about 10⁻⁸ of their scale. The equalities go first, as the SQP takes them.
+
+**Gradients** are the sensitivities' differences (above), of the objective
+and of each constraint's two sides, with a step of 10⁻⁴ of the largest
+value the input's bounds allow, max(|x|, |lo|, |hi|), so that an input at
+0 has one, and at most a quarter of its range. Where a bound is within the
+step, they're one-sided, at x + σ·h·k/4, k = 0 to 4, σ = ±1 into the range:
+
+    D(s) = (f(x + σs) − f(x))/(σs),
+    R₁ = 2·D(h/2) − D(h) = f′ − h²f‴/12,   R₂ = 2·D(h/4) − D(h/2) = f′ − h²f‴/48,
+    f′ ≈ R₂,   e = 4/3·|R₁ − R₂| + |Δ⁴|/h,
+
+the first part R₁'s truncation, four times R₂'s, since 4/3·|R₁ − R₂| alone
+would be R₂'s estimate with no margin. R₂ carries about 10ε/h of the
+solves' noise, twice R₁'s.
+
+`--workers` takes the inputs at once, each from the point's solution, so
+the bits are the same.
+
+**The multipliers,** unscaled, are how fast the optimum's objective
+improves (falls when minimised, rises when maximised) as each is relaxed,
+per unit of its own:
+
+    an inequality:   λᵢ·s_F/sᵢ   (≥ 0)
+    an equality:    −λᵢ·s_F/sᵢ   (as its right side grows, either sign)
+    a bound:         μ·s_F/(hi − lo)
+
+so that, by the envelope theorem, a bound's is ∂F/∂x at the optimum, and
+a constraint's ∂F/∂x over its sides' ∂/∂x there, for one input.
+
+## Least squares
+
+`numeric.least_squares` (M8's D14) minimises ½‖r(θ)‖² by Levenberg and
+Marquardt's method as Moré gives it (Lecture Notes in Mathematics 630,
+1978), over the interface `Residuals`: r and its Jacobian J at θ.
+
+**The step** minimises the linear model with a damping term,
+
+    ‖J·δ + r‖² + μ·‖D·δ‖²,   by Householder QR on [J; √μ·D]·δ = [−r; 0],
+
+so JᵀJ is never formed and its squared conditioning never paid. Dₖ is the
+largest norm of column k of J seen so far, which makes the steps
+independent of the parameters' scales; μ starts at 10⁻³.
+
+**Taking it.** With ρ the residuals' fall over the model's,
+‖r‖² − ‖r + J·δ‖², a step is taken where ρ > 0, and then
+μ ← μ·max(1/3, 1 − (2ρ − 1)³); otherwise μ ← μ·ν, ν doubling each refusal
+and back to 2 at each step taken (Nielsen). Where the model predicts a fall
+below 10⁻¹⁰·‖r‖², Σr²'s rounding, tens of ε of it, can't resolve it and ρ
+is noise: there a step is taken if the gradient test falls. Without that, a
+fit near its minimum stalls, every step refused, before the test can be met
+(M8 step 11's coverage test found it, in 1 data set of 400; the gcc check
+found a window of 8ε·‖r‖² on the actual fall too narrow).
+
+**The answer.** θ is returned once the gradient test holds,
+
+    maxₖ |Jₖᵀr| / (‖Jₖ‖·‖r‖) ≤ gtol = 10⁻¹⁰,
+
+the largest cosine between r and a column of J, zero at a minimum whatever
+the scales; or r is zero. (JᵀJ)⁻¹ comes from the QR of J with its columns
+scaled to unit length, J·S⁻¹ = Q·R:
+
+    (JᵀJ)⁻¹ = S⁻¹·R⁻¹·R⁻ᵀ·S⁻¹,
+
+and a diagonal entry of R below 10⁻¹⁰ of the largest is a parameter the data
+don't determine, refused by its index.
+
+**Student's t,** for the intervals, is the root of its CDF by bisection to
+the doubles' resolution,
+
+    P(T ≤ t) = 1 − ½·I_x(ν/2, ½),   x = ν/(ν + t²),   1 − x = t²/(ν + t²),
+
+with the regularized incomplete beta I by its continued fraction (Lentz's
+method, Numerical Recipes §6.4) and its front factor's
+ln(Γ(a + b)/(Γ(a)Γ(b))) by Stirling's series with log1p where a is large:
+the difference of two numbers near 6·10⁶ at ν = 10⁶ otherwise. It's good to
+1.2·10⁻¹⁴ of t at ν ≤ 1000, and 3.2·10⁻¹² at 10⁶.
+
+## Fitting
+
+A `[fit.NAME]` (M8's D14, D15) is least squares on weighted residuals,
+measurement less model over its error σ (σ = w·|measured| for a relative
+weight w), and the file's form of each parameter at the end:
+
+    s² = Σrᵢ²/(n − p),   C = s²·M·(JᵀJ)⁻¹·Mᵀ,   seₖ = √Cₖₖ,
+    θₖ ± t₀.₉₇₅(n − p)·seₖ,   ρₖₗ = Cₖₗ/(seₖ·seₗ),
+
+M = ∂(the file's form)/∂(θ as fitted), the delta method, which is exact for
+the linearised covariance (Bates and Watts, *Nonlinear Regression Analysis
+and Its Applications*, 1988).
+
+**Rate constants.** The kinetics are built again with the fitted numbers as
+variables in the rates' context, after T and P, so the tape's reverse sweep
+gives ∂r/∂θ exactly. Where an Arrhenius constant's A and Eₐ are both
+fitted, and it isn't centred already, it's fitted centred on the data's
+mean T, T̄:
+
+    k = k_ref·exp(−Eₐ/R·(1/T − 1/T̄)),   A = k_ref·exp(Eₐ/(R·T̄)),
+    ∂A/∂k_ref = exp(Eₐ/(R·T̄)),   ∂A/∂Eₐ = A/(R·T̄),
+
+which takes most of A's and Eₐ's correlation out of the solve: in the file's
+form, the ethylene fit's k1.A and k1.Ea correlate at 0.996. A van 't Hoff
+constant's A and ΔH are centred alike. Each row's state is the ideal gas, pᵢ = yᵢP, fᵢ = pᵢ,
+cᵢ = pᵢ/RT, as rate data from a differential reactor are.
+
+**kᵢⱼ** come from bubble points: at each row's T and liquid x, the model's
+bubble pressure and vapour composition (`flash.bubble_p`) less the
+measured P and y, each over its error. J is by central differences,
+kᵢⱼ ± 10⁻⁶, good to about 10⁻⁷: kᵢⱼ is of order 0.01 and a bubble point's
+rounding about 10⁻¹².
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from
@@ -1208,6 +2457,13 @@ satisfies them, so it's the equation-oriented solve's first point.
 
 `Unit` would gain a `residuals` method beside `calculate`, with its Jacobian
 blocks, and the sequential-modular solve stays the way in.
+
+The same Jacobian gives M8's sensitivities exactly, where its D10 takes them
+by differences of solves. At a converged point r(x, p) = 0, so
+dx/dp = −(∂r/∂x)⁻¹ ∂r/∂p, one factorisation for every input. An output
+y(x, p) then has dy/dp = ∂y/∂p + ∂y/∂x · dx/dp. An optimiser could also take
+the stream variables as its own unknowns, the infeasible path, and meet the
+residuals only at its optimum (M8's D13).
 
 ## How CPA will fit
 

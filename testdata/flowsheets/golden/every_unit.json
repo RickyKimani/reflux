@@ -1,6 +1,6 @@
 {
-  "format": 1,
-  "reflux": "0.2.0",
+  "format": 3,
+  "reflux": "0.4.0",
   "file": "testdata/flowsheets/every_unit.toml",
   "status": "solved",
   "error": null,
@@ -770,7 +770,9 @@
       "balance": {
         "component": 0,
         "energy": 7.677890655934201e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "squeeze",
@@ -790,7 +792,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "warm",
@@ -810,7 +814,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "turbine",
@@ -830,7 +836,9 @@
       "balance": {
         "component": 0,
         "energy": 0
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "part",
@@ -851,7 +859,9 @@
       "balance": {
         "component": 0,
         "energy": 1.679421555033177e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "ease",
@@ -866,7 +876,9 @@
       "balance": {
         "component": 0,
         "energy": 5.3756816143025566e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "share",
@@ -882,7 +894,9 @@
       "balance": {
         "component": 0,
         "energy": 5.381451492446958e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "settle",
@@ -904,7 +918,9 @@
       "balance": {
         "component": 9.674732090156974e-17,
         "energy": 1.8477518561205408e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     },
     {
       "name": "lift",
@@ -924,7 +940,9 @@
       "balance": {
         "component": 0,
         "energy": 7.814131298354786e-15
-      }
+      },
+      "profile": null,
+      "warnings": []
     }
   ],
   "solver": {
@@ -990,7 +1008,9 @@
         [
           2.416684987599936e-9
         ]
-      ]
+      ],
+      "specs": [],
+      "spec_residuals": []
     },
     {
       "units": [
@@ -998,7 +1018,9 @@
       ],
       "tears": [],
       "cycles": 0,
-      "residuals": []
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
     },
     {
       "units": [
@@ -1006,7 +1028,9 @@
       ],
       "tears": [],
       "cycles": 0,
-      "residuals": []
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
     }
   ],
   "notes": [],
@@ -1017,5 +1041,6 @@
   "worst_unit": {
     "component": 9.674732090156974e-17,
     "energy": 7.814131298354786e-15
-  }
+  },
+  "specs": []
 }

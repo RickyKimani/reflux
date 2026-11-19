@@ -55,6 +55,11 @@ pub fn (s ComponentSeparator) outlet_ports() []string {
 	return ['out1', 'out2']
 }
 
+// energy_ports names its energy stream, for an expression (M8's D3).
+pub fn (s ComponentSeparator) energy_ports() []string {
+	return ['duty']
+}
+
 // calculate separates the inlet.
 pub fn (s ComponentSeparator) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
 	check_inlets(s.name, fl, inlets, 1)!

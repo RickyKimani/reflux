@@ -1,0 +1,19 @@
+# Ethane and propane on Peng-Robinson, their kij to fit to nine bubble
+# points at 250 K in ethane_propane.csv (M8 step 12), starting from 0.
+# tools/gen_m8_fits.py drew the data from thermo's PR with kij = 0.012, and
+# SciPy's fit of them is in testdata/m8_fits.json.
+#
+#     reflux fit testdata/m8_fit/ethane_propane.toml
+format = 3
+
+[components]
+names = ["ethane", "propane"]
+
+[model]
+equation = "PR"
+kij = false
+
+[fit.kij]
+data = "ethane_propane.csv"
+parameters = ["kij[ethane, propane]"]
+weights = { P = "0.5 %", "y[ethane]" = "0.003" }

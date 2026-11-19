@@ -419,8 +419,8 @@ fn fuzz_small(p Pool) {
 			}
 		}
 		else {
-			mut heap := i64(0)
-			assert reflux_collect(&heap) == ok && heap > 0
+			mut live := i64(0)
+			assert reflux_collect(&live) == ok && live > 0
 		}
 	}
 }

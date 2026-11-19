@@ -63,7 +63,7 @@ flowchart LR
   M4 --> M7[M7 Columns]
   M6 --> M7
   M4 --> M8[M8 Specs, sensitivity, optimisation]
-  M2 --> M9[M9 Reactors, kinetics, exchangers]
+  M2 --> M9[M9 Equations, kinetics, reactors]
   M4 --> M9
   M3 --> M10a[M10a Thermo from Python]
   M4 --> M10b[M10b Flowsheets from Python]
@@ -189,7 +189,8 @@ tolerance.
 ### M5 — Water, steam and transport properties
 - IAPWS-IF97 natively. IAPWS-95 is itself a Helmholtz equation, so it fits
   the `Model` contract directly (C6).
-- Viscosity, thermal conductivity, surface tension (C7).
+- Viscosity, thermal conductivity, surface tension (C7). M9 brings a gas's
+  viscosity at low pressure, for Ergun's pressure drop.
 - CoolProp behind a flag, as a reference oracle in tests (B-table).
 
 **Exit:** IF97 passes the verification tables published with the standard;
@@ -213,12 +214,54 @@ published VLE and LLE data sets.
 on a reference column. Robustness is reported across a set of specs.
 
 ### M8 — Specifications, sensitivity analysis and optimisation
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m8-plan.md](m8-plan.md), and its step 0's spike of
+DWSIM's study, Adjust, optimiser and regression in
+[spike-dwsim-study.md](spike-dwsim-study.md). It stayed one milestone (its
+D1), with three amendments to the list below:
+- the optimiser is reflux's own, an SQP written in V for the small, dense
+  problems a flowsheet gives, so there's no NLopt; IPOPT, for large sparse
+  ones, moves to M13 (B6);
+- sensitivities are by differences of tight solves, each with an estimate of
+  its error; exact ones, from the converged Jacobian, need every unit's
+  Jacobian and move to M13 (H1);
+- data reconciliation moves to M13, since it needs measured data against the
+  whole flowsheet's equations (H4).
+
+The plan went further than the exit below:
+- specs, studies, optimisations and fits in the file, every name a stream's
+  or unit's variable with its dimension, and any number a feed or unit is
+  given variable by its key;
+- each point of a study solved, failed with its reason, or with an output
+  that has no value saying why, never −∞ (Tutorial 2), and the same bits on
+  any number of workers;
+- the optimiser held to Hock and Schittkowski's problems and to closed-form
+  optima, and every optimum's first-order conditions checked;
+- rate constants and kᵢⱼ fitted to data with intervals, matching SciPy's
+  fits and covering the truth as often as they claim;
+- the spec, an optimisation and the series reactions against DWSIM's own
+  forms, every difference explained;
+- the published reforming model 29 times faster (13.4 ms a solve) with
+  every answer's bits kept, and the fourth release, v0.4.0.
+
+The owner's 50-point study takes 0.70 s on 2 workers, where DWSIM's own
+sensitivity analysis takes 904 s on the same machine
+([benchmarks.md](benchmarks.md)).
+
 - Design specs ("vary reflux ratio until purity is 99.5%"), converged
   together with the tear streams (F4).
 - Warm starts and state caching (F5).
+- What a reactor recomputes though its T hasn't moved, found in M9 step 11
+  (`docs/m9-plan.md`): each reaction's K(T) from the Gibbs energies, by
+  quadrature at every rate evaluation, 93% of the published reforming
+  model's solve; and each compound's gas viscosity in Ergun's drop, about a
+  quarter of a solve. Kept at the last T, the published model would run at
+  about the 28 ms of the case on typed K.
 - Sensitivity sweeps with warm starts along the sweep, parallel cases via
-  `spawn`, and exact local sensitivities from the converged Jacobian (H1).
-- Optimisation: NLopt for small problems, IPOPT for large ones (B6, H3).
+  `spawn`, and local sensitivities, by differences with an error estimate
+  (H1; exact ones from the converged Jacobian moved to M13).
+- Optimisation: an SQP in V for small problems (B6, H3; IPOPT for large ones
+  moved to M13).
 
 **Exit:** the same sensitivity analysis runs faster than DWSIM 9 on the same
 machine, measured with `-prod` builds.
@@ -228,9 +271,49 @@ reforming exercise, one isothermal packed-bed PFR with three LHHW reactions
 and five components, on Peng–Robinson, with no recycle. DWSIM 9's sensitivity
 study of 50 feed temperatures took 30 minutes in the app, about 36 s a point.
 One solve takes 15 to 18 s headless (measured 2026-11-02). With no recycle, all
-of that is in one reactor.
+of that is in one reactor. M9 step 11 timed both in one session, taking
+turns: DWSIM 10.7 s a solve and 11.7 minutes for the study, reflux 28 ms and
+2.1 s at rtol 1e-8 ([benchmarks.md](benchmarks.md)). The study is 50 cold
+solves there; M8's warm starts and parallel cases come on top.
 
-### M9 — Reactors, kinetics and heat exchangers
+**A second case, for correctness rather than speed:** the owner's methanol
+conversion reactor, Tutorial 2, recorded in M9's step 10. DWSIM's temperature
+and pressure sweeps both plotted −∞ at every point, with no message, because
+the quantity swept was methanol's conversion: (in − out)/in for a product the
+feed doesn't have. A sweep should refuse a quantity with no value at a point,
+and say why, rather than plot it.
+
+### M9 — Equations, kinetics and reactors
+**Done.** The detailed plan, with its decisions and the criterion-by-criterion
+exit review, is in [m9-plan.md](m9-plan.md), and its step 0's spike of
+DWSIM's PFR in [spike-dwsim-pfr.md](spike-dwsim-pfr.md). Heat exchangers,
+here at first, moved to a milestone after M9 (its D14): nothing in M9's exit
+needs them, and a cooled PFR wants a coolant stream, which belongs with them.
+A gas's viscosity at low pressure came the other way, from M5, since Ergun's
+pressure drop needs it (D10, as step 0 amended it). The plan went further
+than the exit below:
+- every equation a user gives is an expression in one language, with named
+  definitions, built-in constants at the SI's exact values, compound units
+  and readings on a unit's scale, `(T in degC)`, held against SymPy, and
+  compiled onto a tape that gives every derivative exactly;
+- Xu and Froment's reforming kinetics as well as Vanden Bussche and
+  Froment's, both against mpmath from the papers' own formulas, and the
+  owner's DWSIM case checked: its typed 8.314s, its cut denominators and its
+  overall K, a factor of 0.20 off;
+- the equilibrium over chosen reactions as well as Gibbs minimisation, and a
+  check of where each reversible rate stops against it;
+- each reactor against DWSIM 9 alone, every difference taken apart, and the
+  owner's PFR within 2.3e-10 of the exact answer of DWSIM's equations;
+- a correctness case, the owner's Tutorial 2, whose conversion reactor now
+  takes its correlation as printed and warns past equilibrium;
+- the owner's case timed against DWSIM's: 28 ms a solve against 10.7 s;
+- a hot gas labelled liquid by M3's flash, found and fixed, and the third
+  release, v0.3.0.
+
+- **Equations as data** (A9). DWSIM takes every equation as a string it
+  evaluates: a rate, an equilibrium constant, a specification. reflux parses
+  each into a structure, binds its names to the model, checks its units,
+  renders it back and differentiates it exactly. Kinetics is its first user.
 - **Kinetics as structured data** (Track L, design in
   [kinetics.md](kinetics.md)). This responds to DWSIM's text-box LHHW input.
   Rate laws are power law, LHHW, Eley–Rideal or a parsed expression.
@@ -242,7 +325,6 @@ of that is in one reactor.
   can be built before the reactors.
 - Conversion and yield reactors; Gibbs-minimisation equilibrium reactor (E6);
   CSTR; PFR and packed bed (which need an ODE integrator, B5).
-- Two-stream exchangers specified by duty, outlet T, UA or approach (G2).
 
 **Exit:** the Vanden Bussche–Froment methanol kinetics loads from TOML,
 renders back as the published equations, passes every check, and
@@ -339,6 +421,9 @@ envelopes trace through the critical point.
   sequential-modular solution (J2).
 - Dynamics: holdups, DAEs, IDA, PID controllers (J3); FMI model-exchange
   export (J4).
+- From M8 (its D1): exact sensitivities from the converged Jacobian (H1),
+  the infeasible path for an optimisation, IPOPT for large sparse problems
+  (B6), and data reconciliation (H4).
 
 **Exit:** equation-oriented and sequential-modular solutions agree on every
 golden flowsheet; a dynamic flash drum step test matches a reference.
@@ -365,6 +450,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | A6 Flowsheet and data file formats, versioned, with migrations | M4 |
 | A7 Docs: `v doc`; every example compiled and run in CI | M0 |
 | A8 Releases: semver, changelog, golden suite gates every release | M4 |
+| A9 Equations as data: wherever reflux needs an equation (a rate law, an equilibrium constant, an adsorption term, a pressure drop, a design specification, an objective), it's parsed, never evaluated as text, its names bound to the model, its units checked, rendered back as a formula and differentiated exactly | M9, for kinetics first (done, with a reactor's conversion); then M8's specifications, objectives and constraints (done, with a study's outputs), and every later equation |
 
 ### B — Numerics
 | Item | Pure V | C backend | Needed by |
@@ -374,7 +460,7 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 | B3 Sparse matrices | CSR/CSC, finite-difference Jacobians with column colouring | KLU (+ AMD/COLAMD, BTF) | M7 |
 | B4 Graphs | Tarjan SCC, tear selection, block-triangular ordering | none needed | M4 |
 | B5 ODE / DAE | RK45, Rosenbrock for stiff PFRs | CVODE, IDA | M9, M13 |
-| B6 Optimisation | none planned | NLopt (small), IPOPT (large NLP) | M8 |
+| B6 Optimisation | SQP (Han and Powell) on a dual active-set QP (Goldfarb and Idnani) for small dense problems; Levenberg–Marquardt for least squares | IPOPT (large NLP) | M8 (done, in V), M13 (IPOPT) |
 | B7 Continuation / homotopy | arc-length continuation | none needed | M12 |
 
 ### C — Thermodynamics and properties
@@ -387,7 +473,8 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - C5 Activity models: Wilson, NRTL, UNIQUAC, UNIFAC; γ–φ. **M6**
 - C6 Reference equations: IAPWS-IF97/95 natively; GERG-2008 through CoolProp
   first, natively later. **M5**
-- C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**
+- C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension. **M5**,
+  except a gas's viscosity at low pressure, which Ergun's pressure drop needs: **M9** (done)
 - C8 Electrolytes (eNRTL, e-CPA). **after M12**
 - C9 Property packages: phase models + transport + data, chosen per
   flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and
@@ -410,22 +497,25 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - E3 PH, PS, TV, UV and vapour-fraction flashes; bubble and dew points. **M3**
 - E4 Three-phase and multiphase flash; free-water handling. **M6**
 - E5 Phase envelopes, critical points, azeotrope search. **M12**
-- E6 Chemical equilibrium by Gibbs minimisation. **M9**
+- E6 Chemical equilibrium by Gibbs minimisation. **M9** (done)
 
 ### F — Flowsheet core
 - F1 Streams, ports, unit-operation interface, flowsheet graph. **M4**
 - F2 TOML flowsheet format, versioned; CLI. **M4**
 - F3 Sequential-modular solver: SCC, tears, Wegstein/Broyden, diagnostics. **M4**
-- F4 Design specs converged together with the tears. **M8**
-- F5 Warm starts and state caching. **M8**
+- F4 Design specs converged together with the tears. **M8** (done)
+- F5 Warm starts and state caching. **M8** (done: a unit's last answer and
+  the specs' values; a tear's only where it takes fewer passes)
 - F6 Reports: JSON, CSV, stream tables, convergence history. **M4**
 
 ### G — Unit operations
 - G1 Mixer, splitter, valve, heater/cooler, pump, compressor/expander,
   flash drum, component separator. **M4**
-- G2 Heat exchangers. **M9**
+- G2 Heat exchangers: two-stream, by duty, outlet T, UA or approach. **after M9**
+  (moved out of M9 by its D14)
 - G3 Reactors: conversion, yield, Gibbs, CSTR, PFR, packed bed (using Track L
-  kinetics). **M9**
+  kinetics). **M9** (done, with the equilibrium over chosen reactions, but
+  for the yield reactor, which none of its decisions took up: later)
 - G4 Columns: shortcut, inside-out, Naphtali–Sandholm; absorbers and
   strippers; three-phase and rate-based later. **M7**
 - G5 Extractors and other separators. **after M7**
@@ -441,11 +531,15 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
     call. **M10b**
 
 ### H — Analysis
-- H1 Sensitivity analysis: warm starts, parallel cases, exact sensitivities. **M8**
-- H2 Case studies and scenario files. **M8**
-- H3 Optimisation over flowsheet variables. **M8**
+- H1 Sensitivity analysis: warm starts, parallel cases, derivatives by
+  differences with an error estimate. **M8** (done). Exact sensitivities
+  from the converged Jacobian, which needs each unit's (J1). **M13**
+- H2 Case studies and scenario files. **M8** (done, as studies)
+- H3 Optimisation over flowsheet variables. **M8** (done)
 - H4 Parameter estimation (fit kᵢⱼ or NRTL to VLE data; fit LHHW constants
-  to lab rate data, with confidence intervals); data reconciliation. **M8, M9**
+  to lab rate data, with confidence intervals). **M8** (done, on M9's
+  kinetics). Data reconciliation, against the whole flowsheet's equations.
+  **M13**
 - H5 Monte Carlo uncertainty propagation. **after M8**
 
 ### I — Interoperability
@@ -474,15 +568,16 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 ### L — Reaction kinetics
 - L1 Rate-law building blocks: Arrhenius (centred on T_ref) and van 't Hoff
   temperature functions, monomials, catalyst sites with shared adsorption
-  terms. **M9**
+  terms. **M9** (done)
 - L2 Rate laws: power law, LHHW, Eley–Rideal; activity basis per reaction
-  (partial pressure, fugacity, concentration). **M9**
-- L3 TOML input with equation parsing and element-balance checks. **M9**
+  (partial pressure, fugacity, concentration). **M9** (done)
+- L3 TOML input with equation parsing and element-balance checks. **M9** (done)
 - L4 `reflux kinetics check` / `explain`: rendering (Unicode, LaTeX), units,
-  physical-sanity warnings, factor tables. **M9**
-- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9**
-- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9**
-- L7 Free-form expression rate laws (parsed, unit-checked, differentiated). **after M9**
+  physical-sanity warnings, factor tables. **M9** (done)
+- L5 Thermodynamic reversibility from ΔG°f; equilibrium consistency check. **M9** (done)
+- L6 Analytic ∂r/∂aⱼ and ∂r/∂T, checked against finite differences. **M9** (done)
+- L7 Free-form expression rate laws (parsed, unit-checked, differentiated): A9's
+  expressions, so **M9** (done)
 
 ---
 
@@ -561,8 +656,8 @@ This is the same pattern `vsl` uses (`-d vsl_lapack_lapacke`). Build with
 | SUNDIALS KINSOL | large nonlinear systems | BSD-3 | MSYS2 | M7/M13 | **Probably.** reflux needs its own Newton anyway; KINSOL stays for large sparse cases until ours matches it. |
 | SuiteSparse KLU (+AMD, COLAMD, BTF) | sparse LU for flowsheet and column Jacobians | KLU/BTF LGPL-2.1+, AMD/COLAMD BSD-3 | MSYS2 | M7/M13 | **Later, maybe.** A left-looking (Gilbert–Peierls) sparse LU in V is feasible once the Jacobians are well understood. |
 | SUNDIALS CVODE / IDA | stiff ODEs (PFR), DAEs (dynamics) | BSD-3 | MSYS2 | M9/M13 | **Unlikely.** Simple PFRs can use a pure-V Rosenbrock method; IDA stays for dynamics. |
-| IPOPT | large nonlinear optimisation | EPL-2.0 | official MSVC binaries (3.14.20); has a C interface | M8 | **No.** Decades of work; keep it. |
-| NLopt | small and derivative-free optimisation | mostly MIT, some algorithms LGPL | MSYS2 | M8 | **Maybe**, for the few algorithms actually used. |
+| IPOPT | large nonlinear optimisation | EPL-2.0 | official MSVC binaries (3.14.20); has a C interface | M13 | **No.** Decades of work; keep it. |
+| NLopt | small and derivative-free optimisation | mostly MIT, some algorithms LGPL | MSYS2 | not needed | **Done:** M8's SQP, in V, takes its place for small problems. |
 | CoolProp | reference fluids, test oracle | MIT | build from source or use its DLL | M5 | **Partly.** IF97 and selected fluids go native; CoolProp stays as the test reference. |
 
 Licence policy: the core stays MIT. LGPL libraries (KLU) are fine when
@@ -628,7 +723,7 @@ the official successor. Other standards cover other needs:
 | **FMI 3.0** (Modelica Association; 3.0.2 is current) | Export flowsheets and unit operations as FMUs for Modelica, Simulink and digital-twin tools. It's a C API, cross-platform, so it suits V well. Co-simulation first (M11), model exchange once dynamics exist (M13). |
 | **C ABI + Python** | The de-facto scripting interface: NumPy, pandas, Jupyter, automation, side-by-side comparison with `thermo`, and IDAES/Pyomo users (M10a, M10b). |
 | **AMPL `.nl` files** | Hand equation-oriented models to external optimisers (IPOPT, Knitro) (M13). |
-| **ThermoML** (IUPAC/NIST XML) | Import experimental data for parameter fitting and validation (M8). |
+| **ThermoML** (IUPAC/NIST XML) | Import experimental data for parameter fitting and validation (after M8, whose fits read CSV). |
 | **JSON over stdio/HTTP** | The service API for the UI and for other programs (M14). |
 | **OPC UA** | Live plant data for digital twins (later). |
 

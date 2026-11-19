@@ -1,6 +1,11 @@
-// reflux's command line (M4, D11):
+// reflux's command line (M4, D11; M9, D12):
 //
 //     reflux solve plant.toml [--json results.json] [--csv streams.csv] [--trace]
+//     reflux study plant.toml [NAME] [--json study.json] [--csv study.csv] [--workers N]
+//     reflux optimize plant.toml [NAME] [--json optimum.json] [--csv iterations.csv] [--workers N]
+//     reflux fit reactions.toml [NAME] [--json fit.json] [--csv residuals.csv]
+//     reflux kinetics check FILE [T P NAME=y ...]
+//     reflux kinetics explain FILE T P NAME=y ...
 //     reflux demo [T P]
 //
 // From the source, `v run . solve testdata/flowsheets/reference.toml`.
@@ -9,6 +14,7 @@ module main
 import flowsheet
 import os
 import quantity
+import reactors
 import strings
 
 const usage = 'usage:
@@ -16,6 +22,24 @@ const usage = 'usage:
       Solve a flowsheet file (docs/flowsheet-format.md) and print its stream
       table. --json writes the results (docs/report-format.md), --csv the
       streams, and --trace prints every pass of every loop.
+  reflux study FILE [NAME] [--json OUT] [--csv OUT] [--workers N]
+      Run a study in the file, by NAME if it has more than one, and print
+      its points; --json and --csv write them (docs/report-format.md).
+      --workers runs it on N threads, the processors by default.
+  reflux optimize FILE [NAME] [--json OUT] [--csv OUT] [--workers N]
+      Run an optimisation in the file, by NAME if it has more than one, and
+      print its optimum and iterations; --json and --csv write them
+      (docs/report-format.md). --workers differentiates by N inputs at once,
+      the processors by default.
+  reflux fit FILE [NAME] [--json OUT] [--csv OUT]
+      Fit constants in the file to its data, by NAME if it has more than
+      one fit: rate constants to rates, or kij to bubble points. It prints
+      each with its 95% interval; --json and --csv write the fit and its
+      residuals (docs/report-format.md).
+  reflux kinetics check FILE [T P NAME=y ...]
+  reflux kinetics explain FILE T P NAME=y ...
+      Check the reactions in a file, or explain its rates at a state:
+      reflux kinetics help says more.
   reflux demo [T P]
       The thermodynamics and the flash, on compounds from the database:
       n-butane at T in K and P in bar, by default 350 K and 9.4573 bar.
@@ -23,7 +47,9 @@ const usage = 'usage:
   reflux help
 
 The exit status is 0 when it worked, 1 when the flowsheet failed or a report
-could not be written, and 2 when the command is wrong.'
+could not be written, and 2 when the command is wrong. A study that ran is 0,
+even with failed points, which its table lists; an optimisation is 0 only
+with an optimum, and a fit only with a fit.'
 
 fn main() {
 	mut c := Console{
@@ -64,8 +90,20 @@ fn run(args []string, mut c Console) int {
 		'solve' {
 			return solve(args[1..], mut c)
 		}
+		'study' {
+			return study_command(args[1..], mut c)
+		}
+		'optimize' {
+			return optimize_command(args[1..], mut c)
+		}
+		'fit' {
+			return fit_command(args[1..], mut c)
+		}
 		'demo' {
 			return demo(args[1..], mut c)
+		}
+		'kinetics' {
+			return kinetics_command(args[1..], mut c)
 		}
 		'version', '--version' {
 			c.say('reflux ${flowsheet.version()}')
@@ -80,7 +118,8 @@ fn run(args []string, mut c Console) int {
 			return 2
 		}
 		else {
-			hint := did_you_mean(command, ['solve', 'demo', 'version', 'help'])
+			hint := did_you_mean(command, ['solve', 'study', 'optimize', 'fit', 'kinetics', 'demo',
+				'version', 'help'])
 			c.complain('reflux: no command ${command}${hint}\n\n${usage}')
 			return 2
 		}
@@ -172,7 +211,9 @@ fn solve(args []string, mut c Console) int {
 		c.complain('reflux solve: ${err.msg()}\n\n${usage}')
 		return 2
 	}
-	loaded := flowsheet.load(o.file) or { return failed(o, flowsheet.load_failure(err), mut c) }
+	loaded := flowsheet.load(o.file, makers: reactors.makers()) or {
+		return failed(o, flowsheet.load_failure(err), mut c)
+	}
 	sol := loaded.solve() or { return failed(o, loaded.failure(err), mut c) }
 	r := flowsheet.Report{
 		...loaded.report(sol)

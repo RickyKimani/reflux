@@ -31,11 +31,26 @@ pub fn pip(m Model, t f64, v f64, n []f64) f64 {
 	return v * (d2p_dtdv / d.dp_dt - d2p_dv2 / d.dp_dv)
 }
 
+// vapour_volume is the volume, in covolumes, above which a phase is vapour
+// whatever Π says: less dense than its critical density. A cubic's
+// critical volume is 3 (van der Waals) to 3.95 (Peng–Robinson) covolumes,
+// and Kay's rule on them is the mixture's covolume times the same ratio.
+const vapour_volume = 4.0
+
 // phase_label calls a single phase liquid when Π > 1 and vapour otherwise,
-// as `thermo` does. In a two-phase split the flash labels by density
-// instead, the less dense phase being the vapour (D6), since Π can call
-// both phases liquid-like.
+// as `thermo` does, but for a phase more than four covolumes large, less
+// dense than its critical density, which is vapour (M3's D6, as amended in
+// M9 step 9). At low density Π − 1 ≈ (B − T·dB/dT)/V, B the second virial
+// coefficient, which is above zero for a gas above its Joule–Thomson
+// inversion temperature at zero pressure: hydrogen above about 200 K,
+// nitrogen above 620 K. Π alone calls such a gas liquid, and a drum would
+// send it out of its liquid port. In a two-phase split the flash labels by
+// density instead, the less dense phase being the vapour (D6), since Π can
+// call both phases liquid-like.
 pub fn phase_label(m Model, st State) PhaseLabel {
+	if st.v > vapour_volume * m.min_volume(st.n) {
+		return .vapor
+	}
 	return if pip(m, st.t, st.v, st.n) > 1.0 { .liquid } else { .vapor }
 }
 

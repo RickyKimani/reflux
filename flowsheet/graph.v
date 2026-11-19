@@ -2,11 +2,14 @@ module flowsheet
 
 import math
 
-// Edge is a stream from one unit to another.
+// Edge is a stream from one unit to another, or a spec's link (M8's D5):
+// the dependence of the unit it varies on the unit that makes what it
+// measures, which no stream carries.
 struct Edge {
 	from int
 	to   int
 	name string
+	link int = -1 // the spec's index, for a link
 }
 
 // Graph is a flowsheet's units as nodes and the streams between them as
@@ -57,7 +60,7 @@ fn (g Graph) entries(group []int) []bool {
 		open[u] = g.fed[u]
 	}
 	for e in g.edges {
-		if inside[e.to] && !inside[e.from] {
+		if e.link < 0 && inside[e.to] && !inside[e.from] {
 			open[e.to] = true
 		}
 	}
@@ -66,7 +69,7 @@ fn (g Graph) entries(group []int) []bool {
 
 // has_input is whether anything comes into a group from outside it.
 fn (g Graph) has_input(group []int, inside []bool) bool {
-	return group.any(g.fed[it]) || g.edges.any(inside[it.to] && !inside[it.from])
+	return group.any(g.fed[it]) || g.edges.any(it.link < 0 && inside[it.to] && !inside[it.from])
 }
 
 // Tarjan is Tarjan's strongly connected components (SIAM J. Comput. 1, 1972).

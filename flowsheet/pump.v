@@ -33,6 +33,11 @@ pub fn (u Pump) outlet_ports() []string {
 	return ['out']
 }
 
+// energy_ports names its energy stream, for an expression (M8's D3).
+pub fn (u Pump) energy_ports() []string {
+	return ['work']
+}
+
 // calculate pumps the inlet. An empty inlet has no vapour to refuse.
 pub fn (u Pump) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
 	check_inlets(u.name, fl, inlets, 1)!

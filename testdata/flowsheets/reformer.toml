@@ -1,0 +1,65 @@
+# A methane steam reformer as a packed bed, on Xu and Froment's kinetics
+# (AIChE J. 35, 88, 1989), K from the Gibbs energies of the component data:
+# the owner's coursework case's feed, reactor and catalyst (M9 step 0), with
+# Ergun's pressure drop on the gas's viscosity by Wilke's rule.
+format = 2
+
+[components]
+names = ["methane", "water", "hydrogen", "carbon monoxide", "carbon dioxide"]
+
+[model]
+equation = "PR"
+
+[feed.feed]
+T = "1000 K"
+P = "1 atm"
+molar_flows = { methane = "10 kmol/h", water = "10 kmol/h", hydrogen = "0.1 kmol/h", "carbon monoxide" = "0 kmol/h", "carbon dioxide" = "0 kmol/h" }
+
+[unit.reformer]
+type = "pfr"
+in = "feed"
+out = "product"
+volume = "1 m^3"
+length = "1 m"
+catalyst = { loading = "0.386 kg/m^3", void_fraction = 0.4, particle_diameter = "2 mm" }
+pressure_drop = "ergun"
+
+# One site: its adsorption term is every reaction's, squared.
+[site.Ni]
+symbol = "DEN"
+terms = [
+  { name = "K_CO", K = { A = "8.23e-5 bar^-1", dH = "-70.65 kJ/mol" }, a = { CO = 1 } },
+  { name = "K_H2", K = { A = "6.12e-9 bar^-1", dH = "-82.90 kJ/mol" }, a = { H2 = 1 } },
+  { name = "K_CH4", K = { A = "6.65e-4 bar^-1", dH = "-38.28 kJ/mol" }, a = { CH4 = 1 } },
+  { name = "K_H2O", K = { A = "1.77e5", dH = "88.68 kJ/mol" }, a = { H2O = 1, H2 = -1 } },
+]
+
+[reaction.reforming]
+equation = "CH4 + H2O = CO + 3 H2"
+law = "lhhw"
+k = { A = "4.225e15 kmol*bar^0.5/(kg*h)", Ea = "240.1 kJ/mol" }
+orders = { CH4 = 1, H2O = 1, H2 = -2.5 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2
+
+[reaction.shift]
+equation = "CO + H2O = CO2 + H2"
+law = "lhhw"
+k = { A = "1.955e6 kmol/(kg*h*bar)", Ea = "67.13 kJ/mol" }
+orders = { CO = 1, H2O = 1, H2 = -1 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2
+
+[reaction.overall]
+equation = "CH4 + 2 H2O = CO2 + 4 H2"
+law = "lhhw"
+k = { A = "1.020e15 kmol*bar^0.5/(kg*h)", Ea = "243.9 kJ/mol" }
+orders = { CH4 = 1, H2O = 2, H2 = -3.5 }
+K = "gibbs"
+driving = "difference"
+site = "Ni"
+site_power = 2

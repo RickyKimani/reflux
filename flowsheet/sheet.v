@@ -110,7 +110,11 @@ fn (f Flowsheet) graph() !Graph {
 			if from < 0 {
 				fed[i] = true
 			} else {
-				edges << Edge{from, i, name}
+				edges << Edge{
+					from: from
+					to:   i
+					name: name
+				}
 			}
 		}
 	}
@@ -128,12 +132,27 @@ fn (f Flowsheet) graph() !Graph {
 }
 
 // Block is a part of a flowsheet to solve in one go: one unit, or a net of
-// units joined in loops, whose tears must be converged together.
+// units joined in loops, whose tears must be converged together, with the
+// specs whose links put them there (M8's D5).
 pub struct Block {
 pub:
 	units  []int    // indices into Flowsheet.units, in calculation order
 	tears  []string // the streams torn, whose first values the block starts from
-	cycles int      // elementary cycles in the block, listed up to 50,000
+	cycles int      // elementary cycles of streams in the block, listed up to 50,000
+	specs  []int    // the specs converged with it, by index
+}
+
+// Link is a spec's dependence (M8's D5): the unit it varies, or that the
+// feed it varies enters, on the unit that makes what it measures, as if a
+// stream joined them. Planning puts the two in one block, whose unknowns
+// are its tears and its specs' values.
+pub struct Link {
+pub:
+	from int    // the unit that makes what the spec measures
+	to   int    // the unit the spec varies
+	spec int    // the spec's index
+	name string // the spec's name, for a message
+	line int    // its table's line in the file
 }
 
 // Plan is how to solve a flowsheet: blocks in order, each needing only
@@ -153,6 +172,8 @@ pub:
 	// at. It's a count and not a time, so that a plan is reproducible. At this
 	// default, a graph like the classical test problems takes a moment.
 	work i64 = 200_000_000
+	// links are specs' dependences (M8's D5).
+	links []Link
 }
 
 // plan checks a flowsheet and decides the order to solve it in (D5).
@@ -163,27 +184,98 @@ pub:
 // fewest streams that break them all. A tear in params is honoured, and
 // more are chosen if the loops need them.
 pub fn (f Flowsheet) plan(params PlanParams) !Plan {
-	g := f.graph()!
-	named := f.named_tears(g, params.tears)!
+	streams := f.graph()!
+	named := f.named_tears(streams, params.tears)!
+	g := streams.with_links(params.links)
+	groups := g.components()
+	check_links(g, groups, params.links)!
 	mut blocks := []Block{}
 	mut notes := []string{}
-	for group in g.components() {
+	for group in groups {
 		inside := g.mask(group)
 		if g.is_net(group) && !g.has_input(group, inside) {
 			names := group.map(f.units[it].unit.name)
 			return bad_sheet('', 'nothing feeds the loop of ${names.join(', ')}')
 		}
-		chosen := g.tear_set(group, named.filter(inside[g.edges[it].from]), params.work)
+		// A spec's link is torn already: its value is the block's unknown.
+		mut given := named.filter(inside[g.edges[it].from])
+		mut links := []int{}
+		mut cut := []bool{len: g.edges.len}
+		for i, e in g.edges {
+			if e.link >= 0 && inside[e.from] && inside[e.to] {
+				given << i
+				links << i
+				cut[i] = true
+			}
+		}
+		chosen := g.tear_set(group, given, params.work)
 		notes << chosen.notes
+		mut specs := []int{}
+		for e in links {
+			if g.edges[e].link !in specs {
+				specs << g.edges[e].link
+			}
+		}
+		specs.sort()
 		blocks << Block{
 			units:  g.order(group, chosen.tears)
-			tears:  chosen.tears.map(g.edges[it].name)
-			cycles: chosen.cycles
+			tears:  chosen.tears.filter(g.edges[it].link < 0).map(g.edges[it].name)
+			cycles: if links.len == 0 {
+				chosen.cycles
+			} else {
+				g.cycles(group, cut, cycle_limit).len
+			}
+			specs:  specs
 		}
 	}
 	return Plan{
 		blocks: blocks
 		notes:  notes
+	}
+}
+
+// with_links is the graph with specs' links as edges too, after its
+// streams, so that every stream keeps its index.
+fn (g Graph) with_links(links []Link) Graph {
+	if links.len == 0 {
+		return g
+	}
+	mut edges := g.edges.clone()
+	for l in links {
+		edges << Edge{
+			from: l.from
+			to:   l.to
+			name: l.name
+			link: l.spec
+		}
+	}
+	return new_graph(g.n, edges, g.fed)
+}
+
+// check_links refuses a spec none of whose links closes a loop: nothing it
+// measures depends on what it varies.
+fn check_links(g Graph, groups [][]int, links []Link) ! {
+	mut group_of := []int{len: g.n}
+	for i, group in groups {
+		for u in group {
+			group_of[u] = i
+		}
+	}
+	mut seen := []int{}
+	for l in links {
+		if l.spec in seen {
+			continue
+		}
+		seen << l.spec
+		mine := links.filter(it.spec == l.spec)
+		if !mine.any(group_of[it.from] == group_of[it.to]) {
+			return FlowsheetError{
+				kind:   .bad_file
+				reason: "nothing it measures depends on what it varies, so varying it can't meet the target"
+				line:   l.line
+				key:    'spec.${l.name}'
+			}
+		}
 	}
 }
 
