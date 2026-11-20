@@ -18,7 +18,9 @@ planned like M1 to M4, M9, M10a and M8: research first, then exit criteria,
 decisions and steps. The roadmap entry is in [roadmap.md](roadmap.md).
 
 Status: **approved** on 2026-11-18. Step 0 is done, and amends D7 and
-criterion 8, both approved on 2026-11-18. Step 1 is next.
+criterion 8, both approved on 2026-11-18. Steps 1 to 3 are done, built
+together, and step 1 amends D7 again, approved on 2026-11-20. Step 4,
+the seam, is next.
 
 ## Goal
 
@@ -260,7 +262,7 @@ All checked by tests in CI, as before.
 | D4 | The γ–φ liquid | fᵢ = xᵢ γᵢ Pᵢˢᵃᵗ φᵢˢᵃᵗ exp(Vᵢᴸ (P − Pᵢˢᵃᵗ)/RT):<br>- **Pˢᵃᵗ** by the component's own correlation, and **Vᴸ** by its liquid density, incompressible over the Poynting integral. The liquid's volume is Σ xᵢ Vᵢᴸ, with no excess volume.<br>- **The vapour** is the ideal gas by default, or a cubic of the file's. φˢᵃᵗ is then that cubic's pure φ at Pˢᵃᵗ, and 1 for the ideal gas.<br>- **Poynting** is on by default, and can be turned off.<br>- **Kept until T moves:** Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and each τ depend on T alone (M8's D11).<br>- **Outside a correlation's range,** or above its Tc, a component is refused unless it's a Henry's-law solute (D6). | The textbook form, as Aspen's and `thermo`'s. Poynting costs nothing and matters at pressure. A file can match Aspen's NRTL, ideal gas and no Poynting, by saying so. |
 | D5 | Calorics | The liquid's H, S and Cp come from its fugacities: h̄ᵢ − hᵢⁱᵍ = −RT²(∂ln φᵢᴸ/∂T) at constant P and x, through the same Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and γ. ΔHvap is then Clapeyron's from Pˢᵃᵗ's slope, and Hᴱ is the model's. `thermo`'s 'Poynting&PhiSat' basis is the reference.<br><br>No ΔHvap correlation enters. ChemSep's ΔHvap and liquid Cp are compared with the answer, as the model's accuracy, recorded and not asserted. | A drum's energy balance then agrees with its phase equilibrium. A separate ΔHvap, `thermo`'s 'Hvap' basis, gives a flash whose duty disagrees with its own Clapeyron. |
 | D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units. | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
-| D7 | Models and parameters | **Wilson, NRTL and UNIQUAC:**<br>- each pair's τ (Wilson's Λ) and NRTL's α are expressions in T with units, `"-189.0469 cal/mol / (R*T)"`, so that Aspen's a + b/T + e·ln T + f·T or any paper's form goes in as printed;<br>- the tape gives their T-derivatives exactly;<br>- ChemSep's banks become those expressions in their own forms, A in cal/mol: NRTL's τ = A/RT, UNIQUAC's τ = exp(−A/RT), and Wilson's Λ = (Vⱼ/Vᵢ)·exp(−A/RT) on ChemSep's Wilson volumes. Step 0 confirms each form and the calorie.<br><br>**A pair with no parameters** is refused, naming it and the banks searched. `missing = "ideal"` sets such pairs' τ to 0, and the report lists them as a warning. The report gives each pair's source, as kᵢⱼ's are given: the file, a bank with its DECHEMA reference, or ideal.<br><br>**UNIFAC:** the original for VLE (Hansen et al., 1991), the LLE table (Magnussen et al., 1981) and Dortmund's published parameters (Gmehling et al.), each compound's groups from its component file.<br><br>**Amended in step 0,** approved on 2026-11-18. A bank's A is in thermochemical calories over DECHEMA's own R, 1.98721 cal/(mol·K), which it was fitted with: DWSIM's NRTL, on the same bank, is τ = A/(1.98721·T) to 4e-10 in ln γ, and the SI's R over 4.184 J is 5e-7 off ([spike-dwsim-activity.md](spike-dwsim-activity.md)). So a bank pair's τ keeps that R, its source saying why, as `reflux kinetics check` advises for a constant fitted with a typed R. | Parameters are equations too, and typing them as text in a fixed form is what A9 rules out. A silently ideal pair is the kind of answer that looks right and isn't. |
+| D7 | Models and parameters | **Wilson, NRTL and UNIQUAC:**<br>- each pair's τ (Wilson's Λ) and NRTL's α are expressions in T with units, `"-189.0469 cal/mol / (R*T)"`, so that Aspen's a + b/T + e·ln T + f·T or any paper's form goes in as printed;<br>- the tape gives their T-derivatives exactly;<br>- ChemSep's banks become those expressions in their own forms, A in cal/mol: NRTL's τ = A/RT, UNIQUAC's τ = exp(−A/RT), and Wilson's Λ = (Vⱼ/Vᵢ)·exp(−A/RT) on ChemSep's Wilson volumes. Step 0 confirms each form and the calorie.<br><br>**A pair with no parameters** is refused, naming it and the banks searched. `missing = "ideal"` sets such pairs' τ to 0, and the report lists them as a warning. The report gives each pair's source, as kᵢⱼ's are given: the file, a bank with its DECHEMA reference, or ideal.<br><br>**UNIFAC:** the original for VLE (Hansen et al., 1991), the LLE table (Magnussen et al., 1981) and Dortmund's published parameters (Gmehling et al.), each compound's groups from its component file.<br><br>**Amended in step 0,** approved on 2026-11-18. A bank's A is in thermochemical calories over DECHEMA's own R, 1.98721 cal/(mol·K), which it was fitted with: DWSIM's NRTL, on the same bank, is τ = A/(1.98721·T) to 4e-10 in ln γ, and the SI's R over 4.184 J is 5e-7 off ([spike-dwsim-activity.md](spike-dwsim-activity.md)). So a bank pair's τ keeps that R, its source saying why, as `reflux kinetics check` advises for a constant fitted with a typed R.<br><br>**Amended in step 1,** approved on 2026-11-20. UNIFAC's tables are ChemSep's, repaired where a file contradicts itself, by its own evidence (a subgroup's or a row's main group whose name is another's), and corrected where DDBST's published tables show a typo: the original's 11 values, the LLE table's 2 and Dortmund's 13 (C's Q, six ionic-liquid subgroups). Each repair and correction is reported in data-quality.md. | Parameters are equations too, and typing them as text in a fixed form is what A9 rules out. A silently ideal pair is the kind of answer that looks right and isn't. |
 | D8 | Three phases | A PT flash finds up to three phases, for any phase model:<br>- **stage-wise,** as Michelsen (1982) does: two phases first, then each phase tested for stability by M3's test, an unstable one's trial starting a third phase;<br>- **the split:** successive substitution on a multiphase Rachford–Rice, by Okuno, Johns and Sepehrnoori's (2010) convex form, then Newton on G over every phase, a phase whose fraction falls to zero removed;<br>- **an answer only once every phase is stable** against every trial, as M3 verifies a split;<br>- **a fourth phase** is `.more_phases`, with its reason. | Stage-wise reuses M3's stability test and split, which are proven. The convex Rachford–Rice can't diverge, where the textbook form can with three phases. |
 | D9 | Labels | Phases are ordered by increasing mass density, and each is labelled vapour, liquid or liquid2:<br>- **a γ–φ phase** by the model that made it;<br>- **an equation of state's phase** by Π, with M9's four-covolume rule;<br>- **at most one vapour:** of phases Π calls vapour-like, the least dense;<br>- **phases Π calls liquid-like** are liquids, the denser being liquid2.<br><br>A two-phase split Π calls all liquid-like is then a liquid–liquid split, where M3's D6 called its lighter phase the vapour. Step 7 measures how many of M3's 10,000 sweep splits change label, near critical points, for the owner to judge. | With three phases density alone can't name them, and a liquid–liquid split by PR is mislabelled today. Π is what labels a single phase already. |
 | D10 | Which flashes take three phases | PT, PH and PS.<br><br>The vapour-fraction flashes (bubble and dew points) and TV and UV stay two-phase. A bubble point whose liquid would split is `.more_phases`, saying so. | PT, PH and PS are what units call. A heterogeneous bubble point is M7's, if its decanters need one. |
@@ -385,7 +387,7 @@ a Helmholtz model behind it by its volume roots.
 missing a split, both above; and that its activity packages take
 enthalpies from Lee–Kesler by default.
 
-### 1. ChemSep's banks and tables
+### 1. ChemSep's banks and tables — done, with D7 amended
 - D7: `nrtl.ipd`, `uniquac.ipd`, `wilson.ipd`, `henrys_law.ipd` and the
   three UNIFAC tables vendored byte for byte, with checksums in
   `data/vendor/chemsep/NOTICE.md` and the same licence assumption, stated.
@@ -394,15 +396,194 @@ enthalpies from Lee–Kesler by default.
 - Every UNIFAC parameter compared with `thermo`'s, in
   [data-quality.md](data-quality.md) (criterion 2).
 
-### 2. Wilson, NRTL and UNIQUAC
+Steps 1 to 3 were built together, at the owner's word: the banks and
+tables have nothing to be tested on without the models, and UNIFAC is
+built on its tables.
+
+**What was built:**
+- **Twenty files vendored** from ChemSep LITE 8.50's `ipd/`: the three
+  binary banks, `henrys_law.ipd`, and each UNIFAC table's main groups,
+  parameters (a, b and c for Dortmund) and subgroups, each with its `_ext`
+  extension, which compounds need (subgroups up to 142, 68 and 231). Their
+  sizes and SHA-256 sums are in NOTICE.md, whose test now checks 26 files.
+- **[components/activity.v](../components/activity.v):** the readers
+  (`load_pair_bank`, `load_henry`, `load_unifac`), each line that can't be
+  read a defect; and the builders, `Database.nrtl`, `uniquac`, `wilson`
+  and `unifac`, each pair's source kept (`PairUse`).
+- **[components/quality/activity.v](../components/quality/activity.v):**
+  data-quality.md's new section, and each table against `thermo`'s.
+
+**What the banks hold:**
+
+| Bank | Lines | Pairs | Listed again | Unreadable |
+|---|---|---|---|---|
+| `nrtl.ipd` | 352 | 329 | 23 | 0 |
+| `uniquac.ipd` | 291 | 273 | 18 | 0 |
+| `wilson.ipd` | 366 | 362 | 4 | 0 |
+| `henrys_law.ipd` | 41 | 41 gases, in water, ChemSep's eq. 121 | 0 | 0 |
+
+**The UNIFAC tables contradict themselves,** and the reader repairs each
+place by the file's own evidence, reporting it (design.md, "Activity
+models"):
+- **Furfural's LLE subgroup** points to main group 30, which is DMFA; its
+  own line names Furfural, which is 12. Furfural would have taken DMFA's
+  parameters.
+- **AC-CN's and AC-Br's subgroups** (the original's extension) point to each
+  other's main groups, 57 and 64. The list and the parameter rows agree on
+  which is which, so benzonitrile would have taken AC-Br's.
+- **A parameter row,** `20 COOH 61 C-OO-C`, gives 61 for C-OO-C, which is 62.
+  It landed on CO-OOH's pair, as a duplicate.
+- **Dortmund's extension** names a main group, cy-CHNH2, without its number,
+  numbered here by its rows (230). And it names `78 cy-CH2`, 78 being
+  cy-CH2's subgroup number: its main group is 42.
+- **Two of Dortmund's c rows** have a name copied from the row above, `4
+  ACCH2 99 SO4` for PF6's. The a and b rows pair those numbers, so the
+  numbers stand, and the name is reported.
+- **A molar mass printed with a decimal comma,** `57,028`, which had cost
+  its subgroup.
+
+**And where the published table shows a typo,** DDBST's public pages
+(read on 2026-11-20 by an agent, verbatim) settle it, and
+`unifac_corrections` sets the published value:
+- **The original:** CCl's R (1.0106, not 1.006) and Furfural's Q (2.484,
+  not 2.481); OH–Br, a whole pair that isn't the published one; and seven
+  more parameters with a digit wrong (ACNH2–CCl4 882, not 822; Br–ACNO2
+  4288, not 4228; CCOO–CCl4 54.57, not 54.47; and the rest in
+  data-quality.md).
+- **The LLE table:** the same two subgroups.
+- **Dortmund's:** the quaternary C's Q, 0 where ChemSep has 0.4582, and six
+  ionic-liquid subgroups' R and Q.
+
+**D7 is amended** (below), approved on 2026-11-20.
+
+**Against `thermo`'s copies** (criterion 2), every difference settled:
+
+| Table | Subgroups same, rounded, different | Parameters same, rounded, different | ChemSep's own |
+|---|---|---|---|
+| UNIFAC | 103, 7, 0 | 1049, 107, 0 | 23 subgroups, 208 parameters |
+| UNIFAC-LLE | 56, 0, 1: `thermo`'s typo, an R of 9183 for 0.9183 | 512, 0, 0 | 2, 4 |
+| UNIFAC-Dortmund | 124, 0, 0 | 1042, 425, 3 as `thermo`'s 2006 table, 12 different: DDBST's page prints ChemSep's | 3, 46 |
+
+*Rounded* is within a unit of the last digit of whichever is printed to
+fewer: 8484 for 8483.5, 287.7 for 287.77.
+
+**Compounds a table can't take:** 584 of 584 for the original, 548 of 548
+for Dortmund's, and 483 of 484 for the LLE table, dimethyl sulfoxide's
+group being subgroup 68, which the table hasn't (its DMSO is 57).
+
+**Tests:** [components/activity_test.v](../components/activity_test.v)
+(the banks, each table's counts, repairs and corrections, the compounds
+covered, and the rules on small files written for them) and
+[components/quality/activity_test.v](../components/quality/activity_test.v)
+(each table against `thermo`'s, every difference settled; the rounding
+rule).
+
+### 2. Wilson, NRTL and UNIQUAC — done
 - D2, D7: the `activity` module's interface, each model's ln γ, Gᴱ and Hᴱ
   with derivatives in T and n, τ as expressions kept until T moves.
 - Against `thermo` and mpmath, and Gibbs–Duhem from scratch (criterion 1).
 
-### 3. UNIFAC
+**What was built:**
+- **[numeric/jet.v](../numeric/jet.v):** `Jet`, a value with its first two
+  derivatives along one direction, whose arithmetic carries them: forward
+  differentiation, its value the f64 operation's bits.
+- **[expr/jet.v](../expr/jet.v):** `Expr.jet`, the tree evaluated on jets,
+  so that a parameter's τ(T) has τ′ and τ″ exactly. The tape gives first
+  derivatives only, and Cpᴱ needs the second.
+- **The `activity` module** ([model.v](../activity/model.v)): `Model`, a
+  `Work` per thread that keeps the T-dependent parameters until T moves,
+  `eval`, `excess`, and `Param`, a parameter as an expression in T. Each
+  model's formula is written once, generic over f64 and `Jet`: its value
+  from f64, its T-derivatives from the parameters as jets in T, and its
+  composition derivatives one mole fraction at a time, projected,
+  n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ − Σₖ xₖ∂ᵢₖ. No Hessian is derived by hand.
+- **[nrtl.v](../activity/nrtl.v), [uniquac.v](../activity/uniquac.v),
+  [wilson.v](../activity/wilson.v)**, each pair given once and a missing
+  one refused by name.
+- **The builders** write each bank pair's parameters as their expressions,
+  `-189.0469 K / (1.98721*T)`, DECHEMA's R kept (D7 as amended in step 0).
+
+**[tools/gen_m6_activity.py](../tools/gen_m6_activity.py)** writes
+`testdata/m6_activity.json`: each model on ChemSep's banks and tables at
+four seeded states of each of seven systems of two to five components, by
+`thermo` and, for the binary models, by mpmath at 40 digits from the closed
+forms. It reproduces its output byte for byte.
+
+**Measured** (`activity/models_test.v`, under tcc):
+
+| | Against mpmath | Against `thermo` |
+|---|---|---|
+| ln γ | 1.9e-15 | 3.1e-15 |
+| ∂ln γ/∂T | 4.4e-15 | 2.6e-14 |
+| ∂²ln γ/∂T² | 2.1e-15 | 1.4e-14 (UNIFAC's) |
+| n·∂ln γᵢ/∂nⱼ, of its row | 4.9e-14 | 2.5e-13 |
+| Gᴱ, Hᴱ, Cpᴱ | 1.5e-14 | 5.0e-14 |
+
+And from scratch at every state: Gibbs–Duhem to 2.4e-14 of the sum's terms;
+dn symmetric to 3.1e-13; ln γᵢ against central differences of nGᴱ/RT to
+1.6e-9, and Sᴱ against −∂Gᴱ/∂T to 2.7e-8, each the differences' own error;
+a pure component's γ exactly 1 in every model; and a `Work` used at a second
+T giving a fresh one's bits. The jet pass: 6,240 first derivatives of M9's
+SymPy fixture to 6.5e-16, and its second against differences of the first
+to 3.9e-7.
+
+**Found:**
+- **`thermo.r_gas` is 8.314462618,** N_A·k_B rounded: 1.84e-11 below the
+  exact product, 8.31446261815324, which `expr`'s `R` and the Python
+  `thermo` use. Its comment calls it exact. Changing it would move every
+  golden answer's last bits, so it's for the owner; the activity models use
+  `thermo`'s value, as the γ–φ liquid will.
+- **`thermo`'s UNIQUAC divides by each xᵢ,** so it can't take a component
+  absent; its NRTL, UNIQUAC and Wilson have no second T-derivative. mpmath
+  stands alone there.
+- **Against DWSIM's γ** (step 0's spike, for step 12): its UNIFAC and
+  Dortmund's match these to its Poynting factor; its UNIFAC-LLE is 4% off
+  for methanol, and its Wilson 9e-4 in ln γ.
+
+**Tests:** [activity/models_test.v](../activity/models_test.v),
+[numeric/jet_test.v](../numeric/jet_test.v) and
+[expr/jet_test.v](../expr/jet_test.v).
+
+### 3. UNIFAC — done
 - The original, LLE and Dortmund forms on step 1's tables, each compound's
   groups from its file.
 - Against `thermo`, and Gibbs–Duhem (criterion 1).
+
+**What was built:** [activity/unifac.v](../activity/unifac.v): `Table` and
+`Unifac` in the three variants, ψ and each pure component's group terms
+kept until T moves, the pure terms by the mixture's own arithmetic so that a
+pure component's γ is exactly 1; and `Database.unifac(variant, cas)`.
+
+**Measured:** 28 states of each variant against `thermo` on ChemSep's own
+tables, so that the equations are tested apart from the tables'
+differences, within step 2's figures: ln γ to 3.1e-15, its T-derivatives to
+2.6e-14 and 1.4e-14. The generator reads the tables as shipped; none of its
+systems uses a group the reader repairs or corrects.
+
+**Planted mistakes for steps 1 to 3:** 34, in scratch copies, one at a
+time, all caught:
+- the jet: the product's and quotient's derivatives, the chain rule's
+  second term, ln's and a power's second derivatives;
+- the jet pass: a reading's offset, a negative whole power, log₁₀;
+- the driver: the composition derivatives unprojected, Cpᴱ's and Sᴱ's
+  formulas, the parameters kept when T moves, the second T-derivative;
+- the models: NRTL's G and an index, UNIQUAC's combinatorial and residual
+  terms, Wilson's index, Dortmund's ¾, ψ's sign, a group term's sign, the
+  pure terms left out (planted first as `0.0 * p`, which a jet can't
+  multiply, so it was planted again with the constant lifted);
+- the builders: a pair's orientation, DECHEMA's R, UNIQUAC's sign, Wilson's
+  volume ratio, a leading point's 0;
+- the table reader: the spelling rule, the b and c rows' rule, the a rows'
+  rule, a repeated row, the decimal comma;
+- the comparison: ChemSep's numbering, the rounding rule's unit.
+
+**Checks:** both full checks pass, tcc and gcc with its `-prod` build: 109
+test files, five of them new.
+
+Four tests were written before the run, where a mistake would otherwise
+have slipped through: Sᴱ against −∂Gᴱ/∂T, a `Work` at a second T, the
+table rules on small files (today's files reach none of the duplicate
+rows), and UNIFAC's refusals.
 
 ### 4. The seam
 - D3: `thermo`'s phase model, the Helmholtz `Model` behind it, `Fluid` on

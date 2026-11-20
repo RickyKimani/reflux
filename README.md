@@ -129,6 +129,8 @@ numeric/
   least_squares.v   nonlinear least squares: Levenberg–Marquardt on QR, with
                     (JᵀJ)⁻¹ for the intervals (M8)
   student_t.v       Student's t, for the intervals (M8)
+  jet.v             a value with its first two derivatives, whose arithmetic
+                    differentiates as it goes: forward mode (M6)
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
   ode.v             initial-value problems (M9): the interfaces, Hairer's
                     error norm and first step
@@ -147,10 +149,14 @@ components/
                     correlations in SI per mol
   params.v, kij.v   ChemSep's kᵢⱼ (PR, SRK) and Mathias–Copeman (PR) files,
                     and kᵢⱼ matrices with a report of where each value came from
+  activity.v        ChemSep's NRTL, UNIQUAC, Wilson and Henry's-law banks and
+                    UNIFAC tables, each self-contradiction and published
+                    correction repaired and reported; the models built (M6)
   formula.v         a compound's formula, where two of its structure, SMILES
                     and molar mass agree (M9)
   formation.v       ΔG°f against ΔH°f and S°, with the elements' entropies
-  quality/          the sweep behind docs/data-quality.md
+  quality/          the sweep behind docs/data-quality.md, and each UNIFAC
+                    table against thermo's copy of the published one (M6)
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
   model.v           the Model contract F(T, V, n), with F at fixed T and n for
@@ -189,11 +195,21 @@ expr/               the expression language (M9): every equation a user gives
   render.v          plain text that reads back, Unicode and LaTeX
   expr.v            nodes, contexts, built-in constants, definitions
   eval.v, lint.v    the tree's value; numbers that look like a constant
+  jet.v             the tree's value with two derivatives along one input, for
+                    a parameter's τ(T) (M6)
   value.v           a value, or why there's none, never ±∞ (M8)
   equation.v        equations, =, <= and >=, for specs and constraints (M8)
   tape.v            expressions compiled to a tape: folded, merged, fused;
                     evaluation into the caller's buffer, and the gradient by
                     one reverse sweep
+activity/           liquid activity models (M6): Wilson, NRTL, UNIQUAC and
+                    UNIFAC (original, LLE, Dortmund), each formula written
+                    once over f64 and jets, so that its T- and composition
+                    derivatives are exact
+  model.v           the interface, Work (kept until T moves), eval, the
+                    excess properties, parameters as expressions in T
+  nrtl.v, uniquac.v, wilson.v, pairs.v  the binary models
+  unifac.v          UNIFAC's tables and model
 kinetics/           reactions (M9)
   species.v         a compound as reactions know it, found by name, CAS
                     number or formula
@@ -348,6 +364,8 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (data to fit, and SciPy's fits of them), gen_m8_dwsim.py
                     (DWSIM 9's spec, optimiser and PFR on M8's problems),
                     gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM)
+                    gen_m6_activity.py (the activity models by thermo and
+                    mpmath on ChemSep's banks, and thermo's UNIFAC tables)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

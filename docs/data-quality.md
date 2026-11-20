@@ -897,3 +897,103 @@ Counted here; listed compound by compound in
 | Correlations with no coefficients | 1 |
 | Incomplete Mathias–Copeman sets | 5 |
 | Compounds without Tc, Pc or ω | 1 |
+
+## Activity-model parameters (M6)
+
+ChemSep's binary banks and Henry's-law constants, read as vendored:
+
+| File | Entries | Pairs | Listed more than once | Unreadable lines | Units |
+|---|---|---|---|---|---|
+| `nrtl.ipd` | 352 | 329 | 23 | 0 | cal/mol |
+| `uniquac.ipd` | 291 | 273 | 17 | 0 | cal/mol |
+| `wilson.ipd` | 366 | 362 | 4 | 0 | cal/mol |
+| `henrys_law.ipd` | 41 | 41 gases, in water | 0 | 0 | Pa |
+
+Where a pair is listed more than once, reflux uses the first listing, as
+for kᵢⱼ. The banks' A are in cal/mol over DECHEMA's R, 1.98721 cal/(mol·K)
+(M6 step 0).
+
+### UNIFAC tables
+
+Each table is ChemSep's base file with its extension. Where a file
+contradicts itself, or the published table shows a typo, the reader
+repairs it and says so (M6 step 1):
+
+- **UNIFAC** (`unifacvl.gct`, `unifacvl_ext.gct`, `unifacrq.gct`, `unifacrq_ext.gct`): 133 subgroups, 61 main groups, 1364 parameters.
+  - Repaired, `unifacvl_ext.gct` line 142: main groups 20 and 61 → main groups 20 and 62, its names, COOH and C-OO-C, are those numbers in the list.
+  - Repaired, `unifacrq_ext.gct` line 21: 57,028 → 57.028, a molar mass with a decimal comma.
+  - Repaired, `unifacrq_ext.gct` line 10: main group 57 → main group 64, its main group is named AC-CN, which is 64 in the list; 57 is AC-Br.
+  - Repaired, `unifacrq_ext.gct` line 11: main group 64 → main group 57, its main group is named AC-Br, which is 57 in the list; 64 is AC-CN.
+  - Repaired, `unifacrq.gct`: R 1.006 → R 1.0106, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacrq.gct`: Q 2.481 → Q 2.484, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 133.4 → a 202.1, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 721.9 → a 524.9, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 822.0 → a 882.0, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 4228.0 → a 4288.0, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 727.0 → a 727.8, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 586.6 → a 586.8, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 54.47 → a 54.57, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a -27.545 → a -27.45, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `unifacvl.gct`: a 167.1 → a 167.3, the published table: DDBST's published UNIFAC parameters, https://www.ddbst.com/published-parameters-unifac.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+- **UNIFAC-LLE** (`unifacll.gct`, `unifacll_ext.gct`, `llefacrq.gct`, `llefacrq_ext.gct`): 59 subgroups, 33 main groups, 516 parameters.
+  - Repaired, `llefacrq.gct` line 23: main group 30 → main group 12, its main group is named Furfural, which is 12 in the list; 30 is DMFA.
+  - Repaired, `llefacrq.gct`: Q 2.481 → Q 2.484, the published table: R and Q are a group's own, the same in the LLE table: DDBST's published UNIFAC parameters and thermo 0.6.1's copy of Magnussen et al.'s table.
+  - Repaired, `llefacrq.gct`: R 1.006 → R 1.0106, the published table: R and Q are a group's own, the same in the LLE table: DDBST's published UNIFAC parameters and thermo 0.6.1's copy of Magnussen et al.'s table.
+- **UNIFAC-Dortmund** (`modfac_a.gct`, `modfac_a_ext.gct`, `modfac_b.gct`, `modfac_b_ext.gct`, `modfac_c.gct`, `modfac_c_ext.gct`, `modfacrq.gct`, `modfacrq_ext.gct`): 127 subgroups, 64 main groups, 1528 parameters.
+  - Repaired, `modfac_a_ext.gct` line 6: no main group 230 → main group 230, cy-CHNH2, a main group the list doesn't number, named by its parameters' rows.
+  - Repaired, `modfac_a_ext.gct` line 13: main groups 230 and 78 → main groups 230 and 42, its names, cy-CHNH2 and cy-CH2, are those numbers in the list.
+  - Repaired, `modfac_b_ext.gct` line 11: main groups 230 and 78 → main groups 230 and 42, its names, cy-CHNH2 and cy-CH2, are those numbers in the list.
+  - Repaired, `modfac_c_ext.gct` line 11: main groups 230 and 78 → main groups 230 and 42, its names, cy-CHNH2 and cy-CH2, are those numbers in the list.
+  - Repaired, `modfacrq.gct`: Q 0.4582 → Q 0.0, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: R 1.7989 → R 1.3662, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: Q 0.64 → Q 0.6797, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: R 2.411 → R 1.843, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: Q 2.409 → Q 1.6997, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: R 2.7986 → R 2.7867, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: Q 2.7744 → Q 2.7723, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: R 4.62 → R 3.9628, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: Q 1.1707 → Q 0.6214, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: R 2.4878 → R 2.1094, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: Q 2.474 → Q 2.5106, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: R 3.3854 → R 3.371, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - Repaired, `modfacrq.gct`: Q 2.009 → Q 2.0001, the published table: DDBST's published modified UNIFAC (Dortmund) parameters, https://www.ddbst.com/PublishedParametersUNIFACDO.html, read on 2026-11-20, which thermo 0.6.1's copy agrees with.
+  - `modfac_a_ext.gct` line 2: neither a main group nor a pair.
+  - `modfac_c.gct` line 136: a name that isn't its number's in the list; the numbers stand, as the a rows pair them.
+  - `modfac_c.gct` line 233: a name that isn't its number's in the list; the numbers stand, as the a rows pair them.
+
+Compounds whose groups aren't all in their table, so that the table
+can't take them:
+
+- UNIFAC: none.
+- UNIFAC-LLE: Dimethyl sulfoxide (67-68-5), subgroups 68.
+- UNIFAC-Dortmund: none.
+
+### Against thermo's copies
+
+thermo 0.6.1's tables are an independent copy of the published ones:
+the original (UFSG, UFIP), the LLE table and Dortmund's 2016, with its
+2006 parameters beside them. A value is *rounded* when the two are within
+a unit of the last digit of whichever is printed to fewer: 8484 for
+8483.5, 287.7 for 287.77.
+
+| Table | Subgroups same | Rounded | Different | ChemSep's own | Parameters same | Rounded | As the 2006 table | Different | ChemSep's own |
+|---|---|---|---|---|---|---|---|---|---|
+| UNIFAC | 103 | 7 | 0 | 23 | 1049 | 107 | 0 | 0 | 208 |
+| UNIFAC-LLE | 56 | 0 | 1 | 2 | 512 | 0 | 0 | 0 | 4 |
+| UNIFAC-Dortmund | 124 | 0 | 0 | 3 | 1042 | 425 | 3 | 12 | 46 |
+
+Each difference, and what settles it:
+
+- UNIFAC-LLE, subgroup 30 FCH2O: R 0.9183, Q 1.1; thermo 9183.0, 1.1: thermo's typo, 9183 for the original table's 0.9183; ChemSep's stands.
+- UNIFAC-Dortmund, 3 ACH with 27 ACNO2: [936.3391, -4.4141, 0.012232]; thermo [746.9, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 3 ACH with 29 CH3SH: [77.083, -0.3094, 0.0]; thermo [59.23, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 4 ACCH2 with 12 HCOO: [136.98, 0.0, 0.0]; thermo [78.94, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 4 ACCH2 with 27 ACNO2: [391.044, 0.1964, 2.2499e-05]; thermo [-2345.0, 12.29, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 7 H2O with 11 CCOO: [-433.288, 3.0862, -0.002012]; thermo [-675.5, 3.609, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 7 H2O with 13 CH2O: [177.665, -3.7291, 0.010763]; thermo [-197.5, 0.1766, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 11 CCOO with 7 H2O: [311.974, -1.3412, 0.001074]; thermo [322.3, -1.305, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 12 HCOO with 4 ACCH2: [377.26, 0.0, 0.0]; thermo [732.0, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 13 CH2O with 7 H2O: [433.207, -0.6053, -0.000914]; thermo [140.7, 0.0568, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 27 ACNO2 with 3 ACH: [1866.23, -9.2814, 0.008299]; thermo [36.45, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 27 ACNO2 with 4 ACCH2: [1931.39, -5.1507, 4.5164e-07]; thermo [1567.0, -2.678, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+- UNIFAC-Dortmund, 29 CH3SH with 3 ACH: [-2.1662, 0.1196, 0.0]; thermo [-41.77, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.

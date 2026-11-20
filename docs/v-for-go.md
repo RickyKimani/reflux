@@ -695,6 +695,24 @@ Forget to name the type in an array literal, as in `for kind in [.pr, .srk]`,
 and the error is misleading: `cannot use int as thermo.CubicKind`. Nothing
 tells V which enum `.pr` belongs to, so the elements fall back to ints.
 
+**A flag enum** is a set of bits, as Go's `const ( T Want = 1 << iota; N )`:
+
+```v
+@[flag]
+pub enum Want { t n }
+
+eval(m, t, x, .t | .n, mut w)!   // both
+if want.has(.t) { … }
+```
+
+It has no member for the empty set, and its empty value is awkward to
+reach from outside its module. `Want.zero()` works in the enum's own module,
+but `activity.Want.zero()` from another was `unknown function` in 0.5.2.
+And `Want(0)` is refused: "casting numbers to enums, should be done inside
+`unsafe{}` blocks" (a probe, V 0.5.2). So the module names it once, `pub
+const ln_gamma_only = unsafe { Want(0) }` in
+[activity/model.v](../activity/model.v), and callers use the name.
+
 ---
 
 ## 7. Structs
@@ -1311,6 +1329,43 @@ fx := read_fixture[ThermoFixture]('m1_thermo.json')!
 `@FILE` is the path of the source file, filled in at compile time, so the
 test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
 module is gone; it's `json2` now.)
+
+**One formula on two number types.** A generic function works on any type
+whose operators its body uses, and V's operators can be defined for a
+struct. So M6's activity models are written once, generic over `f64` and
+`numeric.Jet` (a value with its first two derivatives, whose `+ - * /`
+differentiate as they go), and `$if N is f64 { } $else { }` picks what
+differs, decided at compile time. From [activity/num.v](../activity/num.v):
+
+```v
+fn lift[N](c f64) N {
+	$if N is f64 {
+		return c
+	} $else {
+		return numeric.constant(c)   // a jet that doesn't move
+	}
+}
+
+fn wilson[N](nc int, p []N, x []N, mut s []N, mut out []N) {
+	…
+	mut v := lift[N](1.0) - nlog[N](s[i])
+	…
+}
+
+wilson[f64](nc, values, x, mut s, mut ln_gamma)      // the value
+wilson[numeric.Jet](nc, jets, xj, mut sj, mut out)   // its derivatives
+```
+
+A probe ran one such formula both ways under tcc and gcc `-prod`: the jet's
+value was the f64 one's bits, and its derivatives agreed with central
+differences. A generic function's `mut` parameter is written `mut out []N`,
+before the name, as anywhere else; `out mut []N` doesn't parse. A bare
+`0.0 * x[i]` builds for `f64` and not for the struct: V has no
+`f64 * Jet`, and the C it writes is refused ("invalid operand types for
+binary operation", from a planted mistake in M6 step 3). So every constant
+in such a formula is lifted first. Go's
+generics can't do this: Go has no operator overloading, so a formula over a
+type parameter can't use `*` on a struct.
 
 A key the struct doesn't have is ignored, as Go's `encoding/json` ignores
 it, nested objects included, so a test reads only the fields it uses from

@@ -2296,6 +2296,121 @@ measured P and y, each over its error. J is by central differences,
 kᵢⱼ ± 10⁻⁶, good to about 10⁻⁷: kᵢⱼ is of order 0.01 and a bubble point's
 rounding about 10⁻¹².
 
+## Activity models
+
+M6's liquid models ([activity](../activity/model.v), D2 in
+[m6-plan.md](m6-plan.md)) give each component's activity coefficient γᵢ at
+a temperature and mole fractions, and nothing of phases: the γ–φ liquid is
+built on them. A model holds nothing about an evaluation, so threads share
+one, each with its own `Work`, which keeps what depends on T alone (each
+τ, and UNIFAC's ψ and pure-group terms) until T moves, as M8's D11 keeps a
+rate's K.
+
+**The models,** each with τᵢᵢ = 0 (NRTL) or 1 (UNIQUAC, Wilson's Λᵢᵢ):
+
+- **Wilson** (1964): ln γᵢ = 1 − ln Sᵢ − Σₖ xₖΛₖᵢ/Sₖ, with Sᵢ = Σⱼ xⱼΛᵢⱼ.
+- **NRTL** (Renon and Prausnitz, 1968): ln γᵢ = Aᵢ/Bᵢ + Σⱼ (xⱼGᵢⱼ/Bⱼ)(τᵢⱼ −
+  Aⱼ/Bⱼ), with Aⱼ = Σₖ xₖτₖⱼGₖⱼ, Bⱼ = Σₖ xₖGₖⱼ and Gᵢⱼ = exp(−αᵢⱼτᵢⱼ),
+  αᵢⱼ = αⱼᵢ.
+- **UNIQUAC** (Abrams and Prausnitz, 1975), in DECHEMA's form, q in both
+  terms and a coordination number of 10:
+
+      ln γᵢ = ln(rᵢ/R̄) + 5qᵢ ln((qᵢ/Q̄)/(rᵢ/R̄)) + lᵢ − (rᵢ/R̄)Σⱼ xⱼlⱼ
+              + qᵢ(1 − ln Sᵢ − Σⱼ θⱼτᵢⱼ/Sⱼ),
+
+  R̄ = Σ xⱼrⱼ, Q̄ = Σ xⱼqⱼ, θⱼ = xⱼqⱼ/Q̄, Sᵢ = Σⱼ θⱼτⱼᵢ and lᵢ = 5(rᵢ − qᵢ) −
+  (rᵢ − 1). ln(rᵢ/R̄) is ln(Φᵢ/xᵢ), written so that an absent component's
+  xᵢ = 0 divides nothing.
+- **UNIFAC**, each component i a set of subgroups k counted νₖ⁽ⁱ⁾, with rᵢ =
+  Σₖ νₖ⁽ⁱ⁾Rₖ and qᵢ = Σₖ νₖ⁽ⁱ⁾Qₖ:
+
+      ln γᵢ = ln γᵢᶜ + Σₖ νₖ⁽ⁱ⁾(ln Γₖ − ln Γₖ⁽ⁱ⁾),
+      ln Γₖ = Qₖ(1 − ln Σₘ Θₘψₘₖ − Σₘ Θₘψₖₘ/Σₙ Θₙψₙₘ),
+      Θₘ = QₘXₘ/Σₙ QₙXₙ,   Xₘ = Σᵢ νₘ⁽ⁱ⁾xᵢ / Σᵢ Σₙ νₙ⁽ⁱ⁾xᵢ,
+      ψₘₙ = exp(−(aₘₙ + bₘₙT + cₘₙT²)/T),
+      ln γᵢᶜ = 1 − Vᵢ′ + ln Vᵢ′ − 5qᵢ(1 − Vᵢ/Fᵢ + ln(Vᵢ/Fᵢ)),
+      Vᵢ = rᵢ/Σⱼ xⱼrⱼ,   Fᵢ = qᵢ/Σⱼ xⱼqⱼ,
+
+  ln Γₖ⁽ⁱ⁾ being ln Γₖ in pure i. In the original and LLE forms Vᵢ′ = Vᵢ and
+  b = c = 0; in Dortmund's, Vᵢ′ = rᵢ^(3/4)/Σⱼ xⱼrⱼ^(3/4). ψ is taken between
+  main groups, 1 within one. Each ln Γₖ⁽ⁱ⁾ is computed by the mixture's own
+  arithmetic on xᵢ = 1, so that a pure component's γ is exactly 1.
+
+**The derivatives, by forward differentiation.** Each formula is written
+once, generic over f64 and `numeric.Jet`: a value with its first two
+derivatives along one direction, whose arithmetic carries them,
+
+    (ab)′ = a′b + ab′,   (ab)″ = a″b + 2a′b′ + ab″,
+    (a/b)′ = (a′ − qb′)/b,   (a/b)″ = (a″ − 2q′b′ − qb″)/b,   q = a/b,
+    f(a)′ = f′(a)a′,   f(a)″ = f″(a)a′² + f′(a)a″.
+
+The f64 instance gives ln γ; the jet's value is the same bits.
+- **In T,** the parameters as jets in T, each τ's own derivatives from
+  `expr`'s jet pass over its tree (below), and x constant: ∂ln γᵢ/∂T and
+  ∂²ln γᵢ/∂T² at constant composition.
+- **In composition,** one pass for each xⱼ seeded, the parameters constant:
+  ∂ᵢⱼ, the formula's derivative with the x's taken as independent. Since
+  xₖ = nₖ/n, ∂xₖ/∂nⱼ = (δₖⱼ − xₖ)/n, so whatever the formula does off the
+  simplex,
+
+      n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ − Σₖ xₖ∂ᵢₖ.
+
+  Gibbs–Duhem makes Σᵢ xᵢ·n∂ln γᵢ/∂nⱼ = 0, and n∂ln γᵢ/∂nⱼ is symmetric, n
+  times the Hessian of nGᴱ/RT; the tests check both from scratch.
+
+**The excess properties,** per mole, with R as `thermo.r_gas`:
+
+    Gᴱ = RT Σ xᵢ ln γᵢ,   Hᴱ = −RT² Σ xᵢ ∂ln γᵢ/∂T,   Sᴱ = (Hᴱ − Gᴱ)/T,
+    Cpᴱ = ∂Hᴱ/∂T = −RT(2Σ xᵢ ∂ln γᵢ/∂T + TΣ xᵢ ∂²ln γᵢ/∂T²).
+
+`thermo.r_gas` is 8.314462618, N_A·k_B rounded to the CODATA value: 1.84e-11
+below the exact product 8.31446261815324 that `expr`'s `R` and the Python
+`thermo` use. An energy differs by that fraction; ln γ doesn't involve R.
+
+**Parameters** are expressions in T, dimensionless, parsed by `expr` (D7):
+any paper's form goes in as printed. Their T-derivatives come from the jet
+pass: `Expr.jet` evaluates the tree with each node on jets, its value
+`eval`'s bits (a whole power by repeated multiplication, as `raise`), so a
+τ's τ′ and τ″ are exact. ChemSep's banks give A in cal/mol, fitted by DECHEMA
+with R = 1.98721 cal/(mol·K), so each is written with that R, the calorie
+cancelling (M6 step 0):
+
+| Model | ChemSep's bank, written as | |
+|---|---|---|
+| NRTL | τᵢⱼ = `Aᵢⱼ K / (1.98721*T)`, α as printed | 352 lines, 329 pairs |
+| UNIQUAC | τᵢⱼ = `exp(Aᵢⱼ K / (-1.98721*T))` | 291 lines, 273 pairs |
+| Wilson | Λᵢⱼ = `Vⱼ / Vᵢ * exp(Aᵢⱼ K / (-1.98721*T))`, V each compound's Wilson volume | 366 lines, 362 pairs |
+
+A line names its pair either way round; A₁₂ is its first compound's with the
+second, turned to the model's order. A pair listed twice takes its first
+listing. A pair the bank doesn't list is refused by name, unless the caller
+lets it be ideal (τ = 0, or Λ = τ = 1).
+
+**UNIFAC's tables** are ChemSep's base files with their extensions
+([components/activity.v](../components/activity.v)): main groups and their
+parameters' rows, then subgroups. ChemSep numbers C=C as subgroup 9, as the
+1987 *Properties of Gases and Liquids* did, so its 10 to 70 are the
+published 9 to 69. Where a file contradicts itself the reader repairs it,
+by the file's own evidence, and reports it:
+- **A subgroup** whose main group's name is another main group's in the
+  list, and neither name begins the other (so not a spelling, as Morph for
+  Morpholine), takes that main group: furfural's LLE subgroup, which
+  pointed to DMFA, and AC-CN's and AC-Br's, swapped.
+- **A parameter row** whose name isn't its number's: an a row takes its
+  names' pair when its numbers' pair is listed by another row too, or a
+  number isn't in the list; a b or c row takes whichever pair the a rows
+  have. Dortmund's c rows copy a name from the row above, and the numbers
+  stand there.
+- **A number** the list hasn't, named nothing it names, is a new main
+  group, named by its rows.
+
+And where the published table (DDBST's public pages) shows a typo,
+`unifac_corrections` sets the published value, applied only where the file
+still holds the shipped one: the original table's 9 parameters and 2
+subgroups, the LLE table's 2 subgroups, and Dortmund's quaternary C, whose Q
+is 0, with six ionic-liquid subgroups. [data-quality.md](data-quality.md)
+lists every repair, and each table against `thermo`'s copy.
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from

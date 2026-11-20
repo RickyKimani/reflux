@@ -29,8 +29,8 @@ Keep this section current: update it whenever a step is committed.
   branch `m6-activity`. Its plan, `docs/m6-plan.md`, was approved on
   2026-11-18: exit criteria 1–13, decisions D1–D20 and steps 0–15, ending in
   v0.5.0.
-  - **Step 0 is done** (not yet committed), and amends D7 and criterion 8,
-    both approved on 2026-11-18:
+  - **Step 0 is done** (committed at ea977c2), and amends D7 and criterion
+    8, both approved on 2026-11-18:
     - The seam (`spike/seam`): `flash`'s PT flash behind a phase-model
       interface gives the same bits at all 10,000 sweep points, and the same
       time to the laptop's noise (median ratio 1.01).
@@ -42,6 +42,25 @@ Keep this section current: update it whenever a step is committed.
     - ThermoML (`spike/thermoml`) has a public search API and covers 2003
       to 2019, with nothing for methanol–water alone. So criterion 8 takes
       papers' tables where it has nothing.
+  - **Steps 1 to 3 are done,** built together at the owner's word (not yet
+    committed), and step 1 amends D7, approved on 2026-11-20. Step 4, the
+    seam, is next.
+    - Step 1: twenty ChemSep files vendored (the NRTL, UNIQUAC, Wilson and
+      Henry's-law banks; each UNIFAC table with its extension), read in
+      `components/activity.v`. The UNIFAC files contradict themselves in
+      eight places (furfural's LLE subgroup on DMFA's main group, AC-CN's and
+      AC-Br's swapped, a row's 61 for 62, Dortmund's unnumbered 230 and its
+      `78 cy-CH2`), repaired by their own evidence; and DDBST's published
+      tables settle 26 typos (D7 as amended). Each table against thermo's
+      copy is in data-quality.md, every difference settled.
+    - Step 2: `numeric.Jet` (forward differentiation), `Expr.jet` (τ(T)'s
+      second derivative), and the `activity` module: Wilson, NRTL, UNIQUAC,
+      each formula written once over f64 and jets, so its T- and
+      composition derivatives are exact. Against mpmath at 40 digits: ln γ
+      1.9e-15, dn 4.9e-14 of its row; against thermo, its own rounding.
+    - Step 3: UNIFAC in three variants, a pure component's γ exactly 1.
+    - Found: `thermo.r_gas` is N_A·k_B rounded, 1.84e-11 short of exact
+      (for the owner); thermo's UNIQUAC divides by xᵢ.
   - The flash's seam moves from `thermo.Model` to a phase model (D3), which
     a cubic's volume roots and a γ–φ liquid both give, and every cubic
     answer from M3 to M8 keeps its bits (criterion 4).
@@ -575,6 +594,9 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     PYTHONIOENCODING=utf-8 uv run --python "C:/Users/Ricky/AppData/Roaming/uv/python/cpython-3.13.17-windows-x86_64-none/python.exe" tools/gen_m3_fixtures.py
     ```
 
+  - `tools/gen_m6_activity.py` (thermo, mpmath) writes
+    `testdata/m6_activity.json`, the activity models on ChemSep's banks and
+    tables, and `testdata/m6_unifac_tables.json`, thermo's UNIFAC tables.
   - `tools/gen_m8_sensitivities.py` writes `testdata/m8_sensitivities.json`
     (mpmath only): a PFR's derivatives for M8's criterion 6.
   - `tools/gen_m8_hock_schittkowski.py` (SymPy and mpmath) writes
@@ -708,6 +730,8 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
+`activity` (M6), liquid activity models, uses `numeric` and `expr`; `components`
+reads ChemSep's banks and UNIFAC tables into it and builds its models.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
 and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
 uses it for `reflux study` and `reflux optimize`. `fit` (M8) fits a file's
@@ -865,6 +889,19 @@ over the rest, built into a shared library for the Python package in
     what Wilke's rule needs (`WilkeAt`), in the PFR.
   - A conversion may be an expression in T, bound in the kinetics' rate
     context with the file's definitions, evaluated at the outlet's T.
+- **`activity`** is M6's (D2): a liquid's activity coefficients at T and
+  mole fractions, knowing nothing of phases.
+  - `Model` is immutable and shared; each thread's `Work` keeps what
+    depends on T alone (τ, UNIFAC's ψ and pure-group terms) until T moves.
+  - Each formula is written once, generic over f64 and `numeric.Jet`, and
+    `eval` takes its T-derivatives from the parameters as jets and its
+    composition derivatives one xⱼ at a time, n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ − Σₖ xₖ∂ᵢₖ.
+  - A parameter is an expression in T (`Param`), its τ″ from `Expr.jet`.
+    ChemSep's banks are written with DECHEMA's R, `A K / (1.98721*T)`.
+  - `components` reads the banks and UNIFAC tables (`load_pair_bank`,
+    `load_unifac`), repairing each self-contradiction and correcting the
+    published typos, all reported; `Database.nrtl`, `uniquac`, `wilson` and
+    `unifac` build the models.
 - **Units are SI inside** (K, Pa, m³, mol, J), with conversion only at the
   edges.
 - **No panics reach a caller.** Every failure is a typed error
