@@ -63,7 +63,7 @@ pub mut:
 	// nGᴱ/RT in the mole numbers.
 	dn []f64
 mut:
-	t  f64 // the T the parameters are at; 0 before any
+	t  f64 // the T the parameters are at; 0 before any, and after a refusal
 	pv []f64
 	pj []numeric.Jet // the parameters with their T-derivatives
 	pc []numeric.Jet // their values as jets that don't move
@@ -133,6 +133,9 @@ pub fn eval(m Model, t f64, x []f64, want Want, mut w Work) ! {
 		}
 	}
 	if w.t != t {
+		// Not kept until every parameter is in: params writes them as it
+		// goes, so a refusal part of the way through leaves none of a T's.
+		w.t = 0.0
 		m.params(t, mut w)!
 		for k, v in w.pv {
 			w.pc[k] = numeric.constant(v)

@@ -97,14 +97,20 @@ The parameter files have defects of their own:
   it. reflux skips that line and reports it.
 - **`*` in place of numbers.** reflux reads it as a missing value.
 - **The activity banks (M6 step 1)** state their units on a `Units=` line,
-  cal/mol, and their formulas nowhere. Their A's are over DECHEMA's own R,
-  1.98721 cal/(mol·K): DWSIM's NRTL on the same bank is τ = A/(1.98721·T)
-  to 4e-10 in ln γ (docs/spike-dwsim-activity.md).
+  cal/mol, and their formulas and R nowhere. reflux puts their A's over
+  DECHEMA's own R, 1.98721 cal/(mol·K). For NRTL that's confirmed: DWSIM's
+  on the same bank is τ = A/(1.98721·T) to 4e-10 in ln γ
+  (docs/spike-dwsim-activity.md). For UNIQUAC and Wilson it's inferred, as
+  is Wilson's form, until M6's step 12.
 - **UNIFAC's numbering** follows the 1987 *Properties of Gases and Liquids*:
   ChemSep's subgroup 9 is C=C, so the subgroups others number 9 to 69 are
   its 10 to 70, as `unifacrq.gct`'s first line says.
 - **`modfac_a_ext.gct`** names its one new main group, `cy-CHNH2`, with no
-  number. reflux skips that line and reports it.
+  number. reflux reports that line, and numbers the group 230, as its
+  parameters' rows do.
+- **The UNIFAC tables contradict themselves in places, and differ from the
+  published ones in others.** reflux's reader repairs and corrects these
+  and reports each (docs/data-quality.md). The files here are untouched.
 
 ## Compared with the copies in DWSIM's repository
 

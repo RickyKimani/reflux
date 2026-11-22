@@ -10,13 +10,16 @@ import os
 // Read straight from data/vendor/chemsep/, as the kᵢⱼ banks are, every line
 // that can't be read kept as a defect.
 //
-// The banks give A in cal/mol, fitted by DECHEMA with R = 1.98721
-// cal/(mol·K), and state no formula; DECHEMA's are NRTL's τ = A/RT,
-// UNIQUAC's τ = exp(−A/RT) and Wilson's Λ = (Vⱼ/Vᵢ)·exp(−A/RT). So a
-// bank's parameter is written as the expression with that R, the calorie
-// cancelling (D7 as amended in step 0): `-189.0469 K / (1.98721*T)`.
+// The banks give A in cal/mol and state no formula and no R. DECHEMA's
+// forms are NRTL's τ = A/RT, UNIQUAC's τ = exp(−A/RT) and Wilson's
+// Λ = (Vⱼ/Vᵢ)·exp(−A/RT), with R = 1.98721 cal/(mol·K). That's confirmed
+// for NRTL alone (step 0: DWSIM's, on the same bank, to 4e-10). For UNIQUAC
+// and Wilson, whose bank is Andrew Mason's compilation, that R is inferred,
+// and so is Wilson's form, until step 12. A bank's parameter is written as
+// the expression with that R, the calorie cancelling (D7 as amended):
+// `-189.0469 K / (1.98721*T)`.
 
-// dechema_r is the R DECHEMA fitted with, in cal/(mol·K), as text.
+// dechema_r is DECHEMA's R, in cal/(mol·K), as text.
 pub const dechema_r = '1.98721'
 
 // PairParams is one line of a binary bank: its two compounds, its numbers
@@ -727,8 +730,9 @@ pub fn parse_subgroups(text string, file string) ([]SubgroupLine, []TableDefect,
 
 // PairSource says where a binary model's pair came from.
 pub enum PairSource {
-	bank  // its bank's first listing of the pair
-	ideal // none listed: τ = 0 (NRTL) or the ideal mixture's parameters, by the caller's leave
+	bank        // its bank's first listing of the pair
+	ideal       // none listed, by the caller's leave: NRTL's τ = 0 or Wilson's Λ = 1, an ideal mixture of the two
+	no_residual // none listed, by the caller's leave: UNIQUAC's τ = 1, no residual interaction. r and q still count, so it isn't ideal
 }
 
 // PairUse records how a binary model got one pair, i before j.
@@ -745,8 +749,10 @@ pub:
 @[params]
 pub struct ActivityOptions {
 pub:
-	// ideal lets a pair the bank doesn't list be ideal, where by default
-	// it's refused (D7).
+	// ideal lets a pair the bank doesn't list have no energy of
+	// interaction, where by default it's refused (D7). That's an ideal pair
+	// in NRTL and Wilson (PairSource.ideal). UNIQUAC's keeps its
+	// combinatorial term (PairSource.no_residual).
 	ideal bool
 }
 
@@ -767,10 +773,10 @@ fn (db Database) records(cas []string) ![]Record {
 	return out
 }
 
-// pair_texts gives each listed pair's expressions, i–j orientation first,
+// pair_uses gives each listed pair's expressions, i–j orientation first,
 // by the bank's formula, and the uses; an unlisted pair is refused unless
-// opts.ideal, when ideal gives its texts.
-fn pair_uses(bank PairBank, cas []string, names []string, opts ActivityOptions, texts fn (int, int, []string) []string, ideal []string) ![]PairUse {
+// opts.ideal, when its source is unlisted and its texts none_listed.
+fn pair_uses(bank PairBank, cas []string, names []string, opts ActivityOptions, texts fn (int, int, []string) []string, unlisted PairSource, none_listed []string) ![]PairUse {
 	mut out := []PairUse{}
 	mut missing := []string{}
 	for i in 0 .. cas.len {
@@ -783,8 +789,8 @@ fn pair_uses(bank PairBank, cas []string, names []string, opts ActivityOptions, 
 				out << PairUse{
 					i:      i
 					j:      j
-					source: .ideal
-					texts:  ideal
+					source: unlisted
+					texts:  none_listed
 				}
 				continue
 			}
@@ -818,7 +824,7 @@ pub fn (db Database) nrtl(cas []string, opts ActivityOptions) !BinaryModel[activ
 	bank := load_pair_bank(db.vendor, .nrtl)!
 	uses := pair_uses(bank, cas, names, opts, fn (i int, j int, t []string) []string {
 		return ['${t[0]} K / (${dechema_r}*T)', '${t[1]} K / (${dechema_r}*T)', t[2]]
-	}, ['0', '0', '0.3'])!
+	}, .ideal, ['0', '0', '0.3'])!
 	mut pairs := []activity.NrtlPair{}
 	for u in uses {
 		pairs << activity.NrtlPair{
@@ -836,7 +842,8 @@ pub fn (db Database) nrtl(cas []string, opts ActivityOptions) !BinaryModel[activ
 }
 
 // uniquac is UNIQUAC for compounds given by CAS number, on ChemSep's bank,
-// τᵢⱼ = exp(−Aᵢⱼ/(1.98721·T)), with each compound's r and q.
+// τᵢⱼ = exp(−Aᵢⱼ/(1.98721·T)), with each compound's r and q. That the
+// bank's R is DECHEMA's is inferred, until step 12.
 pub fn (db Database) uniquac(cas []string, opts ActivityOptions) !BinaryModel[activity.Uniquac] {
 	recs := db.records(cas)!
 	names := recs.map(it.name)
@@ -849,7 +856,7 @@ pub fn (db Database) uniquac(cas []string, opts ActivityOptions) !BinaryModel[ac
 	bank := load_pair_bank(db.vendor, .uniquac)!
 	uses := pair_uses(bank, cas, names, opts, fn (i int, j int, t []string) []string {
 		return ['exp(${t[0]} K / (-${dechema_r}*T))', 'exp(${t[1]} K / (-${dechema_r}*T))']
-	}, ['1', '1'])!
+	}, .no_residual, ['1', '1'])!
 	mut pairs := []activity.UniquacPair{}
 	for u in uses {
 		pairs << activity.UniquacPair{
@@ -867,7 +874,7 @@ pub fn (db Database) uniquac(cas []string, opts ActivityOptions) !BinaryModel[ac
 
 // wilson is Wilson's equation for compounds given by CAS number, on
 // ChemSep's bank, Λᵢⱼ = (Vⱼ/Vᵢ)·exp(−Aᵢⱼ/(1.98721·T)), V each compound's
-// Wilson volume.
+// Wilson volume. That form and R are inferred for this bank, until step 12.
 pub fn (db Database) wilson(cas []string, opts ActivityOptions) !BinaryModel[activity.Wilson] {
 	recs := db.records(cas)!
 	names := recs.map(it.name)
@@ -880,7 +887,7 @@ pub fn (db Database) wilson(cas []string, opts ActivityOptions) !BinaryModel[act
 	uses := pair_uses(bank, cas, names, opts, fn [v] (i int, j int, t []string) []string {
 		return ['${v[j]} / ${v[i]} * exp(${t[0]} K / (-${dechema_r}*T))',
 			'${v[i]} / ${v[j]} * exp(${t[1]} K / (-${dechema_r}*T))']
-	}, ['1', '1'])!
+	}, .ideal, ['1', '1'])!
 	mut pairs := []activity.WilsonPair{}
 	for u in uses {
 		pairs << activity.WilsonPair{

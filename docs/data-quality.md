@@ -910,8 +910,9 @@ ChemSep's binary banks and Henry's-law constants, read as vendored:
 | `henrys_law.ipd` | 41 | 41 gases, in water | 0 | 0 | Pa |
 
 Where a pair is listed more than once, reflux uses the first listing, as
-for kᵢⱼ. The banks' A are in cal/mol over DECHEMA's R, 1.98721 cal/(mol·K)
-(M6 step 0).
+for kᵢⱼ. The banks' A are in cal/mol, and reflux puts each over DECHEMA's
+R, 1.98721 cal/(mol·K). That's confirmed for NRTL's bank (M6 step 0), and
+inferred for UNIQUAC's and Wilson's, as is Wilson's form, until M6 step 12.
 
 ### UNIFAC tables
 
@@ -972,9 +973,12 @@ can't take them:
 
 thermo 0.6.1's tables are an independent copy of the published ones:
 the original (UFSG, UFIP), the LLE table and Dortmund's 2016, with its
-2006 parameters beside them. A value is *rounded* when the two are within
-a unit of the last digit of whichever is printed to fewer: 8484 for
-8483.5, 287.7 for 287.77.
+2006 parameters beside them. A value is *rounded* when, by the last digit
+of the coarser of the two (a zero before the point being a digit), they
+are within half its unit and 5% of each other (8484 for 8483.5), or
+within a whole unit where the coarser has three digits or more (287.7
+for 287.77); or when a parameter's difference moves ψ's exponent by
+under 1e-6 at 373.15 K.
 
 | Table | Subgroups same | Rounded | Different | ChemSep's own | Parameters same | Rounded | As the 2006 table | Different | ChemSep's own |
 |---|---|---|---|---|---|---|---|---|---|

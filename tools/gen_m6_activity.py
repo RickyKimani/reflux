@@ -20,9 +20,11 @@ reflux's reader makes (docs/data-quality.md): none of the systems here uses
 a group they touch, so the two read the same numbers, and a test that
 didn't would fail on the difference.
 
-Each bank's parameters are A in cal/mol over DECHEMA's R, 1.98721
-cal/(mol K) (M6 step 0): NRTL's tau = A/(1.98721 T), UNIQUAC's tau =
-exp(-A/(1.98721 T)), Wilson's Lambda = (Vj/Vi) exp(-A/(1.98721 T)).
+Each bank's parameters are taken as A in cal/mol over DECHEMA's R, 1.98721
+cal/(mol K): NRTL's tau = A/(1.98721 T), UNIQUAC's tau = exp(-A/(1.98721 T)),
+Wilson's Lambda = (Vj/Vi) exp(-A/(1.98721 T)). M6's step 0 confirmed that for
+NRTL's bank alone. thermo and mpmath are given the same forms, so this
+fixture tests the models' arithmetic and not the banks' conventions.
 
     PYTHONIOENCODING=utf-8 uv run --python <python 3.13> tools/gen_m6_activity.py
 

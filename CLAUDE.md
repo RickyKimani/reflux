@@ -35,16 +35,17 @@ Keep this section current: update it whenever a step is committed.
       interface gives the same bits at all 10,000 sweep points, and the same
       time to the laptop's noise (median ratio 1.01).
     - DWSIM (`docs/spike-dwsim-activity.md`): its NRTL is τ = A/(1.98721·T)
-      on ChemSep's banks to 4e-10, so the banks keep DECHEMA's R (D7). Its
+      on ChemSep's banks to 4e-10, so the banks keep DECHEMA's R (D7),
+      confirmed for NRTL alone and inferred for UNIQUAC and Wilson. Its
       activity packages take enthalpies from Lee–Kesler by default. Its
       UNIQUAC for methanol–water is 0.28 off in ln γ (unexplained), and its
       three-phase flash misses NRTL's water–butanol split.
     - ThermoML (`spike/thermoml`) has a public search API and covers 2003
       to 2019, with nothing for methanol–water alone. So criterion 8 takes
       papers' tables where it has nothing.
-  - **Steps 1 to 3 are done,** built together at the owner's word (not yet
-    committed), and step 1 amends D7, approved on 2026-11-20. Step 4, the
-    seam, is next.
+  - **Steps 1 to 3 are done,** built together at the owner's word
+    (committed at a70e0a9), and step 1 amends D7, approved on 2026-11-20.
+    Step 4, the seam, is next.
     - Step 1: twenty ChemSep files vendored (the NRTL, UNIQUAC, Wilson and
       Henry's-law banks; each UNIFAC table with its extension), read in
       `components/activity.v`. The UNIFAC files contradict themselves in
@@ -61,6 +62,14 @@ Keep this section current: update it whenever a step is committed.
     - Step 3: UNIFAC in three variants, a pure component's γ exactly 1.
     - Found: `thermo.r_gas` is N_A·k_B rounded, 1.84e-11 short of exact
       (for the owner); thermo's UNIQUAC divides by xᵢ.
+    - Corrected after them (the plan, below step 3): a refused T left its
+      parameters in the `Work` under the last T, so the next answer there
+      was wrong; the comparison's rounding rule passed 342.4 for 300 (no
+      count moved). D7 is amended, approved on 2026-11-22:
+      UNIQUAC's unlisted pair is "no residual interaction", not ideal, and
+      the banks' R is inferred for UNIQUAC and Wilson until step 12.
+    - Open, for the owner: `activity.eval` returns NaN with no error where
+      NRTL's G overflows or the mole fractions are all zero.
   - The flash's seam moves from `thermo.Model` to a phase model (D3), which
     a cubic's volume roots and a γ–φ liquid both give, and every cubic
     answer from M3 to M8 keeps its bits (criterion 4).
@@ -72,7 +81,7 @@ Keep this section current: update it whenever a step is committed.
     `GibbsExcessLiquid` and `FlashVLN`. Experimental data come from NIST's
     ThermoML archive.
   - The roadmap gained Lee–Kesler–Plöcker in M12 on 2026-11-18,
-    uncommitted on this branch with the plan.
+    committed at ea977c2 with the plan.
 - **M8 (specifications, sensitivity studies and optimisation) is done,**
   merged in PR #7 (`44fb1c7`) and released as v0.4.0.
   Its plan, `docs/m8-plan.md`, was
@@ -892,12 +901,14 @@ over the rest, built into a shared library for the Python package in
 - **`activity`** is M6's (D2): a liquid's activity coefficients at T and
   mole fractions, knowing nothing of phases.
   - `Model` is immutable and shared; each thread's `Work` keeps what
-    depends on T alone (τ, UNIFAC's ψ and pure-group terms) until T moves.
+    depends on T alone (τ, UNIFAC's ψ and pure-group terms) until T moves,
+    and nothing once a T is refused.
   - Each formula is written once, generic over f64 and `numeric.Jet`, and
     `eval` takes its T-derivatives from the parameters as jets and its
     composition derivatives one xⱼ at a time, n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ − Σₖ xₖ∂ᵢₖ.
   - A parameter is an expression in T (`Param`), its τ″ from `Expr.jet`.
-    ChemSep's banks are written with DECHEMA's R, `A K / (1.98721*T)`.
+    ChemSep's banks are written with DECHEMA's R, `A K / (1.98721*T)`,
+    confirmed for NRTL's bank and inferred for the others (step 12).
   - `components` reads the banks and UNIFAC tables (`load_pair_bank`,
     `load_unifac`), repairing each self-contradiction and correcting the
     published typos, all reported; `Database.nrtl`, `uniquac`, `wilson` and

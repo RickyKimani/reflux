@@ -68,26 +68,42 @@ fn sig_digits(x f64) int {
 	return math.max(digits.trim_right('0').len, 1)
 }
 
-// last_unit is one unit in the last significant digit of x as its
-// shortest form prints it: 0.1 for 287.7, 1 for 727.0.
+// last_unit is one unit in x's last printed digit, as far as its double
+// tells: 0.1 for 287.7, and 1 for 727.0 or 300.0, since a zero before the
+// point is a digit. (One after it doesn't survive reading.)
 fn last_unit(x f64) f64 {
 	if x == 0.0 {
-		return 0.0
+		return 1.0
 	}
-	e := math.floor(math.log10(math.abs(x)))
-	return math.pow(10.0, e - f64(sig_digits(x)) + 1.0)
+	e := math.floor(math.log10(math.abs(x))) - f64(sig_digits(x)) + 1.0
+	return math.pow(10.0, math.min(e, 0.0))
 }
 
 // rounds_to is whether a and b are one number, printed to different
-// precision: within a unit of the last digit of whichever is printed to
-// fewer, which takes rounding (8484 for 8483.5) and cutting short (287.7 for
-// 287.77) alike.
+// precision, judged by the coarser, whose last digit's unit is the larger:
+// - rounded, within half that unit (8484 for 8483.5), and within a
+//   twentieth of it, which is as far as rounding to two digits can move a
+//   number (so 1 isn't 1.4 rounded);
+// - or cut short, or out in the last digit, within a whole unit (287.7 for
+//   287.77), where it has three digits or more, so that a unit is at most
+//   a hundredth of it.
 fn rounds_to(a f64, b f64) bool {
 	if a == b {
 		return true
 	}
-	unit := if sig_digits(a) <= sig_digits(b) { last_unit(a) } else { last_unit(b) }
-	return math.abs(a - b) <= unit * (1.0 + 1e-9)
+	ua, ub := last_unit(a), last_unit(b)
+	unit := math.max(ua, ub)
+	size := if ua > ub {
+		math.abs(a)
+	} else if ub > ua {
+		math.abs(b)
+	} else {
+		math.min(math.abs(a), math.abs(b))
+	}
+	gap := math.abs(a - b)
+	slack := 1.0 + 1e-9 // a decimal's own rounding in a double
+	return (gap <= 0.5 * unit * slack && 20.0 * gap <= size * slack)
+		|| (gap <= unit * slack && 100.0 * unit <= size * slack)
 }
 
 // all_round is whether parameters p and q are one, each of a, b and c
@@ -223,8 +239,9 @@ fn activity_lines(db components.Database) ![]string {
 	o << '| `${henry.file}` | ${henry.entries.len} | ${henry.entries.len} gases, in water | 0 | ${henry.defects.len} | Pa |'
 	o << ''
 	o << 'Where a pair is listed more than once, reflux uses the first listing, as'
-	o << "for kᵢⱼ. The banks' A are in cal/mol over DECHEMA's R, 1.98721 cal/(mol·K)"
-	o << '(M6 step 0).'
+	o << "for kᵢⱼ. The banks' A are in cal/mol, and reflux puts each over DECHEMA's"
+	o << "R, 1.98721 cal/(mol·K). That's confirmed for NRTL's bank (M6 step 0), and"
+	o << "inferred for UNIQUAC's and Wilson's, as is Wilson's form, until M6 step 12."
 	o << ''
 	th := read_thermo_tables()!
 	o << '### UNIFAC tables'
@@ -271,9 +288,12 @@ fn activity_lines(db components.Database) ![]string {
 	o << ''
 	o << "thermo 0.6.1's tables are an independent copy of the published ones:"
 	o << "the original (UFSG, UFIP), the LLE table and Dortmund's 2016, with its"
-	o << '2006 parameters beside them. A value is *rounded* when the two are within'
-	o << 'a unit of the last digit of whichever is printed to fewer: 8484 for'
-	o << '8483.5, 287.7 for 287.77.'
+	o << '2006 parameters beside them. A value is *rounded* when, by the last digit'
+	o << 'of the coarser of the two (a zero before the point being a digit), they'
+	o << 'are within half its unit and 5% of each other (8484 for 8483.5), or'
+	o << 'within a whole unit where the coarser has three digits or more (287.7'
+	o << "for 287.77); or when a parameter's difference moves ψ's exponent by"
+	o << 'under 1e-6 at 373.15 K.'
 	o << ''
 	o << "| Table | Subgroups same | Rounded | Different | ChemSep's own | Parameters same | Rounded | As the 2006 table | Different | ChemSep's own |"
 	o << '|---|---|---|---|---|---|---|---|---|---|'

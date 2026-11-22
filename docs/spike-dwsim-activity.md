@@ -44,8 +44,11 @@ for water at 330 K and 1 atm), its γ at x = (0.3, 0.7) is NRTL's with
 | 8.314462618/4.184 = 1.987204 | −5.3e-7 | −2.9e-7 |
 | 8.314462618/4.1868 = 1.985875 | −1.2e-4 | −6.7e-5 |
 
-So ChemSep's A's are in thermochemical calories, divided by DECHEMA's own
-R, 1.98721 cal/(mol·K), with which DECHEMA regressed them. That R is
+So ChemSep's NRTL A's are in thermochemical calories, divided by DECHEMA's
+own R, 1.98721 cal/(mol·K), with which DECHEMA regressed them. (This script
+shows it for NRTL alone. For the UNIQUAC and Wilson banks it's inferred:
+UNIQUAC's split below matches to four digits, too few to tell one R from
+the other, and Wilson's form wasn't settled.) That R is
 8.31449 J/(mol·K), not the SI's exact 8.314462618. The difference is 2.7e-6
 of τ. **D7 is amended** (below): a bank's τ keeps the R its parameters were
 fitted with, as `reflux kinetics check` already advises ("write R unless the
@@ -120,7 +123,8 @@ the algorithm classes weren't where the script looked for them.
 ## What it means for M6
 
 - **D5 stands,** and DWSIM's default is the case against the alternative.
-- **D7 is amended:** a bank's parameters keep DECHEMA's R.
+- **D7 is amended:** a bank's parameters keep DECHEMA's R, confirmed here
+  for NRTL and inferred for UNIQUAC and Wilson until step 12.
 - **D17's comparisons** are by state, as before: γ, a split's compositions
   and fugacities, and enthalpies under whichever of DWSIM's modes is closest
   to D5's, every difference explained.

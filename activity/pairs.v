@@ -34,7 +34,9 @@ fn check_pair(model string, names []string, i int, j int, mut given []bool) ! {
 }
 
 // every_pair refuses a model missing a pair, naming them all. A caller
-// that means a pair to be ideal says so, by giving it parameters of 0 (D7).
+// that means a pair to have no energy of interaction says so, by giving it
+// NRTL's τ = 0 or a τ or Λ of 1 (D7). That pair is ideal in NRTL and
+// Wilson, and not in UNIQUAC, whose combinatorial term stays.
 fn every_pair(model string, names []string, given []bool) ! {
 	nc := names.len
 	mut missing := []string{}

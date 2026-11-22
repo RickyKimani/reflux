@@ -499,6 +499,13 @@ if _ := qp(p) {
   for where a rate is zero returns `?[]f64`, none where it isn't zero
   anywhere, and takes a rate it can't evaluate there as NaN, which ends the
   search the same way ([equilibrium/consistency.v](../equilibrium/consistency.v)).
+- **A `!` leaves a `mut` argument half written,** as Go's `return err` does
+  a slice, but it's one character and easy to read past: `out[i] = half(x)!`
+  over [4, 3, 8] into [9, 9, 9] fails and leaves [2, 9, 9]. So whatever says
+  that a cache holds a value is cleared before a fill that can fail, and
+  set after it. `activity.eval` kept the last T through a refusal, and gave
+  wrong ln γ at that T from then on ([activity/model.v](../activity/model.v),
+  corrected after M6 step 3).
 
 ---
 

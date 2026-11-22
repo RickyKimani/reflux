@@ -232,6 +232,120 @@ fn test_the_entropy_and_what_is_kept() {
 	assert worst <= 1e-7
 }
 
+// A T a model refuses leaves nothing kept (found after step 3): params
+// writes a Work's parameters as it goes, so a refusal part of the way
+// through leaves some of them at the T refused. Each model here refuses
+// 150 K on its second pair of parameters, the first written by then, and
+// must then give a fresh Work's bits at the T it had, and refuse 150 K again.
+fn test_a_refused_temperature_leaves_nothing_kept() {
+	names := ['a', 'b']
+	first := activity.plain('(100 K)/T', 'first')!
+	below := activity.plain('sqrt(T/(300 K) - 1)', 'second')!
+	negative := activity.plain('T/(300 K) - 1', 'second')!
+	alpha := activity.plain('0.3', 'α')!
+	table := activity.Table{
+		variant:      .original
+		subgroups:    {
+			1: activity.Subgroup{1, 'CH3', 1, 0.9011, 0.848, 15.035}
+			2: activity.Subgroup{2, 'H2O', 7, 0.92, 1.4, 18.015}
+		}
+		mains:        {
+			1: 'CH2'
+			7: 'H2O'
+		}
+		interactions: {
+			activity.interaction_key(1, 7): activity.Interaction{1000.0, 0.0, 0.0}
+			// ψ is exp(−1000) at 150 K, which is 0 in a double.
+			activity.interaction_key(7, 1): activity.Interaction{150000.0, 0.0, 0.0}
+		}
+	}
+	models := [
+		activity.Model(activity.new_nrtl(names, [
+			activity.NrtlPair{0, 1, first, below, alpha},
+		])!),
+		activity.Model(activity.new_uniquac(names, [
+			0.92,
+			1.43,
+		], [
+			1.4,
+			1.43,
+		], [
+			activity.UniquacPair{0, 1, first, below},
+		])!),
+		activity.Model(activity.new_wilson(names, [
+			activity.WilsonPair{0, 1, first, negative},
+		])!),
+		activity.Model(activity.new_unifac(table, names, [
+			{
+				1: 1
+			},
+			{
+				2: 1
+			},
+		])!),
+	]
+	mut wrong := []string{}
+	for m in models {
+		mut fresh := m.work()
+		activity.eval(m, 350.0, [0.4, 0.6], .t | .n, mut fresh)!
+		// A Work that held 350 K, and one that held nothing.
+		for held in [true, false] {
+			mut w := m.work()
+			if held {
+				activity.eval(m, 350.0, [0.4, 0.6], .t | .n, mut w)!
+			}
+			for _ in 0 .. 2 {
+				mut refused := false
+				activity.eval(m, 150.0, [0.4, 0.6], .t | .n, mut w) or { refused = true }
+				assert refused, '${m.name()} accepted 150 K'
+			}
+			activity.eval(m, 350.0, [0.4, 0.6], .t | .n, mut w)!
+			if w.ln_gamma != fresh.ln_gamma || w.dt != fresh.dt || w.dtt != fresh.dtt
+				|| w.dn != fresh.dn {
+				wrong << '${m.name()}: ${w.ln_gamma}, not ${fresh.ln_gamma}'
+			}
+		}
+	}
+	assert wrong == [], wrong.join('; ')
+}
+
+// A pair the bank doesn't list, by the caller's leave (D7): ideal in NRTL
+// and Wilson, and in UNIQUAC only without a residual term, its ln γ then
+// the combinatorial term, written here in UNIFAC's way rather than
+// UNIQUAC's.
+fn test_an_unlisted_pair() {
+	db := components.load_default()!
+	cas := ['7732-18-5', '110-54-3'] // water and n-hexane, in none of the banks
+	x := [0.4, 0.6]
+	nrtl := db.nrtl(cas, ideal: true)!
+	wilson := db.wilson(cas, ideal: true)!
+	assert nrtl.pairs[0].source == .ideal && wilson.pairs[0].source == .ideal
+	for m in [activity.Model(nrtl.model), activity.Model(wilson.model)] {
+		mut w := m.work()
+		activity.eval(m, 298.15, x, .t, mut w)!
+		for i in 0 .. 2 {
+			// Σ xⱼ is 1 to a unit in the last place.
+			assert math.abs(w.ln_gamma[i]) <= 4.5e-16 && w.dt[i] == 0.0, m.name()
+		}
+	}
+	u := db.uniquac(cas, ideal: true)!
+	assert u.pairs[0].source == .no_residual
+	r, q := u.model.r, u.model.q
+	mut w := u.model.work()
+	activity.eval(u.model, 298.15, x, .t, mut w)!
+	rbar, qbar := x[0] * r[0] + x[1] * r[1], x[0] * q[0] + x[1] * q[1]
+	for i in 0 .. 2 {
+		v, f := r[i] / rbar, q[i] / qbar
+		want := 1.0 - v + math.log(v) - 5.0 * q[i] * (1.0 - v / f + math.log(v / f))
+		// Terms of up to 20, each rounded, cancel to ln γ.
+		assert math.abs(w.ln_gamma[i] - want) <= 2e-14, '${i}: ${w.ln_gamma[i]}, not ${want}'
+		if i == 0 {
+			assert want > 0.1, "water's combinatorial term here"
+		}
+		assert w.dt[i] == 0.0
+	}
+}
+
 // ng_slope is ∂(nGᴱ/RT)/∂nᵢ at x, one mole in all, by a central difference
 // of step h in nᵢ.
 fn ng_slope(m activity.Model, t f64, x []f64, i int, h f64) !f64 {

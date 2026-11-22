@@ -2304,7 +2304,8 @@ a temperature and mole fractions, and nothing of phases: the γ–φ liquid is
 built on them. A model holds nothing about an evaluation, so threads share
 one, each with its own `Work`, which keeps what depends on T alone (each
 τ, and UNIFAC's ψ and pure-group terms) until T moves, as M8's D11 keeps a
-rate's K.
+rate's K. A T the model refuses leaves nothing kept, since a refusal can
+come with some of that T's parameters written.
 
 **The models,** each with τᵢᵢ = 0 (NRTL) or 1 (UNIQUAC, Wilson's Λᵢᵢ):
 
@@ -2371,9 +2372,10 @@ below the exact product 8.31446261815324 that `expr`'s `R` and the Python
 any paper's form goes in as printed. Their T-derivatives come from the jet
 pass: `Expr.jet` evaluates the tree with each node on jets, its value
 `eval`'s bits (a whole power by repeated multiplication, as `raise`), so a
-τ's τ′ and τ″ are exact. ChemSep's banks give A in cal/mol, fitted by DECHEMA
-with R = 1.98721 cal/(mol·K), so each is written with that R, the calorie
-cancelling (M6 step 0):
+τ's τ′ and τ″ are exact. ChemSep's banks give A in cal/mol and state no R.
+Each is written with DECHEMA's, 1.98721 cal/(mol·K), the calorie cancelling.
+That's confirmed for NRTL's bank (M6 step 0), and inferred for UNIQUAC's and
+Wilson's, as is Wilson's form, until M6's step 12:
 
 | Model | ChemSep's bank, written as | |
 |---|---|---|
@@ -2384,7 +2386,10 @@ cancelling (M6 step 0):
 A line names its pair either way round; A₁₂ is its first compound's with the
 second, turned to the model's order. A pair listed twice takes its first
 listing. A pair the bank doesn't list is refused by name, unless the caller
-lets it be ideal (τ = 0, or Λ = τ = 1).
+lets it have no energy of interaction. With NRTL's τ = 0 or Wilson's Λ = 1
+that pair is ideal, γ = 1 in their binary. UNIQUAC's τ = 1 removes only the
+residual term: the combinatorial one, in r and q, stays, so the pair is
+reported as having no residual interaction, not as ideal.
 
 **UNIFAC's tables** are ChemSep's base files with their extensions
 ([components/activity.v](../components/activity.v)): main groups and their
