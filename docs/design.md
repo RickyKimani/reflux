@@ -2307,6 +2307,19 @@ one, each with its own `Work`, which keeps what depends on T alone (each
 rate's K. A T the model refuses leaves nothing kept, since a refusal can
 come with some of that T's parameters written.
 
+**An evaluation answers or refuses,** with an `ActivityError` that names
+what's wrong:
+- **The composition:** each xᵢ ≥ 0 and finite, and |Σxᵢ − 1| ≤ 1e-12, which
+  is far above normalising's rounding. All zero has no answer, and
+  UNIQUAC's, UNIFAC's and Wilson's formulas give an unnormalised x a wrong,
+  finite one (UNIQUAC's ln(rᵢ/R̄) moves by −ln Σxᵢ).
+- **A parameter that's divided by or whose log is taken,** NRTL's G =
+  exp(−ατ), τ in UNIQUAC, Λ, ψ: at least the smallest normal double,
+  2.2250738585072014e-308, with finite T-derivatives. A subnormal one has
+  lost digits, so its ln γ would be finite and wrong, and at 0 it's NaN.
+- **The answer:** whatever was asked for, ln γ, its T-derivatives or dn, is
+  finite, in every component.
+
 **The models,** each with τᵢᵢ = 0 (NRTL) or 1 (UNIQUAC, Wilson's Λᵢᵢ):
 
 - **Wilson** (1964): ln γᵢ = 1 − ln Sᵢ − Σₖ xₖΛₖᵢ/Sₖ, with Sᵢ = Σⱼ xⱼΛᵢⱼ.
@@ -2344,6 +2357,12 @@ derivatives along one direction, whose arithmetic carries them,
     (ab)′ = a′b + ab′,   (ab)″ = a″b + 2a′b′ + ab″,
     (a/b)′ = (a′ − qb′)/b,   (a/b)″ = (a″ − 2q′b′ − qb″)/b,   q = a/b,
     f(a)′ = f′(a)a′,   f(a)″ = f″(a)a′² + f′(a)a″.
+
+A logarithm's f″ = −k/a² (k = 1, or 1/ln 10 for log₁₀) overflows for a
+below about 1e-154, where the derivative itself needn't. There, and only
+there, its second derivative is taken in its other form,
+
+    (k ln a)″ = k·(a″/a − (a′/a)²).
 
 The f64 instance gives ln γ; the jet's value is the same bits.
 - **In T,** the parameters as jets in T, each τ's own derivatives from

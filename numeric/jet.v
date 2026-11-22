@@ -73,13 +73,25 @@ pub fn (a Jet) exp() Jet {
 
 // log is ln a.
 pub fn (a Jet) log() Jet {
-	return a.chain(math.log(a.v), 1.0 / a.v, -1.0 / (a.v * a.v))
+	return a.logarithm(math.log(a.v), 1.0)
 }
 
 // log10 is log₁₀ a, as math.log10 gives its value.
 pub fn (a Jet) log10() Jet {
-	k := 1.0 / math.ln10
-	return a.chain(math.log10(a.v), k / a.v, -k / (a.v * a.v))
+	return a.logarithm(math.log10(a.v), 1.0 / math.ln10)
+}
+
+// logarithm is k·ln a, its value f, by the chain rule; and where a² is too
+// small for a double to hold 1/a² (a below about 1e-154), by its second
+// derivative's other form, k(a″/a − (a′/a)²), which squares nothing small.
+fn (a Jet) logarithm(f f64, k f64) Jet {
+	f1 := k / a.v
+	f2 := -k / (a.v * a.v)
+	if math.is_inf(f2, -1) {
+		r := a.d / a.v
+		return Jet{f, f1 * a.d, f1 * a.dd - k * r * r}
+	}
+	return a.chain(f, f1, f2)
 }
 
 // sqrt is √a.

@@ -68,8 +68,10 @@ Keep this section current: update it whenever a step is committed.
       count moved). D7 is amended, approved on 2026-11-22:
       UNIQUAC's unlisted pair is "no residual interaction", not ideal, and
       the banks' R is inferred for UNIQUAC and Wilson until step 12.
-    - Open, for the owner: `activity.eval` returns NaN with no error where
-      NRTL's G overflows or the mole fractions are all zero.
+    - Then `activity.eval` was made to answer finitely or refuse: Σx within
+      1e-12 of 1, G, τ, Λ and ψ normal doubles, every output asked for
+      finite. `numeric.Jet`'s log no longer loses ∂² below 1e-154. No
+      answer moved; newly refused only at 10 K and below.
   - The flash's seam moves from `thermo.Model` to a phase model (D3), which
     a cubic's volume roots and a γ–φ liquid both give, and every cubic
     answer from M3 to M8 keeps its bits (criterion 4).
@@ -903,6 +905,9 @@ over the rest, built into a shared library for the Python package in
   - `Model` is immutable and shared; each thread's `Work` keeps what
     depends on T alone (τ, UNIFAC's ψ and pure-group terms) until T moves,
     and nothing once a T is refused.
+  - `eval` returns what was asked for only if it's finite, and refuses a
+    composition that doesn't sum to 1 and a parameter that isn't a normal
+    double, so a caller normalises x first.
   - Each formula is written once, generic over f64 and `numeric.Jet`, and
     `eval` takes its T-derivatives from the parameters as jets and its
     composition derivatives one xⱼ at a time, n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ − Σₖ xₖ∂ᵢₖ.

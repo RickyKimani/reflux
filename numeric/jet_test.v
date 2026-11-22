@@ -38,6 +38,24 @@ fn test_each_operation_against_its_closed_form() {
 	check(constant(2.0) * constant(5.0), 10.0, 0.0, 0.0)
 }
 
+// ln a's second derivative, a″/a − (a′/a)², where a² is below the doubles
+// and 1/a² above them (found by M6's finiteness fix: eval's ∂²ln γ/∂T² was
+// infinite wherever a sum fell below about 1e-154), down to a itself the
+// smallest normal double; and log₁₀'s likewise.
+fn test_the_log_of_a_small_jet() {
+	for v in [1e-150, 1e-154, 7e-155, 1e-160, 3e-163, 1e-200, 1e-300, 2.2250738585072014e-308] {
+		// a = v·e^g at g = 0, g′ = 3 and g″ = 0.5, so ln a moves as g does.
+		d, dd := v * 3.0, v * 9.5
+		j := Jet{v, d, dd}
+		for log10 in [false, true] {
+			got := if log10 { j.log10() } else { j.log() }
+			k := if log10 { 1.0 / math.ln10 } else { 1.0 }
+			assert math.abs(got.d - 3.0 * k) <= 2e-15, '${v}: first ${got.d}'
+			assert math.abs(got.dd - 0.5 * k) <= 1e-14, '${v}: second ${got.dd}'
+		}
+	}
+}
+
 fn test_a_composition_by_the_chain_rule() {
 	// f(x) = exp(−a/x), a τ-like factor: f′ = f·a/x², f″ = f·(a²/x⁴ − 2a/x³).
 	a, x := 900.0, 350.0

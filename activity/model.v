@@ -19,6 +19,17 @@ import quantity
 // SI, as thermo.r_gas and expr's R.
 pub const r_gas = 8.314462618
 
+// least_normal is the smallest normal double, 2⁻¹⁰²². Below it a number has
+// lost digits, and at 0 all of them, so a parameter there (a G, τ, Λ or ψ,
+// which the formulas divide by or take the log of) is refused: its ln γ
+// could be finite and wrong.
+const least_normal = 2.2250738585072014e-308
+
+// sum_slack is how far from 1 a composition's mole fractions may sum. It's
+// far above normalising's rounding, a few ε for each component, and moves
+// a ln γ by about as much as itself.
+const sum_slack = 1e-12
+
 // Model is a liquid's excess Gibbs energy. A model holds nothing about an
 // evaluation, so threads may share one; each thread brings its own Work,
 // which keeps the parameters that depend on T alone until T moves (M8's
@@ -31,7 +42,8 @@ pub interface Model {
 	// work makes a workspace sized for the model.
 	work() Work
 	// params fills w's T-dependent parameters at t: their values, and
-	// their first two T-derivatives as jets.
+	// their first two T-derivatives as jets. It refuses a T where one isn't
+	// what the formula can take.
 	params(t f64, mut w Work) !
 	// lng is ln γ at x, given the parameters' values p, into out, with s
 	// scratch room: the formula on f64.
@@ -114,7 +126,11 @@ fn refuse(m Model, reason string) IError {
 
 // eval is m's ln γ at (t, x) into w.ln_gamma, and with want its
 // T-derivatives (w.dt, w.dtt) and composition derivatives (w.dn). x is mole
-// fractions, normalised by the caller; a component may be absent, at 0.
+// fractions, normalised by the caller, and refused where they don't sum to
+// 1; a component may be absent, at 0.
+//
+// It answers or refuses: what it was asked for is finite, or it returns an
+// ActivityError, and then w holds no answer.
 //
 // The composition derivatives come from the formula's derivatives with the
 // x's taken as independent, ∂ᵢⱼ: since xₖ = nₖ/n, n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ −
@@ -127,10 +143,17 @@ pub fn eval(m Model, t f64, x []f64, want Want, mut w Work) ! {
 	if x.len != nc {
 		return refuse(m, '${x.len} mole fractions for ${nc} components')
 	}
+	mut total := 0.0
 	for v in x {
 		if !(v >= 0.0) || !math.is_finite(v) {
 			return refuse(m, 'a mole fraction of ${v}')
 		}
+		total += v
+	}
+	// All zero among them. UNIQUAC, UNIFAC and Wilson would answer an
+	// unnormalised x wrongly, and finitely.
+	if !(math.abs(total - 1.0) <= sum_slack) {
+		return refuse(m, 'mole fractions that sum to ${total}, not to 1')
 	}
 	if w.t != t {
 		// Not kept until every parameter is in: params writes them as it
@@ -143,6 +166,7 @@ pub fn eval(m Model, t f64, x []f64, want Want, mut w Work) ! {
 		w.t = t
 	}
 	m.lng(w.pv, x, mut w.sf, mut w.ln_gamma)
+	finite_answer(m, w.ln_gamma, 'ln γ', t, x)!
 	if want.has(.t) {
 		for i in 0 .. nc {
 			w.xj[i] = numeric.constant(x[i])
@@ -152,6 +176,8 @@ pub fn eval(m Model, t f64, x []f64, want Want, mut w Work) ! {
 			w.dt[i] = w.oj[i].d
 			w.dtt[i] = w.oj[i].dd
 		}
+		finite_answer(m, w.dt, '∂ln γ/∂T', t, x)!
+		finite_answer(m, w.dtt, '∂²ln γ/∂T²', t, x)!
 	}
 	if want.has(.n) {
 		for j in 0 .. nc {
@@ -171,6 +197,17 @@ pub fn eval(m Model, t f64, x []f64, want Want, mut w Work) ! {
 			for j in 0 .. nc {
 				w.dn[i * nc + j] = w.dx[i * nc + j] - s
 			}
+		}
+		finite_answer(m, w.dn, 'n·∂ln γ/∂n', t, x)!
+	}
+}
+
+// finite_answer refuses an answer that isn't finite, naming its component:
+// values is one for each, or a row of x.len for each.
+fn finite_answer(m Model, values []f64, what string, t f64, x []f64) ! {
+	for k, v in values {
+		if !math.is_finite(v) {
+			return refuse(m, '${what} of component ${k * x.len / values.len} is ${v} at ${t} K and x = ${x}')
 		}
 	}
 }
@@ -254,4 +291,19 @@ fn finite_param(m Model, p &Param, t f64, what string) !numeric.Jet {
 		return refuse(m, '${what}, ${p.text()}, is ${j.v} at ${t} K')
 	}
 	return j
+}
+
+// usable is whether j can be kept as a parameter that a formula divides by
+// or takes the log of: a positive normal double, with finite T-derivatives.
+// The second derivative's check is the value's and the first's too: j is
+// either finite_param's, all three finite, or an exp, eᵃ, whose second,
+// (eᵃa′)a′ + eᵃa″, isn't finite where eᵃ or eᵃa′ isn't (∞·0 being NaN).
+fn usable(j numeric.Jet) bool {
+	return j.v >= least_normal && math.is_finite(j.dd)
+}
+
+// unusable is the refusal of such a parameter, named by what. (It's only
+// called to refuse, so that a fill that succeeds builds no message.)
+fn unusable(m Model, what string, j numeric.Jet, t f64) IError {
+	return refuse(m, '${what} is ${j.v} at ${t} K, with T-derivatives ${j.d} and ${j.dd}: it must be a positive normal double, and its derivatives finite')
 }

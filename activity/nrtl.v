@@ -75,7 +75,12 @@ pub fn (m &Nrtl) params(t f64, mut w Work) ! {
 				tau := finite_param(m, &m.tau[k], t, 'τ of ${m.names[i]} with ${m.names[j]}')!
 				alpha := finite_param(m, &m.alpha[k], t, 'α of ${m.names[i]} with ${m.names[j]}')!
 				w.pj[k] = tau
-				w.pj[nn + k] = (alpha * tau).neg().exp()
+				g := (alpha * tau).neg().exp()
+				if !usable(g) {
+					return unusable(m, 'G of ${m.names[i]} with ${m.names[j]}, exp(−ατ),',
+						g, t)
+				}
+				w.pj[nn + k] = g
 			}
 			w.pv[k] = w.pj[k].v
 			w.pv[nn + k] = w.pj[nn + k].v

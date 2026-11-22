@@ -87,6 +87,9 @@ pub fn (m &Uniquac) params(t f64, mut w Work) ! {
 			} else {
 				finite_param(m, &m.tau[k], t, 'τ of ${m.names[i]} with ${m.names[j]}')!
 			}
+			if !usable(w.pj[k]) {
+				return unusable(m, 'τ of ${m.names[i]} with ${m.names[j]}', w.pj[k], t)
+			}
 			w.pv[k] = w.pj[k].v
 		}
 	}

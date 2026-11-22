@@ -21,8 +21,8 @@ Status: **approved** on 2026-11-18. Step 0 is done, and amends D7 and
 criterion 8, both approved on 2026-11-18. Steps 1 to 3 are done, built
 together, and step 1 amends D7 again, approved on 2026-11-20. Five defects
 found in them were corrected on 2026-11-22 (below step 3), and D7's
-amendment for two of those was approved that day. Step 4, the seam, is
-next.
+amendment for two of those was approved that day, and `eval`'s answers
+made finite or refused. Step 4, the seam, is next.
 
 ## Goal
 
@@ -633,10 +633,63 @@ form. The first two failed on `a70e0a9`.
 **Checks:** both full checks pass on the corrected tree, tcc (20 min) and
 gcc with its `-prod` build (29 min).
 
-**Found, and left for the owner:** `eval` doesn't check that its answer is
-finite. NRTL with τ = −3000 K/T at 1 K (G = exp(900), an overflow) returns
-NaN with no error, and so does NRTL given mole fractions that are all
-zero.
+**Found, and then fixed at the owner's word** (below): `eval` didn't check
+that its answer was finite. NRTL with τ = −3000 K/T at 1 K (G = exp(900), an
+overflow) returned NaN with no error, and so did NRTL given mole fractions
+that were all zero.
+
+### An answer finite and right, or refused — done
+
+The gap above was wider than found, and `eval` now answers or refuses
+([design.md](design.md), "Activity models"):
+- **Mole fractions not summing to 1 were answered,** wrongly and finitely:
+  UNIQUAC's ln γ off by ln 2 at a sum of 2. They're refused beyond 1e-12
+  from 1, all zero among them.
+- **A parameter that overflowed or underflowed was used:** NRTL's G, and τ,
+  Λ and ψ. At 0 or ∞ it gave NaN, and subnormal a finite ln γ short of
+  digits. Each must now be a normal double with finite T-derivatives, which
+  also refuses a negative τ in UNIQUAC, answered before at some
+  compositions.
+- **Whatever was asked for is checked finite,** whatever the model, and a
+  refusal names the component.
+- **`numeric.Jet`'s log squared a small number to zero,** so that
+  ∂²ln γ/∂T² was infinite wherever a sum fell below about 1e-154, the true
+  one being finite. It takes the other form there, and only there.
+
+**Against `15322ac`,** in 453,460 evaluations (the first listing of every
+bank pair the database has models for, 815; a pair of groups for 1,704 of
+the UNIFAC tables' main-group pairs; 1,800 seeded mixtures; 4 to 3000 K,
+pure, dilute and between, with and without derivatives):
+- 450,320 answers keep their bits, and none moves;
+- 2,690 were refused before and are now;
+- of 329 NaNs and infinities returned as answers, none is left: 271 are now
+  answered (the log's), and 58 refused, all at 10 K or below;
+- each of the 271 is right: its ∂ln γ/∂T against Richardson's differences
+  of ln γ, and its ∂²ln γ/∂T² against those of ∂ln γ/∂T, neither using the
+  log's second derivative, to 1.8e-11, the differences' own error;
+- 121 finite answers are now refused, each on a parameter below the normal
+  doubles, all at 10 K or below. Above 10 K, nothing is newly refused.
+
+**The cost,** gcc's `-prod`, the best of each session's rounds: ln γ of a
+binary 8 to 19 ns more on about 75 (10 to 25%), with both derivatives 70 to
+120 ns more on 620 to 750, and five components' UNIFAC from 11% less to
+21% more, mostly the laptop's noise. Nothing is allocated (tcc's exact
+count). Step 13 times it inside a flash.
+
+**Tests** ([activity/finite_test.v](../activity/finite_test.v), and the
+jet's): a parameter swept through both ends of the doubles in each model,
+ln γ∞ against its closed form to 7.1e-15 and its T-derivatives to 2.5 units
+of the rounding of the terms they cancel from; compositions off 1; and a
+model made to give NaN and each infinity in every output. All six of the
+first failed on `15322ac`, and the jet's.
+
+**Planted mistakes:** 31 on the final code, in a scratch copy, all caught.
+An earlier run's two survivors, a parameter's value and first derivative
+checked for finiteness, were code that nothing could need (the second
+derivative's check is theirs too), and were deleted.
+
+**Checks:** both full checks pass on the final tree, tcc (18 min) and gcc
+with its `-prod` build (33 min): 110 test files, one of them new.
 
 ### 4. The seam
 - D3: `thermo`'s phase model, the Helmholtz `Model` behind it, `Fluid` on

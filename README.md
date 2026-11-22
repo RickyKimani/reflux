@@ -206,8 +206,9 @@ activity/           liquid activity models (M6): Wilson, NRTL, UNIQUAC and
                     UNIFAC (original, LLE, Dortmund), each formula written
                     once over f64 and jets, so that its T- and composition
                     derivatives are exact
-  model.v           the interface, Work (kept until T moves), eval, the
-                    excess properties, parameters as expressions in T
+  model.v           the interface, Work (kept until T moves), eval (a
+                    finite answer or a refusal), the excess properties,
+                    parameters as expressions in T
   nrtl.v, uniquac.v, wilson.v, pairs.v  the binary models
   unifac.v          UNIFAC's tables and model
 kinetics/           reactions (M9)

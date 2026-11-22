@@ -191,8 +191,8 @@ pub fn (m &Unifac) params(t f64, mut w Work) ! {
 			numeric.constant(m.ic[k]) * tj * tj) / tj
 		w.pj[k] = e.neg().exp()
 		w.pv[k] = w.pj[k].v
-		if !(w.pv[k] > 0.0) || !math.is_finite(w.pv[k]) {
-			return refuse(m, 'ψ is ${w.pv[k]} at ${t} K for groups ${m.groups[k / ng]} and ${m.groups[k % ng]}')
+		if !usable(w.pj[k]) {
+			return unusable(m, 'ψ of group ${m.groups[k / ng]} with ${m.groups[k % ng]}', w.pj[k], t)
 		}
 	}
 	for i in 0 .. nc {

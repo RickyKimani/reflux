@@ -67,8 +67,8 @@ pub fn (m &Wilson) params(t f64, mut w Work) ! {
 			} else {
 				finite_param(m, &m.lambda[k], t, 'Λ of ${m.names[i]} with ${m.names[j]}')!
 			}
-			if !(w.pj[k].v > 0.0) {
-				return refuse(m, 'Λ of ${m.names[i]} with ${m.names[j]} is ${w.pj[k].v} at ${t} K')
+			if !usable(w.pj[k]) {
+				return unusable(m, 'Λ of ${m.names[i]} with ${m.names[j]}', w.pj[k], t)
 			}
 			w.pv[k] = w.pj[k].v
 		}
