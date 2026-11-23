@@ -333,10 +333,11 @@ fn kij_parameter(w string, names []string, fl ?thermo.Fluid) !FitParameter {
 	if i == j {
 		return error('${w}: a pair needs two components')
 	}
-	if f.model !is thermo.Cubic {
+	eos := f.helmholtz() or { return error("${w}: kij is a cubic's, and the model is not one") }
+	if eos !is thermo.Cubic {
 		return error("${w}: kij is a cubic's, and the model is not one")
 	}
-	c := f.model as thermo.Cubic
+	c := eos as thermo.Cubic
 	return FitParameter{
 		name:  w
 		part:  .kij

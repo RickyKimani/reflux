@@ -87,8 +87,8 @@ columns sum to zero when weighted by nᵢ. Both are tested.
 ### Ideal gas, reference state and total properties
 
 `Model` is purely residual. Total properties come from a `Fluid`
-([thermo/fluid.v](../thermo/fluid.v)), which pairs a `Model` with each
-component's `IdealGas` data ([thermo/ideal.v](../thermo/ideal.v)).
+([thermo/fluid.v](../thermo/fluid.v)), which pairs a phase model (below)
+with each component's `IdealGas` data ([thermo/ideal.v](../thermo/ideal.v)).
 
 **Reference state:** elements in their standard states at T° = 298.15 K
 and P° = 1 bar. For component i:
@@ -127,6 +127,36 @@ log1p(2 sinh²(x/2)) for small x, where cosh x is too close to 1.
 μ_JT does *not* go to zero at zero pressure. It tends to (T·dB/dT − B)/Cp,
 where B is the second virial coefficient, which is why the low-pressure test
 checks only Cp − Cv and w.
+
+## The phase seam
+
+Everything above is how an equation of state gives a phase. A γ–φ liquid
+gives one with no F at all, so the flash asks for less than a `Model`
+(M6's D3, [thermo/phases.v](../thermo/phases.v)): a **`PhaseModel`**, a
+phase at (T, P, n).
+
+| A phase model gives | A Helmholtz model's (`VolumeRoots`) |
+|---|---|
+| `components()` | the model's |
+| `phase(T, P, n, root)`: V, Z and ln φᵢ of the liquid-like, the vapour-like or the phase of lower G | `solve_tp`'s volume root |
+| `ln_phi_derivs(state)`: ∂ln φᵢ/∂T, ∂ln φᵢ/∂P, n·∂ln φᵢ/∂nⱼ, or why there are none | from F's second derivatives |
+| `phase_label(state)` | Π, with the four-covolume rule |
+| `phase_residual(state)`: Hʳ, Sʳ, Cpʳ, Cvʳ, (∂V/∂T)_P, (∂P/∂V)_T, each NaN where there's none | one `residual2` |
+
+A phase's mass density is Σ nᵢMᵢ/V, of its state and the components' molar
+masses. `thermo.by_roots(model)` puts a `Model` behind the seam, and each of
+its methods gives the function's bits. `new_fluid` takes a `Model` and does
+so itself; `new_phase_fluid` takes any phase model.
+
+**What works in F(T, V, n) itself** stays on `Model`: the TV and UV
+flashes, the reactors, `equilibrium`, Psat, and a fit of a cubic's kᵢⱼ.
+Each takes it from `Fluid.helmholtz()`, which gives the model behind the
+roots, or a `NoHelmholtzError` saying why a fluid has none.
+
+Since a residual can be NaN, a PH or PS flash takes an energy balance for
+met only when |r| ≤ etol holds, which a NaN fails, and never when |r| > etol
+doesn't, which a NaN passes. Without that, Brent closes in on the edge of
+where the NaN begins, as on a change of sign, and the flash returned it.
 
 ## Finding the volume
 
@@ -659,8 +689,8 @@ and P.
 
 `flash.ph(fluid, P, H, z)` and `flash.ps(fluid, P, S, z)`
 ([flash/ph.v](../flash/ph.v)) find T and the split from a molar H or S, on
-the Fluid's reference state. They take a Fluid, not a Model, because H and
-S need the ideal gas.
+the Fluid's reference state. They take a Fluid, not a phase model, because
+H and S need the ideal gas.
 
 **The Q-function** (Michelsen 1999, D5). At fixed P and H the equilibrium
 is the stationary point of
@@ -735,7 +765,9 @@ found by Brent on that root alone.
 `flash.tv(model, T, V, z)` finds P and the split from a molar volume, and
 `flash.uv(fluid, U, V, z)` finds T, P and the split from a molar internal
 energy and volume ([flash/tv.v](../flash/tv.v)). TV needs only a Model,
-since the ideal gas's part of A is the same for any split at fixed T.
+since the ideal gas's part of A is the same for any split at fixed T, and
+nothing less, since it works in F(T, V, n): a caller with a fluid passes
+`fluid.helmholtz()!`. UV refuses a fluid without one, saying why.
 
 **Q-functions** (D5). At fixed T and V the equilibrium minimises A, and
 Q(P) = G − P·V_spec has dQ*/dP = V(P) − V_spec, with V(P) the equilibrium
@@ -822,7 +854,8 @@ composition w its trials reach, the sweep computes
 
     tpd(w) = Σᵢ wᵢ(ln wᵢ + ln φᵢ(w) − ln xᵢ − ln φᵢ(x))
 
-from `thermo.solve_tp` alone, each phase at its root of lower G, and the
+from the model's phases alone (`thermo.solve_tp`'s, for a cubic), each at
+its root of lower G, and the
 lowest tpd is the verdict. A negative tpd at any w shows that x lies above
 some phase's tangent plane, so x is unstable. A phase of a converged split
 is no use as a trial for the other: it sits on that phase's tangent plane,

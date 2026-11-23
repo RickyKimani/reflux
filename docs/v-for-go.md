@@ -608,6 +608,30 @@ every call: 704 of the 944 bytes `solve_tp` allocated
 Option field of type `?&T` gives the reference itself, to call its `mut`
 methods.
 
+**An adapter struct is how every type of one interface gets another's
+methods,** as in Go, where you can't add methods to an interface either.
+`thermo.VolumeRoots` holds a `Model` and has `PhaseModel`'s five methods
+([thermo/phases.v](../thermo/phases.v)). It's boxed once, when it's made,
+and a call through it allocates nothing (probed: 0 bytes in 10,000 calls).
+Methods on `Cubic` itself would have boxed a `Cubic` as a `Model` in every
+call, to pass it on to `solve_tp`.
+
+**A type assertion to a type that can't be in the interface is caught only
+by `is`.** Go refuses to compile both `x.(Cubic)` and `case Cubic:` where
+`Cubic` hasn't x's methods. V 0.5.2 refuses one form of three, so changing
+a field's interface type doesn't show every downcast of it (found in M6
+step 4, when `Fluid.model` became a `PhaseModel`):
+
+| Written, with `p` a `Phases` that a `Cubic` can't be | What V does |
+|---|---|
+| `p is Cubic`, `p !is Cubic` | a compile error |
+| `p as Cubic` | compiles, and returns a zero `Cubic`, with no panic |
+| `?Model(p)`, to another interface | passes `v -check`, then fails in C |
+
+An `as` between a type and an interface it does have panics properly when
+it's wrong. So after such a change, search for `as` by hand, and build the
+tests: `v -check` isn't enough.
+
 **A method with a value receiver can still count its calls,** through a
 pointer field. `numeric.Function` is `at(x f64) f64`, with no `mut`, so a
 wrapper that counts evaluations can't increment a field of its own. It

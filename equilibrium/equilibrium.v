@@ -399,7 +399,7 @@ fn verify_stationary(m Mixture, cons Constraints, g []f64, p f64, r Result, iner
 // for now (D9), a second being M6's.
 fn verify_stable(m Mixture, t f64, p f64, r Result) ! {
 	model := m.model or { return }
-	st := flash.stability(model, t, p, r.y) or {
+	st := flash.stability(thermo.by_roots(model), t, p, r.y) or {
 		return fail(.not_converged, "the answer's phase can't be tested: ${err.msg()}")
 	}
 	if !st.stable {

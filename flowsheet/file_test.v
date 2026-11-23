@@ -487,7 +487,7 @@ fn test_a_files_data_follows_the_databases_root() {
 		'106-97-8   .313e-1'))!
 	copy := components.open(root, [])!
 	l := flowsheet.load_text(sub('names = [', 'data = ["mine"]\nnames = ['), db: copy, dir: root)!
-	m := l.fluid.model
+	m := l.fluid.helmholtz()!
 	if m is thermo.Cubic {
 		// Methane is the first of five compounds, and n-butane the fourth.
 		assert m.kij[3] == 0.0313 && m.kij[15] == 0.0313

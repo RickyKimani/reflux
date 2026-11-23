@@ -270,7 +270,10 @@ fn (s StateFlash) mixture() !FlashResult {
 		steps++
 	}
 	res := s.residual(r)
-	if math.abs(res) > s.params.etol {
+	// Written so that a NaN is off: a phase's residual can be NaN, where
+	// its model has none (thermo.PhaseModel), and Brent closes in on the
+	// edge of where that begins as on a change of sign.
+	if !(math.abs(res) <= s.params.etol) {
 		return fail(.no_convergence, '${s.what()}: stopped at ${r.t} K with the energy balance off by ${res} (etol ${s.params.etol})')
 	}
 	return FlashResult{
@@ -324,10 +327,10 @@ fn (s StateFlash) eval(v []f64, mut f []f64, mut jac []f64) ! {
 		x[i] = (s.z[i] - v[j]) / lt
 	}
 	m := s.fl.model
-	sy := thermo.solve_tp(m, t, s.p, y, .stable)!
-	sx := thermo.solve_tp(m, t, s.p, x, .stable)!
-	dy := thermo.ln_phi_derivs(m, sy)
-	dx := thermo.ln_phi_derivs(m, sx)
+	sy := m.phase(t, s.p, y, .stable)!
+	sx := m.phase(t, s.p, x, .stable)!
+	dy := m.ln_phi_derivs(sy)!
+	dx := m.ln_phi_derivs(sx)!
 	py := s.fl.props(sy)
 	px := s.fl.props(sx)
 	for j, i in s.present {
@@ -404,7 +407,7 @@ fn (g SingleGap) at(t f64) !f64 {
 	if !(t >= state_t_min && t <= state_t_max) {
 		return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
 	}
-	st := thermo.solve_tp(s.fl.model, t, s.p, s.z, g.root)!
+	st := s.fl.model.phase(t, s.p, s.z, g.root)!
 	return (s.of(st) - s.value) / s.scale(t)
 }
 
@@ -430,14 +433,15 @@ fn (s StateFlash) single(root thermo.Root, t0 f64) !FlashResult {
 	}
 	lo, hi := math.min(a, b), math.max(a, b)
 	sol := numeric.brent(f, lo, hi, ftol: s.params.etol, max_iter: s.params.max_steps)!
-	// Brent also stops when the bracket can't shrink, short of ftol.
-	if math.abs(sol.f) > s.params.etol {
+	// Brent also stops when the bracket can't shrink, short of ftol, or at
+	// a NaN (see mixture).
+	if !(math.abs(sol.f) <= s.params.etol) {
 		return fail(.no_convergence, '${s.what()}: stopped at ${sol.x} K with the energy balance off by ${sol.f} (etol ${s.params.etol})')
 	}
 	// The root is the stable one by construction: the liquid below Tsat,
 	// the vapour above it, and with no saturation the lower-Gibbs root.
-	st := thermo.solve_tp(m, sol.x, s.p, s.z, root)!
-	label := thermo.phase_label(m, st)
+	st := m.phase(sol.x, s.p, s.z, root)!
+	label := m.phase_label(st)
 	return FlashResult{
 		t:          sol.x
 		p:          s.p

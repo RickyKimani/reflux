@@ -168,7 +168,7 @@ fn trials(pt Point) [][]f64 {
 // check_single re-tests a single-phase answer for stability, with extra
 // random trials and to the flash's own tolerance, 1e-10: a composition
 // below the feed's tangent plane contradicts the flash.
-fn check_single(m thermo.Model, pt Point, r flash.FlashResult) ! {
+fn check_single(m thermo.PhaseModel, pt Point, r flash.FlashResult) ! {
 	lowest := lowest_tpd(m, pt.t, pt.p, r.z, pt, 1e-10)!
 	if lowest < -1e-10 {
 		return error('a single-phase answer with a phase below its tangent plane (tm = ${lowest})')
@@ -178,9 +178,9 @@ fn check_single(m thermo.Model, pt Point, r flash.FlashResult) ! {
 // tpd is the normalised tangent-plane distance of w against a phase x,
 // Σ wᵢ(ln wᵢ + ln φᵢ(w) − ln xᵢ − ln φᵢ(x)), straight from the model and
 // independent of flash.stability. Negative proves x unstable.
-fn tpd(m thermo.Model, t f64, p f64, x []f64, w []f64) !f64 {
-	sx := thermo.solve_tp(m, t, p, x, .stable)!
-	sw := thermo.solve_tp(m, t, p, w, .stable)!
+fn tpd(m thermo.PhaseModel, t f64, p f64, x []f64, w []f64) !f64 {
+	sx := m.phase(t, p, x, .stable)!
+	sw := m.phase(t, p, w, .stable)!
 	mut sum := 0.0
 	for i in 0 .. x.len {
 		if w[i] > 0.0 {
@@ -196,7 +196,7 @@ fn tpd(m thermo.Model, t f64, p f64, x []f64, w []f64) !f64 {
 // tpd's, so a wrong verdict from stability can't pass. (A phase of a
 // converged split is no use as a trial for the other: it sits on that
 // phase's tangent plane, a stationary point with tm = 0.)
-fn lowest_tpd(m thermo.Model, t f64, p f64, x []f64, pt Point, tol f64) !f64 {
+fn lowest_tpd(m thermo.PhaseModel, t f64, p f64, x []f64, pt Point, tol f64) !f64 {
 	s := flash.stability(m, t, p, x, trials: trials(pt), tol: tol)!
 	mut lowest := 0.0
 	for tr in s.trials {
@@ -212,7 +212,7 @@ fn lowest_tpd(m thermo.Model, t f64, p f64, x []f64, pt Point, tol f64) !f64 {
 // returns the first split it finds, which is the one the verified flash
 // found first and refused. One of its phases must then have a composition
 // below its tangent plane by more than 1e-8.
-fn prove_more_phases(m thermo.Model, pt Point) !string {
+fn prove_more_phases(m thermo.PhaseModel, pt Point) !string {
 	r := flash.pt(m, pt.t, pt.p, pt.z, verify: false)!
 	if r.phases.len != 2 {
 		return error('unverified, the flash gives one phase')
@@ -228,7 +228,7 @@ fn prove_more_phases(m thermo.Model, pt Point) !string {
 }
 
 // check_split checks exit criterion 3 on a split, from scratch.
-fn check_split(m thermo.Model, pt Point, r flash.FlashResult) ! {
+fn check_split(m thermo.PhaseModel, pt Point, r flash.FlashResult) ! {
 	vap, liq := r.phases[0], r.phases[1]
 	if !(r.beta > 0.0 && r.beta < 1.0) {
 		return error('a split with β = ${r.beta}')
@@ -245,8 +245,8 @@ fn check_split(m thermo.Model, pt Point, r flash.FlashResult) ! {
 	if !distinct {
 		return error('the two phases are the same')
 	}
-	sy := thermo.solve_tp(m, r.t, r.p, y, .stable)!
-	sx := thermo.solve_tp(m, r.t, r.p, x, .stable)!
+	sy := m.phase(r.t, r.p, y, .stable)!
+	sx := m.phase(r.t, r.p, x, .stable)!
 	mut sum_x, mut sum_y := 0.0, 0.0
 	for i, z in r.z {
 		sum_x += x[i]

@@ -138,7 +138,7 @@ fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	}
 	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
 	for pair in [[x, y], [y, x]] {
-		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		s := flash.stability(thermo.by_roots(m), r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
 		assert s.stable, '${at}: a phase of the split is unstable'
 	}
 }
@@ -165,7 +165,7 @@ fn test_round_trips_from_pt_states() {
 		for r in [rh, rs] {
 			assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.t} K'
 			if r.phases.len == 2 {
-				check_equilibrium(fl.model, r, at)!
+				check_equilibrium(fl.helmholtz()!, r, at)!
 			}
 			dt := math.abs(r.t - c.t) / c.t
 			if dt > worst_t {
@@ -200,7 +200,7 @@ fn test_pure_saturation() {
 			worst_t = math.max(worst_t, math.abs(r.t - c.t) / c.t)
 			worst_b = math.max(worst_b, math.abs(r.beta - c.vf))
 			if r.phases.len == 2 && r.beta > 0.0 && r.beta < 1.0 {
-				check_equilibrium(fl.model, r, at)!
+				check_equilibrium(fl.helmholtz()!, r, at)!
 			}
 		}
 	}
@@ -242,7 +242,7 @@ fn test_three_phases_are_refused() {
 		}
 	}))!
 	z := [0.5, 0.3, 0.2]
-	r := flash.pt(m, 350.0, 5e5, z, verify: false)!
+	r := flash.pt(thermo.by_roots(m), 350.0, 5e5, z, verify: false)!
 	mut h := 0.0
 	for ph in r.phases {
 		h += ph.fraction * fl.props(ph.state).h

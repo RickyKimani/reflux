@@ -19,7 +19,7 @@ fn first(db components.Database, class Class) !Point {
 
 // refused asserts that check_split refuses r, for a reason that mentions
 // want.
-fn refused(m thermo.Model, pt Point, r flash.FlashResult, want string) ! {
+fn refused(m thermo.PhaseModel, pt Point, r flash.FlashResult, want string) ! {
 	check_split(m, pt, r) or {
 		assert err.msg().contains(want), err.msg()
 		return
@@ -28,17 +28,17 @@ fn refused(m thermo.Model, pt Point, r flash.FlashResult, want string) ! {
 }
 
 // with_phases is r with its phases' compositions replaced by y and x.
-fn with_phases(m thermo.Model, r flash.FlashResult, y []f64, x []f64) !flash.FlashResult {
+fn with_phases(m thermo.PhaseModel, r flash.FlashResult, y []f64, x []f64) !flash.FlashResult {
 	return flash.FlashResult{
 		...r
 		phases: [
 			flash.Phase{
 				...r.phases[0]
-				state: thermo.solve_tp(m, r.t, r.p, y, .stable)!
+				state: m.phase(r.t, r.p, y, .stable)!
 			},
 			flash.Phase{
 				...r.phases[1]
-				state: thermo.solve_tp(m, r.t, r.p, x, .stable)!
+				state: m.phase(r.t, r.p, x, .stable)!
 			},
 		]
 	}
@@ -46,7 +46,7 @@ fn with_phases(m thermo.Model, r flash.FlashResult, y []f64, x []f64) !flash.Fla
 
 // overlapping_split is the first seeded split with a component above 0.05
 // in both phases, where a small change can break one check alone.
-fn overlapping_split(db components.Database) !(Point, thermo.Model, flash.FlashResult) {
+fn overlapping_split(db components.Database) !(Point, thermo.PhaseModel, flash.FlashResult) {
 	for pt in points(candidates(db)!, 200) {
 		m := db.fluid(.pr, pt.cas)!.model
 		r := flash.pt(m, pt.t, pt.p, pt.z) or { continue }

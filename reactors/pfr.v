@@ -244,7 +244,7 @@ fn (mut o PfrOde) eval(v f64, y []f64, mut f []f64) ! {
 	}
 	if o.has_t {
 		props := o.fl.props(o.src.st)
-		lp := thermo.ln_phi_derivs(o.fl.model, o.src.st)
+		lp := o.fl.model.ln_phi_derivs(o.src.st)!
 		mut absorbed := 0.0
 		for i in 0 .. o.n {
 			if o.s[i] == 0 {
@@ -344,7 +344,7 @@ pub fn (r Pfr) calculate_from(fl thermo.Fluid, inlets []flowsheet.Stream, last f
 fn (r Pfr) integrate(fl thermo.Fluid, inlets []flowsheet.Stream, h0 f64) !flowsheet.Outcome {
 	n := r.k.species.len
 	inlet := one_inlet(r.name, fl, inlets, n)!
-	src := new_source(r.name, r.k, r.reactions, r.catalyst.loading, fl.model)!
+	src := new_source(r.name, r.k, r.reactions, r.catalyst.loading, fl.helmholtz()!)!
 	has_t := r.thermal != .isothermal
 	has_p := r.drop == .ergun
 	m := n + int(has_t) + int(has_p)

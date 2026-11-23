@@ -144,7 +144,7 @@ fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	}
 	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
 	for pair in [[x, y], [y, x]] {
-		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		s := flash.stability(thermo.by_roots(m), r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
 		assert s.stable, '${at}: a phase of the split is unstable'
 	}
 }
@@ -162,10 +162,10 @@ fn test_tv_round_trips_from_pt_states() {
 		at := '${c.eos} ${c.components} z ${c.z} at ${c.t} K, ${c.p} Pa'
 		fl := fluid(f, c.eos, c.components, c.kij)!
 		v, _ := own(fl, c)!
-		r := flash.tv(fl.model, c.t, v, c.z) or { panic('${at}: tv: ${err}') }
+		r := flash.tv(fl.helmholtz()!, c.t, v, c.z) or { panic('${at}: tv: ${err}') }
 		assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.p} Pa'
 		if r.phases.len == 2 {
-			check_equilibrium(fl.model, r, at)!
+			check_equilibrium(fl.helmholtz()!, r, at)!
 		}
 		dp := math.abs(r.p - c.p) / c.p
 		if dp > worst_p {
@@ -195,7 +195,7 @@ fn test_uv_round_trips_from_pt_states() {
 		r := flash.uv(fl, u, v, c.z) or { panic('${at}: uv: ${err}') }
 		assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.t} K, ${r.p} Pa'
 		if r.phases.len == 2 {
-			check_equilibrium(fl.model, r, at)!
+			check_equilibrium(fl.helmholtz()!, r, at)!
 		}
 		dt := math.abs(r.t - c.t) / c.t
 		if dt > worst_t {
@@ -222,14 +222,14 @@ fn test_pure_saturation() {
 	for c in f.saturation {
 		at := '${c.components} at ${c.t} K, ${c.p} Pa, vf ${c.vf}'
 		fl := fluid(f, 'pr', c.components, c.kij)!
-		rt := flash.tv(fl.model, c.t, c.v, [1.0]) or { panic('${at}: tv: ${err}') }
+		rt := flash.tv(fl.helmholtz()!, c.t, c.v, [1.0]) or { panic('${at}: tv: ${err}') }
 		ru := flash.uv(fl, c.u, c.v, [1.0]) or { panic('${at}: uv: ${err}') }
 		worst_p = math.max(worst_p, math.max(math.abs(rt.p - c.p), math.abs(ru.p - c.p)) / c.p)
 		worst_t = math.max(worst_t, math.abs(ru.t - c.t) / c.t)
 		worst_b = math.max(worst_b, math.max(math.abs(rt.beta - c.vf), math.abs(ru.beta - c.vf)))
 		for r in [rt, ru] {
 			if r.phases.len == 2 && r.beta > 0.0 && r.beta < 1.0 {
-				check_equilibrium(fl.model, r, at)!
+				check_equilibrium(fl.helmholtz()!, r, at)!
 			}
 		}
 	}
@@ -266,7 +266,7 @@ fn test_three_phases_are_refused() {
 	]
 	m := thermo.new_cubic(.pr, cs, kij: [0.0, 0.5, 0.5, 0.5, 0.0, 0.04, 0.5, 0.04, 0.0])!
 	z := [0.5, 0.3, 0.2]
-	r := flash.pt(m, 350.0, 5e5, z, verify: false)!
+	r := flash.pt(thermo.by_roots(m), 350.0, 5e5, z, verify: false)!
 	mut v := 0.0
 	for ph in r.phases {
 		v += ph.fraction * ph.state.molar_volume()
@@ -296,7 +296,7 @@ fn test_the_tolerance_contract() {
 			if tol == 1e-16 && k % 8 != 0 {
 				continue
 			}
-			rt := flash.tv(fl.model, c.t, v, c.z, vtol: tol) or {
+			rt := flash.tv(fl.helmholtz()!, c.t, v, c.z, vtol: tol) or {
 				assert tol == 1e-16 && err is flash.FlashError, '${at}: ${err}'
 				refused++
 				continue
@@ -330,22 +330,22 @@ fn test_bad_input() {
 	fl := fluid(f, c.eos, c.components, c.kij)!
 	bad := {
 		'T = 0':                fn [fl, c] () !flash.FlashResult {
-			return flash.tv(fl.model, 0.0, c.v, c.z)
+			return flash.tv(fl.helmholtz()!, 0.0, c.v, c.z)
 		}
 		'V < 0':                fn [fl, c] () !flash.FlashResult {
-			return flash.tv(fl.model, c.t, -1e-3, c.z)
+			return flash.tv(fl.helmholtz()!, c.t, -1e-3, c.z)
 		}
 		'V below the covolume': fn [fl, c] () !flash.FlashResult {
-			return flash.tv(fl.model, c.t, 1e-6, c.z)
+			return flash.tv(fl.helmholtz()!, c.t, 1e-6, c.z)
 		}
 		'U is NaN':             fn [fl, c] () !flash.FlashResult {
 			return flash.uv(fl, math.nan(), c.v, c.z)
 		}
 		'a negative z':         fn [fl, c] () !flash.FlashResult {
-			return flash.tv(fl.model, c.t, c.v, [0.5, -0.5])
+			return flash.tv(fl.helmholtz()!, c.t, c.v, [0.5, -0.5])
 		}
 		'vtol = 0':             fn [fl, c] () !flash.FlashResult {
-			return flash.tv(fl.model, c.t, c.v, c.z, vtol: 0.0)
+			return flash.tv(fl.helmholtz()!, c.t, c.v, c.z, vtol: 0.0)
 		}
 		'an unreachable U':     fn [fl, c] () !flash.FlashResult {
 			return flash.uv(fl, 1e8, c.v, c.z)

@@ -138,8 +138,8 @@ fn test_a_splits_balances_close() {
 		for c in 0 .. 3 {
 			assert math.abs(bv * y[c] + bl * x[c] - z[c]) < 1e-14
 		}
-		sv := thermo.solve_tp(s.fluid.model, t[i], 20e5, y, .stable)!
-		sl := thermo.solve_tp(s.fluid.model, t[i], 20e5, x, .stable)!
+		sv := thermo.solve_tp(s.fluid.helmholtz()!, t[i], 20e5, y, .stable)!
+		sl := thermo.solve_tp(s.fluid.helmholtz()!, t[i], 20e5, x, .stable)!
 		for c in 0 .. 3 {
 			fv := sv.ln_phi[c] + math.log(y[c])
 			fl_ := sl.ln_phi[c] + math.log(x[c])
@@ -328,7 +328,7 @@ fn v_api(spec i32, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashResult {
 		flash_pt { flash.pt(f.model, a, b, z)! }
 		flash_ph { flash.ph(f, a, b, z)! }
 		flash_ps { flash.ps(f, a, b, z)! }
-		flash_tv { flash.tv(f.model, a, b, z)! }
+		flash_tv { flash.tv(f.helmholtz()!, a, b, z)! }
 		flash_uv { flash.uv(f, a, b, z)! }
 		flash_tvf { flash.tvf(f.model, a, b, z)! }
 		else { flash.pvf(f.model, a, b, z)! }

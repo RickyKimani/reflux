@@ -22,7 +22,8 @@ criterion 8, both approved on 2026-11-18. Steps 1 to 3 are done, built
 together, and step 1 amends D7 again, approved on 2026-11-20. Five defects
 found in them were corrected on 2026-11-22 (below step 3), and D7's
 amendment for two of those was approved that day, and `eval`'s answers
-made finite or refused. Step 4, the seam, is next.
+made finite or refused. Step 4, the seam, is done, and amends D3, approved
+on 2026-11-23. Step 5 is next.
 
 ## Goal
 
@@ -260,7 +261,7 @@ All checked by tests in CI, as before.
 |---|---|---|---|
 | D1 | Scope | One milestone, the roadmap's M6, with four additions:<br>- **Henry's law,** which any reactor's product over a polar liquid needs;<br>- **γ–φ calorics,** which every energy balance needs;<br>- **a decanter;**<br>- **NRTL and UNIQUAC fitting,** H4's other half.<br><br>Not in it: electrolytes (C8), Gᴱ mixing rules (M12), Hayden–O'Connell vapours, models per unit, and three-phase bubble points (Not in M6). | Each addition is what makes the rest usable in a flowsheet. A γ–φ liquid without Henry's law refuses every feed with hydrogen in it. |
 | D2 | Where it lives | <br>- **A new module, `activity`:** the Gᴱ models and UNIFAC's tables, over `numeric` and `expr`. It knows nothing of phases.<br>- **`thermo`:** the phase seam (D3), the γ–φ liquid (D4, D5) and Henry's law (D6), importing `activity` and `tdep`.<br>- **`components`:** the banks and tables read from ChemSep's files, and a γ–φ fluid's `Setup`.<br>- **`flash`:** on the seam, and the three-phase PT flash.<br>- **`flowsheet`:** format 4, the decanter and report format 4.<br>- **`fit`:** NRTL and UNIQUAC parameters.<br><br>vlib has no module named `activity`. | Gᴱ models are functions of T and x alone, so they're usable and testable without a phase. The seam is `thermo`'s, since a phase is. |
-| D3 | The seam | `flash` takes a phase model, not a `thermo.Model`. A phase model gives a phase at (T, P, n) as liquid-like, vapour-like or the one of lower G, each with:<br>- ln φᵢ and n·∂ln φᵢ/∂nⱼ, ∂ln φᵢ/∂T and ∂ln φᵢ/∂P;<br>- its molar volume and mass density;<br>- its residual H, S and Cp, which `Fluid` adds to the ideal gas's.<br><br>The two kinds:<br>- **a Helmholtz `Model`,** by its volume roots, exactly as `solve_tp` does now;<br>- **a γ–φ fluid,** by its liquid's γ and its vapour's model, the lower G again choosing.<br><br>The TV and UV flashes stay on `thermo.Model` and refuse a γ–φ fluid, saying why. `Cubic.work()` stays the reactors' path. Step 0 prototypes the seam and measures the cubic's bits and time through it. | It's the seam the flash already has in all but name: ln φ and its derivatives (Michelsen and Mollerup). A cubic behind it computes what it computes now, so its answers can't move. |
+| D3 | The seam | `flash` takes a phase model, not a `thermo.Model`. A phase model gives a phase at (T, P, n) as liquid-like, vapour-like or the one of lower G, each with:<br>- ln φᵢ and n·∂ln φᵢ/∂nⱼ, ∂ln φᵢ/∂T and ∂ln φᵢ/∂P;<br>- its molar volume and mass density;<br>- its residual H, S and Cp, which `Fluid` adds to the ideal gas's.<br><br>The two kinds:<br>- **a Helmholtz `Model`,** by its volume roots, exactly as `solve_tp` does now;<br>- **a γ–φ fluid,** by its liquid's γ and its vapour's model, the lower G again choosing.<br><br>The TV and UV flashes stay on `thermo.Model` and refuse a γ–φ fluid, saying why. `Cubic.work()` stays the reactors' path. Step 0 prototypes the seam and measures the cubic's bits and time through it.<br><br>**Amended in step 4,** approved on 2026-11-23:<br>- a phase's residual also has Cvʳ, (∂V/∂T)_P and (∂P/∂V)_T, which `Fluid.props` needs for the Cv, speed of sound and Joule–Thomson coefficient it already gives;<br>- it can't fail, as `props` can't, so what a model hasn't is NaN, and PH and PS take a NaN balance as unmet;<br>- ∂ln φ can refuse, with its reason, as an activity model does;<br>- a phase's mass density comes from its volume and the components' molar masses, so it's no method of its own. | It's the seam the flash already has in all but name: ln φ and its derivatives (Michelsen and Mollerup). A cubic behind it computes what it computes now, so its answers can't move. |
 | D4 | The γ–φ liquid | fᵢ = xᵢ γᵢ Pᵢˢᵃᵗ φᵢˢᵃᵗ exp(Vᵢᴸ (P − Pᵢˢᵃᵗ)/RT):<br>- **Pˢᵃᵗ** by the component's own correlation, and **Vᴸ** by its liquid density, incompressible over the Poynting integral. The liquid's volume is Σ xᵢ Vᵢᴸ, with no excess volume.<br>- **The vapour** is the ideal gas by default, or a cubic of the file's. φˢᵃᵗ is then that cubic's pure φ at Pˢᵃᵗ, and 1 for the ideal gas.<br>- **Poynting** is on by default, and can be turned off.<br>- **Kept until T moves:** Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and each τ depend on T alone (M8's D11).<br>- **Outside a correlation's range,** or above its Tc, a component is refused unless it's a Henry's-law solute (D6). | The textbook form, as Aspen's and `thermo`'s. Poynting costs nothing and matters at pressure. A file can match Aspen's NRTL, ideal gas and no Poynting, by saying so. |
 | D5 | Calorics | The liquid's H, S and Cp come from its fugacities: h̄ᵢ − hᵢⁱᵍ = −RT²(∂ln φᵢᴸ/∂T) at constant P and x, through the same Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and γ. ΔHvap is then Clapeyron's from Pˢᵃᵗ's slope, and Hᴱ is the model's. `thermo`'s 'Poynting&PhiSat' basis is the reference.<br><br>No ΔHvap correlation enters. ChemSep's ΔHvap and liquid Cp are compared with the answer, as the model's accuracy, recorded and not asserted. | A drum's energy balance then agrees with its phase equilibrium. A separate ΔHvap, `thermo`'s 'Hvap' basis, gives a flash whose duty disagrees with its own Clapeyron. |
 | D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units. | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
@@ -691,11 +692,145 @@ derivative's check is theirs too), and were deleted.
 **Checks:** both full checks pass on the final tree, tcc (18 min) and gcc
 with its `-prod` build (33 min): 110 test files, one of them new.
 
-### 4. The seam
+### 4. The seam — done, with D3 amended
 - D3: `thermo`'s phase model, the Helmholtz `Model` behind it, `Fluid` on
   it, and `flash` moved onto it.
 - Every M3 to M8 fixture, golden report and iteration count is the same
   bits, and the PT flash's time is recorded (criterion 4).
+
+**What was built** ([design.md](design.md), "The phase seam"):
+- **[thermo/phases.v](../thermo/phases.v):** `PhaseModel`, a phase at
+  (T, P, n) with its ln φ, their derivatives, its label and its residual
+  properties; `VolumeRoots`, any `Model` behind it by its volume roots, made
+  by `thermo.by_roots`; `Fluid.helmholtz()`, the `Model` behind a fluid or a
+  `NoHelmholtzError` saying why there's none.
+- **`Fluid` on the seam:** its `model` is a `PhaseModel`. `new_fluid` still
+  takes a `Model` and puts it behind its roots; `new_phase_fluid` takes any
+  phase model. `props` adds the ideal gas to what the seam gives.
+- **`flash` on the seam:** the PT, stability, vapour-fraction, PH and PS
+  flashes take a `PhaseModel`. TV takes a `Model` still, and UV refuses a
+  fluid without one (`bad_input`, with why).
+- **What needs F(T, V, n)** asks `helmholtz()`: the TV flash's callers, the
+  five reactors (refused with why in `one_inlet`, D11), `equilibrium`, Psat
+  in the C API and the demo, and a cubic's kᵢⱼ fit.
+- **The callers:** `sweep`, `capi`, `benchmarks`, `fit`, `reactors`,
+  `equilibrium`, the demo and `tools/capi_reference.v`, and 28 test files,
+  where a flash takes `thermo.by_roots(m)` and each test's own checks keep
+  `solve_tp` on the `Model`.
+
+**D3 is amended** (above), approved on 2026-11-23: a phase's residual carries what `Fluid.props` already gives
+beyond H, S and Cp, it can be NaN, ∂ln φ can refuse, and mass density is
+the state's.
+
+**The same bits** (criterion 4), against `1d9c560`, the code before, each
+built from the same source under tcc and under gcc's `-prod`:
+- **A trace of every flash:** the sweep's 10,000 seeded PR mixtures, PT and
+  the whole stability test at each; at one point in five every other flash
+  (the three roots and their properties, `tvf` and `pvf` at β 0, 0.4 and 1,
+  PH, PS, PH from an estimate, TV and UV from the PT answer's state), on PR,
+  SRK and a PR with Péneloux's shift in turn; at one in fifty the same with
+  a component absent; and 160 pure compounds at four states each, below and
+  above their critical points. 62,896 lines: 32,729 answers, every field's
+  bits, iteration counts, paths, labels, each phase's eleven properties and
+  every stability trial; 9,474 refusals by kind and message; 8,520 phases;
+  12,173 stability tests. **The same, byte for byte,** under each compiler.
+- **The CLI:** every flowsheet solved with both reports, the studies, the
+  optimisations, the fits, `kinetics check` with and without a state, and
+  the demo: 65 outputs, the same but for the 14 lines that say how long a
+  run took.
+- **The C API's reference** (`tools/capi_reference.v`, every point the
+  Python tests hold the library to): the same, byte for byte. The Python
+  package's 83 tests pass.
+- **The golden reports** pass their tests in both full checks.
+
+**The time** (criterion 4): M3's twelve cases, by gcc's `-prod`, each the
+best of 15 rounds, six runs of each build taking turns. The best times
+differ by 0.994 to 1.011, while one round's ratio ranges from 0.59 to 1.30;
+of the 72 rounds' ratios, the median is 0.991, 29 above 1 and 43 below. Each
+case allocates the same bytes under tcc, whose count is exact. So the seam
+costs nothing the laptop's clock can see, as step 0 found.
+
+| Case | Before, µs | After, µs | Ratio |
+|---|---|---|---|
+| methane/n-butane PT, two phases | 185.81 | 185.90 | 1.000 |
+| methane/n-butane PT, one phase | 61.09 | 61.33 | 1.004 |
+| methane/n-butane PH | 940.18 | 939.15 | 0.999 |
+| methane/n-butane bubble T | 139.31 | 139.06 | 0.998 |
+| natural gas PT, two phases | 438.67 | 440.73 | 1.005 |
+| natural gas PT, one phase | 178.39 | 180.43 | 1.011 |
+| natural gas PH | 2381.84 | 2371.24 | 0.996 |
+| natural gas bubble T | 432.03 | 432.43 | 1.001 |
+| gas condensate PT, two phases | 809.34 | 804.55 | 0.994 |
+| gas condensate PT, one phase | 252.66 | 253.86 | 1.005 |
+| gas condensate PH | 3658.83 | 3676.68 | 1.005 |
+| gas condensate bubble T | 945.71 | 944.26 | 0.998 |
+
+**Tests:**
+- [thermo/phases_test.v](../thermo/phases_test.v): `VolumeRoots` against the
+  functions on a `Model`, every field's bits, for PR, SRK and a translated
+  PR at every root (972 phases, 108 states with two roots), and `Fluid`'s
+  sums; refusals passed on typed; `helmholtz` both ways.
+- [flash/seam_test.v](../flash/seam_test.v): Raoult's law, an ideal
+  solution of incompressible liquids under an ideal gas, a phase model with
+  no F at all, against closed forms: 32 splits, 170 liquids and 188 vapours
+  by PT and stability (β to 1.6e-14), bubble, dew and vapour-fraction points
+  (2.2e-13), PH and PS (T to 1.8e-12), a pure component's jump, the speed of
+  sound and Joule–Thomson coefficient from what the seam gives, UV's
+  refusal, and the model's own refusals reaching the caller typed.
+- [flowsheet/seam_test.v](../flowsheet/seam_test.v): the five golden
+  flowsheets with the cubic hidden behind a model that has no F(T, V, n):
+  the same report, every number's shortest form.
+- In [reactors/reactors_test.v](../reactors/reactors_test.v), each of the
+  five reactors refuses such a fluid by name, before it calculates, and in
+  [flash/ph_internal_test.v](../flash/ph_internal_test.v) PH's Newton
+  residuals are zero at a PT split whose liquid has a vapour root too.
+
+**Found:**
+- **PH and PS took a NaN energy balance for a met one:** `|r| > etol` is
+  false for a NaN, and Brent closes in on the edge of a NaN as on a change
+  of sign. Given Raoult's law with no liquid enthalpy below 300 K, PH
+  answered 299.93 K. A residual can be NaN under the seam (D3 as amended),
+  so the final checks are `!(|r| ≤ etol)` now, which no finite answer
+  notices. UV's has the same form; 24 probes at `1d9c560`, a cubic with
+  ∂F/∂T NaN beyond an edge either side of the answer, got none through it,
+  so it's left as it is, for step 8.
+- **V's `as` to a type that can't be in the interface compiles, and returns
+  a zero value:** where `fl.model is thermo.Cubic` was a compile error,
+  `fl.model as thermo.Cubic` compiled, and two tests read a zero `Cubic`
+  (one panicked on its empty arrays). And `?thermo.Model(fl.model)` passed
+  `v -check` and failed in C. All three are fixed, and the V notes have it.
+- **`numeric.newton` drops a system's reason at its first point** ("the
+  system cannot be evaluated at x0"), so a phase model's refusal there
+  reaches the caller typed but without its reason. Passing it on would
+  change 27 error messages in the trace above, so it's step 6's, whose
+  flashes on a γ–φ fluid will want it.
+
+**Planted mistakes:** 41, in a scratch copy, one at a time, all caught.
+Two survived the first run and got tests: PH's Newton taking a phase on the
+wrong root (its Jacobian stays consistent, and Brent finishes where Newton
+fails, so the answer never moved), now caught by its residuals at a split;
+and the pure PH's NaN check, which Brent's last point reached from the
+finite side, now held at forty edges.
+
+**For step 5:** a γ–φ phase model keeps what depends on T alone between
+calls, which the seam doesn't carry: a model is immutable and shared. An
+optional interface for a per-flash workspace, as M8's `Warm` is optional,
+adds that without changing the seam. And its `phase_label` and
+`ln_phi_derivs` must tell its liquid from its vapour by the state alone, as
+Raoult's law does here by Z.
+
+**For 0.5.0's CHANGELOG entry** (the V API): `Fluid.model` is a
+`thermo.PhaseModel`; `flash.pt`, `stability`, `tvf`, `pvf`, `bubble_*` and
+`dew_*` take one, and `flash.tv` a `thermo.Model`; `thermo.by_roots`,
+`new_phase_fluid`, `Fluid.helmholtz` and `NoHelmholtzError` are new; a
+reactor refuses a fluid without F(T, V, n); and PH and PS refuse a NaN
+energy balance.
+
+[spike/seam](../spike/seam/spike.v) still builds, with `flash` on the seam
+itself; its `make.py` copies `flash` as it was, so it's run on `1d9c560`.
+
+**Checks:** both full checks pass, tcc (12 min) and gcc with its `-prod`
+build (29 min): 113 test files, three of them new.
 
 ### 5. The γ–φ liquid, and Henry's law
 - D4, D5, D6: fugacities, volumes and calorics; Henry's law in water and in

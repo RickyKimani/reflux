@@ -8,6 +8,10 @@
 //     python spike/seam/make.py
 //     v -prod -cc gcc run spike/seam [points]
 //
+// Since step 4 flash is on the seam itself, so this compares it with
+// seamflash's copy of step 0's. make.py needs flash as it was: run it on
+// 1d9c560.
+//
 // It's run from the repository root. Not part of the simulator.
 module main
 
@@ -75,9 +79,9 @@ fn compare(db components.Database, count int) !Tally {
 	mut tally := Tally{}
 	for pt in sweep.points(pool, count) {
 		fl := db.fluid(.pr, pt.cas) or { continue }
-		m := fl.model
+		m := fl.helmholtz()!
 		eos := sf.Phases(sf.Eos{m})
-		ra := flash.pt(m, pt.t, pt.p, pt.z) or {
+		ra := flash.pt(fl.model, pt.t, pt.p, pt.z) or {
 			theirs := seam_error(eos, pt)
 			if theirs == '' {
 				tally.differ << "${pt.index}: flash failed (${err.msg()}) and seamflash didn't"
@@ -134,11 +138,12 @@ fn time_cases() ! {
 		}
 		s := fx.systems[c.system]
 		fl := benchmarks.fluid(s)!
-		m := fl.model
+		m := fl.helmholtz()!
+		phases := fl.model
 		eos := sf.Phases(sf.Eos{m})
 		states := [][]f64{len: c.p.len, init: [c.t[index], c.p[index]]}
-		direct := fn [m] (t f64, p f64, z []f64) !int {
-			return flash.pt(m, t, p, z)!.phases.len
+		direct := fn [phases] (t f64, p f64, z []f64) !int {
+			return flash.pt(phases, t, p, z)!.phases.len
 		}
 		seamed := fn [eos] (t f64, p f64, z []f64) !int {
 			return sf.pt(eos, t, p, z)!.phases.len

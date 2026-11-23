@@ -33,7 +33,7 @@ fn molar_h(fl thermo.Fluid, s Stream) !f64 {
 			continue
 		}
 		root := if phase.label == .vapor { thermo.Root.vapor } else { thermo.Root.liquid }
-		h += phase.fraction * fl.props(thermo.solve_tp(fl.model, s.t, s.p, phase.state.n, root)!).h
+		h += phase.fraction * fl.props(thermo.solve_tp(fl.helmholtz()!, s.t, s.p, phase.state.n, root)!).h
 	}
 	return h
 }

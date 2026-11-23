@@ -50,7 +50,7 @@ fn (mut p VleProblem) residuals(theta []f64) ![]f64 {
 	mut out := []f64{}
 	for row in p.rows {
 		p.flashes++
-		b := flash.bubble_p(model, row.t, row.x) or {
+		b := flash.bubble_p(thermo.by_roots(model), row.t, row.x) or {
 			return error('no bubble point at T = ${row.t} K and x = ${row.x}: ${err.msg()}')
 		}
 		if b.phases.len != 2 {
@@ -98,10 +98,11 @@ fn (mut p VleProblem) eval(theta []f64, mut r []f64, mut j []f64) ! {
 // the file must give, since they're of different kinds.
 fn fit_vle(file flowsheet.FitFile, plan flowsheet.FitPlan, data Data) Fitted {
 	fl := file.fluid or { return failed(plan, 'the file has no [model]') }
-	if fl.model !is thermo.Cubic {
+	eos := fl.helmholtz() or { return failed(plan, "kij is a cubic's, and the model is not one") }
+	if eos !is thermo.Cubic {
 		return failed(plan, "kij is a cubic's, and the model is not one")
 	}
-	base := fl.model as thermo.Cubic
+	base := eos as thermo.Cubic
 	nc := file.names.len
 	t_col, p_col := data.index('T'), data.index('P')
 	if t_col < 0 || p_col < 0 {
@@ -258,7 +259,7 @@ fn vle_residuals(mut p VleProblem, theta []f64, weighted []f64) ![]Residual {
 	mut out := []Residual{}
 	mut k := 0
 	for r, row in p.rows {
-		b := flash.bubble_p(model, row.t, row.x)!
+		b := flash.bubble_p(thermo.by_roots(model), row.t, row.x)!
 		out << Residual{
 			row:      r
 			column:   'P'

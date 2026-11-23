@@ -45,7 +45,7 @@ fn from_scratch(fl thermo.Fluid, s Stream) !Molar {
 		if phase.fraction == 0.0 {
 			continue
 		}
-		st := thermo.solve_tp(fl.model, s.t, s.p, phase.state.n, root_of(phase))!
+		st := thermo.solve_tp(fl.helmholtz()!, s.t, s.p, phase.state.n, root_of(phase))!
 		pr := fl.props(st)
 		m.h += phase.fraction * pr.h
 		m.s += phase.fraction * pr.s
@@ -79,8 +79,8 @@ fn check_stream(fl thermo.Fluid, s Stream, at string) ! {
 	}
 	assert r.phases.len == 2, at
 	y, x := r.phases[0].state.n, r.phases[1].state.n
-	sy := thermo.solve_tp(fl.model, s.t, s.p, y, root_of(r.phases[0]))!
-	sx := thermo.solve_tp(fl.model, s.t, s.p, x, root_of(r.phases[1]))!
+	sy := thermo.solve_tp(fl.helmholtz()!, s.t, s.p, y, root_of(r.phases[0]))!
+	sx := thermo.solve_tp(fl.helmholtz()!, s.t, s.p, x, root_of(r.phases[1]))!
 	mut sum_x, mut sum_y := 0.0, 0.0
 	for i, zi in r.z {
 		sum_x += x[i]

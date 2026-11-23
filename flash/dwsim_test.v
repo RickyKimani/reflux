@@ -218,7 +218,7 @@ fn test_pt_matches_the_exact_pr_and_dwsim() {
 		sys := fx.systems[c.system]
 		m := cubic_of(sys)!
 		fl := fluid_of(sys, m)!
-		r := flash.pt(m, c.t, c.p, sys.z)!
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, sys.z)!
 		got := split_of(r)
 		mol := molar_of(fl, fx.p_ref_s, r)
 		hs, ss := math.abs(c.exact.h) + thermo.r_gas * c.t, math.abs(c.exact.s) + thermo.r_gas
@@ -284,7 +284,7 @@ fn test_ph_and_ps_by_state() {
 			shift := thermo.r_gas * math.log(thermo.p_ref / fx.p_ref_s)
 			mol = Molar{(1.0 - c.vf) * l.h + c.vf * g.h, (1.0 - c.vf) * l.s + c.vf * g.s - shift}
 		} else {
-			mol = molar_of(fl, fx.p_ref_s, flash.pt(m, st.t, c.p, sys.z)!)
+			mol = molar_of(fl, fx.p_ref_s, flash.pt(thermo.by_roots(m), st.t, c.p, sys.z)!)
 		}
 		want := c.exact.spec
 		scale := if c.kind == 'ph' { thermo.r_gas * st.t } else { thermo.r_gas }
@@ -383,11 +383,11 @@ fn test_reflux_bubble_and_dew_points() {
 		beta := if c.kind == 'bubble' { 0.0 } else { 1.0 }
 		e, d := c.exact, c.dwsim
 		if c.t > 0.0 {
-			r := flash.tvf(m, c.t, beta, sys.z)!
+			r := flash.tvf(thermo.by_roots(m), c.t, beta, sys.z)!
 			assert math.abs(r.p - e.p) <= 1e-10 * e.p, '${at}: ${r.p} vs ${e.p}'
 			assert math.abs(r.p - d.p) <= math.abs(e.p - d.p) + 1e-8 * e.p, at
 		} else {
-			r := flash.pvf(m, c.p, beta, sys.z)!
+			r := flash.pvf(thermo.by_roots(m), c.p, beta, sys.z)!
 			assert math.abs(r.t - e.t) <= 1e-10 * e.t, '${at}: ${r.t} vs ${e.t}'
 			assert math.abs(r.t - d.t) <= math.abs(e.t - d.t) + 1e-8 * e.t, at
 			assert math.abs(r.t - d.t) <= 0.01, at

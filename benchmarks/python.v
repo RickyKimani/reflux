@@ -6,7 +6,6 @@ import json2
 import numeric
 import os
 import strings
-import thermo
 import time
 
 // M10a's speed (exit criterion 10): what a call from Python costs over V's
@@ -85,10 +84,10 @@ pub fn time_v(what string, n int, reps int) ![]f64 {
 		t0 := time.sys_mono_now()
 		for t in ts {
 			if what == 'props' {
-				st := thermo.solve_tp(fl.model, t, python_p, python_z, .stable)!
+				st := fl.model.phase(t, python_p, python_z, .stable)!
 				pr := fl.props(st)
 				sink += pr.h / numeric.sum(python_z)
-				if thermo.phase_label(fl.model, st) == .liquid {
+				if fl.model.phase_label(st) == .liquid {
 					sink += 1.0
 				}
 			} else {

@@ -45,7 +45,6 @@ Keep this section current: update it whenever a step is committed.
       papers' tables where it has nothing.
   - **Steps 1 to 3 are done,** built together at the owner's word
     (committed at a70e0a9), and step 1 amends D7, approved on 2026-11-20.
-    Step 4, the seam, is next.
     - Step 1: twenty ChemSep files vendored (the NRTL, UNIQUAC, Wilson and
       Henry's-law banks; each UNIFAC table with its extension), read in
       `components/activity.v`. The UNIFAC files contradict themselves in
@@ -72,9 +71,18 @@ Keep this section current: update it whenever a step is committed.
       1e-12 of 1, G, τ, Λ and ψ normal doubles, every output asked for
       finite. `numeric.Jet`'s log no longer loses ∂² below 1e-154. No
       answer moved; newly refused only at 10 K and below.
-  - The flash's seam moves from `thermo.Model` to a phase model (D3), which
-    a cubic's volume roots and a γ–φ liquid both give, and every cubic
-    answer from M3 to M8 keeps its bits (criterion 4).
+  - **Step 4, the seam, is done,** and amends D3, approved on 2026-11-23:
+    `flash` takes a `thermo.PhaseModel`, a phase at
+    (T, P, n), which an equation of state gives by `thermo.by_roots` and
+    step 5's γ–φ fluid will give itself. Step 5 is next.
+    - Every cubic answer keeps its bits (criterion 4): the plan has the
+      trace, the timings and what was compared.
+    - What needs F(T, V, n) asks `Fluid.helmholtz()`: TV and UV, the
+      reactors (D11, refused with why), equilibrium, Psat, a kij fit.
+    - Found: PH and PS took a NaN energy balance as met (fixed); V's `as`
+      to a type that can't be in the interface compiles and returns a zero
+      value (v-for-go); `numeric.newton` drops a model's reason at x0
+      (step 6's to pass on).
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as
@@ -769,8 +777,13 @@ over the rest, built into a shared library for the Python package in
   - `Cubic.work()` (M8) is `solve_tp` for many states at no allocation: one
     volume function, boxed once, moved to each composition in place, with
     `solve_tp`'s bits. One per thread; the reactors' `Source` uses it.
-  - `Fluid` adds the ideal-gas part, for total properties.
-- **`flash` works for any `thermo.Model`** (D2).
+  - `Fluid` adds the ideal-gas part, for total properties. Its `model` is
+    a `PhaseModel` (M6's D3): never downcast it with `as`, which compiles
+    and returns zeros. Ask `helmholtz()` for the `Model`, then test that.
+- **`flash` works for any `thermo.PhaseModel`** (M6's D3): a phase at
+  (T, P, n) with ln φ, their derivatives, a label and residual properties.
+  `thermo.by_roots(model)` is any `Model` as one, and `tv` alone takes a
+  `Model` itself.
   - `stability` is Michelsen's tangent-plane test. Its trials are Wilson's
     vapour- and liquid-like ones plus a nearly pure phase of each component.
     Substitution with DEM is followed by a second-order finish in α = 2√W.

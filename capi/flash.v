@@ -61,7 +61,7 @@ struct StabilityPoint {
 
 // stability_point tests one feed with the V API's defaults: every trial, so
 // that tm is the lowest any reached.
-fn stability_point(m thermo.Model, t f64, p f64, z []f64) !StabilityPoint {
+fn stability_point(m thermo.PhaseModel, t f64, p f64, z []f64) !StabilityPoint {
 	check_tp(t, p)!
 	check_z(z)!
 	st := flash.stability(m, t, p, z)!
@@ -170,7 +170,7 @@ fn flash_at(spec i32, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashResult 
 		flash_pt { flash.pt(f.model, a, b, z)! }
 		flash_ph { flash.ph(f, a, b, z)! }
 		flash_ps { flash.ps(f, a, b, z)! }
-		flash_tv { flash.tv(f.model, a, b, z)! }
+		flash_tv { flash.tv(f.helmholtz()!, a, b, z)! }
 		flash_uv { flash.uv(f, a, b, z)! }
 		flash_tvf { flash.tvf(f.model, a, b, z)! }
 		else { flash.pvf(f.model, a, b, z)! }

@@ -3,18 +3,26 @@ module thermo
 import math
 import numeric
 
-// Fluid is what a stream needs: a residual Model for the non-ideality, plus
-// ideal-gas data for each component. Keeping them apart means Model stays
-// purely residual, so CPA or SAFT never deal with heat capacities.
+// Fluid is what a stream needs: a PhaseModel for the phases and their
+// non-ideality (M6's D3), plus ideal-gas data for each component. Keeping
+// them apart means a model stays purely residual, so CPA or SAFT never deal
+// with heat capacities. What needs F(T, V, n) itself asks helmholtz for it.
 pub struct Fluid {
 pub:
-	model Model
+	model PhaseModel
 	ideal []IdealGas
 }
 
-// new_fluid pairs a model with ideal-gas data, one entry per component, in
-// the model's component order.
+// new_fluid pairs an equation of state, whose phases are its volume roots,
+// with ideal-gas data, one entry per component, in the model's component
+// order.
 pub fn new_fluid(model Model, ideal []IdealGas) !Fluid {
+	return new_phase_fluid(by_roots(model), ideal)
+}
+
+// new_phase_fluid is new_fluid for any phase model, with or without an
+// F(T, V, n) behind it.
+pub fn new_phase_fluid(model PhaseModel, ideal []IdealGas) !Fluid {
 	nc := model.components().len
 	if ideal.len != nc {
 		return error('got ideal-gas data for ${ideal.len} components, but the model has ${nc}')
@@ -49,9 +57,7 @@ pub:
 // same T, P and n, plus the residual part from the model.
 pub fn (f Fluid) props(st State) Props {
 	t, p, v := st.t, st.p, st.v
-	r := f.model.residual2(t, v, st.n)
-	pd := pressure_derivs_from(r, t, v, st.n)
-	res := residual_props_from(r, pd, st)
+	res := f.model.phase_residual(st)
 	ntot := numeric.sum(st.n)
 	comps := f.model.components()
 
@@ -86,7 +92,6 @@ pub fn (f Fluid) props(st State) Props {
 	cp := cp_ig + res.cp
 	cv := cp_ig - ntot * r_gas + res.cv
 	u := h - p * v
-	dv_dt := -pd.dp_dt / pd.dp_dv // (∂V/∂T)_P
 	return Props{
 		h:        h
 		s:        s
@@ -96,8 +101,8 @@ pub fn (f Fluid) props(st State) Props {
 		cp:       cp
 		cv:       cv
 		// w² = (∂P/∂ρ)_S = (Cp/Cv)·(∂P/∂ρ)_T, with ρ the mass density m/V.
-		w:        math.sqrt(-v * v / mass * cp / cv * pd.dp_dv)
-		mu_jt:    (t * dv_dt - v) / cp
+		w:        math.sqrt(-v * v / mass * cp / cv * res.dp_dv)
+		mu_jt:    (t * res.dv_dt - v) / cp
 		absolute: absolute
 	}
 }

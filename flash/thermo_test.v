@@ -190,7 +190,7 @@ fn test_pt_matches_thermo() {
 		at := '${c.eos} ${c.components} z ${c.z} at ${c.t} K, ${c.p} Pa'
 		m := cubic_of(f, c.eos, c.components, c.kij)!
 		fl := fluid_of(f, m, c.components)!
-		r := flash.pt(m, c.t, c.p, c.z)!
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, c.z)!
 		assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases'
 		if r.phases.len == 1 {
 			assert r.phases[0].label.str() == c.phases[0].label, at
@@ -323,7 +323,7 @@ fn test_bubble_and_dew_points_are_boundaries() {
 		mut sides := []f64{}
 		for d in [1e-7, -1e-7] {
 			t, p := if c.spec == 'p' { c.t * (1.0 + d), c.p } else { c.t, c.p * (1.0 + d) }
-			r := flash.pt(m, t, p, c.z)!
+			r := flash.pt(thermo.by_roots(m), t, p, c.z)!
 			sides << incipient_fraction(r, c.incipient)
 		}
 		sides.sort()

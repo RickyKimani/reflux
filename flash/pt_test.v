@@ -93,7 +93,7 @@ fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	}
 	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
 	for pair in [[x, y], [y, x]] {
-		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		s := flash.stability(thermo.by_roots(m), r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
 		assert s.stable, '${at}: a phase of the split is unstable'
 	}
 }
@@ -108,7 +108,7 @@ fn test_pt_matches_thermos_splits() {
 	for c in f.cases {
 		at := '${c.eos} ${c.components} z ${c.z} at ${c.t} K, ${c.p} Pa'
 		m := model_for(f, c)!
-		r := flash.pt(m, c.t, c.p, c.z)!
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, c.z)!
 		if c.stable {
 			assert r.phases.len == 1 && r.path == .single_phase, at
 			continue
@@ -142,7 +142,7 @@ fn test_every_split_is_an_equilibrium() {
 			continue
 		}
 		m := model_for(f, c)!
-		r := flash.pt(m, c.t, c.p, c.z)!
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, c.z)!
 		check_equilibrium(m, r, '${c.eos} ${c.components} z ${c.z} at ${c.t} K, ${c.p} Pa')!
 		if r.path == .newton {
 			newton++
@@ -166,7 +166,7 @@ fn test_the_split_budget() {
 	mut total, mut newton := 0, 0
 	for c in f.cases.filter(!it.stable) {
 		m := model_for(f, c)!
-		r := flash.pt(m, c.t, c.p, c.z, verify: false)!
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, c.z, verify: false)!
 		total += r.iterations
 		if r.path == .newton {
 			newton++
@@ -184,7 +184,7 @@ fn test_a_split_starts_from_wilsons_trials() {
 	f := read_fixture()!
 	mut quick, mut splits := 0, 0
 	for c in f.cases.filter(!it.stable) {
-		r := flash.pt(model_for(f, c)!, c.t, c.p, c.z)!
+		r := flash.pt(thermo.by_roots(model_for(f, c)!), c.t, c.p, c.z)!
 		splits++
 		if r.stability.stopped && r.stability.trials.len == 2 {
 			quick++
@@ -227,9 +227,9 @@ fn test_a_split_wilson_cannot_start_comes_from_the_other_trials() {
 	m := thermo.new_cubic(.pr, cs)!
 	z := [0.9104788721112472, 0.005351791480631326, 0.08416933640812153]
 	t, p := 224.0717225900757, 5.300771495603128e6
-	quick := flash.stability(m, t, p, z, first_proof: true)!
+	quick := flash.stability(thermo.by_roots(m), t, p, z, first_proof: true)!
 	assert !quick.stable && quick.stopped && quick.trials.len == 2
-	r := flash.pt(m, t, p, z)!
+	r := flash.pt(thermo.by_roots(m), t, p, z)!
 	check_equilibrium(m, r, 'hydrogen iodide, n-decane and water')!
 	assert r.stability.trials.len == 5 && !r.stability.stopped
 	assert math.abs(r.beta - 0.0750223285695649) <= 1e-8, '${r.beta}'
@@ -242,7 +242,7 @@ fn test_a_single_phase_is_labelled_by_its_pip() {
 			continue
 		}
 		m := model_for(f, c)!
-		r := flash.pt(m, c.t, c.p, c.z)!
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, c.z)!
 		assert r.phases.len == 1 && r.phases[0].fraction == 1.0
 		ph := r.phases[0]
 		assert ph.label == thermo.phase_label(m, ph.state)
@@ -269,14 +269,14 @@ fn test_retrograde_condensation() {
 	m := condensate()!
 	mut liquid := []f64{}
 	for pbar in [20.0, 50.0, 80.0, 110.0, 140.0, 155.0] {
-		r := flash.pt(m, 400.0, pbar * 1e5, condensate_z)!
+		r := flash.pt(thermo.by_roots(m), 400.0, pbar * 1e5, condensate_z)!
 		check_equilibrium(m, r, 'condensate at 400 K, ${pbar} bar')!
 		liquid << 1.0 - r.beta
 	}
 	assert liquid[0] < liquid[1] && liquid[1] < liquid[2] && liquid[2] < liquid[3], '${liquid}'
 	assert liquid[3] > liquid[4] && liquid[4] > liquid[5], '${liquid}'
 	// And at 170 bar it is a single phase again, above its dew point.
-	assert flash.pt(m, 400.0, 170e5, condensate_z)!.phases.len == 1
+	assert flash.pt(thermo.by_roots(m), 400.0, 170e5, condensate_z)!.phases.len == 1
 }
 
 // natural_gas is M10a's exit script's natural gas: PR with the database's
@@ -314,7 +314,7 @@ fn test_an_extrapolation_that_overshoots_is_undone() {
 	m := natural_gas()!
 	mut betas := []f64{}
 	for t in [264.9, 265.0, 265.1] {
-		r := flash.pt(m, t, 81e5, gas_z)!
+		r := flash.pt(thermo.by_roots(m), t, 81e5, gas_z)!
 		check_equilibrium(m, r, 'the gas at ${t} K and 81 bar')!
 		assert r.iterations <= 21, '${t} K: ${r.iterations} steps'
 		betas << r.beta
@@ -323,7 +323,7 @@ fn test_an_extrapolation_that_overshoots_is_undone() {
 	// steps of 0.1 K differ by 0.26%, the curve's own bend.
 	d1, d2 := betas[1] - betas[0], betas[2] - betas[1]
 	assert d1 > 0.0 && d2 > 0.0 && math.abs(d2 - d1) < 0.01 * d1, '${betas}'
-	r := flash.pt(m, 262.0, 105e5, gas_z)!
+	r := flash.pt(thermo.by_roots(m), 262.0, 105e5, gas_z)!
 	check_equilibrium(m, r, 'the gas at 262 K and 105 bar')!
 }
 
@@ -347,7 +347,7 @@ fn test_light_and_heavy_side_by_side() {
 	}
 	m := thermo.new_cubic(.pr, [n2, decane], kij: [0.0, 0.11, 0.11, 0.0])!
 	for c in [[250.0, 1e5], [300.0, 10e5], [300.0, 100e5], [450.0, 200e5]] {
-		r := flash.pt(m, c[0], c[1], [0.5, 0.5])!
+		r := flash.pt(thermo.by_roots(m), c[0], c[1], [0.5, 0.5])!
 		at := 'N2/n-decane at ${c[0]} K, ${c[1]} Pa'
 		check_equilibrium(m, r, at)!
 		assert r.phases[0].state.n[1] < 0.05, at // little decane in the gas
@@ -355,7 +355,7 @@ fn test_light_and_heavy_side_by_side() {
 	// At 1 bar the gas is nearly ideal and the liquid nearly pure decane, so
 	// Raoult's law, y = x·Psat/P with PR's own Psat, holds to a few percent
 	// for the decane, a trace of 4e-5 in the gas.
-	low := flash.pt(m, 250.0, 1e5, [0.5, 0.5])!
+	low := flash.pt(thermo.by_roots(m), 250.0, 1e5, [0.5, 0.5])!
 	psat := thermo.saturation_pressure(thermo.new_cubic(.pr, [decane])!, 250.0)!
 	raoult := low.phases[1].state.n[1] * psat / 1e5
 	assert math.abs(low.phases[0].state.n[1] / raoult - 1.0) < 0.05, '${low.phases[0].state.n[1]} vs ${raoult}'
@@ -394,7 +394,7 @@ fn test_three_phases_are_refused_not_hidden() {
 	)!
 	z := [0.5, 0.3, 0.2]
 	for c in [[300.0, 10e5], [350.0, 5e5], [400.0, 20e5]] {
-		if r := flash.pt(m, c[0], c[1], z) {
+		if r := flash.pt(thermo.by_roots(m), c[0], c[1], z) {
 			assert false, '${c}: a two-phase answer for a three-phase state (β ${r.beta})'
 		} else {
 			assert err is flash.FlashError
@@ -404,7 +404,7 @@ fn test_three_phases_are_refused_not_hidden() {
 	// Without the re-test the flash returns that split, whose fugacities
 	// are equal (it's a stationary point of G) but which isn't the
 	// equilibrium: which is exactly what verify is for.
-	r := flash.pt(m, 350.0, 5e5, z, verify: false)!
+	r := flash.pt(thermo.by_roots(m), 350.0, 5e5, z, verify: false)!
 	assert r.phases.len == 2
 }
 
@@ -419,7 +419,7 @@ fn test_a_split_meets_the_tolerance_it_was_given() {
 	mut met, mut refused := 0, 0
 	for c in f.cases.filter(!it.stable && it.components == [0, 3] && it.t >= 330.0) {
 		m := model_for(f, c)!
-		r := flash.pt(m, c.t, c.p, c.z, tol: 1e-16, verify: false) or {
+		r := flash.pt(thermo.by_roots(m), c.t, c.p, c.z, tol: 1e-16, verify: false) or {
 			assert (err as flash.FlashError).kind == .no_convergence, err.msg()
 			refused++
 			continue
@@ -438,8 +438,8 @@ fn test_verify_changes_nothing_when_the_split_is_right() {
 	f := read_fixture()!
 	for c in f.cases.filter(!it.stable)[..40] {
 		m := model_for(f, c)!
-		a := flash.pt(m, c.t, c.p, c.z)!
-		b := flash.pt(m, c.t, c.p, c.z, verify: false)!
+		a := flash.pt(thermo.by_roots(m), c.t, c.p, c.z)!
+		b := flash.pt(thermo.by_roots(m), c.t, c.p, c.z, verify: false)!
 		assert a.beta == b.beta && a.phases[0].state.n == b.phases[0].state.n
 	}
 }
@@ -449,13 +449,13 @@ fn test_pt_refuses_bad_input() {
 	m := model_for(f, f.cases[0])!
 	for args in [[250.0, 30e5, 0.4], [250.0, 30e5, 0.4, -0.6], [0.0, 30e5, 0.4, 0.6],
 		[250.0, 0.0, 0.4, 0.6]] {
-		flash.pt(m, args[0], args[1], args[2..]) or {
+		flash.pt(thermo.by_roots(m), args[0], args[1], args[2..]) or {
 			assert (err as flash.FlashError).kind == .bad_input, err.msg()
 			continue
 		}
 		assert false, '${args} should be refused'
 	}
-	if _ := flash.pt(m, 250.0, 30e5, [0.4, 0.6], tol: 0.0) {
+	if _ := flash.pt(thermo.by_roots(m), 250.0, 30e5, [0.4, 0.6], tol: 0.0) {
 		assert false, 'tol = 0 should be refused'
 	}
 }

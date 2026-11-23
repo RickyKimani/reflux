@@ -167,11 +167,15 @@ thermo/
   alpha.v           per-component α (Soave, PRSV, Twu, Mathias–Copeman)
   translated.v      Péneloux volume shift, as a wrapper around any Model
   ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
-  fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
+  phases.v          the flash's seam (M6): a phase at (T, P, n), and any Model
+                    behind it by its volume roots
+  fluid.v           phase model + ideal gas → total H, S, G, Cp, Cv, speed of
+                    sound, μ_JT
   saturation.v      pure-component Psat, for any Model
   phase.v           phase identification parameter and liquid/vapour labels
 flash/
-  stability.v       Michelsen's tangent-plane stability test, for any Model
+  stability.v       Michelsen's tangent-plane stability test, for any phase
+                    model
   pt.v              the PT flash: stability, then the two-phase split
   vf.v              vapour-fraction flashes: bubble and dew points, T or P given
   ph.v              PH and PS flashes, pure components included
@@ -454,7 +458,8 @@ And from M2:
 - [x] Every correlation swept for sanity. What fails is listed, not hidden,
       in [docs/data-quality.md](docs/data-quality.md).
 
-And from M3, for any `thermo.Model`:
+And from M3, for any `thermo.Model` (since M6 step 4, for any phase model,
+with or without an F):
 
 - [x] Michelsen's stability test, with Wilson's trials and a nearly pure
       phase of each component. It agrees with `thermo` and with brute-force

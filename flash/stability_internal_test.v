@@ -15,7 +15,7 @@ fn feed_at(m thermo.Model, t f64, p f64, z []f64) !Feed {
 		d[i] = math.log(z[i]) + st.ln_phi[i]
 	}
 	return Feed{
-		m:       m
+		m:       thermo.by_roots(m)
 		t:       t
 		p:       p
 		z:       z
