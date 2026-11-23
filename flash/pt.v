@@ -102,10 +102,11 @@ fn k_of(lnk f64) f64 {
 // A split is accepted only with every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol and
 // 0 < β < 1, and, with params.verify, only if neither phase is unstable.
 // Anything else is a FlashError.
-pub fn pt(m thermo.PhaseModel, t f64, p f64, z []f64, params FlashParams) !FlashResult {
+pub fn pt(model thermo.PhaseModel, t f64, p f64, z []f64, params FlashParams) !FlashResult {
 	if !(params.tol > 0.0) || params.max_steps < 1 {
 		return fail(.bad_input, 'tol and max_steps must be positive')
 	}
+	m := thermo.for_one_thread(model)
 	// One proof of instability is enough to start a split from, so the trials
 	// stop at the first after Wilson's two. A split that doesn't stand from
 	// those gets them all.

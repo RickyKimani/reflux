@@ -356,14 +356,14 @@ fn test_the_models_refusals_reach_the_caller() {
 		assert err is flash.FlashError && (err as flash.FlashError).kind == .no_volume_root, err.msg()
 		assert err.msg().contains("Raoult's vapour pressures end"), err.msg()
 	}
-	// No derivatives is a typed refusal too. (Its reason stops at
-	// numeric.newton, which says only that it can't evaluate the system:
-	// step 6's to pass on.)
+	// No derivatives is a typed refusal too, with the model's reason, which
+	// numeric.newton passes on (M6 step 6).
 	flat := thermo.PhaseModel(raoult([0, 1], flat: true))
 	if _ := flash.bubble_p(flat, 360.0, [0.5, 0.5]) {
 		assert false, 'a Newton with no derivatives'
 	} else {
 		assert err is flash.FlashError, err.msg()
+		assert err.msg().contains('Raoult has no derivatives here'), err.msg()
 	}
 }
 

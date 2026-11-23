@@ -158,6 +158,19 @@ met only when |r| ≤ etol holds, which a NaN fails, and never when |r| > etol
 doesn't, which a NaN passes. Without that, Brent closes in on the edge of
 where the NaN begins, as on a change of sign, and the flash returned it.
 
+**A workspace for one flash** (M6 step 5). A model is immutable and shared,
+yet a γ–φ liquid's Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and τ depend on T alone, and a flash asks
+for many phases at one T. A model that keeps them is also a
+`thermo.Scoped`, whose `scoped()` is a copy with a workspace of its own;
+`thermo.for_one_thread(m)` is that copy, or m, and every flash calls it
+first. The seam itself is unchanged, as M8's `Warm` is optional to a unit.
+A copy gives the bits of a model that makes its own each call.
+
+**`numeric.newton` passes on why a system can't be evaluated** at its
+start: "the system cannot be evaluated at x0" is followed by the system's
+own error, or by the residual or Jacobian entry that wasn't finite. A
+phase model's refusal there reaches the caller with its reason (M6 step 6).
+
 ## Finding the volume
 
 `solve_tp` doesn't solve a polynomial, because CPA and SAFT don't have one.
@@ -685,6 +698,35 @@ moves τ until both roots exist. With only a vapour root, P is too low or T
 too high, and the reverse with only a liquid root. Any β gives the same T
 and P.
 
+**Azeotropes** (M6 step 6, [flash/azeotrope.v](../flash/azeotrope.v)).
+`flash.azeotrope_t(model, P, x0)` finds the azeotrope near x0 at P, and
+`azeotrope_p(model, T, x0)` at T. A vapour-fraction flash can't: its two
+phases are the same composition there, which it takes for the trivial
+solution. The unknowns are x over the components present but the last,
+which is 1 − Σ of the rest, and τ = ln T (or ln P); the equations are equal
+fugacities with y = x,
+
+    gᵢ = ln φᵢᴸ(x) − ln φᵢⱽ(x) = 0,   one for each component present,
+
+with Φ = n·∂ln φᵢ/∂nⱼ and l the last component,
+
+    ∂gᵢ/∂xₖ = (Φᴸᵢₖ − Φᴸᵢₗ) − (Φⱽᵢₖ − Φⱽᵢₗ),
+    ∂gᵢ/∂τ = T(∂ln φᵢᴸ/∂T − ∂ln φᵢⱽ/∂T)   or   P(∂ln φᵢᴸ/∂P − ∂ln φᵢⱽ/∂P).
+
+Newton starts from x0's bubble point. Where x0 is an azeotrope already, or
+within about 1e-4 of one, that bubble point collapses onto K = 1, the
+trivial solution it refuses, so the start is the bubble point 2% from x0
+towards each component in turn, Newton still starting at x0. The answer is
+shown: each |gᵢ| ≤ tol, every xᵢ in (0, 1), the liquid and the vapour two
+phases, not one root twice (where an equation of state has one root, every
+gᵢ is 0 at any x), and the liquid stable with the vapour as a trial. Which
+phase has the lower G says nothing here: at an azeotrope the two are
+equal. A liquid that would split is a
+heterogeneous azeotrope, refused as `.more_phases` (three phases are step
+7's). The result is the vapour and the liquid, each of composition x, at
+β = 0. A caller finds where to look by where y − x changes sign along the
+bubble points, as the tests do.
+
 ## PH and PS flashes
 
 `flash.ph(fluid, P, H, z)` and `flash.ps(fluid, P, S, z)`
@@ -759,6 +801,23 @@ The flash finds Tsat with pvf, then answers this way for an H_spec
 between the saturated liquid's and vapour's, within etol of either end.
 Outside that range the answer is a single phase on its own side of Tsat,
 found by Brent on that root alone.
+
+**A model that refuses a T** (M6 step 6). A γ–φ liquid is refused outside
+its correlations' ranges (D4), and a flash says so as `no_volume_root`. The
+bracket then steps back from that T towards the last, by halves, up to 40
+times, and goes on from the farthest T the model takes. Only if the model
+takes none is the specification outside its range. An equation of state
+never refuses a phase there, so its brackets don't move.
+
+**Newton's own state** (M6 step 6). Within a hundredth of a kelvin of an
+azeotrope, H rises so steeply with T that the PT flash at the nearest double
+to Newton's T can miss the balance: methanol–water at 1.39e-10 against
+1e-10. Newton's own (v, ln T) meets it. So where the answer's balance is
+off and the PT flash split, the answer is Newton's state from Brent's last
+split, if it is one: each phase on its phase of lower G, the fugacities
+equal to tol, the balance met to etol, both phases' amounts positive, and
+with `verify` each phase stable with the other as a trial. The vapour is
+the phase of lower mass density, as in a PT split.
 
 ## TV and UV flashes
 
@@ -2467,6 +2526,115 @@ still holds the shipped one: the original table's 9 parameters and 2
 subgroups, the LLE table's 2 subgroups, and Dortmund's quaternary C, whose Q
 is 0, with six ionic-liquid subgroups. [data-quality.md](data-quality.md)
 lists every repair, and each table against `thermo`'s copy.
+
+## The γ–φ liquid
+
+A γ–φ fluid ([thermo/gamma_phi.v](../thermo/gamma_phi.v), M6's D4 to D6) is
+a phase model whose liquid comes from an activity model and each
+component's vapour pressure and liquid density, and whose vapour is the
+ideal gas or an equation of state's. It has no F(T, V, n) behind its
+liquid, so the flash takes it as it takes a cubic, and the TV and UV
+flashes and the reactors refuse it. `Database.gamma_phi(names, options)`
+([components/gamma_phi.v](../components/gamma_phi.v)) builds one from
+ChemSep's banks, tables and component files.
+
+**A solvent's fugacity** is xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ exp(Vᵢᴸ(P − Pᵢˢᵃᵗ)/RT), so
+
+    ln φᵢᴸ = ln γᵢ(x′) + ln Pᵢˢᵃᵗ + ln φᵢˢᵃᵗ + Vᵢᴸ(P − Pᵢˢᵃᵗ)/RT − ln P,
+
+- **γ** from the activity model over the solvents alone, at x′, their own
+  mole fractions, x′ᵢ = xᵢ/s with s = Σ xⱼ over the solvents;
+- **Pˢᵃᵗ and Vᴸ** from the component's own correlations, Vᴸ = 1/ρᴸ, the
+  liquid incompressible over the Poynting integral;
+- **φˢᵃᵗ** the vapour model's φ of the pure component at the correlation's
+  Pˢᵃᵗ, on its vapour root, and 1 for the ideal gas;
+- **Poynting's term** on by default, and off if asked, as Aspen's NRTL is.
+
+**A Henry's-law solute's** is xᵢHᵢ,mix, so ln φᵢᴸ = ln Hᵢ,mix − ln P, with
+
+    ln Hᵢ,mix = Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ,   ln Hᵢⱼ = A + B/T + C ln T + D·Tᴱ,
+
+the sums over the solvents that have constants for it, an absent one
+weighing nothing, which is
+`thermo`'s 'solvents_with_parameters' mode, and ln Hᵢⱼ ChemSep's equation
+121 in Pa. A solute is outside the activity model, so its γ* is 1 (the
+unsymmetric convention with no correction), it adds no volume, and it has
+no Poynting term. ChemSep's banks pair water, the one solvent with
+constants, with none of the gases, and its UNIFAC tables have no group for
+hydrogen, CO, CO₂, nitrogen, oxygen or the noble gases, so there is no γ∞
+to correct by for those (the light hydrocarbons, made of UNIFAC's own
+groups, could take theirs from it, a later piece), and no gas's volume at
+infinite dilution. (`thermo`
+gives a solute the symmetric γ from the whole model, and Poynting on any
+volume it's given; the two agree on an ideal solvent, which is how they're
+compared.) ChemSep's bank has 41 gases, all in water.
+
+**Which compounds are solutes:** those named, and any with a constant in
+another compound present whose Tc is below the lowest T at which a
+compound that can only be a solvent has a vapour pressure: wherever the
+liquid can be had, such a gas is above its critical point. A fluid where no
+T is inside every solvent's correlations is refused when it's built, naming
+the solvent above its critical point there.
+
+**The liquid's volume** is Σ nᵢVᵢᴸ over the solvents, with no excess volume
+(D4), and (∂V/∂T)_P = Σ nᵢ dVᵢᴸ/dT. It is incompressible, so (∂P/∂V)_T is
+−∞, and it has no Cv and no speed of sound: NaN, as the seam allows.
+
+**Which phase is which.** `phase(T, P, n, root)` gives the liquid, the
+vapour model's vapour (the ideal gas, or a cubic's vapour root), or the one
+of lower Σ nᵢ ln φᵢ, which is G less the ideal gas's at the same (T, P, n).
+A state's label and derivatives come from the model that made it: a
+liquid's volume is Σ nᵢVᵢᴸ to the bit, and a vapour whose volume ever
+equalled it would be refused.
+
+**Its derivatives**, all exact but φˢᵃᵗ's second:
+- **In T,** through jets (`numeric.Jet`, as the activity models use):
+  `tdep.Correlation.jet` gives each vapour pressure and density with its
+  first two T-derivatives, for the forms a γ–φ liquid is made of (10, 16,
+  101, 105 and 106); the activity model gives ∂ln γ/∂T and ∂²ln γ/∂T², and
+  each ln Hᵢⱼ is a jet.
+- **φˢᵃᵗ's:** d ln φˢᵃᵗ/dT = ∂ln φ/∂T + ∂ln φ/∂P·dPˢᵃᵗ/dT exactly, at
+  (T, Pˢᵃᵗ(T)), and its second by Richardson's extrapolation of central
+  differences of the first, steps h = 10⁻⁴T and h/2,
+  (4D(h/2) − D(h))/3: an equation of state has no third derivatives of F.
+- **In P:** ∂ln φᵢ/∂P = −1/P + Vᵢᴸ/RT, the second term for a solvent with
+  Poynting's term only.
+- **In n:** a solvent's n·∂ln φᵢ/∂nⱼ is the activity model's over x′,
+  divided by s, and 0 in a solute's amount; a solute's is
+  (ln Hᵢⱼ − ln Hᵢ,mix)/Σₖ xₖ in a solvent j with a constant, the sum over
+  those, and 0 otherwise.
+
+**Calorics from the fugacities** (D5), with R as `thermo.r_gas`:
+
+    Hʳ = −RT² Σ nᵢ ∂ln φᵢ/∂T,   Gʳ = RT Σ nᵢ ln φᵢ,   Sʳ = (Hʳ − Gʳ)/T,
+    Cpʳ = ∂Hʳ/∂T = −RT(2Σ nᵢ ∂ln φᵢ/∂T + T Σ nᵢ ∂²ln φᵢ/∂T²).
+
+So a pure liquid's heat of vaporisation is Clapeyron's, T·ΔV·dPˢᵃᵗ/dT on
+its own Pˢᵃᵗ and both phases' volumes, and the mixture's Hᴱ is the activity
+model's: no ΔHvap correlation enters.
+
+**Why φˢᵃᵗ at the correlation's Pˢᵃᵗ.** Only there is a pure liquid's
+fugacity its vapour's at its own vapour pressure: at Pˢᵃᵗ, xγ = 1 and the
+Poynting term vanishes, so f = Pˢᵃᵗφ(Pˢᵃᵗ), the vapour's. `thermo` takes
+φˢᵃᵗ at the equation of state's own Pˢᵃᵗ instead, which moves a pure
+liquid's ln f off its vapour's by the difference of the two ln φ's: up to
+3.3e-4 for methanol and water and 9.0e-4 for ethanol under PR, from 300 to
+355 K. The tests move `thermo`'s answers onto reflux's φˢᵃᵗ before
+comparing.
+
+**What it refuses**, with its reason (D4): a T outside a solvent's vapour
+pressure or density range, or a solute's Henry's-law range, for the liquid
+and for the phase of lower G alike, never the vapour in the liquid's place;
+a liquid of solutes alone; a solute with a constant in none of the solvents
+present; and a T where the vapour model has no vapour root at Pˢᵃᵗ, so no
+φˢᵃᵗ. A flash reports a refused phase as `no_volume_root`, the kind that
+says the model has no such phase there.
+
+**Kept until T moves** (D4): each solvent's ln Pˢᵃᵗ, Vᴸ and ln φˢᵃᵗ, each
+ln Hᵢⱼ as jets, and the activity model's own `Work`, in a `GammaWork` that a
+model's `scoped()` copy holds (the seam's workspace, above). A model without
+one makes its own for each call, with the same bits. A refusal leaves
+nothing kept.
 
 ## Reports
 

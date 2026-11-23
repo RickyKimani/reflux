@@ -71,10 +71,10 @@ Keep this section current: update it whenever a step is committed.
       1e-12 of 1, G, τ, Λ and ψ normal doubles, every output asked for
       finite. `numeric.Jet`'s log no longer loses ∂² below 1e-154. No
       answer moved; newly refused only at 10 K and below.
-  - **Step 4, the seam, is done,** and amends D3, approved on 2026-11-23:
-    `flash` takes a `thermo.PhaseModel`, a phase at
+  - **Step 4, the seam, is done,** and amends D3, approved on 2026-11-23
+    (committed at e5c8055): `flash` takes a `thermo.PhaseModel`, a phase at
     (T, P, n), which an equation of state gives by `thermo.by_roots` and
-    step 5's γ–φ fluid will give itself. Step 5 is next.
+    the γ–φ fluid gives itself.
     - Every cubic answer keeps its bits (criterion 4): the plan has the
       trace, the timings and what was compared.
     - What needs F(T, V, n) asks `Fluid.helmholtz()`: TV and UV, the
@@ -83,6 +83,29 @@ Keep this section current: update it whenever a step is committed.
       to a type that can't be in the interface compiles and returns a zero
       value (v-for-go); `numeric.newton` drops a model's reason at x0
       (step 6's to pass on).
+  - **Steps 5 and 6 are done,** built together at the owner's word, not
+    committed, and amend D4, D6 and criterion 3, approved on
+    2026-11-23.
+    - Step 5: `thermo.GammaPhi`, a γ–φ fluid behind the seam (a solvent by
+      γ, Pˢᵃᵗ, φˢᵃᵗ at the correlation's Pˢᵃᵗ and Poynting; a Henry's-law
+      solute by ln H mixed over the solvents with constants, γ* = 1),
+      calorics from its fugacities, a workspace per flash
+      (`thermo.Scoped`, `for_one_thread`); `Database.gamma_phi`;
+      `tdep.Correlation.jet`. Against `thermo`'s `GibbsExcessLiquid`, ln φ
+      to 4.7e-13, Cp to 3.6e-12, 7.9e-9 with φˢᵃᵗ; Henry's law in water and
+      in a mixed solvent.
+    - Step 6: the flashes on it (each split checked from scratch, against
+      `FlashVL` β to 6.7e-11), `flash.azeotrope_t` and `azeotrope_p`,
+      `numeric.newton`'s reason at x0, PH's step back from a refused T, and
+      PH and PS from Newton's own state where a PT flash at its T misses
+      the balance.
+    - Every cubic answer keeps its bits but 868 trace lines: 865 refusals
+      now with their reason, 3 refusals (one state's PH and PS) now its
+      verified answer.
+    - Found: ChemSep's hydrogen row in `henrys_law.ipd` is 5.9 times
+      Sander's compilation at 298 K, slope 920 K against 490 (for the
+      owner); `thermo` takes φˢᵃᵗ at its EOS's own Pˢᵃᵗ, and its solute's γ
+      is the symmetric one.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as

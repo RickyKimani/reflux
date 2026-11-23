@@ -312,6 +312,47 @@ pub fn (c Correlation) deriv(t f64) f64 {
 	}
 }
 
+// jet_forms are the forms jet takes: vapour pressures and liquid densities,
+// what a γ–φ liquid is made of (M6).
+pub const jet_forms = [10, 16, 101, 105, 106]
+
+// jet is Y(T) with its first two T-derivatives, exact to rounding, for the
+// forms a γ–φ liquid needs (jet_forms): t is T along itself
+// (numeric.along(T)), and the jet's arithmetic carries the derivatives.
+// Its value can differ from eval's in the last bits, since 105's power is
+// taken as an exponential. Above Tc it follows eval: 0 for form 106.
+pub fn (c Correlation) jet(t numeric.Jet) !numeric.Jet {
+	k := numeric.constant
+	return match c.eq {
+		10 {
+			(k(c.a) - k(c.b) / (t + k(c.c))).exp()
+		}
+		16 {
+			k(c.a) + (k(c.b) / t + k(c.c) + k(c.d) * t + k(c.e) * t * t).exp()
+		}
+		101 {
+			(k(c.a) + k(c.b) / t + k(c.c) * t.log() + k(c.d) * t.pow(c.e)).exp()
+		}
+		105 {
+			// A/B^(1 + τᴰ), τ = 1 − T/C, as A·e^(−(1 + τᴰ)·ln B)
+			tau := k(1.0) - t / k(c.c)
+			k(c.a) * ((tau.pow(c.d) + k(1.0)) * k(-math.log(c.b))).exp()
+		}
+		106 {
+			tr := t / k(c.tc)
+			if tr.v >= 1.0 {
+				k(0.0)
+			} else {
+				h := k(c.b) + tr * (k(c.c) + tr * (k(c.d) + tr * k(c.e)))
+				k(c.a) * (h * (k(1.0) - tr).log()).exp()
+			}
+		}
+		else {
+			error('equation ${c.eq} has no jet: only ${jet_forms} do')
+		}
+	}
+}
+
 // integral returns ∫ Y dT from t1 to t2, in closed form where one exists
 // and by adaptive quadrature otherwise. Enthalpies come from this. It fails
 // where Y isn't finite on the interval (114 at Tc, or 114 and 116 above it).

@@ -335,6 +335,33 @@ it a struct holding `&Solver` whose `at` calls the solver's `mut` methods
 with the sections made from it the same way, one `&Readings` between them
 ([flowsheet/section.v](../flowsheet/section.v)).
 
+The other way through is a `mut` copy of the pointer, and the field needn't
+be under `mut:` at all: probed in V 0.5.2,
+
+```v
+@[heap]
+struct Work {
+mut:
+	n int
+}
+
+struct Model {
+	w &Work
+}
+
+fn (m Model) bump() {
+	m.w.n++        // refused: "field `w` of struct `Model` is immutable"
+	mut w := m.w
+	w.n++          // fine: the copy is mut, and it points where m.w does
+}
+```
+
+So `mut` is checked on the path you write, not on what it reaches. The γ–φ
+model keeps its workspace this way: `GammaPhi`'s methods take it
+immutably, as `thermo.PhaseModel` asks, and `mut w := g.workspace()` gives
+them the `&GammaWork` that one flash's copy holds
+([thermo/gamma_phi.v](../thermo/gamma_phi.v), M6 step 5).
+
 ---
 
 ## 4. Errors and options: `!T`, `?T`, and `or {}`
@@ -506,6 +533,20 @@ if _ := qp(p) {
   set after it. `activity.eval` kept the last T through a refusal, and gave
   wrong ln γ at that T from then on ([activity/model.v](../activity/model.v),
   corrected after M6 step 3).
+- **An array of Options needs every element cast.** A function's return
+  and a struct field turn `Kind.pr` into `?Kind` by themselves, but an array
+  literal takes its type from its first element and converts nothing after
+  it. Probed in V 0.5.2:
+
+  | Literal | |
+  |---|---|
+  | `[Kind.pr, none]` | refused: "cannot use `?void` as `Kind`" |
+  | `[?Kind(none), Kind.pr]` or `[?Kind(none), .pr]` | refused: "cannot use `Kind` as `?Kind`" |
+  | `[?Kind(none), ?Kind(.pr)]` | fine |
+
+  The γ–φ tests run each pure liquid with the ideal gas and with PR as
+  `for vapour in [?thermo.CubicKind(none), ?thermo.CubicKind(.pr)]`
+  ([components/gamma_phi_test.v](../components/gamma_phi_test.v), M6 step 5).
 
 ---
 

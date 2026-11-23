@@ -29,6 +29,24 @@ pub interface PhaseModel {
 	phase_residual(st State) PhaseResidual
 }
 
+// Scoped is a phase model that can keep what depends on T alone between
+// calls, in a workspace for one thread: the γ–φ fluid's Pˢᵃᵗ, Vᴸ and its
+// activity model's parameters (M6's D4). A model holds nothing about a
+// flash, so threads share one, and each flash asks for its own copy.
+pub interface Scoped {
+	scoped() PhaseModel
+}
+
+// for_one_thread is m with a workspace of its own, if it keeps one, or m:
+// what a flash calls first, so that its many phases at one T share what
+// depends on T alone.
+pub fn for_one_thread(m PhaseModel) PhaseModel {
+	if m is Scoped {
+		return m.scoped()
+	}
+	return m
+}
+
 // PhaseResidual is what Fluid.props needs of a phase beyond the ideal gas:
 // its residual properties on the (T, P) basis, extensive as in
 // ResidualProps, and its volume's two derivatives, for the speed of sound

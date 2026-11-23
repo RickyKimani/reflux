@@ -118,7 +118,8 @@ numeric/
   cholesky.v        Cholesky factorisation, the positive-definiteness test
   vec.v             small vector helpers
   integrate.v       adaptive Gauss–Kronrod quadrature
-  newton.v          Newton for nonlinear systems: line search or dogleg
+  newton.v          Newton for nonlinear systems: line search or dogleg, and
+                    why a system can't be evaluated at its start
   broyden.v         Broyden's quasi-Newton method, with no Jacobian
   minimize.v        Newton minimisation with a Levenberg–Marquardt shift
   qp.v              convex quadratic programmes: Goldfarb and Idnani's dual
@@ -139,7 +140,9 @@ numeric/
                     on the problem's own Jacobian
 tdep/
   tdep.v            temperature-dependent correlations (ChemSep and DIPPR
-                    forms): value, derivative and both integrals
+                    forms): value, derivative and both integrals; a vapour
+                    pressure's or density's two exact T-derivatives as a jet
+                    (M6)
 components/
   record.v          a compound as a component file holds it (docs/data-format.md)
   file.v, index.v   the TOML component files and index: deterministic writer,
@@ -152,6 +155,9 @@ components/
   activity.v        ChemSep's NRTL, UNIQUAC, Wilson and Henry's-law banks and
                     UNIFAC tables, each self-contradiction and published
                     correction repaired and reported; the models built (M6)
+  gamma_phi.v       a γ–φ fluid from the database: the activity model, each
+                    solvent's Pˢᵃᵗ and density, which compounds are Henry's-law
+                    solutes and their constants, the vapour (M6)
   formula.v         a compound's formula, where two of its structure, SMILES
                     and molar mass agree (M9)
   formation.v       ΔG°f against ΔH°f and S°, with the elements' entropies
@@ -168,7 +174,10 @@ thermo/
   translated.v      Péneloux volume shift, as a wrapper around any Model
   ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
   phases.v          the flash's seam (M6): a phase at (T, P, n), and any Model
-                    behind it by its volume roots
+                    behind it by its volume roots; a workspace for one flash
+  gamma_phi.v       the γ–φ fluid (M6): a liquid by its activity coefficients,
+                    vapour pressures, Poynting's term and φˢᵃᵗ, Henry's-law
+                    solutes, calorics from its fugacities
   fluid.v           phase model + ideal gas → total H, S, G, Cp, Cv, speed of
                     sound, μ_JT
   saturation.v      pure-component Psat, for any Model
@@ -179,6 +188,8 @@ flash/
   pt.v              the PT flash: stability, then the two-phase split
   vf.v              vapour-fraction flashes: bubble and dew points, T or P given
   ph.v              PH and PS flashes, pure components included
+  azeotrope.v       an azeotrope at a given T or P, by Newton on x and T or P
+                    (M6)
   tv.v              TV and UV flashes, in the model's own variables (T, V, n)
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic

@@ -123,7 +123,8 @@ const trivial_tol = 1e-5
 //
 // A pure component is always stable here: it can't split by composition,
 // and the model has already given its phase of lower Gibbs energy.
-pub fn stability(m thermo.PhaseModel, t f64, p f64, z []f64, params StabilityParams) !Stability {
+pub fn stability(model thermo.PhaseModel, t f64, p f64, z []f64, params StabilityParams) !Stability {
+	m := thermo.for_one_thread(model)
 	comps := m.components()
 	nc := comps.len
 	if z.len != nc {

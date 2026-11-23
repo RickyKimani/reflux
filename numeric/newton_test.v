@@ -538,3 +538,31 @@ fn test_newton_refuses_bad_input() {
 		assert false, 'a system that is NaN at x0 should be refused'
 	}
 }
+
+// A system that can't be evaluated at x0 is refused with why (M6 step 6):
+// its own error, or the residual or Jacobian entry that isn't finite, so
+// that a phase model's refusal reaches a flash's caller.
+fn test_newton_says_why_it_cannot_start() {
+	refuses := fn (x []f64, mut f []f64, mut j []f64) ! {
+		return error('x must be positive')
+	}
+	nan_f := fn (x []f64, mut f []f64, mut j []f64) ! {
+		f[0] = math.nan()
+		j[0] = 1.0
+	}
+	inf_j := fn (x []f64, mut f []f64, mut j []f64) ! {
+		f[0] = x[0]
+		j[0] = math.inf(1)
+	}
+	systems := [Sys{refuses}, Sys{nan_f}, Sys{inf_j}]
+	whys := ['cannot be evaluated at x0: x must be positive',
+		'cannot be evaluated at x0: a residual of nan',
+		'cannot be evaluated at x0: a Jacobian entry of +inf']
+	for k, s in systems {
+		if _ := newton(s, [1.0]) {
+			assert false, 'case ${k} should be refused'
+		} else {
+			assert err.msg().contains(whys[k]), err.msg()
+		}
+	}
+}

@@ -108,7 +108,8 @@ struct Saturation {
 	params  VfParams
 }
 
-fn saturate(m thermo.PhaseModel, given Given, value f64, beta f64, z []f64, params VfParams) !FlashResult {
+fn saturate(model thermo.PhaseModel, given Given, value f64, beta f64, z []f64, params VfParams) !FlashResult {
+	m := thermo.for_one_thread(model)
 	if !(beta >= 0.0 && beta <= 1.0) {
 		return fail(.bad_input, 'the vapour fraction β = ${beta} is outside [0, 1]')
 	}

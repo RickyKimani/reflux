@@ -199,6 +199,12 @@ All checked by tests in CI, as before.
    - Its calorics follow from its fugacities. A pure liquid's ΔHvap from H
      equals Clapeyron's T·ΔV·dPˢᵃᵗ/dT to rounding, and Hᴱ equals
      −RT²∂(Gᴱ/RT)/∂T.
+
+   **Amended in step 5,** approved on 2026-11-23. On the
+   'Poynting&PhiSat' basis, Cp to 1e-7: both take φˢᵃᵗ's second
+   T-derivative by differences, `thermo` by its own, and reflux's is held to
+   differences of its own H to 1e-9, measured at 1.7e-11 (D4 as amended).
+   Everything else to 1e-10, as before.
 4. **Nothing a cubic does changes.** Behind the new seam (D3), every M3 to M8
    fixture, golden report and recorded iteration count keeps its bits. The
    PT flash's time on M3's benchmark cases is recorded before and after, and
@@ -262,9 +268,9 @@ All checked by tests in CI, as before.
 | D1 | Scope | One milestone, the roadmap's M6, with four additions:<br>- **Henry's law,** which any reactor's product over a polar liquid needs;<br>- **γ–φ calorics,** which every energy balance needs;<br>- **a decanter;**<br>- **NRTL and UNIQUAC fitting,** H4's other half.<br><br>Not in it: electrolytes (C8), Gᴱ mixing rules (M12), Hayden–O'Connell vapours, models per unit, and three-phase bubble points (Not in M6). | Each addition is what makes the rest usable in a flowsheet. A γ–φ liquid without Henry's law refuses every feed with hydrogen in it. |
 | D2 | Where it lives | <br>- **A new module, `activity`:** the Gᴱ models and UNIFAC's tables, over `numeric` and `expr`. It knows nothing of phases.<br>- **`thermo`:** the phase seam (D3), the γ–φ liquid (D4, D5) and Henry's law (D6), importing `activity` and `tdep`.<br>- **`components`:** the banks and tables read from ChemSep's files, and a γ–φ fluid's `Setup`.<br>- **`flash`:** on the seam, and the three-phase PT flash.<br>- **`flowsheet`:** format 4, the decanter and report format 4.<br>- **`fit`:** NRTL and UNIQUAC parameters.<br><br>vlib has no module named `activity`. | Gᴱ models are functions of T and x alone, so they're usable and testable without a phase. The seam is `thermo`'s, since a phase is. |
 | D3 | The seam | `flash` takes a phase model, not a `thermo.Model`. A phase model gives a phase at (T, P, n) as liquid-like, vapour-like or the one of lower G, each with:<br>- ln φᵢ and n·∂ln φᵢ/∂nⱼ, ∂ln φᵢ/∂T and ∂ln φᵢ/∂P;<br>- its molar volume and mass density;<br>- its residual H, S and Cp, which `Fluid` adds to the ideal gas's.<br><br>The two kinds:<br>- **a Helmholtz `Model`,** by its volume roots, exactly as `solve_tp` does now;<br>- **a γ–φ fluid,** by its liquid's γ and its vapour's model, the lower G again choosing.<br><br>The TV and UV flashes stay on `thermo.Model` and refuse a γ–φ fluid, saying why. `Cubic.work()` stays the reactors' path. Step 0 prototypes the seam and measures the cubic's bits and time through it.<br><br>**Amended in step 4,** approved on 2026-11-23:<br>- a phase's residual also has Cvʳ, (∂V/∂T)_P and (∂P/∂V)_T, which `Fluid.props` needs for the Cv, speed of sound and Joule–Thomson coefficient it already gives;<br>- it can't fail, as `props` can't, so what a model hasn't is NaN, and PH and PS take a NaN balance as unmet;<br>- ∂ln φ can refuse, with its reason, as an activity model does;<br>- a phase's mass density comes from its volume and the components' molar masses, so it's no method of its own. | It's the seam the flash already has in all but name: ln φ and its derivatives (Michelsen and Mollerup). A cubic behind it computes what it computes now, so its answers can't move. |
-| D4 | The γ–φ liquid | fᵢ = xᵢ γᵢ Pᵢˢᵃᵗ φᵢˢᵃᵗ exp(Vᵢᴸ (P − Pᵢˢᵃᵗ)/RT):<br>- **Pˢᵃᵗ** by the component's own correlation, and **Vᴸ** by its liquid density, incompressible over the Poynting integral. The liquid's volume is Σ xᵢ Vᵢᴸ, with no excess volume.<br>- **The vapour** is the ideal gas by default, or a cubic of the file's. φˢᵃᵗ is then that cubic's pure φ at Pˢᵃᵗ, and 1 for the ideal gas.<br>- **Poynting** is on by default, and can be turned off.<br>- **Kept until T moves:** Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and each τ depend on T alone (M8's D11).<br>- **Outside a correlation's range,** or above its Tc, a component is refused unless it's a Henry's-law solute (D6). | The textbook form, as Aspen's and `thermo`'s. Poynting costs nothing and matters at pressure. A file can match Aspen's NRTL, ideal gas and no Poynting, by saying so. |
+| D4 | The γ–φ liquid | fᵢ = xᵢ γᵢ Pᵢˢᵃᵗ φᵢˢᵃᵗ exp(Vᵢᴸ (P − Pᵢˢᵃᵗ)/RT):<br>- **Pˢᵃᵗ** by the component's own correlation, and **Vᴸ** by its liquid density, incompressible over the Poynting integral. The liquid's volume is Σ xᵢ Vᵢᴸ, with no excess volume.<br>- **The vapour** is the ideal gas by default, or a cubic of the file's. φˢᵃᵗ is then that cubic's pure φ at Pˢᵃᵗ, and 1 for the ideal gas.<br>- **Poynting** is on by default, and can be turned off.<br>- **Kept until T moves:** Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and each τ depend on T alone (M8's D11).<br>- **Outside a correlation's range,** or above its Tc, a component is refused unless it's a Henry's-law solute (D6).<br><br>**Amended in step 5,** approved on 2026-11-23:<br>- **φˢᵃᵗ is taken at the correlation's Pˢᵃᵗ:** the vapour model's pure φ there, on its vapour root, not at the vapour model's own Pˢᵃᵗ, where `thermo` takes it. Only then is a pure liquid's fugacity its vapour's at its vapour pressure; `thermo`'s choice moves ln f by up to 9.0e-4 (ethanol under PR).<br>- **φˢᵃᵗ's second T-derivative is Richardson's extrapolation** of central differences of its exact first, since an equation of state has no third derivatives of F. The liquid's Cp with φˢᵃᵗ then agrees with differences of its own H to 1.7e-11, not to rounding (criterion 3 as amended).<br>- **A solvent's vapour pressure and density must be in a form with exact T-derivatives,** ChemSep's 10, 16, 101, 105 or 106, which 614 of its 642 compounds have both of. Another form is refused, naming these. | The textbook form, as Aspen's and `thermo`'s. Poynting costs nothing and matters at pressure. A file can match Aspen's NRTL, ideal gas and no Poynting, by saying so. |
 | D5 | Calorics | The liquid's H, S and Cp come from its fugacities: h̄ᵢ − hᵢⁱᵍ = −RT²(∂ln φᵢᴸ/∂T) at constant P and x, through the same Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and γ. ΔHvap is then Clapeyron's from Pˢᵃᵗ's slope, and Hᴱ is the model's. `thermo`'s 'Poynting&PhiSat' basis is the reference.<br><br>No ΔHvap correlation enters. ChemSep's ΔHvap and liquid Cp are compared with the answer, as the model's accuracy, recorded and not asserted. | A drum's energy balance then agrees with its phase equilibrium. A separate ΔHvap, `thermo`'s 'Hvap' basis, gives a flash whose duty disagrees with its own Clapeyron. |
-| D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units. | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
+| D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units.<br><br>**Amended in step 5,** approved on 2026-11-23:<br>- **A solute's γ* is 1.** Solutes are outside the activity model, which is over the solvents alone, on their own mole fractions. No bank pairs water, the one solvent with Henry's-law constants, with any of the 41 gases, and ChemSep's UNIFAC tables have no group for hydrogen, CO, CO₂, nitrogen, oxygen or the noble gases, so for those there's no γ∞ to form γ/γ∞ with. (The banks pair a few condensable ones, butane, isoprene, 1,3-butadiene, isobutene, thiophene and CS₂, with alcohols and aromatics, and the light hydrocarbons are made of UNIFAC's own groups: their γ∞ is a later piece, not M6's, every solute's γ* being 1 until then.) A solute adds no volume and has no Poynting term, since ChemSep gives no volume at infinite dilution. `thermo` gives a solute the symmetric γ of the whole model instead, so criterion 7 compares the two on ideal solvents.<br>- **Hᵢ,mix is `thermo`'s rule,** as read: Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ over the solvents present that have constants.<br>- **A component is a solute** when the file names it, or when it has constants in another compound present and its Tc is below the lowest T at which a compound that can only be a solvent has a vapour pressure. Wherever the liquid can be had, such a gas is above its Tc, so the roles don't change with T. A fluid in which no T has every solvent's correlations is refused when it's built, naming the solvent above its Tc there (criterion 7's refusal by name). | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
 | D7 | Models and parameters | **Wilson, NRTL and UNIQUAC:**<br>- each pair's τ (Wilson's Λ) and NRTL's α are expressions in T with units, `"-189.0469 cal/mol / (R*T)"`, so that Aspen's a + b/T + e·ln T + f·T or any paper's form goes in as printed;<br>- the tape gives their T-derivatives exactly;<br>- ChemSep's banks become those expressions in their own forms, A in cal/mol: NRTL's τ = A/RT, UNIQUAC's τ = exp(−A/RT), and Wilson's Λ = (Vⱼ/Vᵢ)·exp(−A/RT) on ChemSep's Wilson volumes. Step 0 confirms each form and the calorie.<br><br>**A pair with no parameters** is refused, naming it and the banks searched. `missing = "ideal"` sets such pairs' τ to 0, and the report lists them as a warning. The report gives each pair's source, as kᵢⱼ's are given: the file, a bank with its DECHEMA reference, or ideal.<br><br>**UNIFAC:** the original for VLE (Hansen et al., 1991), the LLE table (Magnussen et al., 1981) and Dortmund's published parameters (Gmehling et al.), each compound's groups from its component file.<br><br>**Amended in step 0,** approved on 2026-11-18. A bank's A is in thermochemical calories over DECHEMA's own R, 1.98721 cal/(mol·K), which it was fitted with: DWSIM's NRTL, on the same bank, is τ = A/(1.98721·T) to 4e-10 in ln γ, and the SI's R over 4.184 J is 5e-7 off ([spike-dwsim-activity.md](spike-dwsim-activity.md)). So a bank pair's τ keeps that R, its source saying why, as `reflux kinetics check` advises for a constant fitted with a typed R.<br><br>**Amended in step 1,** approved on 2026-11-20. UNIFAC's tables are ChemSep's, repaired where a file contradicts itself, by its own evidence (a subgroup's or a row's main group whose name is another's), and corrected where DDBST's published tables show a typo: the original's 11 values, the LLE table's 2 and Dortmund's 13 (C's Q, six ionic-liquid subgroups). Each repair and correction is reported in data-quality.md.<br><br>**Amended after step 3,** approved on 2026-11-22. `missing = "ideal"` gives a pair no energy of interaction: τ = 0 in NRTL and Λ = 1 in Wilson, an ideal pair, and τ = 1 in UNIQUAC, whose combinatorial term stays, so its source and warning say "no residual interaction", not ideal. And step 0's R is confirmed for NRTL's bank alone: for UNIQUAC's and Wilson's it's inferred, as is Wilson's form, until step 12. | Parameters are equations too, and typing them as text in a fixed form is what A9 rules out. A silently ideal pair is the kind of answer that looks right and isn't. |
 | D8 | Three phases | A PT flash finds up to three phases, for any phase model:<br>- **stage-wise,** as Michelsen (1982) does: two phases first, then each phase tested for stability by M3's test, an unstable one's trial starting a third phase;<br>- **the split:** successive substitution on a multiphase Rachford–Rice, by Okuno, Johns and Sepehrnoori's (2010) convex form, then Newton on G over every phase, a phase whose fraction falls to zero removed;<br>- **an answer only once every phase is stable** against every trial, as M3 verifies a split;<br>- **a fourth phase** is `.more_phases`, with its reason. | Stage-wise reuses M3's stability test and split, which are proven. The convex Rachford–Rice can't diverge, where the textbook form can with three phases. |
 | D9 | Labels | Phases are ordered by increasing mass density, and each is labelled vapour, liquid or liquid2:<br>- **a γ–φ phase** by the model that made it;<br>- **an equation of state's phase** by Π, with M9's four-covolume rule;<br>- **at most one vapour:** of phases Π calls vapour-like, the least dense;<br>- **phases Π calls liquid-like** are liquids, the denser being liquid2.<br><br>A two-phase split Π calls all liquid-like is then a liquid–liquid split, where M3's D6 called its lighter phase the vapour. Step 7 measures how many of M3's 10,000 sweep splits change label, near critical points, for the owner to judge. | With three phases density alone can't name them, and a liquid–liquid split by PR is mislabelled today. Π is what labels a single phase already. |
@@ -832,14 +838,280 @@ itself; its `make.py` copies `flash` as it was, so it's run on `1d9c560`.
 **Checks:** both full checks pass, tcc (12 min) and gcc with its `-prod`
 build (29 min): 113 test files, three of them new.
 
-### 5. The γ–φ liquid, and Henry's law
+### 5. The γ–φ liquid, and Henry's law — done, with D4, D6 and criterion 3 amended
 - D4, D5, D6: fugacities, volumes and calorics; Henry's law in water and in
   mixed solvents.
 - Against `GibbsExcessLiquid` and Clapeyron (criteria 3 and 7).
 
-### 6. VLE flashes with activity models
+Built together with step 6, at the owner's word.
+
+**What was built** ([design.md](design.md), "The γ–φ liquid"):
+- **[tdep/tdep.v](../tdep/tdep.v):** `Correlation.jet`, a correlation's
+  value with its first two T-derivatives as a `numeric.Jet`, for forms 10,
+  16, 101, 105 and 106 (`jet_forms`). 614 of ChemSep's 642 compounds have
+  both a vapour pressure and a liquid density in those forms; 26 lack one,
+  and 2 have a vapour pressure of form 200.
+- **[thermo/gamma_phi.v](../thermo/gamma_phi.v):** `GammaPhi`, a
+  `PhaseModel` (D3):
+  - a solvent's ln φ from γ over the solvents' own mole fractions, Pˢᵃᵗ,
+    φˢᵃᵗ and Poynting's term;
+  - a Henry's-law solute's from ln H mixed over the solvents that have
+    constants;
+  - the liquid's volume, and ln φ's derivatives in T (by jets), P and n;
+  - Hʳ, Sʳ and Cpʳ from the fugacities (D5), and Cv and the speed of sound
+    NaN;
+  - each refusal with its reason (D4).
+- **The seam's workspace** (step 4's "for step 5"): `thermo.Scoped` and
+  `for_one_thread` ([thermo/phases.v](../thermo/phases.v)), a copy of the
+  model with a `GammaWork` that keeps what depends on T alone, which each
+  flash makes for itself.
+- **[components/gamma_phi.v](../components/gamma_phi.v):**
+  `Database.gamma_phi(names, options)` builds:
+  - the activity model (NRTL, UNIQUAC, Wilson or a UNIFAC) over the
+    solvents;
+  - each solvent's vapour pressure and density, from its component file;
+  - the Henry's-law solutes, named or by D6's rule as amended, with their
+    constants from `henrys_law.ipd`;
+  - the vapour (the ideal gas, or a cubic with its bank's kᵢⱼ), Poynting's
+    term, and `ideal` for an unlisted pair (D7).
+
+  It returns the fluid with the pairs' sources and notes.
+- **[tools/gen_m6_gamma_phi.py](../tools/gen_m6_gamma_phi.py)** writes
+  [testdata/m6_gamma_phi.json](../testdata/m6_gamma_phi.json).
+
+**D4, D6 and criterion 3 are amended** (above), approved on
+2026-11-23:
+- D4: φˢᵃᵗ at the correlation's Pˢᵃᵗ, its second derivative by differences,
+  and the forms a solvent's correlations must take;
+- D6: a solute's γ* = 1, outside the activity model, with no volume and no
+  Poynting term, and the rule for which compounds are solutes;
+- criterion 3: Cp on the φˢᵃᵗ basis to 1e-7.
+
+**Against `thermo`** (criteria 3 and 7), each the worst over its states,
+relative but for dn (to its row's floor of 1e-3):
+
+| Basis | States | ln φ | ∂T | ∂P | dn | H, S | Cp | V |
+|---|---|---|---|---|---|---|---|---|
+| Psat, ideal gas | 20 (NRTL, UNIQUAC, UNIFAC) | 8.4e-15 | 6.4e-16 | exact | 1.0e-13 | 5.8e-16 | 2.1e-14 | 4.4e-16 |
+| Poynting, ideal gas | 20 | 4.7e-13 | 4.0e-13 | 1.6e-12 | 9.1e-14 | 4.0e-13 | 3.6e-12 | 5.7e-16 |
+| Poynting&PhiSat, PR, `thermo` moved onto reflux's φˢᵃᵗ | 8 (NRTL) | 1.6e-13 | 1.5e-13 | 3.6e-13 | 1.2e-15 | 1.4e-13 | 7.9e-9 | 3.3e-16 |
+| Henry's law, gases in water | 12 | 6.9e-15 | 2.5e-14 | exact | exact | 8.5e-16 | 2.2e-14 | |
+| Henry's law, CO₂ and H₂ in water and ethylene glycol | 8 | 4.8e-15 | 1.1e-15 | exact | 2.6e-11 | 1.2e-15 | 2.9e-14 | |
+
+- With Poynting's term, V(P − Pˢᵃᵗ)/RT is on `thermo`'s R, 1.84e-11 from
+  reflux's, which moves ln φ and ∂P by that share of the term.
+- With φˢᵃᵗ, both take its second T-derivative by differences, which
+  leaves 7.9e-9 in Cp. Held to differences of its own H instead, reflux's
+  Cp is 3.1e-12 off on the Psat basis, 3.2e-12 with Poynting's term and
+  1.7e-11 with φˢᵃᵗ.
+- In the mixed solvent, ChemSep's bank has the gases in water alone, so
+  each one's constant in the glycol is synthetic, given in the fixture, and
+  no bank pairs water with the glycol, so both sides are an ideal solution.
+  `thermo` has no composition derivatives: its dn is by differences of its
+  ln φ, a gas's column reflux's exact 0 to its rounding, 1.3e-10.
+
+**Its own consistency** (criterion 3): a pure liquid's ln f equals its
+vapour's at Pˢᵃᵗ to 8.9e-16, by the ideal gas and by PR; its ΔHvap from H
+equals Clapeyron's T·ΔV·dPˢᵃᵗ/dT to 4.4e-16; and Hᴱ from H equals the
+activity model's to 2.2e-15.
+
+**Tests:**
+- [tdep/jet_test.v](../tdep/jet_test.v): each form's jet against its value
+  and derivatives, on methanol's and water's coefficients and a form 10 and
+  16: the value to 3.3e-16, the first derivative to 9.3e-15, the second to
+  7.9e-10 against differences (the reference's own error); form 106 at and
+  above Tc; every other form refused.
+- [components/gamma_phi_test.v](../components/gamma_phi_test.v):
+  - the table above; pure liquids and Clapeyron; Hᴱ;
+  - a workspace's bits against a model without one, at three temperatures
+    and back, and after a refused T;
+  - each correlation in other units by its scale, vapour pressures in kPa
+    and densities in mol/m³, the same liquid (ChemSep's are all in Pa and
+    kmol/m³);
+  - and the refusals, each by its reason: below a correlation's range, for
+    the liquid and the phase of lower G but not the vapour; through the PT
+    flash, as `no_volume_root`, and through the bubble point's Newton, with
+    its reason (step 6); a solute beyond its constant's range; a liquid of
+    solutes alone; an unlisted pair; a solute with no constant; and no T
+    with a liquid of hydrogen and methanol, by name.
+
+**Found:**
+- **ChemSep's hydrogen row in `henrys_law.ipd` is wrong.** It gives
+  4.22e10 Pa at 298.15 K, 5.9 times the 7.19e9 Pa of Sander's compilation
+  (Hscp 7.7e-6 mol/(m³·Pa), from Wilhelm et al. 1977 and Young 1981, at
+  henrys-law.org), and a slope d ln Hscp/d(1/T) of 920 K against 490 K. The
+  same file's oxygen, nitrogen, CO₂ and methane agree with the same
+  compilation to 4.3%, and in slope to 5%. Both the value and the slope are
+  off, so it isn't one digit's typo. A liquid would hold a sixth of the
+  hydrogen it should, and the owner's case has hydrogen over
+  methanol–water: for the owner to decide (below).
+- **`henrys_law.ipd` names CAS 78-79-5 "Isopentane":** that's isoprene's
+  number (isopentane's is 78-78-4), and the NRTL bank names it isoprene, so
+  which compound the row's constants are for is unknown. Recorded for step
+  10's data, with hydrogen's row.
+- **`thermo` takes φˢᵃᵗ at the equation of state's own Pˢᵃᵗ,** so a pure
+  liquid's ln f misses its vapour's by up to 9.0e-4 (ethanol under PR, 300
+  to 355 K; 3.3e-4 for methanol and water). Hence D4's amendment.
+- **`thermo`'s d²Vᴸ/dT² is numerical:** with Poynting's term it moves Cp
+  by up to 9.5e-7 of itself. The generator replaces it by mpmath's, keeping
+  `thermo`'s own as `cp_thermo`.
+- **`thermo`'s solute takes the symmetric γ of the whole model,** neither
+  D6's γ* nor 1, and `GibbsExcessLiquid` has no composition derivatives. So
+  the comparison is on ideal solvents, and its dn comes from the Gᴱ
+  model's Hessian, or in the mixed solvent from differences of its ln φ.
+- **V:** an array of Options needs every element cast, and a `mut` copy of
+  a reference reaches through an immutable receiver (the V notes).
+
+**For the owner: hydrogen's constant.** Either replace the row with a
+published fit, Fernández-Prini, Alvarez and Harvey's (2003), a new form; or
+correct it to the compilation's value and slope in equation 121's own form,
+reported as UNIFAC's corrections are (D7 as amended). Step 10's published
+data would check either. Until then a hydrogen solute is about 6 times too
+insoluble.
+
+### 6. VLE flashes with activity models — done
 - PT, bubble and dew points, PH and PS on γ–φ fluids, each split verified.
 - Against `FlashVL`; azeotropes found (criterion 5).
+
+Built together with step 5.
+
+**What was built** ([design.md](design.md), "Azeotropes" and "PH and PS
+flashes"):
+- **The flashes take a γ–φ fluid as they take a cubic,** behind the seam,
+  each calling `for_one_thread` first: PT, stability, vapour-fraction, PH
+  and PS. Nothing else in them knows a γ–φ fluid.
+- **[numeric/newton.v](../numeric/newton.v) says why a system can't be
+  evaluated at x0** (step 4's "found"): the system's error, or the residual
+  or Jacobian entry that isn't finite.
+- **PH's bracket steps back** from a T the model refuses, by halves towards
+  the last, up to 40 times ([flash/ph.v](../flash/ph.v)).
+- **PH and PS fall back to Newton's own state** where the PT flash at
+  Newton's T misses the balance, the state checked as a PT split is: within
+  0.01 K of an azeotrope, methanol–water's balance came out 1.39e-10
+  against 1e-10.
+- **[flash/azeotrope.v](../flash/azeotrope.v):** `azeotrope_t` and
+  `azeotrope_p`, Newton on x and ln T or ln P from x0's bubble point, or
+  from one 2% away where x0 is an azeotrope already. The answer is checked:
+  equal fugacities, two phases and not one root twice, the liquid stable, a
+  heterogeneous azeotrope refused as `.more_phases`: water and 1-butanol's
+  by NRTL, at 365.86 K and 1 atm, where the one liquid's tm is −0.031.
+
+**Against `thermo`** (criterion 5): 210 flashes on the 'Poynting' basis
+with the ideal gas, on methanol–water, ethanol–water and acetone–methanol
+by NRTL, acetone–methanol–water by NRTL, and methanol–water by UNIFAC.
+- **PT:** 90, 30 of them splits: β to 6.7e-11, x and y to 1.0e-12.
+- **Bubble and dew T and P:** 120, T to 5.7e-14, P to 8.6e-13, the
+  incipient phase to 3.3e-14.
+- **PH and PS,** from each PT answer's H and S back to its T: T to 1.1e-11
+  and 2.5e-12, β to 6.6e-12 and 9.4e-13.
+- **Each answer checked from scratch:** equal fugacities to 1e-10, the
+  balance to 1e-12, each phase on its phase of lower G, and a TPD scan of
+  each phase at steps of 1/40 finding nothing below its tangent plane
+  (lowest 0).
+- **The azeotropes:** ethanol–water's at x₁ = 0.868, 351.53 K, and
+  acetone–methanol's at 0.791, 328.53 K, x to 2.0e-14 and T to 7.8e-16 of
+  `thermo`'s by Brent.
+
+The references are solved on `thermo`'s own liquid: PT splits by
+substitution on its fugacities, boundaries and azeotropes by Brent on them.
+At one state, acetone–methanol at 373.194 K and 415051 Pa, `FlashVL`
+contradicts its own liquid, and its answer is recorded beside. Criterion 5
+asks 1e-8; β's worst is a split within 0.01 K of an azeotrope, where β
+moves as 1/(K − 1).
+
+**Every cubic answer** (criterion 4), against step 4's code (`e5c8055`),
+by step 4's trace, CLI and C API reference, under tcc and gcc's `-prod`:
+- **The C API's reference:** the same, byte for byte.
+- **The CLI's 65 outputs:** the same, but for the 7 lines under each
+  compiler that say how long a run took.
+- **The trace's 62,896 lines:** the same, but for 868, under each compiler.
+  - 865 are refusals whose "the system cannot be evaluated at x0" now gives
+    its reason, every one "T = … K, P = … Pa is out of range", the
+    vapour-fraction flash's own bound on Newton's step.
+  - 3 are one state's PH, PS and PH from an estimate, ten components at
+    99.65 MPa and 224.48 K. They were refused, the balance off by 0.31 at
+    221.55 K, and are now answered by Newton's own state: the PT split they
+    start from, T within 77 ulps and β within 2. Brent had closed in on a
+    jump in the unverified flashes' H(T), and Newton from its last split
+    reaches the verified answer.
+- **The time:** M3's twelve cases by gcc's `-prod`, six runs of each build
+  taking turns, the best of 15 rounds each. The best times are 0.951 to
+  1.037 of before; of the 72 rounds' ratios the median is 0.993, 33 above 1
+  and 39 below, with one round's ratio from 0.63 to 1.54. Each case
+  allocates the same bytes under tcc.
+
+**Tests:**
+- [components/gamma_phi_test.v](../components/gamma_phi_test.v): the
+  flashes and azeotropes above; `azeotrope_t` from the azeotrope itself and
+  `azeotrope_p` at its T, each giving back the other's P and x to 1e-12;
+  water and 1-butanol's heterogeneous azeotrope refused; and PH stepping
+  back into water's range from the ideal gas's start below it.
+- [numeric/newton_test.v](../numeric/newton_test.v): a system's own error,
+  a NaN residual and an infinite Jacobian entry at x0, each in the refusal.
+- [flash/seam_test.v](../flash/seam_test.v): Raoult's law with no
+  derivatives refused with its reason.
+
+**Planted mistakes** (both steps): 88, in a scratch copy, one at a time.
+The first run planted 80: 46 caught, 33 survived and 1 didn't build. Each
+survivor then got a test, had its code deleted, or is explained here, and
+a second run on a fresh copy, with 8 more for the new code, caught what
+the new tests should. In all, 75 caught and 3 sites deleted; 10 survive,
+explained.
+- **New tests** (in the lists above): a workspace after a refused T; a
+  correlation in other units, since ChemSep's vapour pressures are all in
+  Pa, scale 1, so leaving the scale out changed nothing; a solute beyond
+  its Henry's-law range; dn against differences, with a gas dissolved in
+  non-ideal solvents and with a solvent absent; a phase of 2.5 mol; each
+  phase's (∂V/∂T)_P against its volume's slope; the ideal-gas vapour's
+  speed of sound and Joule–Thomson coefficient; `new_gamma_phi`'s own
+  refusals; a Henry's-law bank of another data root, for three guards
+  ChemSep's can't reach; a solute named that isn't a compound; the PR
+  vapour with and without kᵢⱼ; Newton's two reasons beyond the system's
+  own; `azeotrope_p`, a heterogeneous azeotrope and a single component; and
+  Newton's iterations for each azeotrope, recorded, which can't grow.
+- **Deleted:** the solutes' mix skipped an absent solvent, which weighs
+  nothing anyway, and gave its dn column 0, where a little of that solvent
+  does move the mix: the column is now the derivative, and the skip is
+  gone. A residual's sum skipped zero amounts, whose ln φ is always finite.
+  And the azeotrope's check that the liquid was on its phase of lower G
+  could never fail, the two phases' G being equal there; it's now the
+  check that matters, that they're two phases and not one root twice.
+- **Explained, 10:**
+  - `scoped` without a workspace, and `for_one_thread` not making one,
+    give the same bits by design; what the workspace saves is speed. A
+    liquid phase at one T takes 22.8 µs without it and 0.41 µs with it,
+    for methanol–water with PR's vapour, whose φˢᵃᵗ costs five
+    pure-component phases each (36.2 and 0.51 µs with acetone too; gcc's
+    `-prod`).
+  - From Newton's own state, its fugacities and balance checked again:
+    Newton stops only with every residual within tol, and the check
+    computes the same inequalities on the same phases, unless a phase has
+    moved to its other root. Its verification: every fallback answer in the
+    tests and the trace is stable. Its labels by molar volume rather than
+    mass density: in a vapour–liquid split the two agree, as they do in
+    every such state here; the rule is PT's (M3's D6 as amended).
+  - The azeotrope's residual checked again: as above, Newton's own stop.
+  - Two guards no public path reaches: a vapour whose volume is the
+    liquid's Σ nᵢVᵢᴸ to the bit, and an azeotrope at one root twice, which
+    a search can't reach from the bubble point it needs to start.
+  - PH's bracket stepping back on any failure, not only a refused phase:
+    a PT flash reports every refusal by the model as `no_volume_root`, so
+    it differs only where a flash fails by its own doing inside the
+    bracket, which none in the tests or the trace does.
+
+**For 0.5.0's CHANGELOG entry** (the V API):
+- new: `components.Database.gamma_phi` with `GammaPhiOptions` and
+  `LiquidModel`, `thermo.GammaPhi` and `new_gamma_phi`, `thermo.Scoped`
+  and `for_one_thread`, `tdep.Correlation.jet` and `jet_forms`, and
+  `flash.azeotrope_t` and `azeotrope_p`;
+- `numeric.newton`'s refusal at x0 gives the system's reason;
+- PH and PS answer where Newton's own state meets the balance and a PT
+  flash at its T doesn't.
+
+**Checks:** both full checks pass, tcc (16 min) and gcc with its `-prod`
+build (31 min): 115 test files, two of them new. The Python package's
+tests pass (`tools/python.vsh test`, 5 min), the C API's reference being
+the same bytes as step 4's.
 
 ### 7. Three phases
 - D8, D9: the stage-wise PT flash, the multiphase Rachford–Rice and Newton
