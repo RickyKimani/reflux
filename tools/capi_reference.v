@@ -143,14 +143,14 @@ fn props_point(f thermo.Fluid, root thermo.Root, t f64, p f64, z []f64) string {
 	mut values := nans(11)
 	mut ln_phi := nans(nc)
 	mut phase := -1
-	if st := thermo.solve_tp(f.model, t, p, z, root) {
+	if st := f.model.phase(t, p, z, root) {
 		pr := f.props(st)
 		n := numeric.sum(z)
 		v := [st.z, st.v / n, pr.h / n, pr.s / n, pr.g / n, pr.u / n, pr.a / n, pr.cp / n, pr.cv / n,
 			pr.w, pr.mu_jt]
 		if all_finite(v) && all_finite(st.ln_phi) {
 			values, ln_phi = v.clone(), st.ln_phi.clone()
-			phase = if thermo.phase_label(f.model, st) == .liquid { 0 } else { 1 }
+			phase = if f.model.phase_label(st) == .liquid { 0 } else { 1 }
 		} else {
 			status = not_finite
 		}
@@ -174,7 +174,7 @@ fn psat_point(m thermo.Cubic, j int, t f64) string {
 	return '{"component": ${j}, "t": ${bits(t)}, "status": ${status}, "p": ${bits(p)}}'
 }
 
-fn stability_point(m thermo.Model, t f64, p f64, z []f64) string {
+fn stability_point(m thermo.PhaseModel, t f64, p f64, z []f64) string {
 	st := flash.stability(m, t, p, z) or {
 		return '{"t": ${bits(t)}, "p": ${bits(p)}, "z": ${bits_list(z)}, "status": ${status_of(err)}, "stable": -1, "tm": ${bits(math.nan())}, "w": ${bits_list(nans(z.len))}}'
 	}
@@ -206,7 +206,7 @@ fn run_flash(spec string, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashRes
 		'pt' { flash.pt(f.model, a, b, z)! }
 		'ph' { flash.ph(f, a, b, z)! }
 		'ps' { flash.ps(f, a, b, z)! }
-		'tv' { flash.tv(f.model, a, b, z)! }
+		'tv' { flash.tv(f.helmholtz()!, a, b, z)! }
 		'uv' { flash.uv(f, a, b, z)! }
 		'tvf' { flash.tvf(f.model, a, b, z)! }
 		else { flash.pvf(f.model, a, b, z)! }
@@ -222,6 +222,11 @@ fn flash_point(spec string, f thermo.Fluid, a f64, b f64, z []f64) FlashPoint {
 		}
 	}
 	r := run_flash(spec, f, a, b, z) or { return failed(status_of(err)) }
+	// The C API's layout has a liquid and a vapour: two liquids or three
+	// phases are MORE_PHASES there until ABI 2 (M6's D14), so here too.
+	if r.phases.len > 2 || r.phases.any(it.label == .liquid2) {
+		return failed(int(flash.Failure.more_phases) + 1)
+	}
 	mut phase := [nans(4), nans(4)]
 	mut x := [nans(nc), nans(nc)]
 	mut h, mut s, mut v := 0.0, 0.0, 0.0
@@ -273,7 +278,7 @@ fn fluid_json(db components.Database, fc FluidCase) !string {
 		overrides: overrides
 	)!
 	f := s.fluid
-	m := f.model as thermo.Cubic
+	m := f.helmholtz()! as thermo.Cubic
 	nc := cas.len
 	mut props := []string{}
 	mut stab := []string{}

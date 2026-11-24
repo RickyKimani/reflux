@@ -119,9 +119,14 @@ fn density(m thermo.Model, st thermo.State) f64 {
 fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	assert r.phases.len == 2, at
 	vap, liq := r.phases[0], r.phases[1]
-	assert vap.label == .vapor && liq.label == .liquid, at
-	assert density(m, vap.state) < density(m, liq.state), '${at}: the vapour is the less dense'
-	assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
+	assert density(m, vap.state) < density(m, liq.state), '${at}: the lighter phase first'
+	// M6's D9: two liquids where Π calls the lighter liquid-like too.
+	if thermo.phase_label(m, vap.state) == .liquid {
+		assert vap.label == .liquid && liq.label == .liquid2 && r.beta == 0.0, '${at}: two liquids'
+	} else {
+		assert vap.label == .vapor && liq.label == .liquid, at
+		assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
+	}
 	assert math.abs(vap.fraction + liq.fraction - 1.0) <= 1e-15, at
 	y, x := vap.state.n, liq.state.n
 	sy := thermo.solve_tp(m, r.t, r.p, y, .stable)!
@@ -138,7 +143,7 @@ fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	}
 	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
 	for pair in [[x, y], [y, x]] {
-		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		s := flash.stability(thermo.by_roots(m), r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
 		assert s.stable, '${at}: a phase of the split is unstable'
 	}
 }
@@ -165,7 +170,7 @@ fn test_round_trips_from_pt_states() {
 		for r in [rh, rs] {
 			assert r.phases.len == c.phases.len, '${at}: ${r.phases.len} phases at ${r.t} K'
 			if r.phases.len == 2 {
-				check_equilibrium(fl.model, r, at)!
+				check_equilibrium(fl.helmholtz()!, r, at)!
 			}
 			dt := math.abs(r.t - c.t) / c.t
 			if dt > worst_t {
@@ -200,7 +205,7 @@ fn test_pure_saturation() {
 			worst_t = math.max(worst_t, math.abs(r.t - c.t) / c.t)
 			worst_b = math.max(worst_b, math.abs(r.beta - c.vf))
 			if r.phases.len == 2 && r.beta > 0.0 && r.beta < 1.0 {
-				check_equilibrium(fl.model, r, at)!
+				check_equilibrium(fl.helmholtz()!, r, at)!
 			}
 		}
 	}
@@ -208,10 +213,12 @@ fn test_pure_saturation() {
 	assert worst_t <= 1e-9 && worst_b <= 1e-8
 }
 
-fn test_three_phases_are_refused() {
+fn test_three_phases_round_trip() {
 	// pt_test's water, n-decane and methane at 350 K and 5 bar has three
-	// phases. Given the H of the false two-phase split there, ph's PT
-	// flashes near 350 K re-test their phases and report more_phases.
+	// phases (M6's D8). From their H and S, PH and PS come back to 350 K
+	// and the same three phases (D10), though the first search, on
+	// unverified two-phase flashes, misses the balance and a second on
+	// verified ones finds it.
 	cs := [
 		Component{
 			name:  'water'
@@ -242,15 +249,21 @@ fn test_three_phases_are_refused() {
 		}
 	}))!
 	z := [0.5, 0.3, 0.2]
-	r := flash.pt(m, 350.0, 5e5, z, verify: false)!
-	mut h := 0.0
+	r := flash.pt(thermo.by_roots(m), 350.0, 5e5, z)!
+	assert r.phases.len == 3
+	mut h, mut s := 0.0, 0.0
 	for ph in r.phases {
 		h += ph.fraction * fl.props(ph.state).h
+		s += ph.fraction * fl.props(ph.state).s
 	}
-	if _ := flash.ph(fl, 5e5, h, z) {
-		assert false, 'a two-phase answer for a three-phase state'
-	} else {
-		assert err is flash.FlashError && (err as flash.FlashError).kind == .more_phases, err.msg()
+	for back in [flash.ph(fl, 5e5, h, z)!, flash.ps(fl, 5e5, s, z)!] {
+		assert back.phases.len == 3, '${back.phases.len} phases'
+		// etol's 1e-10 of RT in H, over the three phases' Cp.
+		assert math.abs(back.t / 350.0 - 1.0) <= 1e-9, '${back.t}'
+		for k in 0 .. 3 {
+			assert math.abs(back.phases[k].fraction - r.phases[k].fraction) <= 1e-8
+			assert back.phases[k].label == r.phases[k].label
+		}
 	}
 }
 

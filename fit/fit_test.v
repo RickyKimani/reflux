@@ -202,6 +202,6 @@ fn test_a_kij_starts_from_the_model() {
 			'testdata', 'm8_fit')
 	)!
 	fl := on.fluid or { panic('no fluid') }
-	c := fl.model as thermo.Cubic
+	c := fl.helmholtz()! as thermo.Cubic
 	assert c.kij[1] != 0.0 && on.fits[0].parameters[0].start == c.kij[1]
 }

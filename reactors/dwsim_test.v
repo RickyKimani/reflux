@@ -429,7 +429,7 @@ struct DwsimViscosity {
 
 fn new_dwsim_viscosity(fl thermo.Fluid, records []components.Record) !DwsimViscosity {
 	return DwsimViscosity{
-		model: fl.model
+		model: fl.helmholtz()!
 		pure:  records.map(it.property('vapor_viscosity')!)
 		tc:    records.map(it.constants.tc or { 0.0 })
 		pc:    records.map(it.constants.pc or { 0.0 })

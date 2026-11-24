@@ -32,9 +32,9 @@ fn test_a_split_outside_zero_to_one_is_refused() {
 	// to a "split" that doesn't contain the feed, which split refuses.
 	m := methane_butane()!
 	z := [0.9, 0.1]
-	assert stability(m, 300.0, 20e5, z)!.stable
+	assert stability(thermo.by_roots(m), 300.0, 20e5, z)!.stable
 	sp := Splitter{
-		m:       m
+		m:       thermo.by_roots(m)
 		t:       300.0
 		p:       20e5
 		z:       z
@@ -56,9 +56,9 @@ fn test_a_split_that_collapses_onto_the_feed_is_refused() {
 	m := methane_butane()!
 	for c in [[0.7, 330.0, 131.5e5], [0.6, 340.0, 122e5], [0.5, 300.0, 50e5]] {
 		z := [c[0], 1.0 - c[0]]
-		assert !stability(m, c[1], c[2], z)!.stable
+		assert !stability(thermo.by_roots(m), c[1], c[2], z)!.stable
 		sp := Splitter{
-			m:       m
+			m:       thermo.by_roots(m)
 			t:       c[1]
 			p:       c[2]
 			z:       z

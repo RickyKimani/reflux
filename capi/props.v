@@ -143,7 +143,7 @@ struct PhaseProps {
 fn phase_props(f thermo.Fluid, root thermo.Root, t f64, p f64, z []f64) !PhaseProps {
 	check_tp(t, p)!
 	check_z(z)!
-	st := thermo.solve_tp(f.model, t, p, z, root) or {
+	st := f.model.phase(t, p, z, root) or {
 		return point_error(point_no_volume_root, err.msg())
 	}
 	pr := f.props(st)
@@ -162,7 +162,7 @@ fn phase_props(f thermo.Fluid, root thermo.Root, t f64, p f64, z []f64) !PhasePr
 	return PhaseProps{
 		values: values
 		ln_phi: st.ln_phi
-		phase:  if thermo.phase_label(f.model, st) == .liquid { liquid } else { vapor }
+		phase:  if f.model.phase_label(st) == .liquid { liquid } else { vapor }
 	}
 }
 
@@ -284,9 +284,8 @@ pub fn reflux_psat(fluid i64, component i32, n i64, t &f64, out &f64, status &i3
 	check_points(n, [voidptr(t), out, status], ['t', 'out', 'status']) or {
 		return failed(err, buf, buf_len)
 	}
-	pure := pure_model(s.fluid.model, int(component)) or {
-		return fail(data_error, buf, buf_len, err.msg())
-	}
+	eos := s.fluid.helmholtz() or { return fail(data_error, buf, buf_len, err.msg()) }
+	pure := pure_model(eos, int(component)) or { return fail(data_error, buf, buf_len, err.msg()) }
 	mut reasons := Reasons{}
 	for i in 0 .. int(n) {
 		ps := saturation(pure, unsafe { t[i] }) or {

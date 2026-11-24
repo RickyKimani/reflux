@@ -122,8 +122,9 @@ const trivial_tol = 1e-5
 // instability is a FlashError, not a guess.
 //
 // A pure component is always stable here: it can't split by composition,
-// and solve_tp has already taken its root of lower Gibbs energy.
-pub fn stability(m thermo.Model, t f64, p f64, z []f64, params StabilityParams) !Stability {
+// and the model has already given its phase of lower Gibbs energy.
+pub fn stability(model thermo.PhaseModel, t f64, p f64, z []f64, params StabilityParams) !Stability {
+	m := thermo.for_one_thread(model)
 	comps := m.components()
 	nc := comps.len
 	if z.len != nc {
@@ -152,7 +153,7 @@ pub fn stability(m thermo.Model, t f64, p f64, z []f64, params StabilityParams) 
 			stable: true
 		}
 	}
-	feed_state := thermo.solve_tp(m, t, p, feed_x, .stable) or {
+	feed_state := m.phase(t, p, feed_x, .stable) or {
 		return fail(.no_volume_root, 'the feed at ${t} K and ${p} Pa: ${err}')
 	}
 	mut d := []f64{len: nc}
@@ -223,7 +224,7 @@ struct Start {
 
 // Feed is one stability test: the feed and its tangent plane.
 struct Feed {
-	m       thermo.Model
+	m       thermo.PhaseModel
 	t       f64
 	p       f64
 	z       []f64
@@ -258,7 +259,7 @@ fn (f Feed) at(u []f64) !Point {
 		return fail(.no_convergence, 'a stability trial left the composition space (ΣW = ${sum})')
 	}
 	x := w.map(it / sum)
-	st := thermo.solve_tp(f.m, f.t, f.p, x, .stable) or {
+	st := f.m.phase(f.t, f.p, x, .stable) or {
 		return fail(.no_volume_root, 'a trial phase at ${f.t} K and ${f.p} Pa: ${err}')
 	}
 	mut r := []f64{len: nc}
@@ -411,7 +412,7 @@ fn (f Feed) objective(a []f64, mut g []f64, mut h []f64) !f64 {
 		}
 	}
 	cur := f.at(f.u_of(a))!
-	der := thermo.ln_phi_derivs(f.m, cur.st)
+	der := f.m.ln_phi_derivs(cur.st)!
 	k := f.present.len
 	nc := f.z.len
 	for j, i in f.present {

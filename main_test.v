@@ -50,7 +50,7 @@ fn test_solve_a_reactor() {
 	code, _, err := quiet(['solve', file, '--json', json_path])
 	assert code == 0 && err == '', err
 	r := decode(json_path)!
-	assert r.format == 3 && r.units.len == 1 && r.units[0].kind == 'pfr'
+	assert r.format == 4 && r.units.len == 1 && r.units[0].kind == 'pfr'
 	profile := r.units[0].profile or { panic('no profile') }
 	product := r.streams.filter(it.name == 'product')[0]
 	assert profile[0].volume == 0 && profile.last().volume == 1 && profile.last().length == 1

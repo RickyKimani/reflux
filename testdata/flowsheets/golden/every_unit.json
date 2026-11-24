@@ -1,6 +1,6 @@
 {
-  "format": 3,
-  "reflux": "0.4.0",
+  "format": 4,
+  "reflux": "0.5.0",
   "file": "testdata/flowsheets/every_unit.toml",
   "status": "solved",
   "error": null,
@@ -21,6 +21,50 @@
       "molar_mass": 0.0721488
     }
   ],
+  "model": {
+    "equation": "SRK",
+    "liquid": "",
+    "vapour": "",
+    "poynting": false,
+    "solutes": [],
+    "pairs": [
+      {
+        "a": "methane",
+        "b": "propane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.01"
+          }
+        ],
+        "source": "the file"
+      },
+      {
+        "a": "methane",
+        "b": "n-pentane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      },
+      {
+        "a": "propane",
+        "b": "n-pentane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      }
+    ],
+    "notes": [],
+    "warnings": []
+  },
   "streams": [
     {
       "name": "gas",

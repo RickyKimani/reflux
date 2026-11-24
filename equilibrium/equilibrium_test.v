@@ -58,7 +58,7 @@ fn mixture(c ECase) Mixture {
 		fl := db.fluid(.pr, names, kij: false) or { panic(err) }
 		return Mixture{
 			species: sp
-			model:   fl.model
+			model:   fl.helmholtz() or { panic(err) }
 		}
 	}
 	return Mixture{
@@ -242,10 +242,10 @@ fn test_refused() {
 	fl := db.fluid(.pr, names, kij: false)!
 	pr := Mixture{
 		species: ms
-		model:   fl.model
+		model:   fl.helmholtz()!
 	}
 	got := refusal(fn [pr] () !Result {
 		return gibbs(pr, 300, 100e5, [1.0, 3, 0, 0, 0], [])
 	})
-	assert got == 'equilibrium: the equilibrium mixture at 300 K and 1e7 Pa would split into two phases, which needs M6', got
+	assert got == "equilibrium: the equilibrium mixture at 300 K and 1e7 Pa would split into two phases, and an equilibrium here is of one phase (M9's D9)", got
 }

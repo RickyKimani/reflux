@@ -114,14 +114,16 @@ struct GibbsAt {
 fn (a GibbsAt) outlet_at(t f64) !flowsheet.Stream {
 	m := equilibrium.Mixture{
 		species: a.g.species
-		model:   a.fl.model
+		model:   a.fl.helmholtz()!
 	}
 	r := equilibrium.gibbs(m, t, a.p, a.flows, a.g.inert) or { return failed(a.g.name, err.msg()) }
 	return at_tp(a.g.name, a.fl, r.n, t, a.p)
 }
 
-// one_inlet checks a reactor's one inlet: a flow per species, and something
-// flowing.
+// one_inlet checks what every reactor starts from: one inlet, with a flow
+// per species and something flowing, and a fluid whose phase an equation of
+// state gives. A reactor has one phase by F(T, V, n) (M6's D11), so a fluid
+// without one is refused here, for all five of them.
 fn one_inlet(name string, fl thermo.Fluid, inlets []flowsheet.Stream, n int) !flowsheet.Stream {
 	if inlets.len != 1 {
 		return spec_error(name, 'got ${inlets.len} inlets for 1 port')
@@ -131,6 +133,9 @@ fn one_inlet(name string, fl thermo.Fluid, inlets []flowsheet.Stream, n int) !fl
 	}
 	if !(inlets[0].total() > 0) {
 		return spec_error(name, 'nothing flows in')
+	}
+	fl.helmholtz() or {
+		return spec_error(name, 'a reactor has one phase, by an equation of state: ${err.msg()}')
 	}
 	return inlets[0]
 }

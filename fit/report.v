@@ -258,12 +258,54 @@ fn value_of(f Fitted, constant string, part flowsheet.Part, original string) str
 	return original
 }
 
+// pairs_section is each fitted pair of an activity model as the file writes
+// it (M6's D16), a [[model.pairs]] table: a fitted energy's τ as A/RT
+// (NRTL) or exp(−A/RT) (UNIQUAC), A in J/mol to 10 figures, a fitted α, and
+// the pair's other parameters as the model had them.
+fn pairs_section(f Fitted, fits flowsheet.FitFile) string {
+	g := fits.gamma_phi or { return '' }
+	mut b := strings.new_builder(512)
+	keys := if fits.liquid == 'NRTL' { ['tau_ab', 'tau_ba', 'alpha'] } else { ['tau_ab', 'tau_ba'] }
+	for u in g.pairs {
+		ia, ib := g.model.solvents[u.i], g.model.solvents[u.j]
+		mut texts := u.texts.clone()
+		mut fitted := false
+		for q, p in f.plan.parameters {
+			forward := p.i == ia && p.j == ib
+			if !forward && !(p.i == ib && p.j == ia) {
+				continue
+			}
+			fitted = true
+			if p.part == .alpha {
+				texts[2] = figures10(f.values[q])
+			} else if fits.liquid == 'NRTL' {
+				texts[if forward { 0 } else { 1 }] = '${figures10(f.values[q])} J/mol / (R*T)'
+			} else {
+				texts[if forward { 0 } else { 1 }] = 'exp(${figures10(-f.values[q])} J/mol / (R*T))'
+			}
+		}
+		if !fitted {
+			continue
+		}
+		b.writeln('[[model.pairs]]')
+		b.writeln('a = "${fits.names[ia]}"')
+		b.writeln('b = "${fits.names[ib]}"')
+		for k, key in keys {
+			b.writeln('${key} = "${texts[k]}"')
+		}
+	}
+	return b.str()
+}
+
 // section is the fitted constants as the file writes them: each constant's
 // table, in the file's units, its other number as it was where only one
-// was fitted; or each pair's kij.
+// was fitted; or each pair's kij, or an activity model's pairs.
 fn section(f Fitted, fits flowsheet.FitFile) string {
 	mut b := strings.new_builder(1024)
 	plan := f.plan
+	if plan.kind == .vle && plan.parameters.any(it.part != .kij) {
+		return pairs_section(f, fits)
+	}
 	if plan.kind == .vle {
 		for q, p in plan.parameters {
 			b.writeln('${p.name} = ${figures10(f.values[q])}')

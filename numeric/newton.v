@@ -102,7 +102,7 @@ pub fn newton(system System, x0 []f64, params NewtonParams) !NewtonSolution {
 		jac:      []f64{len: n * n}
 	}
 	if !s.evaluate(s.x, mut s.f, mut s.jac) {
-		return error('newton: the system cannot be evaluated at x0')
+		return error('newton: the system cannot be evaluated at x0: ${s.why}')
 	}
 	if max_abs(s.f) <= params.ftol {
 		return s.solution()
@@ -126,19 +126,25 @@ mut:
 	jac         []f64
 	iterations  int
 	evaluations int
+	why         string // why the last evaluation failed, for x0's refusal
 }
 
 // evaluate calls the system at x, and reports whether it gave finite values.
 fn (mut s Newton) evaluate(x []f64, mut f []f64, mut jac []f64) bool {
 	s.evaluations++
-	s.system.eval(x, mut f, mut jac) or { return false }
+	s.system.eval(x, mut f, mut jac) or {
+		s.why = err.msg()
+		return false
+	}
 	for v in f {
 		if !math.is_finite(v) {
+			s.why = 'a residual of ${v}'
 			return false
 		}
 	}
 	for v in jac {
 		if !math.is_finite(v) {
+			s.why = 'a Jacobian entry of ${v}'
 			return false
 		}
 	}

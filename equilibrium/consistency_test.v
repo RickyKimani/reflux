@@ -221,7 +221,7 @@ fn test_a_real_gas_on_pressures() {
 	sp := gases('methane', 'water', 'hydrogen', 'carbon monoxide', 'carbon dioxide')
 	r := kinetics.parse_equation('reforming', 'CH4 + H2O = CO + 3 H2', sp)!
 	fl := cdb.fluid(.pr, sp.map(it.name), kij: false)!
-	model := ?thermo.Model(fl.model)
+	model := ?thermo.Model(fl.helmholtz()!)
 	t, p := 900.0, 30e5
 	for basis in [kinetics.Basis.fugacity, .pressure, .concentration] {
 		unit := if basis == .concentration { 'm^3/(mol*s)' } else { 'mol/(kg*s*Pa^2)' }
@@ -249,7 +249,7 @@ fn test_a_real_gas_on_pressures() {
 			assert j.consistent(), '${j.stops}'
 			continue
 		}
-		st := thermo.solve_tp(fl.model, t, p, j.at, .stable)!
+		st := thermo.solve_tp(fl.helmholtz()!, t, p, j.at, .stable)!
 		mut sum := 0.0
 		for q, i in r.species {
 			sum += r.nu[q] * st.ln_phi[i]

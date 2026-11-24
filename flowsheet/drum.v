@@ -73,36 +73,54 @@ pub fn (d FlashDrum) energy_ports() []string {
 	return ['duty']
 }
 
-// of_phase is phase k of a two-phase flash as a stream of its own: saturated
-// at the flash's T and P, so it needs no flash. It has the form a bubble or
-// dew point's answer has, both phases with the other at no moles.
-fn of_phase(fl thermo.Fluid, total f64, r flash.FlashResult, k int) Stream {
-	phase := r.phases[k]
+// of_phases is some of a flash's phases as a stream of their own: at the
+// flash's T and P, so it needs no flash. It keeps every phase, those not
+// taken at no moles, as a bubble or dew point's answer keeps the other
+// phase, and those taken in their shares; its β is the vapour's share.
+fn of_phases(fl thermo.Fluid, total f64, r flash.FlashResult, take []int) Stream {
+	mut share := 0.0
+	for k in take {
+		share += r.phases[k].fraction
+	}
+	nc := r.z.len
+	mut z := []f64{len: nc}
 	mut phases := []flash.Phase{cap: r.phases.len}
-	for i, other in r.phases {
+	mut beta := 0.0
+	for k, ph in r.phases {
+		f := if k in take { ph.fraction / share } else { 0.0 }
+		for i in 0 .. nc {
+			z[i] += f * ph.state.n[i]
+		}
+		if ph.label == .vapor {
+			beta = f
+		}
 		phases << flash.Phase{
-			...other
-			fraction: if i == k { 1.0 } else { 0.0 }
+			...ph
+			fraction: f
 		}
 	}
 	saturated := flash.FlashResult{
 		...r
-		z:      phase.state.n
-		beta:   if k == 0 { 1.0 } else { 0.0 }
+		z:      z
+		beta:   beta
 		phases: phases
 	}
-	return of_flash(fl, phase.state.n.map(it * total * phase.fraction), saturated)
+	return of_flash(fl, z.map(it * total * share), saturated)
 }
 
-// separated is the flash's vapour and liquid, or for a single phase, that
-// phase and an empty stream.
+// separated is the flash's vapour and its liquids, by their labels (M6's
+// D9 and D11): the vapour, if any, out of the vapour port, and every liquid,
+// liquid2 too, out of the liquid port. A port with no phase gets an empty
+// stream.
 fn separated(fl thermo.Fluid, flows []f64, total f64, r flash.FlashResult) (Stream, Stream) {
-	if r.phases.len == 2 {
-		return of_phase(fl, total, r, 0), of_phase(fl, total, r, 1)
+	vapour := []int{len: r.phases.len, init: index}.filter(r.phases[it].label == .vapor)
+	liquids := []int{len: r.phases.len, init: index}.filter(r.phases[it].label != .vapor)
+	if vapour.len == 0 || liquids.len == 0 {
+		full := of_flash(fl, flows, r)
+		empty := of_flash(fl, []f64{len: flows.len}, r)
+		return if vapour.len > 0 { full, empty } else { empty, full }
 	}
-	full := of_flash(fl, flows, r)
-	empty := of_flash(fl, []f64{len: flows.len}, r)
-	return if r.beta == 1.0 { full, empty } else { empty, full }
+	return of_phases(fl, total, r, vapour), of_phases(fl, total, r, liquids)
 }
 
 // calculate mixes the inlets and flashes them. An empty inlet adds nothing
@@ -114,9 +132,14 @@ pub fn (d FlashDrum) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
 	r := d.flash_mixture(fl, b, p) or { return flash_failed(d.name, err) }
 	vapour, liquid := separated(fl, b.flows, b.total, r)
 	out := vapour.total() * vapour.h + liquid.total() * liquid.h
+	mut warnings := []string{}
+	if r.phases.any(it.label == .liquid2) {
+		warnings << 'its liquid outlet has two liquid phases, liquid and liquid2, which a decanter would separate'
+	}
 	return Outcome{
-		outlets: [vapour, liquid]
-		energy:  [EnergyStream{'duty', out - b.enthalpy}]
+		outlets:  [vapour, liquid]
+		energy:   [EnergyStream{'duty', out - b.enthalpy}]
+		warnings: warnings
 	}
 }
 

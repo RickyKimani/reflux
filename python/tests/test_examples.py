@@ -55,7 +55,11 @@ def test_the_script_draws_its_figure(tmp_path):
     lines = r.stdout.splitlines()
     assert lines[0] == "bubble points: 101 of 101 have answers"
     assert lines[1] == "dew points: 101 of 101 have answers"
-    assert lines[2] == "map: 6480 of 6480 have answers"
+    # Near the critical point, 125 of the map's splits are two phases Π
+    # calls liquid-like, liquid and liquid2 (M6's D9), which the C API
+    # refuses until ABI 2 (D14).
+    assert lines[2].startswith("map: 6355 of 6480 have answers; the first without,"), lines[2]
+    assert "flash: liquid, liquid2 at" in lines[2], lines[2]
     assert lines[-1] == f"wrote {out}"
     png = out.read_bytes()
     # A PNG's IHDR gives its size: 11 by 4.6 inches at 110 dots an inch.
@@ -96,14 +100,19 @@ def test_its_t_x_y_is_a_phase_diagram(db, txy):
 def test_its_map_splits_exactly_where_the_feed_is_unstable(db, gas):
     assert gas.status.shape == (80, 81)
     assert np.array_equal(gas.t[0], diagrams.MAP_T) and np.array_equal(gas.p[:, 0], diagrams.MAP_P)
-    assert gas.ok.all(), [gas.reason(tuple(i)) for i in np.argwhere(~gas.ok)[:3]]
+    # Every point has an answer but the 125 near the critical point that are
+    # two liquids by Π (M6's D9), MORE_PHASES in the C API until ABI 2.
+    refused = ~gas.ok
+    assert refused.sum() == 125
+    assert (gas.status[refused] == reflux.Status.MORE_PHASES).all()
+    assert all("liquid, liquid2" in gas.reason(tuple(i)) for i in np.argwhere(refused))
     with db.fluid("PR", diagrams.GAS_NAMES) as f:
         st = f.stability(diagrams.MAP_T, diagrams.MAP_P[:, None], diagrams.GAS_Z)
     assert st.ok.all()
     split = gas.phases == 2
-    assert np.array_equal(split, ~st.stable)
+    assert np.array_equal(split | refused, ~st.stable)
     assert ((gas.beta > 0) & (gas.beta < 1))[split].all()
-    assert np.isin(gas.beta[~split], [0.0, 1.0]).all()
+    assert np.isin(gas.beta[~split & ~refused], [0.0, 1.0]).all()
     # Some of each: the map has an envelope in it, not one region.
     assert 1000 < split.sum() < gas.status.size - 1000
 

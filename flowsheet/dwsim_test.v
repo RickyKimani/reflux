@@ -126,7 +126,7 @@ fn test_the_flowsheet_has_dwsims_constants() {
 	for i, c in fixture.components {
 		assert comps[i].tc == c.tc && comps[i].pc == c.pc && comps[i].omega == c.omega && comps[i].mw == c.mw
 	}
-	m := loaded.fluid.model
+	m := loaded.fluid.helmholtz()!
 	if m is thermo.Cubic {
 		for i, row in fixture.kij {
 			for j, k in row {

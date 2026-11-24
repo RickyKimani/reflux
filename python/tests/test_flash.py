@@ -39,13 +39,21 @@ def m3(tmp_path_factory):
 
 def test_the_splits_are_thermos(m3):
     # β and the compositions to 1e-8 and the phases' volumes to 1e-9, as
-    # flash/thermo_test.v holds the V API to: all 83 of M3's PT states.
-    worst_split, worst_v, splits = 0.0, 0.0, 0
+    # flash/thermo_test.v holds the V API to: all 83 of M3's PT states. A
+    # split whose phases Π calls both liquid-like is liquid and liquid2 (M6's
+    # D9), which the layout can't hold until ABI 2, so the C API refuses it
+    # and says so (D14).
+    worst_split, worst_v, splits, liquids = 0.0, 0.0, 0, 0
     for c in M3["pt"]:
         with m3_fluid(m3, c) as f:
             r = f.flash_pt(c["t"], c["p"], c["z"])
+            why = "" if r.ok else r.reason(())
         at = f"{c['eos']} {c['components']} z {c['z']} at {c['t']} K, {c['p']} Pa"
-        assert r.status == Status.OK, f"{at}: {r.reason(())}"
+        if r.status == Status.MORE_PHASES and why.startswith("flash: liquid, liquid2 at "):
+            assert len(c["phases"]) == 2, at
+            liquids += 1
+            continue
+        assert r.status == Status.OK, f"{at}: {why}"
         assert r.phases == len(c["phases"]), at
         if r.phases == 2:
             splits += 1
@@ -63,7 +71,8 @@ def test_the_splits_are_thermos(m3):
             worst_split = max(worst_split, abs(ph.fraction - want["fraction"]),
                               *np.abs(ph.x - want["z"]))
             worst_v = max(worst_v, abs(ph.v - want["v"]) / want["v"])
-    assert splits == 39
+    assert splits + liquids == 39
+    print(f"{liquids} of thermo's 39 splits are two liquids")
     assert worst_split <= 1e-8, worst_split
     assert worst_v <= 1e-9, worst_v
 
@@ -158,14 +167,16 @@ def test_a_flash_that_fails_says_why(fl, db):
     assert not r.liquid.present[1:].any() and not r.vapor.present[1:].any()
     assert r.reason(1) == "T = nan K: a temperature must be finite and above 0"
     assert r.reason(2).startswith("h is nan at T = 1e+10 K")
-    # Water, n-decane and methane with a large water–hydrocarbon kᵢⱼ have a
-    # third phase at 350 K and 5 bar.
+    # Water, n-decane and methane with a large water–hydrocarbon kᵢⱼ are a
+    # vapour and two liquids at 350 K and 5 bar, which the layout of one
+    # liquid and one vapour can't hold until ABI 2 (M6's D14).
     with db.fluid("PR", ["water", "n-decane", "methane"], kij=False,
                   overrides={("water", "n-decane"): 0.5, ("water", "methane"): 0.5,
                              ("n-decane", "methane"): 0.04}) as three:
         r3 = three.flash_pt(350.0, 5e5, [0.5, 0.3, 0.2])
         assert r3.status == Status.MORE_PHASES
-        assert "unstable" in r3.reason(()) and "three or more phases" in r3.reason(())
+        assert r3.reason(()) == ("flash: vapour, liquid, liquid2 at 350.0 K and 500000.0 Pa, and the C API "
+                                 "takes one liquid and one vapour until ABI 2")
     st = fl.stability([300.0, -1.0], 1e5, [0.5, 0.5])
     assert st.status.tolist() == [Status.OK, Status.BAD_INPUT]
     assert not st.stable[1] and np.isnan(st.tm[1])

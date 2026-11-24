@@ -70,5 +70,6 @@ fn test_the_vendored_files_match_their_notice() {
 		assert sha256.sum(bytes).hex() == cells[5].trim('`'), '${name} no longer matches the SHA-256 in its NOTICE'
 		checked++
 	}
-	assert checked == 6
+	// The six of M2, and M6's twenty: the activity banks and UNIFAC tables.
+	assert checked == 26
 }

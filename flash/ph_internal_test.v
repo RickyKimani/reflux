@@ -77,6 +77,48 @@ fn test_the_q_function_jacobian_matches_differences() {
 	}
 }
 
+fn test_q_is_stationary_at_the_pt_split() {
+	// eval takes each phase on its own root of lower G, so at a PT split,
+	// held to that split's own H or S, every one of its residuals is zero.
+	// A phase on another root moves only the path to the answer, which is
+	// why a planted one survived every test through ph itself: the Jacobian
+	// of the wrong residual is consistent, and Brent finishes where Newton
+	// fails.
+	fl := methane_butane_fluid()!
+	z := [0.4, 0.6]
+	// At 300 K and 5.5 bar the liquid has a vapour root too, or the root
+	// taken couldn't show.
+	r := pt(fl.model, 300.0, 5.5e5, z)!
+	assert r.phases.len == 2
+	liq := r.phases[1].state
+	assert fl.model.phase(300.0, 5.5e5, liq.n, .vapor)!.v > 1.5 * liq.v
+	for spec in [Spec.h, .s] {
+		mut value := 0.0
+		for ph in r.phases {
+			pr := fl.props(ph.state)
+			value += ph.fraction * if spec == .h { pr.h } else { pr.s }
+		}
+		s := StateFlash{
+			fl:      fl
+			spec:    spec
+			value:   value
+			p:       5.5e5
+			z:       z
+			present: [0, 1]
+			params:  StateParams{}
+		}
+		y := r.phases[0].state.n
+		v := [r.beta * y[0], r.beta * y[1], math.log(300.0)]
+		mut f := []f64{len: v.len}
+		mut jac := []f64{len: v.len * v.len}
+		s.eval(v, mut f, mut jac)!
+		for row, x in f {
+			// The split's own 1e-12 in ln f, and rounding in T = exp(ln T).
+			assert math.abs(x) <= 1e-10, '${spec}: residual ${row} is ${x} at the PT split'
+		}
+	}
+}
+
 fn test_the_ideal_gas_start_aims_at_the_ideal_gas() {
 	// ideal_t searches for where the feed as an ideal gas has the specified
 	// H or S. From the state's own H and S, that gap at its T is minus its
@@ -90,7 +132,7 @@ fn test_the_ideal_gas_start_aims_at_the_ideal_gas() {
 	assert r.phases.len == 1
 	st := r.phases[0].state
 	pr := fl.props(st)
-	res := thermo.residual_props(fl.model, st)
+	res := thermo.residual_props(fl.helmholtz()!, st)
 	for spec in [Spec.h, .s] {
 		s := StateFlash{
 			fl:      fl

@@ -99,7 +99,7 @@ fn failed(plan flowsheet.FitPlan, reason string) Fitted {
 }
 
 // run runs one of a file's fits: of rate constants to rates (D14), or of
-// kᵢⱼ to bubble points (D15).
+// kᵢⱼ or an activity model's pairs to bubble points (D15, M6's D16).
 pub fn run(file flowsheet.FitFile, plan flowsheet.FitPlan) Fitted {
 	data := read_data(plan.path) or { return failed(plan, err.msg()) }
 	return match plan.kind {

@@ -87,8 +87,8 @@ columns sum to zero when weighted by nᵢ. Both are tested.
 ### Ideal gas, reference state and total properties
 
 `Model` is purely residual. Total properties come from a `Fluid`
-([thermo/fluid.v](../thermo/fluid.v)), which pairs a `Model` with each
-component's `IdealGas` data ([thermo/ideal.v](../thermo/ideal.v)).
+([thermo/fluid.v](../thermo/fluid.v)), which pairs a phase model (below)
+with each component's `IdealGas` data ([thermo/ideal.v](../thermo/ideal.v)).
 
 **Reference state:** elements in their standard states at T° = 298.15 K
 and P° = 1 bar. For component i:
@@ -127,6 +127,49 @@ log1p(2 sinh²(x/2)) for small x, where cosh x is too close to 1.
 μ_JT does *not* go to zero at zero pressure. It tends to (T·dB/dT − B)/Cp,
 where B is the second virial coefficient, which is why the low-pressure test
 checks only Cp − Cv and w.
+
+## The phase seam
+
+Everything above is how an equation of state gives a phase. A γ–φ liquid
+gives one with no F at all, so the flash asks for less than a `Model`
+(M6's D3, [thermo/phases.v](../thermo/phases.v)): a **`PhaseModel`**, a
+phase at (T, P, n).
+
+| A phase model gives | A Helmholtz model's (`VolumeRoots`) |
+|---|---|
+| `components()` | the model's |
+| `phase(T, P, n, root)`: V, Z and ln φᵢ of the liquid-like, the vapour-like or the phase of lower G | `solve_tp`'s volume root |
+| `ln_phi_derivs(state)`: ∂ln φᵢ/∂T, ∂ln φᵢ/∂P, n·∂ln φᵢ/∂nⱼ, or why there are none | from F's second derivatives |
+| `phase_label(state)` | Π, with the four-covolume rule |
+| `phase_residual(state)`: Hʳ, Sʳ, Cpʳ, Cvʳ, (∂V/∂T)_P, (∂P/∂V)_T, each NaN where there's none | one `residual2` |
+
+A phase's mass density is Σ nᵢMᵢ/V, of its state and the components' molar
+masses. `thermo.by_roots(model)` puts a `Model` behind the seam, and each of
+its methods gives the function's bits. `new_fluid` takes a `Model` and does
+so itself; `new_phase_fluid` takes any phase model.
+
+**What works in F(T, V, n) itself** stays on `Model`: the TV and UV
+flashes, the reactors, `equilibrium`, Psat, and a fit of a cubic's kᵢⱼ.
+Each takes it from `Fluid.helmholtz()`, which gives the model behind the
+roots, or a `NoHelmholtzError` saying why a fluid has none.
+
+Since a residual can be NaN, a PH or PS flash takes an energy balance for
+met only when |r| ≤ etol holds, which a NaN fails, and never when |r| > etol
+doesn't, which a NaN passes. Without that, Brent closes in on the edge of
+where the NaN begins, as on a change of sign, and the flash returned it.
+
+**A workspace for one flash** (M6 step 5). A model is immutable and shared,
+yet a γ–φ liquid's Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and τ depend on T alone, and a flash asks
+for many phases at one T. A model that keeps them is also a
+`thermo.Scoped`, whose `scoped()` is a copy with a workspace of its own;
+`thermo.for_one_thread(m)` is that copy, or m, and every flash calls it
+first. The seam itself is unchanged, as M8's `Warm` is optional to a unit.
+A copy gives the bits of a model that makes its own each call.
+
+**`numeric.newton` passes on why a system can't be evaluated** at its
+start: "the system cannot be evaluated at x0" is followed by the system's
+own error, or by the residual or Jacobian entry that wasn't finite. A
+phase model's refusal there reaches the caller with its reason (M6 step 6).
 
 ## Finding the volume
 
@@ -574,11 +617,84 @@ mixture above is the example. There, a two-phase flash, reflux's without
 the re-test or `thermo`'s FlashVL, returns a split whose fugacities are
 equal but which isn't the equilibrium.
 
-**Which phase is the vapour.** The phase of lower *mass* density, ΣnᵢMᵢ/V
-(D6, amended in step 6). Molar volume isn't a substitute. In methane with
+**The order of the phases.** By increasing *mass* density, ΣnᵢMᵢ/V (D6,
+amended in step 6). Molar volume isn't a substitute. In methane with
 n-decane at 300 K and 200 bar, the methane-rich phase has the smaller molar
 volume and yet weighs 168 kg/m³, against the decane-rich phase's 585. Step
 4 compared molar volumes and called the decane-rich phase the vapour.
+
+**Their names** (M6's D9, `labelled` in [flash/multi.v](../flash/multi.v)).
+Each phase is named by its model's `phase_label` (an equation of state's
+by Π and the four-covolume rule, above; a γ–φ fluid's by the model that
+made it); of the phases called vapour only the least dense stays so, the
+rest being liquids; and of the liquids the less dense is the liquid and
+the denser liquid2. A third liquid has no name and is refused. β is the
+vapour's fraction, or 0 with none. Until M6 the less dense phase of a split
+was the vapour whatever Π said, so a liquid–liquid split by an equation of
+state was called vapour and liquid: of M3's sweep's 3,344 splits by PR,
+2,289 are liquids by Π, now liquid and liquid2.
+
+## Three phases
+
+M6's D8 ([flash/multi.v](../flash/multi.v)), Michelsen's stage-wise flash.
+A two-phase split whose verification finds a phase unstable takes that
+phase's trial composition as a third phase: the split's two and the trial,
+the trial with 1% of the feed and the others 99% of theirs. With no moles
+the trial would hold a component that lives almost only in it in no phase
+at all.
+
+**The split.** Successive substitution: at each step each phase's φᵢⱼ at its
+composition, then the fractions and compositions from Michelsen's (1994)
+multiphase Rachford–Rice (`numeric.multiphase_rr`,
+[numeric/multiphase.v](../numeric/multiphase.v)) on Kᵢⱼ = 1/φᵢⱼ:
+
+    Q(β) = Σⱼ βⱼ − Σᵢ zᵢ ln Eᵢ,   Eᵢ = Σⱼ βⱼKᵢⱼ,   β ≥ 0,
+    xᵢⱼ = zᵢKᵢⱼ/Eᵢ,   ∂Q/∂βⱼ = 1 − Σᵢ xᵢⱼ,   ∂²Q/∂βⱼ∂βₖ = Σᵢ zᵢKᵢⱼKᵢₖ/Eᵢ².
+
+Q is convex, so its minimum over β ≥ 0 is unique; there each phase present
+has Σᵢ xᵢⱼ = 1 (so Σⱼ βⱼ = 1 and Σⱼ βⱼxᵢⱼ = zᵢ), and a phase held at 0 has
+Σᵢ xᵢⱼ ≤ 1, stable absent. Each component's K-values are scaled by its
+largest, so none overflows. Newton runs on the free phases, a phase at 0
+whose step would go below it held there and the step taken again; the step
+is cut short to keep β ≥ 0, and halved until Q falls or rises by no more
+than its rounding (near the minimum a Newton step moves Q by about the
+gradient squared). With two phases it is a Rachford–Rice with the negative
+flash cut off at 0 and 1: the same root inside, to 2e-15.
+
+A phase held at 0 three steps running leaves the split, and of two phases
+that come within 1e-4 in every ln x, one does. After 30 steps the split
+goes on by Newton on G.
+
+**Newton on G over the phases.** Each component present has a dependent
+phase rᵢ, the one holding the most of it, which takes the rest of the feed;
+its moles in every other phase are the variables. Then
+
+    gᵢⱼ = ln fᵢⱼ − ln fᵢᵣᵢ,
+    Hᵢⱼ,ₖₘ = (δⱼₘ − δⱼᵣₖ)Aʲᵢₖ − (δᵣᵢₘ − δᵣᵢᵣₖ)Aʳⁱᵢₖ,
+    Aʲᵢₖ = (δᵢₖ/xᵢⱼ − 1 + Φʲᵢₖ)/Nⱼ,
+
+the two-phase form, H = δⱼₘAʲ + Aˡ, when one phase l is every component's.
+With one dependent phase for all, a trace such as water's 1e-29 of decane is
+z − Σ of numbers near 0.3, rounding, and Newton is lost; as a variable of
+its own it keeps its digits. And the variables are scaled by √n: a trace's
+Hessian entry is 1/n, 1e29 beside entries of order 1, which Cholesky can't
+factor, and scaled every diagonal entry is of order 1 (Michelsen and
+Mollerup). The scaled gradient is s·g, so its test is held at the smallest
+s, and the stop is left to a step too small to move anything or a fall G's
+rounding can't show; the split holds the answer to tol in every ln f.
+
+**The answer** has every |ln fᵢⱼ − ln fᵢᵣ| ≤ tol and every fraction above 0,
+and with `verify` each phase is tested for stability, the others as
+trials. An unstable phase of a split of two grows it to three; of a split
+of three, it is a fourth, `.more_phases`. A phase that leaves on the way
+leaves a split of two, verified again.
+
+**PH and PS** (D10) search first on unverified PT flashes, which stay
+two-phase, and if that misses the energy balance, again on verified ones:
+in a region of three phases an unverified flash's H(T) is a false split's.
+Newton's finish in (v, ln T) is two-phase, so a split of three is finished
+by Brent alone, to etol. **TV and UV** stay two-phase: an answer of three
+is refused, `.more_phases`, though the search may pass through three.
 
 ## Vapour-fraction flashes
 
@@ -655,12 +771,41 @@ moves τ until both roots exist. With only a vapour root, P is too low or T
 too high, and the reverse with only a liquid root. Any β gives the same T
 and P.
 
+**Azeotropes** (M6 step 6, [flash/azeotrope.v](../flash/azeotrope.v)).
+`flash.azeotrope_t(model, P, x0)` finds the azeotrope near x0 at P, and
+`azeotrope_p(model, T, x0)` at T. A vapour-fraction flash can't: its two
+phases are the same composition there, which it takes for the trivial
+solution. The unknowns are x over the components present but the last,
+which is 1 − Σ of the rest, and τ = ln T (or ln P); the equations are equal
+fugacities with y = x,
+
+    gᵢ = ln φᵢᴸ(x) − ln φᵢⱽ(x) = 0,   one for each component present,
+
+with Φ = n·∂ln φᵢ/∂nⱼ and l the last component,
+
+    ∂gᵢ/∂xₖ = (Φᴸᵢₖ − Φᴸᵢₗ) − (Φⱽᵢₖ − Φⱽᵢₗ),
+    ∂gᵢ/∂τ = T(∂ln φᵢᴸ/∂T − ∂ln φᵢⱽ/∂T)   or   P(∂ln φᵢᴸ/∂P − ∂ln φᵢⱽ/∂P).
+
+Newton starts from x0's bubble point. Where x0 is an azeotrope already, or
+within about 1e-4 of one, that bubble point collapses onto K = 1, the
+trivial solution it refuses, so the start is the bubble point 2% from x0
+towards each component in turn, Newton still starting at x0. The answer is
+shown: each |gᵢ| ≤ tol, every xᵢ in (0, 1), the liquid and the vapour two
+phases, not one root twice (where an equation of state has one root, every
+gᵢ is 0 at any x), and the liquid stable with the vapour as a trial. Which
+phase has the lower G says nothing here: at an azeotrope the two are
+equal. A liquid that would split is a
+heterogeneous azeotrope, refused as `.more_phases` (three phases are step
+7's). The result is the vapour and the liquid, each of composition x, at
+β = 0. A caller finds where to look by where y − x changes sign along the
+bubble points, as the tests do.
+
 ## PH and PS flashes
 
 `flash.ph(fluid, P, H, z)` and `flash.ps(fluid, P, S, z)`
 ([flash/ph.v](../flash/ph.v)) find T and the split from a molar H or S, on
-the Fluid's reference state. They take a Fluid, not a Model, because H and
-S need the ideal gas.
+the Fluid's reference state. They take a Fluid, not a phase model, because
+H and S need the ideal gas.
 
 **The Q-function** (Michelsen 1999, D5). At fixed P and H the equilibrium
 is the stationary point of
@@ -730,12 +875,31 @@ between the saturated liquid's and vapour's, within etol of either end.
 Outside that range the answer is a single phase on its own side of Tsat,
 found by Brent on that root alone.
 
+**A model that refuses a T** (M6 step 6). A γ–φ liquid is refused outside
+its correlations' ranges (D4), and a flash says so as `no_volume_root`. The
+bracket then steps back from that T towards the last, by halves, up to 40
+times, and goes on from the farthest T the model takes. Only if the model
+takes none is the specification outside its range. An equation of state
+never refuses a phase there, so its brackets don't move.
+
+**Newton's own state** (M6 step 6). Within a hundredth of a kelvin of an
+azeotrope, H rises so steeply with T that the PT flash at the nearest double
+to Newton's T can miss the balance: methanol–water at 1.39e-10 against
+1e-10. Newton's own (v, ln T) meets it. So where the answer's balance is
+off and the PT flash split, the answer is Newton's state from Brent's last
+split, if it is one: each phase on its phase of lower G, the fugacities
+equal to tol, the balance met to etol, both phases' amounts positive, and
+with `verify` each phase stable with the other as a trial. The vapour is
+the phase of lower mass density, as in a PT split.
+
 ## TV and UV flashes
 
 `flash.tv(model, T, V, z)` finds P and the split from a molar volume, and
 `flash.uv(fluid, U, V, z)` finds T, P and the split from a molar internal
 energy and volume ([flash/tv.v](../flash/tv.v)). TV needs only a Model,
-since the ideal gas's part of A is the same for any split at fixed T.
+since the ideal gas's part of A is the same for any split at fixed T, and
+nothing less, since it works in F(T, V, n): a caller with a fluid passes
+`fluid.helmholtz()!`. UV refuses a fluid without one, saying why.
 
 **Q-functions** (D5). At fixed T and V the equilibrium minimises A, and
 Q(P) = G − P·V_spec has dQ*/dP = V(P) − V_spec, with V(P) the equilibrium
@@ -822,7 +986,8 @@ composition w its trials reach, the sweep computes
 
     tpd(w) = Σᵢ wᵢ(ln wᵢ + ln φᵢ(w) − ln xᵢ − ln φᵢ(x))
 
-from `thermo.solve_tp` alone, each phase at its root of lower G, and the
+from the model's phases alone (`thermo.solve_tp`'s, for a cubic), each at
+its root of lower G, and the
 lowest tpd is the verdict. A negative tpd at any w shows that x lies above
 some phase's tangent plane, so x is unstable. A phase of a converged split
 is no use as a trial for the other: it sits on that phase's tangent plane,
@@ -1815,16 +1980,23 @@ each unit balances as
   W = F (h_out − h_in) is below 0 for an expander.
 - **Flash drum.** The inlets blend as in a mixer, then a flash at the drum's
   pressure: PT at a given T, or PH at h = (Σⱼ Fⱼ hⱼ + Q) / F. A duty of 0 is
-  adiabatic. Each phase k leaves by its own outlet, with flows
+  adiabatic. Each phase k leaves by its label's outlet (M6's D9 and D11):
+  the vapour by the vapour port, and every liquid, liquid2 too, by the
+  liquid port, a stream of both at their shares. Its flows are
 
       nᵢₖ = F βₖ xᵢₖ
 
   saturated at the flash's T and P. That needs no second flash: its result is
   the first's, with the phase's composition as z and the other phase at no
   moles, the form a bubble or dew point's answer has. A single phase leaves by
-  its own outlet, and the other outlet is empty. In a split, the "vapour" is
-  the less dense phase by mass (M3's D6), so a liquid–liquid split goes out
-  the same way.
+  its own outlet, and the other outlet is empty. A liquid–liquid split, D9's
+  liquid and liquid2, leaves by the liquid port, and the drum's outcome warns
+  that its liquid has two phases.
+- **Decanter** (M6's D11). A flash drum with an outlet for each phase: the
+  same blend and flash, and each phase k by its label, the vapour by vapour,
+  liquid by light and liquid2 by heavy, each nᵢₖ = F βₖ xᵢₖ as above. A
+  label the flash didn't give has an empty outlet, so a single liquid, D9's
+  liquid, leaves by light.
 - **Component separator.** A fraction fᵢ of each component goes to the first
   outlet and the rest to the second, each flashed at the given T and P. It's
   a black box, so Q is whatever closes the balance, and its pressure can rise.
@@ -2296,6 +2468,311 @@ measured P and y, each over its error. J is by central differences,
 kᵢⱼ ± 10⁻⁶, good to about 10⁻⁷: kᵢⱼ is of order 0.01 and a bubble point's
 rounding about 10⁻¹².
 
+**An activity model's pairs** (M6's D16) come from bubble points the same
+way, on the γ–φ fluid with the fitted pairs in place of its own. A pair's
+energy Aᵢⱼ, J/mol, is NRTL's τᵢⱼ = Aᵢⱼ/RT or UNIQUAC's τᵢⱼ = exp(−Aᵢⱼ/RT), R
+the SI's exact value, and NRTL's α a number; each evaluation builds the
+model again from those expressions. Its start is the model's own pair at
+T₀ = 298.15 K,
+
+    A = τ(T₀)·R·T₀ (NRTL),   A = −R·T₀·ln τ(T₀) (UNIQUAC),   α = α(T₀),
+
+which a bank's pair, A₁₂ cal/mol over DECHEMA's R, gives at any T. J is by
+central differences of an energy ± 10⁻⁴·max(|A|, 2500 J/mol) and α ± 10⁻⁴:
+the bubble points' rounding, 10⁻¹², over the step is then about 10⁻⁸ of J,
+and the difference's truncation about as much, which moves the answer by
+as little of its standard error and stops no convergence where the data
+determine the parameters. With steps of 10⁻⁶ the rounding kept NRTL's α
+and both energies from the gradient test. Where they don't (α with both
+energies on one isobaric binary), whether the test is met or Levenberg–
+Marquardt stops at the rounding, saying so, is the platform's. The pairs fitted are written back as
+`[[model.pairs]]`, each fitted energy as `"A J/mol / (R*T)"` (UNIQUAC's in
+an `exp`).
+
+**The point test** (M6's criterion 8) checks a binary's VLE data for
+Gibbs–Duhem consistency, as Fredenslund, Gmehling and Rasmussen give Van
+Ness, Byer and Gibbs' test (*Vapor–Liquid Equilibria Using UNIFAC*, 1977).
+Gᴱ is a Legendre series, fitted to the bubble pressures alone by Barker's
+method, the vapour the ideal gas:
+
+    g = Gᴱ/RT = x₁x₂ Σₖ aₖ Lₖ(z),   z = x₁ − x₂,   k = 0 … 3,
+    ln γ₁ = g + x₂ g′,   ln γ₂ = g − x₁ g′,   g′ = dg/dx₁,
+    g′ = Σₖ aₖ [(x₂ − x₁) Lₖ(z) + 2x₁x₂ Lₖ′(z)],
+    P_model = x₁γ₁P₁ˢᵃᵗ + x₂γ₂P₂ˢᵃᵗ,   rᵢ = (P_model − P)/P,
+
+Lₖ by Bonnet's recursion, kLₖ = (2k − 1)zLₖ₋₁ − (k − 1)Lₖ₋₂, and
+Lₖ′ = Lₖ₋₂′ + (2k − 1)Lₖ₋₁, each point at its own T for isobaric data, Gᴱ's
+T-dependence over the set neglected. Then y₁ = x₁γ₁P₁ˢᵃᵗ/P_model, and the
+data are consistent where the mean |y₁ − y₁,measured| ≤ 0.01. ln γ is
+linear in the aₖ, so J is exact. Barker's fit can have two minima where the
+data cover part of the range, so it starts from a = 0 and from the Gᴱ the
+measured vapour implies, gᵢ = x₁ ln(y₁P/x₁P₁ˢᵃᵗ) + x₂ ln(y₂P/x₂P₂ˢᵃᵗ)
+fitted linearly, and keeps the lower Σr².
+
+## Activity models
+
+M6's liquid models ([activity](../activity/model.v), D2 in
+[m6-plan.md](m6-plan.md)) give each component's activity coefficient γᵢ at
+a temperature and mole fractions, and nothing of phases: the γ–φ liquid is
+built on them. A model holds nothing about an evaluation, so threads share
+one, each with its own `Work`, which keeps what depends on T alone (each
+τ, and UNIFAC's ψ and pure-group terms) until T moves, as M8's D11 keeps a
+rate's K. A T the model refuses leaves nothing kept, since a refusal can
+come with some of that T's parameters written.
+
+**An evaluation answers or refuses,** with an `ActivityError` that names
+what's wrong:
+- **The composition:** each xᵢ ≥ 0 and finite, and |Σxᵢ − 1| ≤ 1e-12, which
+  is far above normalising's rounding. All zero has no answer, and
+  UNIQUAC's, UNIFAC's and Wilson's formulas give an unnormalised x a wrong,
+  finite one (UNIQUAC's ln(rᵢ/R̄) moves by −ln Σxᵢ).
+- **A parameter that's divided by or whose log is taken,** NRTL's G =
+  exp(−ατ), τ in UNIQUAC, Λ, ψ: at least the smallest normal double,
+  2.2250738585072014e-308, with finite T-derivatives. A subnormal one has
+  lost digits, so its ln γ would be finite and wrong, and at 0 it's NaN.
+- **The answer:** whatever was asked for, ln γ, its T-derivatives or dn, is
+  finite, in every component.
+
+**The models,** each with τᵢᵢ = 0 (NRTL) or 1 (UNIQUAC, Wilson's Λᵢᵢ):
+
+- **Wilson** (1964): ln γᵢ = 1 − ln Sᵢ − Σₖ xₖΛₖᵢ/Sₖ, with Sᵢ = Σⱼ xⱼΛᵢⱼ.
+- **NRTL** (Renon and Prausnitz, 1968): ln γᵢ = Aᵢ/Bᵢ + Σⱼ (xⱼGᵢⱼ/Bⱼ)(τᵢⱼ −
+  Aⱼ/Bⱼ), with Aⱼ = Σₖ xₖτₖⱼGₖⱼ, Bⱼ = Σₖ xₖGₖⱼ and Gᵢⱼ = exp(−αᵢⱼτᵢⱼ),
+  αᵢⱼ = αⱼᵢ.
+- **UNIQUAC** (Abrams and Prausnitz, 1975), in DECHEMA's form, q in both
+  terms and a coordination number of 10:
+
+      ln γᵢ = ln(rᵢ/R̄) + 5qᵢ ln((qᵢ/Q̄)/(rᵢ/R̄)) + lᵢ − (rᵢ/R̄)Σⱼ xⱼlⱼ
+              + qᵢ(1 − ln Sᵢ − Σⱼ θⱼτᵢⱼ/Sⱼ),
+
+  R̄ = Σ xⱼrⱼ, Q̄ = Σ xⱼqⱼ, θⱼ = xⱼqⱼ/Q̄, Sᵢ = Σⱼ θⱼτⱼᵢ and lᵢ = 5(rᵢ − qᵢ) −
+  (rᵢ − 1). ln(rᵢ/R̄) is ln(Φᵢ/xᵢ), written so that an absent component's
+  xᵢ = 0 divides nothing.
+- **UNIFAC**, each component i a set of subgroups k counted νₖ⁽ⁱ⁾, with rᵢ =
+  Σₖ νₖ⁽ⁱ⁾Rₖ and qᵢ = Σₖ νₖ⁽ⁱ⁾Qₖ:
+
+      ln γᵢ = ln γᵢᶜ + Σₖ νₖ⁽ⁱ⁾(ln Γₖ − ln Γₖ⁽ⁱ⁾),
+      ln Γₖ = Qₖ(1 − ln Σₘ Θₘψₘₖ − Σₘ Θₘψₖₘ/Σₙ Θₙψₙₘ),
+      Θₘ = QₘXₘ/Σₙ QₙXₙ,   Xₘ = Σᵢ νₘ⁽ⁱ⁾xᵢ / Σᵢ Σₙ νₙ⁽ⁱ⁾xᵢ,
+      ψₘₙ = exp(−(aₘₙ + bₘₙT + cₘₙT²)/T),
+      ln γᵢᶜ = 1 − Vᵢ′ + ln Vᵢ′ − 5qᵢ(1 − Vᵢ/Fᵢ + ln(Vᵢ/Fᵢ)),
+      Vᵢ = rᵢ/Σⱼ xⱼrⱼ,   Fᵢ = qᵢ/Σⱼ xⱼqⱼ,
+
+  ln Γₖ⁽ⁱ⁾ being ln Γₖ in pure i. In the original and LLE forms Vᵢ′ = Vᵢ and
+  b = c = 0; in Dortmund's, Vᵢ′ = rᵢ^(3/4)/Σⱼ xⱼrⱼ^(3/4). ψ is taken between
+  main groups, 1 within one. Each ln Γₖ⁽ⁱ⁾ is computed by the mixture's own
+  arithmetic on xᵢ = 1, so that a pure component's γ is exactly 1.
+
+**The derivatives, by forward differentiation.** Each formula is written
+once, generic over f64 and `numeric.Jet`: a value with its first two
+derivatives along one direction, whose arithmetic carries them,
+
+    (ab)′ = a′b + ab′,   (ab)″ = a″b + 2a′b′ + ab″,
+    (a/b)′ = (a′ − qb′)/b,   (a/b)″ = (a″ − 2q′b′ − qb″)/b,   q = a/b,
+    f(a)′ = f′(a)a′,   f(a)″ = f″(a)a′² + f′(a)a″.
+
+A logarithm's f″ = −k/a² (k = 1, or 1/ln 10 for log₁₀) overflows for a
+below about 1e-154, where the derivative itself needn't. There, and only
+there, its second derivative is taken in its other form,
+
+    (k ln a)″ = k·(a″/a − (a′/a)²).
+
+The f64 instance gives ln γ; the jet's value is the same bits.
+- **In T,** the parameters as jets in T, each τ's own derivatives from
+  `expr`'s jet pass over its tree (below), and x constant: ∂ln γᵢ/∂T and
+  ∂²ln γᵢ/∂T² at constant composition.
+- **In composition,** one pass for each xⱼ seeded, the parameters constant:
+  ∂ᵢⱼ, the formula's derivative with the x's taken as independent. Since
+  xₖ = nₖ/n, ∂xₖ/∂nⱼ = (δₖⱼ − xₖ)/n, so whatever the formula does off the
+  simplex,
+
+      n·∂ln γᵢ/∂nⱼ = ∂ᵢⱼ − Σₖ xₖ∂ᵢₖ.
+
+  Gibbs–Duhem makes Σᵢ xᵢ·n∂ln γᵢ/∂nⱼ = 0, and n∂ln γᵢ/∂nⱼ is symmetric, n
+  times the Hessian of nGᴱ/RT; the tests check both from scratch.
+
+**The excess properties,** per mole, with R as `thermo.r_gas`:
+
+    Gᴱ = RT Σ xᵢ ln γᵢ,   Hᴱ = −RT² Σ xᵢ ∂ln γᵢ/∂T,   Sᴱ = (Hᴱ − Gᴱ)/T,
+    Cpᴱ = ∂Hᴱ/∂T = −RT(2Σ xᵢ ∂ln γᵢ/∂T + TΣ xᵢ ∂²ln γᵢ/∂T²).
+
+`thermo.r_gas` is 8.314462618, N_A·k_B rounded to the CODATA value: 1.84e-11
+below the exact product 8.31446261815324 that `expr`'s `R` and the Python
+`thermo` use. An energy differs by that fraction; ln γ doesn't involve R.
+
+**Parameters** are expressions in T, dimensionless, parsed by `expr` (D7):
+any paper's form goes in as printed. Their T-derivatives come from the jet
+pass: `Expr.jet` evaluates the tree with each node on jets, its value
+`eval`'s bits (a whole power by repeated multiplication, as `raise`), so a
+τ's τ′ and τ″ are exact. ChemSep's banks give A in cal/mol and state no R.
+Each is written with DECHEMA's, 1.98721 cal/(mol·K), the calorie cancelling.
+That's confirmed for NRTL's bank (M6 step 0), and inferred for UNIQUAC's and
+Wilson's, as is Wilson's form, until M6's step 12:
+
+| Model | ChemSep's bank, written as | |
+|---|---|---|
+| NRTL | τᵢⱼ = `Aᵢⱼ K / (1.98721*T)`, α as printed | 352 lines, 329 pairs |
+| UNIQUAC | τᵢⱼ = `exp(Aᵢⱼ K / (-1.98721*T))` | 291 lines, 273 pairs |
+| Wilson | Λᵢⱼ = `Vⱼ / Vᵢ * exp(Aᵢⱼ K / (-1.98721*T))`, V each compound's Wilson volume | 366 lines, 362 pairs |
+
+A line names its pair either way round; A₁₂ is its first compound's with the
+second, turned to the model's order. A pair listed twice takes its first
+listing. A pair the bank doesn't list is refused by name, unless the caller
+lets it have no energy of interaction. With NRTL's τ = 0 or Wilson's Λ = 1
+that pair is ideal, γ = 1 in their binary. UNIQUAC's τ = 1 removes only the
+residual term: the combinatorial one, in r and q, stays, so the pair is
+reported as having no residual interaction, not as ideal.
+
+**UNIFAC's tables** are ChemSep's base files with their extensions
+([components/activity.v](../components/activity.v)): main groups and their
+parameters' rows, then subgroups. ChemSep numbers C=C as subgroup 9, as the
+1987 *Properties of Gases and Liquids* did, so its 10 to 70 are the
+published 9 to 69. Where a file contradicts itself the reader repairs it,
+by the file's own evidence, and reports it:
+- **A subgroup** whose main group's name is another main group's in the
+  list, and neither name begins the other (so not a spelling, as Morph for
+  Morpholine), takes that main group: furfural's LLE subgroup, which
+  pointed to DMFA, and AC-CN's and AC-Br's, swapped.
+- **A parameter row** whose name isn't its number's: an a row takes its
+  names' pair when its numbers' pair is listed by another row too, or a
+  number isn't in the list; a b or c row takes whichever pair the a rows
+  have. Dortmund's c rows copy a name from the row above, and the numbers
+  stand there.
+- **A number** the list hasn't, named nothing it names, is a new main
+  group, named by its rows.
+
+And where the published table (DDBST's public pages) shows a typo,
+`unifac_corrections` sets the published value, applied only where the file
+still holds the shipped one: the original table's 9 parameters and 2
+subgroups, the LLE table's 2 subgroups, and Dortmund's quaternary C, whose Q
+is 0, with six ionic-liquid subgroups. [data-quality.md](data-quality.md)
+lists every repair, and each table against `thermo`'s copy.
+
+## The γ–φ liquid
+
+A γ–φ fluid ([thermo/gamma_phi.v](../thermo/gamma_phi.v), M6's D4 to D6) is
+a phase model whose liquid comes from an activity model and each
+component's vapour pressure and liquid density, and whose vapour is the
+ideal gas or an equation of state's. It has no F(T, V, n) behind its
+liquid, so the flash takes it as it takes a cubic, and the TV and UV
+flashes and the reactors refuse it. `Database.gamma_phi(names, options)`
+([components/gamma_phi.v](../components/gamma_phi.v)) builds one from
+ChemSep's banks, tables and component files.
+
+**A solvent's fugacity** is xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ exp(Vᵢᴸ(P − Pᵢˢᵃᵗ)/RT), so
+
+    ln φᵢᴸ = ln γᵢ(x′) + ln Pᵢˢᵃᵗ + ln φᵢˢᵃᵗ + Vᵢᴸ(P − Pᵢˢᵃᵗ)/RT − ln P,
+
+- **γ** from the activity model over the solvents alone, at x′, their own
+  mole fractions, x′ᵢ = xᵢ/s with s = Σ xⱼ over the solvents;
+- **Pˢᵃᵗ and Vᴸ** from the component's own correlations, Vᴸ = 1/ρᴸ, the
+  liquid incompressible over the Poynting integral;
+- **φˢᵃᵗ** the vapour model's φ of the pure component at the correlation's
+  Pˢᵃᵗ, on its vapour root, and 1 for the ideal gas;
+- **Poynting's term** on by default, and off if asked, as Aspen's NRTL is.
+
+**A Henry's-law solute's** is xᵢHᵢ,mix, so ln φᵢᴸ = ln Hᵢ,mix − ln P, with
+
+    ln Hᵢ,mix = Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ,
+
+the sums over the solvents that have constants for it, an absent one
+weighing nothing, which is `thermo`'s 'solvents_with_parameters' mode. Each
+Hᵢⱼ, in Pa, is in one of two forms:
+- **IAPWS's, for a gas in water** that its guideline covers (G7-04;
+  Fernández-Prini, Alvarez and Harvey, 2003; 14 gases), with A, B and C
+  from its Table 2:
+
+      ln(kH/p*) = A/Tr + B·τ^0.355/Tr + C·Tr^−0.41·e^τ,   Tr = T/Tc, τ = 1 − Tr,
+      ln(p*/pc) = (Tc/T)·Σ aᵢτ^bᵢ,
+
+  on water's critical point (647.096 K, 22.064 MPa), p* being Wagner and
+  Pruss's vapour pressure (IAPWS, 1992), whose six aᵢ and bᵢ the guideline
+  gives. It takes the place of ChemSep's row (D6 as amended after step 6):
+  ChemSep's hydrogen is 5.95 times it at 298 K and its neon 4.5e32 times
+  (data-quality.md). Equation 121 can't hold it, so it's this form, on jets.
+- **ChemSep's equation 121,** ln H = A + B/T + C ln T + D·Tᴱ, for every
+  other gas and solvent.
+
+A solute is outside the activity model, so its γ* is 1 (the
+unsymmetric convention with no correction), it adds no volume, and it has
+no Poynting term. ChemSep's banks pair water, the one solvent with
+constants, with none of the gases, and its UNIFAC tables have no group for
+hydrogen, CO, CO₂, nitrogen, oxygen or the noble gases, so there is no γ∞
+to correct by for those (the light hydrocarbons, made of UNIFAC's own
+groups, could take theirs from it, a later piece), and no gas's volume at
+infinite dilution. (`thermo`
+gives a solute the symmetric γ from the whole model, and Poynting on any
+volume it's given; the two agree on an ideal solvent, which is how they're
+compared.) ChemSep's bank has 41 gases, all in water, and IAPWS 14, all
+but sulfur hexafluoride among them.
+
+**Which compounds are solutes:** those named, and any with a constant in
+another compound present whose Tc is below the lowest T at which a
+compound that can only be a solvent has a vapour pressure: wherever the
+liquid can be had, such a gas is above its critical point. A fluid where no
+T is inside every solvent's correlations is refused when it's built, naming
+the solvent above its critical point there.
+
+**The liquid's volume** is Σ nᵢVᵢᴸ over the solvents, with no excess volume
+(D4), and (∂V/∂T)_P = Σ nᵢ dVᵢᴸ/dT. It is incompressible, so (∂P/∂V)_T is
+−∞, and it has no Cv and no speed of sound: NaN, as the seam allows.
+
+**Which phase is which.** `phase(T, P, n, root)` gives the liquid, the
+vapour model's vapour (the ideal gas, or a cubic's vapour root), or the one
+of lower Σ nᵢ ln φᵢ, which is G less the ideal gas's at the same (T, P, n).
+A state's label and derivatives come from the model that made it: a
+liquid's volume is Σ nᵢVᵢᴸ to the bit, and a vapour whose volume ever
+equalled it would be refused.
+
+**Its derivatives**, all exact but φˢᵃᵗ's second:
+- **In T,** through jets (`numeric.Jet`, as the activity models use):
+  `tdep.Correlation.jet` gives each vapour pressure and density with its
+  first two T-derivatives, for the forms a γ–φ liquid is made of (10, 16,
+  101, 105 and 106); the activity model gives ∂ln γ/∂T and ∂²ln γ/∂T², and
+  each ln Hᵢⱼ is a jet.
+- **φˢᵃᵗ's:** d ln φˢᵃᵗ/dT = ∂ln φ/∂T + ∂ln φ/∂P·dPˢᵃᵗ/dT exactly, at
+  (T, Pˢᵃᵗ(T)), and its second by Richardson's extrapolation of central
+  differences of the first, steps h = 10⁻⁴T and h/2,
+  (4D(h/2) − D(h))/3: an equation of state has no third derivatives of F.
+- **In P:** ∂ln φᵢ/∂P = −1/P + Vᵢᴸ/RT, the second term for a solvent with
+  Poynting's term only.
+- **In n:** a solvent's n·∂ln φᵢ/∂nⱼ is the activity model's over x′,
+  divided by s, and 0 in a solute's amount; a solute's is
+  (ln Hᵢⱼ − ln Hᵢ,mix)/Σₖ xₖ in a solvent j with a constant, the sum over
+  those, and 0 otherwise.
+
+**Calorics from the fugacities** (D5), with R as `thermo.r_gas`:
+
+    Hʳ = −RT² Σ nᵢ ∂ln φᵢ/∂T,   Gʳ = RT Σ nᵢ ln φᵢ,   Sʳ = (Hʳ − Gʳ)/T,
+    Cpʳ = ∂Hʳ/∂T = −RT(2Σ nᵢ ∂ln φᵢ/∂T + T Σ nᵢ ∂²ln φᵢ/∂T²).
+
+So a pure liquid's heat of vaporisation is Clapeyron's, T·ΔV·dPˢᵃᵗ/dT on
+its own Pˢᵃᵗ and both phases' volumes, and the mixture's Hᴱ is the activity
+model's: no ΔHvap correlation enters.
+
+**Why φˢᵃᵗ at the correlation's Pˢᵃᵗ.** Only there is a pure liquid's
+fugacity its vapour's at its own vapour pressure: at Pˢᵃᵗ, xγ = 1 and the
+Poynting term vanishes, so f = Pˢᵃᵗφ(Pˢᵃᵗ), the vapour's. `thermo` takes
+φˢᵃᵗ at the equation of state's own Pˢᵃᵗ instead, which moves a pure
+liquid's ln f off its vapour's by the difference of the two ln φ's: up to
+3.3e-4 for methanol and water and 9.0e-4 for ethanol under PR, from 300 to
+355 K. The tests move `thermo`'s answers onto reflux's φˢᵃᵗ before
+comparing.
+
+**What it refuses**, with its reason (D4): a T outside a solvent's vapour
+pressure or density range, or a solute's Henry's-law range, for the liquid
+and for the phase of lower G alike, never the vapour in the liquid's place;
+a liquid of solutes alone; a solute with a constant in none of the solvents
+present; and a T where the vapour model has no vapour root at Pˢᵃᵗ, so no
+φˢᵃᵗ. A flash reports a refused phase as `no_volume_root`, the kind that
+says the model has no such phase there.
+
+**Kept until T moves** (D4): each solvent's ln Pˢᵃᵗ, Vᴸ and ln φˢᵃᵗ, each
+ln Hᵢⱼ as jets, and the activity model's own `Work`, in a `GammaWork` that a
+model's `scoped()` copy holds (the seam's workspace, above). A model without
+one makes its own for each call, with the same bits. A refusal leaves
+nothing kept.
+
 ## Reports
 
 The report (M4's D11) is the solution in SI, with what a reader works out from
@@ -2309,6 +2786,12 @@ molar masses Mᵢ:
 | mass fractions | wᵢ = zᵢMᵢ / Σⱼ zⱼMⱼ |
 | volume flow | F·v, at the stream's T and P |
 | each phase | its own state, which is one mole of it: x, h, s and v |
+
+Report format 4 (M6's D13) adds how the fluid was built: an equation of
+state's kᵢⱼ for every pair, or a γ–φ fluid's activity model, vapour and
+solutes, each binary pair's parameters as the expressions the model
+evaluates, and each pair's source, a bank's line with its DECHEMA reference,
+the file, or none listed.
 
 A unit's balance is the one `solve` checks (D8), on the inlets it was
 calculated from: its worst component against its flow F, and its energy
@@ -2399,9 +2882,12 @@ language, so its conventions are the same for every function (M10a's D2):
   spec saying what a point's two values are, (T, P) for the PT flash. It
   writes the whole's β, T, P, H, S and V per mole of feed, and each phase's
   fraction, V, H, S and composition in the place of its label: the
-  liquid's (0) then the vapour's (1). A split's less dense phase is the
-  vapour, and a single phase takes its label's place, the other NaN, so the
-  vapour's composition is always the same column of the arrays. The whole's
+  liquid's (0) then the vapour's (1). A single phase takes its label's
+  place, the other NaN, so the vapour's composition is always the same
+  column of the arrays. An answer with two liquids, which M6's D9 names
+  liquid and liquid2, or with three phases, has no place in the layout, so
+  it is `REFLUX_POINT_MORE_PHASES`, its reason naming the phases, until ABI 2
+  (M6's D14 as settled in step 7). The whole's
   H, S and V are its phases', summed in the flash's order, as
   `flowsheet.Stream` sums them.
 - **Held to the V API bit for bit.** `tools/capi_reference.v` computes a

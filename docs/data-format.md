@@ -204,7 +204,11 @@ db := components.open(components.data_root(), ['my_components'])!
 
 A data root is a directory holding `components/` and `vendor/chemsep/`,
 whose `pr.ipd`, `srk.ipd` and `mc-PR.lib` a fluid's kᵢⱼ and Mathias–Copeman
-constants come from. `data_root()` is `$REFLUX_DATA` if that's set, and the
+constants come from, and whose `nrtl.ipd`, `uniquac.ipd`, `wilson.ipd`,
+`henrys_law.ipd` and UNIFAC tables (`*.gct`) an activity model's pairs,
+groups and Henry's constants (M6). A gas in water that IAPWS's guideline
+G7-04 covers takes IAPWS's constants, which are in the code
+([components/gamma_phi.v](../components/gamma_phi.v)), not the data root. `data_root()` is `$REFLUX_DATA` if that's set, and the
 source tree's `data/` otherwise. To use a copy of the data elsewhere, copy
 both directories and point `REFLUX_DATA` at the copy.
 

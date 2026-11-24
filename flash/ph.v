@@ -81,13 +81,21 @@ struct StateFlash {
 	z       []f64
 	present []int
 	params  StateParams
+	// verified runs every PT flash of the search verified, which finds a
+	// third phase (M6's D10): the second search, where the first, on the
+	// quicker unverified flashes, missed the balance.
+	verified bool
 }
 
 // The temperatures a PH or PS flash may search.
 const state_t_min = 10.0
 const state_t_max = 1e4
 
-fn state_flash(fl thermo.Fluid, spec Spec, value f64, p f64, z []f64, params StateParams) !FlashResult {
+fn state_flash(fluid thermo.Fluid, spec Spec, value f64, p f64, z []f64, params StateParams) !FlashResult {
+	fl := thermo.Fluid{
+		...fluid
+		model: thermo.for_one_thread(fluid.model)
+	}
 	if !(p > 0.0) || !math.is_finite(p) {
 		return fail(.bad_input, 'P = ${p} Pa is not a pressure')
 	}
@@ -160,7 +168,10 @@ fn (s StateFlash) flash_at(t f64, answer bool) !FlashResult {
 	if !(t >= state_t_min && t <= state_t_max) {
 		return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
 	}
-	return pt(s.fl.model, t, s.p, s.z, tol: s.params.tol, verify: answer && s.params.verify)
+	return pt(s.fl.model, t, s.p, s.z,
+		tol:    s.params.tol
+		verify: (answer || s.verified) && s.params.verify
+	)
 }
 
 // ideal_t is the temperature at which the feed as an ideal gas has the
@@ -226,8 +237,7 @@ fn (s StateFlash) bracket(t0 f64) !(f64, f64, int) {
 	for k in 0 .. 60 {
 		// 1.5 and 2 take the fewest steps on the reference set; 1.25 takes 3%
 		// more.
-		next := if up { t * 1.5 } else { t / 1.5 }
-		fn_ := s.residual(s.flash_at(next, false)!)
+		next, fn_ := s.step_to(t, if up { t * 1.5 } else { t / 1.5 })!
 		if fn_ == 0.0 || (fn_ > 0.0) != (f0 > 0.0) {
 			return if up { t, next, k + 2 } else { next, t, k + 2 }
 		}
@@ -236,7 +246,43 @@ fn (s StateFlash) bracket(t0 f64) !(f64, f64, int) {
 	return fail(.no_convergence, '${s.what()}: no change of sign in 60 steps from ${t0} K')
 }
 
+// step_to is the bracket's next T and the residual there: next, or, where
+// the model refuses a phase at next (a γ–φ liquid outside a correlation's
+// range, D4), the farthest of halfway back to t, a quarter, and so on, that
+// it doesn't. An equation of state never refuses one here.
+fn (s StateFlash) step_to(t f64, next f64) !(f64, f64) {
+	mut to := next
+	for _ in 0 .. 40 {
+		r := s.flash_at(to, false) or {
+			if err is FlashError && err.kind == .no_volume_root && math.abs(to - t) > 1e-6 * t {
+				to = t + 0.5 * (to - t)
+				continue
+			}
+			return err
+		}
+		return to, s.residual(r)
+	}
+	return fail(.bad_input, '${s.what()}: the model has no phase between ${t} K and ${next} K, so the specification is outside its range')
+}
+
+// mixture searches first on unverified PT flashes, which only steer T and
+// cost half as much (M4 step 9), then, if that misses the balance, again on
+// verified ones throughout. An unverified flash stays two-phase, so in a
+// region of three phases its H(T) is a false split's, and the answer's
+// verified flash, three phases, misses the balance (M6's D10).
 fn (s StateFlash) mixture() !FlashResult {
+	return s.search() or {
+		if s.verified || !s.params.verify {
+			return err
+		}
+		StateFlash{
+			...s
+			verified: true
+		}.search()!
+	}
+}
+
+fn (s StateFlash) search() !FlashResult {
 	lo, hi, mut steps := s.bracket(s.ideal_t())!
 	f := EnergyGap{s}
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3 * lo, max_iter: s.params.max_steps)!
@@ -246,7 +292,7 @@ fn (s StateFlash) mixture() !FlashResult {
 	// One phase has nothing to verify: verification tests a split's phases.
 	mut verified := r.phases.len == 1
 	if r.phases.len == 2 {
-		if t, n := s.newton(r) {
+		if t, n, _ := s.newton(r) {
 			steps += n
 			if q := s.flash_at(t, true) {
 				r = q
@@ -270,13 +316,70 @@ fn (s StateFlash) mixture() !FlashResult {
 		steps++
 	}
 	res := s.residual(r)
-	if math.abs(res) > s.params.etol {
+	// Written so that a NaN is off: a phase's residual can be NaN, where
+	// its model has none (thermo.PhaseModel), and Brent closes in on the
+	// edge of where that begins as on a change of sign.
+	if !(math.abs(res) <= s.params.etol) {
+		// Where H rises steeply with T, as within a hundredth of a kelvin of
+		// an azeotrope, a PT flash at the nearest double to the answer's T
+		// can miss the balance, while Newton's own state, in v, doesn't (M6
+		// step 6): from the split Brent ended at.
+		if r.phases.len == 2 {
+			if _, n, v := s.newton(r) {
+				if q := s.from_newton(v, steps + n) {
+					return q
+				}
+			}
+		}
 		return fail(.no_convergence, '${s.what()}: stopped at ${r.t} K with the energy balance off by ${res} (etol ${s.params.etol})')
 	}
 	return FlashResult{
 		...r
 		iterations: steps
 	}
+}
+
+// from_newton is the split at Newton's own (v, ln T), where a PT flash at
+// its T misses the energy balance: each phase on its phase of lower G, the
+// fugacities equal to tol and the balance met to etol, and with
+// params.verify each phase stable with the other as a trial, as a PT
+// flash's split is shown; named by D9, as a PT flash's are.
+fn (s StateFlash) from_newton(v []f64, steps int) !FlashResult {
+	nc := s.z.len
+	k := s.present.len
+	t := math.exp(v[k])
+	mut vt, mut lt := 0.0, 0.0
+	for j, i in s.present {
+		vt += v[j]
+		lt += s.z[i] - v[j]
+	}
+	mut x := []f64{len: nc}
+	mut y := []f64{len: nc}
+	for j, i in s.present {
+		y[i] = v[j] / vt
+		x[i] = (s.z[i] - v[j]) / lt
+	}
+	m := s.fl.model
+	sy := m.phase(t, s.p, y, .stable)!
+	sx := m.phase(t, s.p, x, .stable)!
+	mut worst := 0.0
+	for i in s.present {
+		worst = math.max(worst, math.abs(math.log(y[i]) + sy.ln_phi[i] - math.log(x[i]) - sx.ln_phi[i]))
+	}
+	balance := (vt * s.of(sy) + lt * s.of(sx) - s.value) / s.scale(t)
+	if !(worst <= s.params.tol) || !(math.abs(balance) <= s.params.etol) || !(vt > 0.0 && lt > 0.0) {
+		return error("Newton's state isn't an answer")
+	}
+	if s.params.verify {
+		for pair in [[x, y], [y, x]] {
+			check := stability(m, t, s.p, pair[0], trials: [pair[1]], tol: verify_tol(s.params.tol))!
+			if !check.stable {
+				return error("a phase of Newton's state is unstable")
+			}
+		}
+	}
+	return labelled(m, t, s.p, s.z, [sy, sx], [vt, lt], .newton, steps, stability(m, t, s.p,
+		s.z)!)
 }
 
 // newton solves Q's stationary conditions in (v, ln T) together, from the
@@ -291,13 +394,13 @@ fn (s StateFlash) mixture() !FlashResult {
 //
 // with Cp the two phases' heat capacity at fixed composition. It returns
 // the temperature and the steps taken.
-fn (s StateFlash) newton(r FlashResult) !(f64, int) {
+fn (s StateFlash) newton(r FlashResult) !(f64, int, []f64) {
 	y := r.phases[0].state.n
 	mut v0 := s.present.map(r.beta * y[it])
 	v0 << math.log(r.t)
 	// eval makes StateFlash a numeric.System.
 	sol := numeric.newton(s, v0, ftol: s.params.tol, max_iter: s.params.max_steps)!
-	return math.exp(sol.x[s.present.len]), sol.iterations
+	return math.exp(sol.x[s.present.len]), sol.iterations, sol.x
 }
 
 // eval is newton's system at (v, ln T).
@@ -324,10 +427,10 @@ fn (s StateFlash) eval(v []f64, mut f []f64, mut jac []f64) ! {
 		x[i] = (s.z[i] - v[j]) / lt
 	}
 	m := s.fl.model
-	sy := thermo.solve_tp(m, t, s.p, y, .stable)!
-	sx := thermo.solve_tp(m, t, s.p, x, .stable)!
-	dy := thermo.ln_phi_derivs(m, sy)
-	dx := thermo.ln_phi_derivs(m, sx)
+	sy := m.phase(t, s.p, y, .stable)!
+	sx := m.phase(t, s.p, x, .stable)!
+	dy := m.ln_phi_derivs(sy)!
+	dx := m.ln_phi_derivs(sx)!
 	py := s.fl.props(sy)
 	px := s.fl.props(sx)
 	for j, i in s.present {
@@ -404,7 +507,7 @@ fn (g SingleGap) at(t f64) !f64 {
 	if !(t >= state_t_min && t <= state_t_max) {
 		return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
 	}
-	st := thermo.solve_tp(s.fl.model, t, s.p, s.z, g.root)!
+	st := s.fl.model.phase(t, s.p, s.z, g.root)!
 	return (s.of(st) - s.value) / s.scale(t)
 }
 
@@ -430,14 +533,15 @@ fn (s StateFlash) single(root thermo.Root, t0 f64) !FlashResult {
 	}
 	lo, hi := math.min(a, b), math.max(a, b)
 	sol := numeric.brent(f, lo, hi, ftol: s.params.etol, max_iter: s.params.max_steps)!
-	// Brent also stops when the bracket can't shrink, short of ftol.
-	if math.abs(sol.f) > s.params.etol {
+	// Brent also stops when the bracket can't shrink, short of ftol, or at
+	// a NaN (see mixture).
+	if !(math.abs(sol.f) <= s.params.etol) {
 		return fail(.no_convergence, '${s.what()}: stopped at ${sol.x} K with the energy balance off by ${sol.f} (etol ${s.params.etol})')
 	}
 	// The root is the stable one by construction: the liquid below Tsat,
 	// the vapour above it, and with no saturation the lower-Gibbs root.
-	st := thermo.solve_tp(m, sol.x, s.p, s.z, root)!
-	label := thermo.phase_label(m, st)
+	st := m.phase(sol.x, s.p, s.z, root)!
+	label := m.phase_label(st)
 	return FlashResult{
 		t:          sol.x
 		p:          s.p

@@ -101,7 +101,8 @@ fn test_a_pfrs_derivatives_against_their_closed_forms() {
 // cp is a stream's heat capacity at its T and P, W/K for its flows, by
 // thermo's analytic second derivatives: no difference in it.
 fn cp(fl thermo.Fluid, st flowsheet.Stream) f64 {
-	state := thermo.solve_tp(fl.model, st.t, st.p, st.flows, .vapor) or { panic(err) }
+	eos := fl.helmholtz() or { panic(err) }
+	state := thermo.solve_tp(eos, st.t, st.p, st.flows, .vapor) or { panic(err) }
 	return fl.props(state).cp
 }
 

@@ -41,7 +41,7 @@ fn file_refused(text string, line int, says string) {
 fn test_the_file_refused() {
 	text := base_text()
 	at := 37 // parameters' line
-	file_refused(text.replace('format = 3', 'format = 2'), 8, 'fits need format 3, not 2')
+	file_refused(text.replace('format = 3', 'format = 2'), 8, 'fits need format 3, or 4 for an activity model, not 2')
 	file_refused(text.replace('parameters = ["k1.A", "k1.Ea", "K_E.A", "K_E.dH", "K_H", "k2.A", "k2.Ea"]',
 		'parameters = []'), 35, 'a fit varies at least one parameter')
 	file_refused(text.replace('"k2.Ea"]', '"k9.Ea"]'), at, 'no constant k9: the reactions have K_E, K_H, k1, k2')
@@ -49,7 +49,7 @@ fn test_the_file_refused() {
 	file_refused(text.replace('"K_E.dH"', '"K_E.Ea"'), at, 'K_E is a term of site Ni, A·exp(−dH/RT): fit K_E.A or K_E.dH')
 	file_refused(text.replace('"K_H", "k2.A"', '"K_H.A", "k2.A"'), at, 'a number that does not depend on T: fit K_H')
 	file_refused(text.replace('"k2.Ea"]', '"k2.A"]'), at, 'k2.A is listed twice')
-	file_refused(text.replace('"k2.Ea"]', '"kij[ethane, hydrogen]"]'), at, 'a fit is of rates or of kij, not both')
+	file_refused(text.replace('"k2.Ea"]', '"kij[ethane, hydrogen]"]'), at, "a fit is of rates or of a model's pairs, not both")
 	file_refused(text.replace('{ name = "K_H", K = "0.3 bar^-1"', '{ name = "K_H", K = "0.3 bar^-1 * exp(500 K / T)"'),
 		at, "written as an expression, which a fit can't take apart")
 	file_refused(text + 'start = { "k3.A" = "1 mol/(kg*s*bar^2)" }\n', 39, 'k3.A is not one of the parameters')

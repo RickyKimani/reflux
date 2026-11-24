@@ -16,7 +16,7 @@
 import flowsheet
 import reactors
 
-const golden = ['reference', 'every_unit', 'no_recycle', 'interlocking', 'saturated_loop']
+const golden = ['reference', 'every_unit', 'no_recycle', 'interlocking', 'saturated_loop', 'decanter']
 const with_reactors = ['reformer', 'methanol']
 
 chdir(dir(dir(@FILE)))!

@@ -1,6 +1,6 @@
 {
-  "format": 3,
-  "reflux": "0.4.0",
+  "format": 4,
+  "reflux": "0.5.0",
   "file": "testdata/flowsheets/reformer.toml",
   "status": "solved",
   "error": null,
@@ -31,6 +31,127 @@
       "molar_mass": 0.0440095
     }
   ],
+  "model": {
+    "equation": "PR",
+    "liquid": "",
+    "vapour": "",
+    "poynting": false,
+    "solutes": [],
+    "pairs": [
+      {
+        "a": "methane",
+        "b": "water",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.485"
+          }
+        ],
+        "source": "pr.ipd line 311: Methane/Water Whitson Table 9.3"
+      },
+      {
+        "a": "methane",
+        "b": "hydrogen",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0263"
+          }
+        ],
+        "source": "pr.ipd line 25: Hydrogen/Methane T=90.3-127K p219"
+      },
+      {
+        "a": "methane",
+        "b": "carbon monoxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.03"
+          }
+        ],
+        "source": "pr.ipd line 97: Carbon Monoxide/Methane p353"
+      },
+      {
+        "a": "methane",
+        "b": "carbon dioxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0793"
+          }
+        ],
+        "source": "pr.ipd line 121: Methane/Carbon Dioxide T=173-220K P=26-66bar p398"
+      },
+      {
+        "a": "water",
+        "b": "hydrogen",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      },
+      {
+        "a": "water",
+        "b": "carbon monoxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      },
+      {
+        "a": "water",
+        "b": "carbon dioxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0063"
+          }
+        ],
+        "source": "pr.ipd line 232: Carbon Dioxide/Water T=523-623K p633"
+      },
+      {
+        "a": "hydrogen",
+        "b": "carbon monoxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0919"
+          }
+        ],
+        "source": "pr.ipd line 23: Hydrogen/Carbon Monoxide T=68.2-88.2K p215"
+      },
+      {
+        "a": "hydrogen",
+        "b": "carbon dioxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "-0.1622"
+          }
+        ],
+        "source": "pr.ipd line 37: Hydrogen/Carbon Dioxide p242"
+      },
+      {
+        "a": "carbon monoxide",
+        "b": "carbon dioxide",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      }
+    ],
+    "notes": [],
+    "warnings": []
+  },
   "streams": [
     {
       "name": "feed",

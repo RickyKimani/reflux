@@ -17,6 +17,7 @@ pub fn built_in_makers() map[string]Maker {
 		'compressor':          make_compressor
 		'expander':            make_expander
 		'flash_drum':          make_flash_drum
+		'decanter':            make_decanter
 		'component_separator': make_component_separator
 	}
 }
@@ -93,6 +94,24 @@ fn make_flash_drum(mut s Section) !Unit {
 	}
 	p := if s.has('P') { s.quantity('P', .pressure)! } else { 0.0 }
 	return new_flash_drum(s.name, inlets: inlets.len, mode: mode, value: value, outlet_p: p)!
+}
+
+// make_decanter reads a decanter (M6's D11): its specification is a flash
+// drum's.
+fn make_decanter(mut s Section) !Unit {
+	if s.context.format < 4 {
+		return s.fail('type', 'a decanter needs format 4 (M6), and this file is format ${s.context.format}',
+			[])
+	}
+	inlets := s.strings('in')!
+	key := s.one_of(['T', 'duty'])!
+	mode, value := if key == 'T' {
+		DrumMode.outlet_t, s.quantity(key, .temperature)!
+	} else {
+		DrumMode.duty, s.quantity(key, .power)!
+	}
+	p := if s.has('P') { s.quantity('P', .pressure)! } else { 0.0 }
+	return new_decanter(s.name, inlets: inlets.len, mode: mode, value: value, outlet_p: p)!
 }
 
 fn make_component_separator(mut s Section) !Unit {

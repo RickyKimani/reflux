@@ -52,7 +52,7 @@ pub:
 // collapsing onto the feed (K = 1), as it does where no such point exists,
 // above the cricondenbar or cricondentherm, say; the phases coming out the
 // wrong way round (.phases_swapped); or no convergence.
-pub fn tvf(m thermo.Model, t f64, beta f64, z []f64, params VfParams) !FlashResult {
+pub fn tvf(m thermo.PhaseModel, t f64, beta f64, z []f64, params VfParams) !FlashResult {
 	if !(t > 0.0) || !math.is_finite(t) {
 		return fail(.bad_input, 'T = ${t} K is not a temperature')
 	}
@@ -63,7 +63,7 @@ pub fn tvf(m thermo.Model, t f64, beta f64, z []f64, params VfParams) !FlashResu
 // fraction β: as tvf, with ln T as the unknown in place of ln P. Where two
 // temperatures fit, as at a pressure between a mixture's critical point and
 // its cricondenbar, Wilson's estimate usually leads to the higher.
-pub fn pvf(m thermo.Model, p f64, beta f64, z []f64, params VfParams) !FlashResult {
+pub fn pvf(m thermo.PhaseModel, p f64, beta f64, z []f64, params VfParams) !FlashResult {
 	if !(p > 0.0) || !math.is_finite(p) {
 		return fail(.bad_input, 'P = ${p} Pa is not a pressure')
 	}
@@ -71,22 +71,22 @@ pub fn pvf(m thermo.Model, p f64, beta f64, z []f64, params VfParams) !FlashResu
 }
 
 // bubble_p is the bubble-point pressure at T: tvf with β = 0.
-pub fn bubble_p(m thermo.Model, t f64, z []f64, params VfParams) !FlashResult {
+pub fn bubble_p(m thermo.PhaseModel, t f64, z []f64, params VfParams) !FlashResult {
 	return tvf(m, t, 0.0, z, params)
 }
 
 // dew_p is the dew-point pressure at T: tvf with β = 1.
-pub fn dew_p(m thermo.Model, t f64, z []f64, params VfParams) !FlashResult {
+pub fn dew_p(m thermo.PhaseModel, t f64, z []f64, params VfParams) !FlashResult {
 	return tvf(m, t, 1.0, z, params)
 }
 
 // bubble_t is the bubble-point temperature at P: pvf with β = 0.
-pub fn bubble_t(m thermo.Model, p f64, z []f64, params VfParams) !FlashResult {
+pub fn bubble_t(m thermo.PhaseModel, p f64, z []f64, params VfParams) !FlashResult {
 	return pvf(m, p, 0.0, z, params)
 }
 
 // dew_t is the dew-point temperature at P: pvf with β = 1.
-pub fn dew_t(m thermo.Model, p f64, z []f64, params VfParams) !FlashResult {
+pub fn dew_t(m thermo.PhaseModel, p f64, z []f64, params VfParams) !FlashResult {
 	return pvf(m, p, 1.0, z, params)
 }
 
@@ -99,7 +99,7 @@ enum Given {
 
 // Saturation is one vapour-fraction flash.
 struct Saturation {
-	m       thermo.Model
+	m       thermo.PhaseModel
 	given   Given
 	value   f64 // the given T in K, or P in Pa
 	beta    f64
@@ -108,7 +108,8 @@ struct Saturation {
 	params  VfParams
 }
 
-fn saturate(m thermo.Model, given Given, value f64, beta f64, z []f64, params VfParams) !FlashResult {
+fn saturate(model thermo.PhaseModel, given Given, value f64, beta f64, z []f64, params VfParams) !FlashResult {
+	m := thermo.for_one_thread(model)
 	if !(beta >= 0.0 && beta <= 1.0) {
 		return fail(.bad_input, 'the vapour fraction β = ${beta} is outside [0, 1]')
 	}
@@ -181,8 +182,8 @@ fn (s Saturation) at(v []f64) !SatPoint {
 		y[i] = kk * x[i]
 	}
 	sum_x, sum_y := numeric.sum(x), numeric.sum(y)
-	sx := thermo.solve_tp(s.m, t, p, x.map(it / sum_x), .liquid)!
-	sy := thermo.solve_tp(s.m, t, p, y.map(it / sum_y), .vapor)!
+	sx := s.m.phase(t, p, x.map(it / sum_x), .liquid)!
+	sy := s.m.phase(t, p, y.map(it / sum_y), .vapor)!
 	return SatPoint{t, p, d, x, y, sum_x, sum_y, sx, sy}
 }
 
@@ -197,8 +198,8 @@ fn (s Saturation) eval(v []f64, mut f []f64, mut jac []f64) ! {
 	n := k + 1
 	nc := s.z.len
 	cur := s.at(v)!
-	dx := thermo.ln_phi_derivs(s.m, cur.sx)
-	dy := thermo.ln_phi_derivs(s.m, cur.sy)
+	dx := s.m.ln_phi_derivs(cur.sx)!
+	dy := s.m.ln_phi_derivs(cur.sy)!
 	mut h := 0.0
 	for j, i in s.present {
 		f[j] = v[j] + cur.sy.ln_phi[i] - cur.sx.ln_phi[i]
@@ -394,7 +395,7 @@ fn (s Saturation) attempt(v0 []f64) !FlashResult {
 // by much more.)
 fn (s Saturation) on_stable_roots(cur SatPoint) ! {
 	for st in [cur.sx, cur.sy] {
-		stable := thermo.solve_tp(s.m, cur.t, cur.p, st.n, .stable) or {
+		stable := s.m.phase(cur.t, cur.p, st.n, .stable) or {
 			return fail(.no_volume_root, '${s.what()}: ${err}')
 		}
 		if math.abs(stable.v - st.v) > 1e-6 * st.v {
@@ -422,8 +423,8 @@ fn (s Saturation) what() string {
 // roots is the pure component's liquid and vapour roots at τ = ln P or ln T.
 fn (s Saturation) roots(tau f64) !(thermo.State, thermo.State) {
 	t, p := s.tp(tau)!
-	liq := thermo.solve_tp(s.m, t, p, s.z, .liquid)!
-	vap := thermo.solve_tp(s.m, t, p, s.z, .vapor)!
+	liq := s.m.phase(t, p, s.z, .liquid)!
+	vap := s.m.phase(t, p, s.z, .vapor)!
 	return liq, vap
 }
 
@@ -440,8 +441,8 @@ fn (q PureSat) eval(x []f64, mut f []f64, mut jac []f64) ! {
 	if !(vap.v - liq.v > 1e-9 * vap.v) {
 		return error('only one volume root')
 	}
-	dl := thermo.ln_phi_derivs(s.m, liq)
-	dv := thermo.ln_phi_derivs(s.m, vap)
+	dl := s.m.ln_phi_derivs(liq)!
+	dv := s.m.ln_phi_derivs(vap)!
 	f[0] = liq.ln_phi[i] - vap.ln_phi[i]
 	jac[0] = if s.given == .t {
 		liq.p * (dl.dp[i] - dv.dp[i])
@@ -476,7 +477,7 @@ fn (s Saturation) pure() !FlashResult {
 			break
 		}
 		// One root: raise P (lower T) if it's vapour-like, else the reverse.
-		up := thermo.phase_label(s.m, liq) == .vapor
+		up := s.m.phase_label(liq) == .vapor
 		dir := if up == (s.given == .t) { 1.0 } else { -1.0 }
 		if last_dir != 0.0 && dir != last_dir {
 			step /= 2.0
