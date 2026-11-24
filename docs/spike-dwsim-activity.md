@@ -77,6 +77,11 @@ compared.
 
 ## UNIQUAC for methanol–water: unexplained
 
+**Explained in step 12** ([m6-plan.md](m6-plan.md), step 12): DWSIM holds a
+second record for the pair, Water/Methanol (−6.359 and −1.192), and its code
+takes each ordered pair's τ's from that pair's own record, so two of the four
+come from each. Its code on both records is its γ to 1.7e-9.
+
 At 330 K and x = (0.3, 0.7), DWSIM's UNIQUAC γ, Poynting taken out, is
 (1.01196, 0.79960). DECHEMA's form, τᵢⱼ = exp(−Aᵢⱼ/RT), gives (1.34110,
 1.09153) by `thermo` and by a hand-written UNIQUAC, to the last digit. That
@@ -105,6 +110,12 @@ The organic phase is 0.38 water by the model at 298 K, against about 0.51
 measured: ChemSep's VLE-fitted UNIQUAC predicts the split, not well.
 
 ## Its NRTL misses the split its model has
+
+**Corrected in step 12:** it doesn't. A feed of 0.5 water is outside the
+split (0.6008 to 0.9944 water at 298.15 K), so one liquid is right. At 0.8
+water its default flash finds the model's two liquids; its InsideOut and
+GibbsMinimization approaches are the ones that go wrong. What follows is as
+the spike recorded it.
 
 ChemSep's NRTL for water–1-butanol (A₁₂ = 2633.6951, A₂₁ = 504.0381 cal/mol,
 α = 0.4447) splits, 0.6008 and 0.9944 water at 298.15 K, and 0.5870 and

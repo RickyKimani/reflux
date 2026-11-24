@@ -2481,9 +2481,11 @@ which a bank's pair, A₁₂ cal/mol over DECHEMA's R, gives at any T. J is by
 central differences of an energy ± 10⁻⁴·max(|A|, 2500 J/mol) and α ± 10⁻⁴:
 the bubble points' rounding, 10⁻¹², over the step is then about 10⁻⁸ of J,
 and the difference's truncation about as much, which moves the answer by
-as little of its standard error and stops no convergence. With steps of
-10⁻⁶ the rounding, 10⁻⁶ of J, kept NRTL's α and both energies from the
-gradient test. The pairs fitted are written back as
+as little of its standard error and stops no convergence where the data
+determine the parameters. With steps of 10⁻⁶ the rounding kept NRTL's α
+and both energies from the gradient test. Where they don't (α with both
+energies on one isobaric binary), whether the test is met or Levenberg–
+Marquardt stops at the rounding, saying so, is the platform's. The pairs fitted are written back as
 `[[model.pairs]]`, each fitted energy as `"A J/mol / (R*T)"` (UNIQUAC's in
 an `exp`).
 

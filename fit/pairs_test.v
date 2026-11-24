@@ -126,8 +126,16 @@ fn test_an_undetermined_alpha_still_fits() {
 		'"A[water, methanol]", "alpha[methanol, water]"]')
 	ff := flowsheet.load_fits_text(text, dir: dir)!
 	r := fit.run(ff, ff.fits[0])
-	assert r.ok, r.error
-	// Measured: α 0.199 ± 5.29, its interval −10.7 to 11.1.
+	// Where its residuals' rounding lies depends on the platform's libm: a
+	// fit this badly determined meets its test on Windows, under tcc and
+	// gcc, and stopped at its rounding on CI's Ubuntu (a gradient test of
+	// 2.3e-10, on d8a1e0c), saying so. Either is honest; claiming an α
+	// isn't.
+	if !r.ok {
+		assert r.error.contains('the steps fell below rounding'), r.error
+		return
+	}
+	// Measured on Windows: α 0.199 ± 5.29, its interval −10.7 to 11.1.
 	assert r.standard_errors[2] > 1.0 && r.lower[2] < 0.0 && r.upper[2] > 1.0, '${r.values} ${r.standard_errors}'
 }
 

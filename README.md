@@ -335,8 +335,9 @@ sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
-                    flowsheet, on the owner's reforming PFR, and on M8's
-                    study, optimisation and spec (docs/benchmarks.md)
+                    flowsheet, on the owner's reforming PFR, on M8's study,
+                    optimisation and spec, and on M6's γ–φ flashes
+                    (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
 capi/               the C API (M10a): reflux.h, and the functions it declares,
@@ -389,7 +390,11 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (DWSIM 9's spec, optimiser and PFR on M8's problems),
                     gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM)
                     gen_m6_activity.py (the activity models by thermo and
-                    mpmath on ChemSep's banks, and thermo's UNIFAC tables)
+                    mpmath on ChemSep's banks, and thermo's UNIFAC tables),
+                    gen_m6_published.py (ThermoML's data sets), gen_m6_fits.py
+                    (SciPy's NRTL and UNIQUAC fits), gen_m6_dwsim.py (DWSIM 9's
+                    activity packages by state), gen_m6_bench.py and
+                    bench_m6.v (M6's speed against DWSIM and thermo)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

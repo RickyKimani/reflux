@@ -160,6 +160,21 @@ reflux solves `testdata/flowsheets/reformer_dwsim.toml`, the same case on DWSIM'
 
 DWSIM's optimiser and Adjust solve the whole flowsheet at each evaluation. reflux's SQP counts every solve, its gradients' included, five a gradient; its spec is met with the recycle's tears, by Broyden on both, so its count is the block's passes, each one pass of its units.
 
+## γ–φ flashes
+
+M6 step 13, D18, exit criterion 12: methanol and water at 1 atm, as γ–φ fluids by NRTL and UNIFAC on ChemSep's parameters (the vapour the ideal gas, Poynting on) and by Peng–Robinson on ChemSep's kᵢⱼ, in each program. `tools/gen_m6_bench.py` writes `testdata/m6_bench.json` on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-24, with DWSIM 9.0.5.0 at its defaults, thermo 0.6.1's FlashVL, and reflux built with gcc. A PT flash is at 350 K (z = 0.5), 357 K (0.3) and 346 K (0.7), each two-phase; a bubble point is the T of a liquid of 0.1, 0.5 and 0.9 methanol. Each time is the median of its rounds, per call; reflux ran before the others and again after, and the faster is shown.
+
+| | reflux | thermo | DWSIM | thermo over reflux | DWSIM over reflux |
+|---|---|---|---|---|---|
+| NRTL, PT flash | 74.7 µs | 1.29 ms | 10.5 ms | 17 | 140 |
+| NRTL, bubble T | 69.2 µs | 3.47 ms | 2.22 ms | 50 | 32 |
+| UNIFAC, PT flash | 79.5 µs | 1.38 ms | 12.2 ms | 17 | 150 |
+| UNIFAC, bubble T | 75.0 µs | 6.13 ms | 4.40 ms | 82 | 59 |
+| Peng–Robinson, PT flash | 144 µs | 1.39 ms | 662 µs | 9.6 | 4.6 |
+| Peng–Robinson, bubble T | 110 µs | 2.52 ms | 844 µs | 23 | 7.6 |
+
+reflux's γ–φ PT flash takes 0.52 of its Peng–Robinson flash's time on the same states: the liquid is xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ and the Poynting term, with no volume roots to find, as D18 expected. DWSIM's activity packages run 16 times slower than its own Peng–Robinson. thermo's answers are reflux's to 1.7e-07 in β and 7.8e-09 K; DWSIM's γ–φ answers differ by up to 0.0023 in β and 0.048 K, its Poynting term's sign and its vapour pressures' extra figures (M6 step 12).
+
 ## From Python
 
 M10a step 7, exit criterion 10: what a call from Python costs over V's own loop doing the same work. Methane, ethane and n-butane, 30/30/40, at 20 bar, from 220 to 400 K (one point at 300 K), with Peng–Robinson and the database's kᵢⱼ. `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, timing V and Python alternately, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-05, with Python 3.13.17 and NumPy 2.5.4.

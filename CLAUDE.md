@@ -38,8 +38,9 @@ Keep this section current: update it whenever a step is committed.
       on ChemSep's banks to 4e-10, so the banks keep DECHEMA's R (D7),
       confirmed for NRTL alone and inferred for UNIQUAC and Wilson. Its
       activity packages take enthalpies from Lee–Kesler by default. Its
-      UNIQUAC for methanol–water is 0.28 off in ln γ (unexplained), and its
-      three-phase flash misses NRTL's water–butanol split.
+      UNIQUAC for methanol–water is 0.28 off in ln γ (explained in step
+      12), and its three-phase flash seemed to miss NRTL's water–butanol
+      split (corrected in step 12: the feed was outside it).
     - ThermoML (`spike/thermoml`) has a public search API and covers 2003
       to 2019, with nothing for methanol–water alone. So criterion 8 takes
       papers' tables where it has nothing.
@@ -134,9 +135,9 @@ Keep this section current: update it whenever a step is committed.
       (near the natural gas's critical point), one of M3's 39 splits by
       `thermo`, and the PT state of one TVF answer at 80.6 bar; their
       tests hold each so.
-  - **Steps 9 to 11 are done,** built together at the owner's word, not
-    committed. D12 is amended, approved on 2026-11-24: Wilson's
-    pairs are `lambda_ab` and `lambda_ba`.
+  - **Steps 9 to 11 are done,** built together at the owner's word
+    (committed at d8a1e0c). D12 is amended, approved on 2026-11-24:
+    Wilson's pairs are `lambda_ab` and `lambda_ba`.
     - Step 9: format 4 (a γ–φ `[model]`: `liquid`, `vapour`, `poynting`,
       `henry`, `missing`, `[[model.pairs]]` as expressions), the
       `decanter` (vapour, light, heavy; one liquid by light), a drum's
@@ -154,6 +155,25 @@ Keep this section current: update it whenever a step is committed.
       thermo's models to 1.5e-6 of the standard errors. The published
       methanol–water set determines NRTL's two energies but not α nor
       UNIQUAC's, so those fits are on drawn ethanol–water data.
+  - **Steps 12 and 13 are done,** built together, not committed. No
+    decision amended.
+    - Step 12: DWSIM 9's activity packages by state
+      (`testdata/m6_dwsim.json`, `tools/gen_m6_dwsim.py`), every difference
+      explained, its γ worked out again from its own code where it isn't
+      reflux's: NRTL and both UNIFACs are reflux's to 1.7e-9; its Poynting
+      term has |P − Psat|; its methanol–water UNIQUAC mixes two records;
+      its Wilson takes R = 1.9872 and volumes from the density at 298.15 K;
+      its UNIFAC-LL is its VLE UNIFAC with wrong group fractions; its
+      default three-phase flash is right, InsideOut and GibbsMinimization
+      aren't. Four reports to make to DWSIM.
+    - Step 13: γ–φ flashes timed (`testdata/m6_bench.json`,
+      `tools/gen_m6_bench.py`, `tools/bench_m6.v`, `benchmarks/m6.v`):
+      NRTL's PT flash 75 µs in reflux, 1.3 ms in thermo, 10.5 ms in DWSIM;
+      half reflux's PR flash's time.
+    - CI failed on d8a1e0c's Ubuntu jobs (both): the test of NRTL's α fitted
+      where the data don't determine it, which stops at its rounding there
+      (a gradient test of 2.3e-10) and converges on Windows. The test now
+      takes either outcome; not yet seen on CI.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as
@@ -704,6 +724,11 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     `$REFLUX_THERMOML_CACHE`), with each VLE set's point test;
     `tools/gen_m6_fits.py` (thermo, SciPy, mpmath) `testdata/m6_fits.json`
     and `testdata/m6_fit/*.csv`, SciPy's fits of NRTL's and UNIQUAC's pairs.
+  - `tools/gen_m6_dwsim.py` (DWSIM, about two minutes) writes
+    `testdata/m6_dwsim.json`, DWSIM's activity packages by state;
+    `tools/gen_m6_bench.py` (DWSIM, thermo and V, a few minutes)
+    `testdata/m6_bench.json`, the γ–φ timings, which can't reproduce byte
+    for byte. Then `v run tools/benchmarks.vsh` writes `docs/benchmarks.md`.
   - `tools/gen_m6_activity.py` (thermo, mpmath) writes
     `testdata/m6_activity.json`, the activity models on ChemSep's banks and
     tables, and `testdata/m6_unifac_tables.json`, thermo's UNIFAC tables.
@@ -806,6 +831,21 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     - A compressor's work differs from reflux's by 1e-5 to 5e-5 on DWSIM's
       own constants, scattered with T: its ideal-gas H and S, integrated
       approximately (M3).
+  - DWSIM's activity packages (M6 step 12, `docs/m6-plan.md`):
+    - Each is at its defaults an ideal-gas vapour, Poynting on, ChemSep's
+      liquid densities and Lee–Kesler enthalpies; its vapour pressures carry
+      the full ChemSep's constants, 5e-5 above ChemSep LITE's.
+    - Its Poynting term is exp(V·|P − Psat|/RT): below Psat it raises φ.
+    - Its UNIQUAC takes each ordered pair's τ's from that pair's own record,
+      and holds two inconsistent records for methanol–water.
+    - Its Wilson is (Vⱼ/Vᵢ)·exp(−A/(1.9872·T)), V from the liquid's density
+      at 298.15 K.
+    - Its UNIFAC-LL is its VLE UNIFAC (VLE groups, VLE a for most pairs),
+      each group fraction divided by the Q of the compound's Dortmund group
+      numbers read in the VLE table.
+    - Its three-phase flash: NestedLoops (the default) is right; InsideOut
+      adds a vapour where there's none; GibbsMinimization misses splits.
+      Its three-phase numbers move from run to run.
   - DWSIM's other reactors (M9 step 10):
     - The equilibrium reactor puts fugacities over 1 atm against K at
       1 bar. Its default tolerances, 0.01 and 1e-3, leave its answer up to
