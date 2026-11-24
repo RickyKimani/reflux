@@ -91,6 +91,17 @@ fn (r Report) summary(mut b strings.Builder) {
 	for note in r.notes {
 		b.writeln('  ${note}')
 	}
+	// A γ–φ fluid's model, and what its pairs should be read with (M6's D13).
+	if m := r.model {
+		if m.liquid != '' {
+			vapour := if m.vapour == 'ideal gas' { 'the ideal gas' } else { 'by ${m.vapour}' }
+			poynting := if m.poynting { 'with' } else { 'without' }
+			b.writeln('  The liquid by ${m.liquid}, the vapour ${vapour}, ${poynting} the Poynting correction.')
+		}
+		for w in m.warnings {
+			b.writeln('  ${w}')
+		}
+	}
 	if all := r.balance {
 		worst := r.worst_unit or { Balance{} }
 		b.writeln('  The whole closes its balances to ${scientific(all.component, 2)} of the flow and ${scientific(all.energy, 2)} of F·RT,')

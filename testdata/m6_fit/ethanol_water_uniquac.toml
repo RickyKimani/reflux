@@ -1,0 +1,19 @@
+# Ethanol and water by UNIQUAC (M6 step 11): its pair's two energies fitted
+# to 30 bubble points in ethanol_water_uniquac.csv, drawn from thermo's
+# UNIQUAC at ChemSep's pair as ethanol_water.toml's are from its NRTL; from
+# zero energies. SciPy's fit is in testdata/m6_fits.json.
+#
+#     reflux fit testdata/m6_fit/ethanol_water_uniquac.toml
+format = 4
+
+[components]
+names = ["ethanol", "water"]
+
+[model]
+liquid = "UNIQUAC"
+
+[fit.uniquac]
+data = "ethanol_water_uniquac.csv"
+parameters = ["A[ethanol, water]", "A[water, ethanol]"]
+start = { "A[ethanol, water]" = "0 J/mol", "A[water, ethanol]" = "0 J/mol" }
+weights = { P = "0.5 %", "y[ethanol]" = "0.003" }

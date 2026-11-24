@@ -132,9 +132,14 @@ pub fn (d FlashDrum) calculate(fl thermo.Fluid, inlets []Stream) !Outcome {
 	r := d.flash_mixture(fl, b, p) or { return flash_failed(d.name, err) }
 	vapour, liquid := separated(fl, b.flows, b.total, r)
 	out := vapour.total() * vapour.h + liquid.total() * liquid.h
+	mut warnings := []string{}
+	if r.phases.any(it.label == .liquid2) {
+		warnings << 'its liquid outlet has two liquid phases, liquid and liquid2, which a decanter would separate'
+	}
 	return Outcome{
-		outlets: [vapour, liquid]
-		energy:  [EnergyStream{'duty', out - b.enthalpy}]
+		outlets:  [vapour, liquid]
+		energy:   [EnergyStream{'duty', out - b.enthalpy}]
+		warnings: warnings
 	}
 }
 

@@ -296,6 +296,7 @@ flowsheet/
   pump.v            pump: v·ΔP/η, liquid only
   compressor.v      compressor and expander: isentropic by PS, then η
   drum.v            flash drum: mixed inlets, saturated vapour and liquid out
+  decanter.v        decanter: a flash drum with vapour, light and heavy outlets (M6)
   separator.v       component separator: a fraction of each component
   sheet.v           Flowsheet: units joined by named streams, and its plan
   graph.v           strongly connected components, elementary cycles, order
@@ -320,11 +321,13 @@ study/              studies (M8): one or two inputs over their values, in
   optimize.v        an optimisation (M8): the SQP on the flowsheet, scaled,
                     every evaluation a converged solve
   optimize_report.v the optimisation's report: JSON, CSV and the table
-fit/                fits (M8): rate constants to rates, and kᵢⱼ to bubble
-                    points, each with its 95% interval
+fit/                fits (M8): rate constants to rates, and kᵢⱼ or an
+                    activity model's pairs (M6) to bubble points, each with
+                    its 95% interval
   data.v            a fit's CSV, every column with its unit
   rates.v           rate constants, on the tape's exact derivatives, centred
-  vle.v             kᵢⱼ, on bubble points
+  vle.v             kᵢⱼ, or NRTL's and UNIQUAC's pairs, on bubble points
+  consistency.v     the point test of VLE data for Gibbs–Duhem consistency (M6)
   fit.v             the statistics, in the file's own form
   report.v          the fit's report: JSON, CSV, the table and the fitted
                     constants as file text

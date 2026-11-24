@@ -113,8 +113,8 @@ Keep this section current: update it whenever a step is committed.
     bank's row. Against it, ChemSep's hydrogen is 5.95 times off at 298 K
     (62 at 623 K), its neon 4.5e32, the other eleven within 12% at 298 K
     (data-quality.md). Committed at 2648ebb.
-  - **Steps 7 and 8 are done,** built together at the owner's word.
-    D9 and D14 are settled, approved on 2026-11-24 (by Π, 2,289
+  - **Steps 7 and 8 are done,** built together at the owner's word
+    (committed at afb5cab). D9 and D14 are settled, approved on 2026-11-24 (by Π, 2,289
     of M3's sweep's 3,344 PR splits are two liquids, now liquid and liquid2;
     the C API refuses two liquids until ABI 2). D8 is amended, approved on
     2026-11-24: Michelsen's multiphase Rachford–Rice (Q over β ≥ 0) in
@@ -134,6 +134,26 @@ Keep this section current: update it whenever a step is committed.
       (near the natural gas's critical point), one of M3's 39 splits by
       `thermo`, and the PT state of one TVF answer at 80.6 bar; their
       tests hold each so.
+  - **Steps 9 to 11 are done,** built together at the owner's word, not
+    committed. D12 is amended, approved on 2026-11-24: Wilson's
+    pairs are `lambda_ab` and `lambda_ba`.
+    - Step 9: format 4 (a γ–φ `[model]`: `liquid`, `vapour`, `poynting`,
+      `henry`, `missing`, `[[model.pairs]]` as expressions), the
+      `decanter` (vapour, light, heavy; one liquid by light), a drum's
+      two-liquid warning, report format 4's `model` (each pair's
+      parameters and source). Every golden report written again, no number
+      moved; `decanter.json` new.
+    - Step 10: the ThermoML archive has methanol–water inside other papers'
+      files after all (step 0 looked at two-compound files only):
+      `testdata/m6_published.json`, 11 VLE sets at 101.3 kPa, water–1-butanol
+      LLE and its heteroazeotrope, and a ternary LLE with p-xylene;
+      `fit.point_test` (Fredenslund et al.'s, two starts for Barker's
+      fit's two minima), 9 of 11 consistent; 74 model deviations recorded.
+    - Step 11: a fit's `A[a, b]` (J/mol) and `alpha[a, b]` on NRTL and
+      UNIQUAC, written back as `[[model.pairs]]`; against SciPy with
+      thermo's models to 1.5e-6 of the standard errors. The published
+      methanol–water set determines NRTL's two energies but not α nor
+      UNIQUAC's, so those fits are on drawn ethanol–water data.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as
@@ -573,7 +593,9 @@ Keep this section current: update it whenever a step is committed.
 - **Plan a milestone before coding it.** Research, then write
   `docs/mN-plan.md` with exit criteria, decisions (D1, D2, …) and steps. It
   needs the owner's approval before any code.
-- **One step at a time.** The owner says "Commit step N and start step N+1".
+- **Steps in bundles.** Related steps are built together by default, each
+  with its own write-up in the plan, and stop where a decision is the
+  owner's. The owner says when to commit and what to start next.
   - Commit only when asked, and push only when asked.
   - Open the PR into `main` only after the milestone's docs and exit review,
     and only when asked.
@@ -587,7 +609,14 @@ Keep this section current: update it whenever a step is committed.
   - updating `docs/design.md` (every formula the code uses), the README
     layout block, `testdata/README.md` (one row per fixture) and
     `docs/v-for-go.md` (V lessons);
-  - running the tcc check, and the gcc check in the background.
+  - at the end of a bundle, before its commit and only if V source
+    changed, one full tcc check. No local gcc check: CI runs both
+    compilers, the `-prod` build and the Python tests on Ubuntu and Windows
+    on every push, so its run is read after the push. Locally, gcc runs
+    only what tcc can't show: `tools/python.vsh test` when the C API or
+    what it calls changed, and a test that tcc and gcc may differ on.
+    Inside a bundle, and for a fix between bundles, run the touched tests
+    and their dependents, and the planted mistakes.
 - **Changing an approved decision** happens in the plan's table, marked
   "Amended in step N", and is flagged to the owner.
 
@@ -616,8 +645,9 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
   program of its own. `check.vsh` runs up to 4 at once (V's runner would
   allow one per 8 GiB of RAM: one here), and builds with `-nocache` under
   gcc, where V 0.5.2's module cache made each build about three times
-  slower. Run the gcc check in the background, and don't edit or regenerate
-  anything it compiles or reads until it finishes.
+  slower: about an hour on this laptop by M6. Run any full check in the
+  background, and don't edit or regenerate anything it compiles or reads
+  until it finishes.
 - **CI** (`.github/workflows/ci.yml`) runs `check.vsh` on Ubuntu and Windows
   with both tcc and gcc. The gcc jobs also run `tools/python.vsh test`. V is
   pinned to the commit in `.v-version` (0.5.2, eab77e7).
@@ -669,6 +699,11 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     water; `tools/gen_m6_gamma_phi.py` (thermo, chemicals, mpmath, SciPy)
     `testdata/m6_gamma_phi.json`, the γ–φ liquid, Henry's law and the
     flashes against `thermo`.
+  - `tools/gen_m6_published.py` (SciPy) writes `testdata/m6_published.json`,
+    data sets fetched from the ThermoML archive by DOI (cached in
+    `$REFLUX_THERMOML_CACHE`), with each VLE set's point test;
+    `tools/gen_m6_fits.py` (thermo, SciPy, mpmath) `testdata/m6_fits.json`
+    and `testdata/m6_fit/*.csv`, SciPy's fits of NRTL's and UNIQUAC's pairs.
   - `tools/gen_m6_activity.py` (thermo, mpmath) writes
     `testdata/m6_activity.json`, the activity models on ChemSep's banks and
     tables, and `testdata/m6_unifac_tables.json`, thermo's UNIFAC tables.

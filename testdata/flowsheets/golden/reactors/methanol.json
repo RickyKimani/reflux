@@ -1,5 +1,5 @@
 {
-  "format": 3,
+  "format": 4,
   "reflux": "0.4.0",
   "file": "testdata/flowsheets/methanol.toml",
   "status": "solved",
@@ -21,6 +21,50 @@
       "molar_mass": 0.0320419
     }
   ],
+  "model": {
+    "equation": "PR",
+    "liquid": "",
+    "vapour": "",
+    "poynting": false,
+    "solutes": [],
+    "pairs": [
+      {
+        "a": "carbon monoxide",
+        "b": "hydrogen",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0919"
+          }
+        ],
+        "source": "pr.ipd line 23: Hydrogen/Carbon Monoxide T=68.2-88.2K p215"
+      },
+      {
+        "a": "carbon monoxide",
+        "b": "methanol",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      },
+      {
+        "a": "hydrogen",
+        "b": "methanol",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "none listed: 0"
+      }
+    ],
+    "notes": [],
+    "warnings": []
+  },
   "streams": [
     {
       "name": "syngas",

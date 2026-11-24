@@ -40,6 +40,10 @@ pub:
 	// ideal lets a pair the bank doesn't list have no energy of
 	// interaction (D7 as amended).
 	ideal bool
+	// pairs are a binary model's pairs given by the caller, a file's
+	// [[model.pairs]] (D12), in place of the bank's: each of two solvents,
+	// by CAS number.
+	pairs []PairOverride
 }
 
 // GammaPhiSetup is a γ–φ fluid and how it was built.
@@ -199,20 +203,34 @@ pub fn (db Database) gamma_phi(names []string, opts GammaPhiOptions) !GammaPhiSe
 		return error("no temperature has a liquid of ${a} and ${b}: ${a}'s vapour pressure and liquid density end at ${hi} K (its Tc is ${comps[ends].tc} K), and ${b}'s begin at ${lo} K; ${bank.file} has no constant for ${a} in the others, so it can't be a Henry's-law solute")
 	}
 	solvent_cas := solvents.map(cas[it])
+	for o in opts.pairs {
+		for c in [o.a, o.b] {
+			i := cas.index(c)
+			if i < 0 {
+				return error("a pair names ${c}, which isn't one of the compounds")
+			}
+			if solute[i] {
+				return error("a pair names ${records[i].name}, a Henry's-law solute, which is outside the activity model: a pair is of two solvents")
+			}
+		}
+	}
+	if opts.pairs.len > 0 && opts.liquid in [.unifac, .unifac_lle, .unifac_dortmund] {
+		return error("UNIFAC's parameters are its groups', from its table: pairs are NRTL's, UNIQUAC's and Wilson's")
+	}
 	mut pairs := []PairUse{}
 	liquid := match opts.liquid {
 		.nrtl {
-			b := db.nrtl(solvent_cas, ideal: opts.ideal)!
+			b := db.nrtl(solvent_cas, ideal: opts.ideal, overrides: opts.pairs)!
 			pairs = b.pairs.clone()
 			activity.Model(b.model)
 		}
 		.uniquac {
-			b := db.uniquac(solvent_cas, ideal: opts.ideal)!
+			b := db.uniquac(solvent_cas, ideal: opts.ideal, overrides: opts.pairs)!
 			pairs = b.pairs.clone()
 			activity.Model(b.model)
 		}
 		.wilson {
-			b := db.wilson(solvent_cas, ideal: opts.ideal)!
+			b := db.wilson(solvent_cas, ideal: opts.ideal, overrides: opts.pairs)!
 			pairs = b.pairs.clone()
 			activity.Model(b.model)
 		}

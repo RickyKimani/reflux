@@ -1,9 +1,10 @@
 # The flowsheet file format
 
-A flowsheet is a [TOML](https://toml.io) file, format 1, 2 or 3: format 2
-(M9) adds reactions and reactors, and format 3 (M8) adds specs, studies,
-optimisations and fits. A file of reactions alone may be format 2 or 3. Each reads
-every earlier format's sections as that format does.
+A flowsheet is a [TOML](https://toml.io) file, format 1, 2, 3 or 4: format 2
+(M9) adds reactions and reactors, format 3 (M8) adds specs, studies,
+optimisations and fits, and format 4 (M6) adds γ–φ fluids, whose liquid is
+an activity model, and the decanter. A file of reactions alone may be format
+2 or 3. Each reads every earlier format's sections as that format does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
 
@@ -79,8 +80,9 @@ prefixes, and how a compound unit is written.
 
 ## `format`
 
-Required: 1, 2 for a file with reactions or reactors, or 3 for a file with
-specs. A later format will come with a way to migrate.
+Required: 1, 2 for a file with reactions or reactors, 3 for a file with
+specs, or 4 for a file with an activity model or a decanter. A later format
+will come with a way to migrate.
 
 ## `[components]`
 
@@ -93,12 +95,59 @@ specs. A later format will come with a way to migrate.
 
 ## `[model]`
 
+An equation of state:
+
 | Key | |
 |---|---|
 | `equation` | Required: `"PR"`, `"SRK"`, `"RK"` or `"vdW"`. |
 | `kij` | `true` by default: binary interaction parameters from ChemSep's bank. |
 | `alpha` | `"equation"` by default, or `"mathias_copeman"`, for PR only. |
 | `kij_overrides` | A list of pairs set by hand: `[{ a = "methane", b = "ethane", k = 0.01 }]`. |
+
+Or in format 4 a γ–φ fluid (M6's D12), whose liquid's fugacity is
+xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ times the Poynting correction, and whose vapour is the ideal
+gas or an equation of state ([design.md](design.md#the-γφ-liquid)):
+
+```toml
+[model]
+liquid = "NRTL"
+vapour = "PR"
+henry = ["carbon dioxide"]
+
+[[model.pairs]]
+a = "water"
+b = "methanol"
+tau_ab = "3317.08 J/mol / (R*T)"
+tau_ba = "-790.97 J/mol / (R*T)"
+alpha = "0.3"
+```
+
+| Key | |
+|---|---|
+| `liquid` | Required: `"Wilson"`, `"NRTL"`, `"UNIQUAC"`, `"UNIFAC"`, `"UNIFAC-LLE"` or `"UNIFAC-Dortmund"`. The binary models take ChemSep's banks, each pair's first listing; UNIFAC each compound's groups from its component file. |
+| `vapour` | `"ideal gas"` by default, or an equation, `"PR"` and so on. |
+| `kij` | For a cubic vapour: `true` by default, ChemSep's bank for its equation. |
+| `poynting` | `true` by default: the Poynting correction, each solvent's liquid volume from its density correlation. |
+| `henry` | Henry's-law solutes, by name, beyond those taken as solutes anyway: a gas with Henry's constants in a solvent present whose Tc is below every solvent's vapour-pressure range, such as hydrogen in water. In water, a gas IAPWS covers takes IAPWS's constant (G7-04), and the rest ChemSep's `henrys_law.ipd`. |
+| `missing` | `"refuse"` by default: a pair of solvents the bank doesn't list is refused, by name. `"ideal"` gives it no energy of interaction, an ideal pair for NRTL and Wilson and no residual interaction for UNIQUAC, and the report warns of it. |
+| `pairs` | `[[model.pairs]]`: a binary model's pairs, each in place of the bank's (below). |
+
+Each `[[model.pairs]]` is a pair of solvents, `a` and `b`, and the model's
+parameters for it, each an expression in T that comes out a pure number,
+with units, the SI's constants (`R`) and `T` ([Reactions](#reactions-format-2)
+has the language):
+
+| Model | Keys |
+|---|---|
+| NRTL | `tau_ab`, `tau_ba`, `alpha`, all required |
+| UNIQUAC | `tau_ab`, `tau_ba` |
+| Wilson | `lambda_ab`, `lambda_ba` |
+
+`tau_ab` is a's with b: NRTL's τ_ab in G_ab = exp(−α τ_ab), UNIQUAC's τ_ab,
+Wilson's Λ_ab. UNIFAC takes none, its parameters being its groups'. A bank's
+pair is written in the same language in the report: NRTL's methanol–water
+is `tau_ab = "792.8020 K / (1.98721*T)"` for water with methanol, A₁₂ in
+cal/mol over DECHEMA's R, which the bank was fitted with.
 
 ## `[solver]`
 
@@ -197,9 +246,21 @@ expander finds its isentropic outlet, then applies the efficiency.
 | Key | |
 |---|---|
 | `in` | One inlet, or a list. |
-| `vapour`, `liquid` | The two outlets. With one phase, the other is empty. |
+| `vapour`, `liquid` | The two outlets. With one phase, the other is empty. Two liquids both leave by `liquid`, as from a vessel without a boot, and the unit's report warns of it. |
 | `T` or `duty` | One of these. A duty of `"0 W"` is adiabatic. |
 | `P` | The drum's pressure, at most the lowest inlet's. By default, the lowest inlet's. |
+
+### `decanter`
+
+A three-phase separator (format 4, M6's D11): a flash drum with an outlet
+for each phase.
+
+| Key | |
+|---|---|
+| `in` | One inlet, or a list. |
+| `vapour`, `light`, `heavy` | The three outlets: the vapour, the lighter liquid and the denser, by mass density. Any of them may be empty. A single liquid leaves by `light`. |
+| `T` or `duty` | One of these. A duty of `"0 W"` is adiabatic. |
+| `P` | Its pressure, at most the lowest inlet's. By default, the lowest inlet's. |
 
 ### `component_separator`
 
@@ -214,7 +275,9 @@ expander finds its isentropic outlet, then applies the efficiency.
 
 Five unit types run a file's reactions (M9, D10), each with one inlet `in`
 and one outlet `out`, its outlet a flash at its state, and its balance
-checked on its elements, which is what a reaction conserves.
+checked on its elements, which is what a reaction conserves. A reactor
+works in one phase, by an equation of state: on a γ–φ fluid it's refused,
+saying so, and an outlet that would split is refused too (M6's D11).
 [testdata/flowsheets/reformer.toml](../testdata/flowsheets/reformer.toml)
 is a whole file: a steam reformer as a packed bed, on Xu and Froment's
 kinetics.
@@ -544,7 +607,8 @@ constraint at once.
 A fit finds a file's constants that best match measured data, with each
 constant's standard error and 95% interval (M8's D14, D15). It's in a
 format-3 file with the reactions whose constants it fits, the `[model]`
-whose kᵢⱼ it fits, or both; a flowsheet file's fits read too.
+whose kᵢⱼ it fits, or both, or in format 4 with the activity model whose
+pairs it fits (M6's D16); a flowsheet file's fits read too.
 `reflux fit file.toml [NAME]` runs it ([report-format.md](report-format.md)).
 
 ```toml
@@ -562,8 +626,8 @@ weights = { P = "0.5 %", "y[ethane]" = "0.003" }
 | Key | |
 |---|---|
 | `data` | Required. A CSV file, beside this one unless its path is absolute (below). |
-| `parameters` | Required. What the fit varies, all of one kind. A reaction's named constant (`k1`, the rate constant of the first reaction, or the law's own `k_name`; a site term's constant by its `name`; a fitted K, `K1` or its own name) by its part: `NAME.A` and `NAME.Ea` of an Arrhenius constant, `NAME.A` and `NAME.dH` of a van 't Hoff one, `NAME` of a number with its unit. Or a pair's kᵢⱼ, `kij[a, b]`, which needs a `[model]`. |
-| `start` | Where to start a parameter, by name, a number with its unit; the file's value if not given. |
+| `parameters` | Required. What the fit varies, all of one kind. A reaction's named constant (`k1`, the rate constant of the first reaction, or the law's own `k_name`; a site term's constant by its `name`; a fitted K, `K1` or its own name) by its part: `NAME.A` and `NAME.Ea` of an Arrhenius constant, `NAME.A` and `NAME.dH` of a van 't Hoff one, `NAME` of a number with its unit. Or a pair's kᵢⱼ, `kij[a, b]`, which needs a `[model]` with an equation. Or an activity model's pair: `A[a, b]`, a's energy with b in J/mol, NRTL's τ_ab = A/RT or UNIQUAC's τ_ab = exp(−A/RT), and `alpha[a, b]`, NRTL's α, which need a `[model]` with `liquid = "NRTL"` or `"UNIQUAC"`. |
+| `start` | Where to start a parameter, by name, a number with its unit; the file's value if not given. A pair's energy starts at the model's τ at 298.15 K, as A = τRT (NRTL) or −RT ln τ (UNIQUAC): a bank's A₁₂ in cal/mol over DECHEMA's R is that at any T. |
 | `weights` | Each measured column's error: `"5 %"` of each measurement, or a number with the column's unit. A rate fit's columns are unweighted (an error of 1 in SI) where none is given; a kᵢⱼ fit needs P's and each y's, since they're of different kinds. |
 
 **Rate data** have a row for each state: `T [K]` and `P [bar]` (any unit of
@@ -576,7 +640,11 @@ mean T, and reported back in the file's own form.
 
 **VLE data** have a row for each bubble point: `T`, `P`, `x[component]`
 for every component of the liquid but one, which makes up the rest, and
-`y[component]` for each measured vapour fraction.
+`y[component]` for each measured vapour fraction. A fit of an activity
+model's pairs is written back as the pairs' `[[model.pairs]]` tables, each
+fitted energy as `"A J/mol / (R*T)"` (UNIQUAC's in an `exp`), the pair's
+other parameters as they were. Data are worth giving the point test for
+Gibbs–Duhem consistency first (`fit.point_test`, M6 step 10).
 
 A fit that can't be made says why: data it can't read, a parameter the data
 don't determine (an Arrhenius constant's A and Eₐ from data at one T), or a

@@ -433,6 +433,24 @@ fn test_a_given_drop() {
 	}
 }
 
+// A reactor works in one phase, by an equation of state (M6's D11): on a
+// γ–φ fluid, carbon dioxide and hydrogen over methanol and water, it's
+// refused, saying why, as each of the five checks its inlet the same way.
+fn test_a_gamma_phi_fluid_is_refused() {
+	cas := ['124-38-9', '1333-74-0', '67-56-1', '7732-18-5']
+	ms, _, mrs := setup(cas, ['CO2 + 3 H2 = CH3OH + H2O'])
+	gp := db.gamma_phi(cas, henry: ['124-38-9'])!.fluid
+	c := new_conversion_reactor('conv',
+		species: ms
+		steps:   [Conversion{ reaction: mrs[0], key: 0, conversion: 0.5 }]
+		t:       400
+	)!
+	mut why := ''
+	c.calculate(gp, [feed(gp, [1.0, 3, 0.5, 0.5], 330, 50e5)]) or { why = err.msg() }
+	assert why.contains('a reactor has one phase, by an equation of state'), why
+	assert why.contains('F(T, V, n)'), why
+}
+
 // What a reactor refuses: an integration whose T and the energy balance's
 // disagree (a rate that doesn't fall with T, cooling ethane past where it's
 // a gas); an outlet that would split into two phases (methanol and water
@@ -453,7 +471,7 @@ fn test_refused() {
 	)!
 	why = ''
 	c.calculate(mfl, [feed(mfl, [1.0, 3, 0, 0], 500, 50e5)]) or { why = err.msg() }
-	assert why.contains('would split into two phases'), why
+	assert why.contains('would split into 2 phases'), why
 	gs, gfl, grs := setup(['74-82-8', '7732-18-5', '1333-74-0', '630-08-0', '124-38-9'],
 		['CH4 + H2O = CO + 3 H2', 'CO + H2O = CO2 + H2', 'CH4 + 2 H2O = CO2 + 4 H2'])
 	for bad in [

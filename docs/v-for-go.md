@@ -1085,6 +1085,15 @@ filled from a 4-byte NumPy buffer corrupted the heap
 ([docs/spike-python-ffi.md](spike-python-ffi.md)). Go programmers who've
 used cgo know this as `C.int` versus `int`.
 
+**Gotcha: an array has `map`, `filter`, `any` and `all`, but no `reduce`.**
+`xs.map(math.abs(it)).reduce(math.max, 0.0)` is "unknown function: reduce".
+vlib's `arrays` module has them as functions, `arrays.reduce(xs, fn (acc f64,
+x f64) f64 {...})!`, a Result for an empty array, and `arrays.fold(xs, 0.0,
+fn ...)`, as a probe showed, but each takes a closure, which this code keeps
+out of anything run often (§10). A loop is what
+[components/published_test.v](../components/published_test.v) uses, as Go
+would.
+
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
 

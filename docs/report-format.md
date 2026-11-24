@@ -1,13 +1,14 @@
 # The report format
 
 `reflux solve plant.toml --json results.json` writes a flowsheet's results as
-JSON, and `--csv streams.csv` its streams as CSV. This is format 3 of the
+JSON, and `--csv streams.csv` its streams as CSV. This is format 4 of the
 JSON, and of the CSV, which is format 1's. It changes only with a new
 `format` number, so that what reads a report can rely on it. Format 2 (M9)
 adds a reactor's profile to its unit, a unit's warnings, an element balance
 where something reacts, and the failure `"reaction_failed"`. Format 3 (M8)
 adds the file's specs, each block's specs and their residuals, and the
-failure `"spec_not_met"`.
+failure `"spec_not_met"`. Format 4 (M6) adds `model`, how the fluid was
+built, and a phase `"liquid2"`, so that a stream may have three phases.
 
 - **Every number is SI:** K, Pa, mol/s, kg/s, m³/s, J/mol, J/(mol·K), m³/mol
   and W.
@@ -36,12 +37,13 @@ table = pd.read_csv("streams.csv", index_col="stream")
 
 | Key | |
 |---|---|
-| `format` | 3. |
+| `format` | 4. |
 | `reflux` | The version of reflux that wrote it. |
 | `file` | The flowsheet file, as the command line named it. |
 | `status` | `"solved"` or `"failed"`. |
 | `error` | Why it failed, or `null`. |
 | `components` | The components. Empty if the file didn't load. |
+| `model` | How the fluid was built, or `null` if the file didn't load (format 4). |
 | `streams` | Every stream: the feeds, then each unit's outlets, unit by unit. Empty on a failure. |
 | `units` | Every unit, in the file's order. Empty on a failure. |
 | `solver` | What it was solved with, or `null` if the file didn't load. |
@@ -59,6 +61,31 @@ table = pd.read_csv("streams.csv", index_col="stream")
 | `compound` | As the database does. |
 | `molar_mass` | kg/mol. |
 
+### `model`
+
+How the file's fluid was built (M6's D13): an equation of state, or a γ–φ
+fluid, with each pair's parameters and where they came from.
+
+| Key | |
+|---|---|
+| `equation` | The equation of state, `"PR"` and so on, or `""` for a γ–φ fluid. |
+| `liquid` | A γ–φ fluid's activity model, `"NRTL"` and so on, or `""`. |
+| `vapour` | A γ–φ fluid's vapour, `"ideal gas"` or an equation, or `""`. |
+| `poynting` | Whether a γ–φ liquid has the Poynting correction; `false` for an equation of state. |
+| `solutes` | A γ–φ fluid's Henry's-law solutes, by the file's names. |
+| `pairs` | Each pair of components the model has parameters for, in the file's order: an equation of state's kᵢⱼ, every pair; a binary activity model's, every pair of solvents. UNIFAC has none, its parameters being its groups'. |
+| `notes` | Where other values came from: an α not the equation's own, a vapour pressure from its Antoine record, a gas's Henry's constant from IAPWS. |
+| `warnings` | What the answers should be read with: a pair with no parameters, made ideal by `missing = "ideal"`. `reflux solve` prints them. |
+
+### `model.pairs[]`
+
+| Key | |
+|---|---|
+| `a` | The pair's first component, by the file's name: its parameters with `b` come first. |
+| `b` | The second. |
+| `parameters` | Each as `{ name, text }`: `kij`, a number; `tau_ab`, `tau_ba` and NRTL's `alpha`, or Wilson's `lambda_ab` and `lambda_ba`, each an expression in T as the file would write it. A bank's is in its own form: NRTL's `"792.8020 K / (1.98721*T)"` is A₁₂ in cal/mol over DECHEMA's R. |
+| `source` | Where they came from: a bank's line and its comment, such as `"nrtl.ipd line 180: Methanol/Water p61 1/1a"`, the DECHEMA volume and page; `"the file"`; `"none listed: 0"` for a kᵢⱼ; or `"none listed: an ideal pair"`, `"none listed: no residual interaction"` for UNIQUAC. |
+
 ### `streams[]`
 
 | Key | |
@@ -68,7 +95,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 | `to` | The unit it enters, or `null` for a product. |
 | `T` | K. |
 | `P` | Pa. |
-| `vapour_fraction` | The share of the moles in the less dense phase, or with one phase, 1 if it's labelled vapour and 0 if liquid. |
+| `vapour_fraction` | The vapour's share of the moles, 0 with no vapour: a liquid, or two (M6's D9). |
 | `molar_flow` | mol/s. |
 | `mass_flow` | kg/s. |
 | `volume_flow` | m³/s, at the stream's T and P. |
@@ -89,7 +116,7 @@ composition it was given. So it has fractions and a phase though its flows are
 
 | Key | |
 |---|---|
-| `phase` | `"vapour"`, `"liquid"` or `"liquid2"`, as the flash labels it (M6's D9): by the phase identification parameter for an equation of state, at most one vapour, and of two liquids the denser `"liquid2"`. A stream may have up to three phases. Report format 4 (M6 step 9) makes this its own. |
+| `phase` | `"vapour"`, `"liquid"` or `"liquid2"`, as the flash labels it (M6's D9): by the phase identification parameter for an equation of state, at most one vapour, and of two liquids the denser `"liquid2"`. A stream may have up to three phases. Report format 4 (M6 step 9) makes `"liquid2"` its own. |
 | `fraction` | Its share of the stream's moles. |
 | `mole_fractions` | |
 | `H` | J/mol of the phase. |
@@ -107,7 +134,7 @@ composition it was given. So it has fractions and a phase though its flows are
 | `energy` | Its duty or work. |
 | `balance` | How far it closes its balances, on the inlets it was calculated from. Where an inlet is a tear, those are a pass behind the stream in `streams`, by no more than `tol`. |
 | `profile` | A PFR's state along it, or `null` for a unit without one. |
-| `warnings` | What its results should be read with, though they stand, each a sentence: a conversion reactor's outlet past equilibrium, say, with its Q/K. Empty for most units. The text report lists them under the unit table. |
+| `warnings` | What its results should be read with, though they stand, each a sentence: a conversion reactor's outlet past equilibrium, say, with its Q/K, or a flash drum's liquid outlet of two liquids. Empty for most units. The text report lists them under the unit table. |
 
 ### `units[].energy[]`
 
@@ -197,7 +224,8 @@ has it.
 ## What it prints
 
 `reflux solve` prints how the flowsheet was solved, each spec's value, a
-stream table, and each unit's duty and work, in K, bar, mol/s, kg/s, kJ/mol
+γ–φ fluid's model and its warnings, a stream table, and each unit's duty and
+work, in K, bar, mol/s, kg/s, kJ/mol
 and kW, to 5 significant figures. `--trace` adds every pass of every loop,
 and each spec's residual at every evaluation. These are for reading, and
 their layout may change. The JSON is for programs.
@@ -369,7 +397,7 @@ mean T is reported back as A and Eₐ.
 | `status` | `"fitted"`; or `"failed"`, with `reason`, or `error` if the file didn't load. |
 | `error` | Why the file didn't load, as the solve's `error`, or `null`. |
 | `reason` | Why there's no fit, or `""`. |
-| `kind` | `"rates"`, rate constants to rates, or `"vle"`, kᵢⱼ to bubble points. |
+| `kind` | `"rates"`, rate constants to rates, or `"vle"`, kᵢⱼ or an activity model's pairs to bubble points. |
 | `data` | The data's file, as the fit names it. |
 | `parameters` | Each parameter, as below, in the fit's order. |
 | `correlation` | The parameters' correlations, a row each, in the file's form. |

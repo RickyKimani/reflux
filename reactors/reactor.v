@@ -166,11 +166,11 @@ fn solve_t(unit string, o Outlet, target f64, guess f64, first f64) !flowsheet.S
 	return o.outlet_at(r.x)!
 }
 
-// one_phase refuses an outlet that would split: a reactor here works in one
-// phase, a second being M6's.
+// one_phase refuses an outlet that would split: a reactor works in one
+// phase (M6's D11), more needing kinetics on each phase's activities.
 fn one_phase(unit string, s flowsheet.Stream) ! {
 	if s.result.phases.len > 1 {
-		return failed(unit, 'its outlet would split into two phases at ${s.t} K and ${s.p} Pa, which needs M6')
+		return failed(unit, "its outlet would split into ${s.result.phases.len} phases at ${s.t} K and ${s.p} Pa, and a reactor works in one (M6's D11)")
 	}
 }
 

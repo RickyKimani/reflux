@@ -1,5 +1,5 @@
 {
-  "format": 3,
+  "format": 4,
   "reflux": "0.4.0",
   "file": "testdata/flowsheets/no_recycle.toml",
   "status": "solved",
@@ -26,6 +26,83 @@
       "molar_mass": 0.0581222
     }
   ],
+  "model": {
+    "equation": "SRK",
+    "liquid": "",
+    "vapour": "",
+    "poynting": false,
+    "solutes": [],
+    "pairs": [
+      {
+        "a": "methane",
+        "b": "ethane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "-0.0089"
+          }
+        ],
+        "source": "srk.ipd line 115: Methane/Ethane T=130.37-199.93K p385"
+      },
+      {
+        "a": "methane",
+        "b": "propane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.005"
+          }
+        ],
+        "source": "srk.ipd line 130: Methane/Propane T=130.37-213.71K p413"
+      },
+      {
+        "a": "methane",
+        "b": "n-butane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0215"
+          }
+        ],
+        "source": "srk.ipd line 134: Methane/n-Butane T=294-394K p422"
+      },
+      {
+        "a": "ethane",
+        "b": "propane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "-0.0022"
+          }
+        ],
+        "source": "srk.ipd line 183: Ethane/Propane p539"
+      },
+      {
+        "a": "ethane",
+        "b": "n-butane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0052"
+          }
+        ],
+        "source": "srk.ipd line 185: Ethane/n-Butane T=229-361K P=6.9-57.9bar p544"
+      },
+      {
+        "a": "propane",
+        "b": "n-butane",
+        "parameters": [
+          {
+            "name": "kij",
+            "text": "0.0"
+          }
+        ],
+        "source": "srk.ipd line 252: Propane/n-Butane p666"
+      }
+    ],
+    "notes": [],
+    "warnings": []
+  },
   "streams": [
     {
       "name": "well",

@@ -1989,9 +1989,14 @@ each unit balances as
   saturated at the flash's T and P. That needs no second flash: its result is
   the first's, with the phase's composition as z and the other phase at no
   moles, the form a bubble or dew point's answer has. A single phase leaves by
-  its own outlet, and the other outlet is empty. In a split, the "vapour" is
-  the less dense phase by mass (M3's D6), so a liquid–liquid split goes out
-  the same way.
+  its own outlet, and the other outlet is empty. A liquid–liquid split, D9's
+  liquid and liquid2, leaves by the liquid port, and the drum's outcome warns
+  that its liquid has two phases.
+- **Decanter** (M6's D11). A flash drum with an outlet for each phase: the
+  same blend and flash, and each phase k by its label, the vapour by vapour,
+  liquid by light and liquid2 by heavy, each nᵢₖ = F βₖ xᵢₖ as above. A
+  label the flash didn't give has an empty outlet, so a single liquid, D9's
+  liquid, leaves by light.
 - **Component separator.** A fraction fᵢ of each component goes to the first
   outlet and the rest to the second, each flashed at the given T and P. It's
   a black box, so Q is whatever closes the balance, and its pressure can rise.
@@ -2463,6 +2468,45 @@ measured P and y, each over its error. J is by central differences,
 kᵢⱼ ± 10⁻⁶, good to about 10⁻⁷: kᵢⱼ is of order 0.01 and a bubble point's
 rounding about 10⁻¹².
 
+**An activity model's pairs** (M6's D16) come from bubble points the same
+way, on the γ–φ fluid with the fitted pairs in place of its own. A pair's
+energy Aᵢⱼ, J/mol, is NRTL's τᵢⱼ = Aᵢⱼ/RT or UNIQUAC's τᵢⱼ = exp(−Aᵢⱼ/RT), R
+the SI's exact value, and NRTL's α a number; each evaluation builds the
+model again from those expressions. Its start is the model's own pair at
+T₀ = 298.15 K,
+
+    A = τ(T₀)·R·T₀ (NRTL),   A = −R·T₀·ln τ(T₀) (UNIQUAC),   α = α(T₀),
+
+which a bank's pair, A₁₂ cal/mol over DECHEMA's R, gives at any T. J is by
+central differences of an energy ± 10⁻⁴·max(|A|, 2500 J/mol) and α ± 10⁻⁴:
+the bubble points' rounding, 10⁻¹², over the step is then about 10⁻⁸ of J,
+and the difference's truncation about as much, which moves the answer by
+as little of its standard error and stops no convergence. With steps of
+10⁻⁶ the rounding, 10⁻⁶ of J, kept NRTL's α and both energies from the
+gradient test. The pairs fitted are written back as
+`[[model.pairs]]`, each fitted energy as `"A J/mol / (R*T)"` (UNIQUAC's in
+an `exp`).
+
+**The point test** (M6's criterion 8) checks a binary's VLE data for
+Gibbs–Duhem consistency, as Fredenslund, Gmehling and Rasmussen give Van
+Ness, Byer and Gibbs' test (*Vapor–Liquid Equilibria Using UNIFAC*, 1977).
+Gᴱ is a Legendre series, fitted to the bubble pressures alone by Barker's
+method, the vapour the ideal gas:
+
+    g = Gᴱ/RT = x₁x₂ Σₖ aₖ Lₖ(z),   z = x₁ − x₂,   k = 0 … 3,
+    ln γ₁ = g + x₂ g′,   ln γ₂ = g − x₁ g′,   g′ = dg/dx₁,
+    g′ = Σₖ aₖ [(x₂ − x₁) Lₖ(z) + 2x₁x₂ Lₖ′(z)],
+    P_model = x₁γ₁P₁ˢᵃᵗ + x₂γ₂P₂ˢᵃᵗ,   rᵢ = (P_model − P)/P,
+
+Lₖ by Bonnet's recursion, kLₖ = (2k − 1)zLₖ₋₁ − (k − 1)Lₖ₋₂, and
+Lₖ′ = Lₖ₋₂′ + (2k − 1)Lₖ₋₁, each point at its own T for isobaric data, Gᴱ's
+T-dependence over the set neglected. Then y₁ = x₁γ₁P₁ˢᵃᵗ/P_model, and the
+data are consistent where the mean |y₁ − y₁,measured| ≤ 0.01. ln γ is
+linear in the aₖ, so J is exact. Barker's fit can have two minima where the
+data cover part of the range, so it starts from a = 0 and from the Gᴱ the
+measured vapour implies, gᵢ = x₁ ln(y₁P/x₁P₁ˢᵃᵗ) + x₂ ln(y₂P/x₂P₂ˢᵃᵗ)
+fitted linearly, and keeps the lower Σr².
+
 ## Activity models
 
 M6's liquid models ([activity](../activity/model.v), D2 in
@@ -2740,6 +2784,12 @@ molar masses Mᵢ:
 | mass fractions | wᵢ = zᵢMᵢ / Σⱼ zⱼMⱼ |
 | volume flow | F·v, at the stream's T and P |
 | each phase | its own state, which is one mole of it: x, h, s and v |
+
+Report format 4 (M6's D13) adds how the fluid was built: an equation of
+state's kᵢⱼ for every pair, or a γ–φ fluid's activity model, vapour and
+solutes, each binary pair's parameters as the expressions the model
+evaluates, and each pair's source, a bank's line with its DECHEMA reference,
+the file, or none listed.
 
 A unit's balance is the one `solve` checks (D8), on the inlets it was
 calculated from: its worst component against its flow F, and its energy

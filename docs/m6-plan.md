@@ -23,7 +23,11 @@ together, and step 1 amends D7 again, approved on 2026-11-20. Five defects
 found in them were corrected on 2026-11-22 (below step 3), and D7's
 amendment for two of those was approved that day, and `eval`'s answers
 made finite or refused. Step 4, the seam, is done, and amends D3, approved
-on 2026-11-23. Step 5 is next.
+on 2026-11-23. Steps 5 and 6 are done, and amend D4, D6 and criterion 3,
+approved on 2026-11-23; Henry's constants by IAPWS amend D6 again, approved
+on 2026-11-24. Steps 7 and 8 are done, amending D8 and settling D9 and
+D14, approved on 2026-11-24. Steps 9 to 11 are done, built together, and
+amend D12, approved on 2026-11-24. Steps 12 and 13 are next.
 
 ## Goal
 
@@ -276,7 +280,7 @@ All checked by tests in CI, as before.
 | D9 | Labels | Phases are ordered by increasing mass density, and each is labelled vapour, liquid or liquid2:<br>- **a γ–φ phase** by the model that made it;<br>- **an equation of state's phase** by Π, with M9's four-covolume rule;<br>- **at most one vapour:** of phases Π calls vapour-like, the least dense;<br>- **phases Π calls liquid-like** are liquids, the denser being liquid2.<br><br>A two-phase split Π calls all liquid-like is then a liquid–liquid split, where M3's D6 called its lighter phase the vapour. Step 7 measures how many of M3's 10,000 sweep splits change label, near critical points, for the owner to judge.<br><br>**Settled in step 7,** approved on 2026-11-24, as written. Of the sweep's 3,344 two-phase splits by PR, Π calls both phases liquid-like in 2,289, liquid–liquid splits labelled vapour and liquid until now; 1,055 are vapour–liquid as before; none has both phases vapour-like or the labels inverted. They aren't near critical points: the liquids' density gap runs from 0.04% to 98% of the denser's, median 27% (`spike/labels`). None of the golden flowsheets' 34 two-phase streams is renamed. Some are near critical points after all: M10a's exit script maps a natural gas's phases, and 125 of its 6,480 points, near its critical point at 225 to 228 K and 73 to 77 bar, are splits whose dense vapour Π calls liquid-like, now liquid and liquid2, which the C API refuses (D14). | With three phases density alone can't name them, and a liquid–liquid split by PR is mislabelled today. Π is what labels a single phase already. |
 | D10 | Which flashes take three phases | PT, PH and PS.<br><br>The vapour-fraction flashes (bubble and dew points) and TV and UV stay two-phase. A bubble point whose liquid would split is `.more_phases`, saying so. | PT, PH and PS are what units call. A heterogeneous bubble point is M7's, if its decanters need one. |
 | D11 | Units | **A `decanter`:** an inlet and three outlets, `vapour`, `light` and `heavy`, any of them possibly empty, at a T or a duty and a P, as the drum is.<br><br>**The `flash_drum`** sends both liquids out of its liquid port, as a vessel without a boot does, and its report says that liquid has two phases.<br><br>**Reactors** stay one-phase on a Helmholtz model (M9). A γ–φ fluid is refused there, saying why. | A two-liquid feed to a drum isn't an error. A reactor on γ–φ needs liquid-phase kinetics on activities, a later piece. |
-| D12 | The file | **Format 4.** `[model]` has:<br>- `equation` for an equation-of-state fluid, as before;<br>- or `liquid` for γ–φ: `"Wilson"`, `"NRTL"`, `"UNIQUAC"`, `"UNIFAC"`, `"UNIFAC-LLE"` or `"UNIFAC-Dortmund"`;<br>- `vapour`: `"ideal gas"` by default, or an equation;<br>- `poynting`: true by default;<br>- `henry`: solutes beyond those above their Tc;<br>- `missing`: `"refuse"` by default, or `"ideal"`.<br><br>`[[model.pairs]]`, `{ a, b, tau_ab, tau_ba, alpha }`, overrides a bank, each value an expression with units.<br><br>Formats 1 to 3 read as before. | A new model and a new unit are a new format, by the CHANGELOG's rules. |
+| D12 | The file | **Format 4.** `[model]` has:<br>- `equation` for an equation-of-state fluid, as before;<br>- or `liquid` for γ–φ: `"Wilson"`, `"NRTL"`, `"UNIQUAC"`, `"UNIFAC"`, `"UNIFAC-LLE"` or `"UNIFAC-Dortmund"`;<br>- `vapour`: `"ideal gas"` by default, or an equation;<br>- `poynting`: true by default;<br>- `henry`: solutes beyond those above their Tc;<br>- `missing`: `"refuse"` by default, or `"ideal"`.<br><br>`[[model.pairs]]`, `{ a, b, tau_ab, tau_ba, alpha }`, overrides a bank, each value an expression with units.<br><br>Formats 1 to 3 read as before.<br><br>**Amended in step 9,** approved on 2026-11-24: Wilson's pairs are `{ a, b, lambda_ab, lambda_ba }`, its Λ, since Wilson's parameter isn't a τ. NRTL's are `tau_ab`, `tau_ba` and `alpha`, all required, and UNIQUAC's `tau_ab` and `tau_ba`; UNIFAC takes none. | A new model and a new unit are a new format, by the CHANGELOG's rules. |
 | D13 | Reports | **Report format 4:**<br>- a stream may have three phases, `phase` being `"vapour"`, `"liquid"` or `"liquid2"`;<br>- `model` gives each pair's parameters with their source, and any warnings;<br>- the decanter's outlets.<br><br>The fit report is unchanged. | The report says what was used, as it says which kᵢⱼ were. |
 | D14 | The C API and Python | Unchanged in M6: cubic fluids, two phases. A three-phase point stays `REFLUX_POINT_MORE_PHASES`.<br><br>γ–φ fluids and three phases from Python come with M10b, as ABI 2.<br><br>**Settled in step 7,** approved on 2026-11-24: an answer with two liquids, which D9 now names liquid and liquid2, has no place in the layout either, so it is `REFLUX_POINT_MORE_PHASES` too, with its reason, until M10b. | The layout (liquid 0, vapour 1) has no room for a second liquid. Changing it is an ABI break, which belongs with M10b's other changes. |
 | D15 | References and tests | <br>- `thermo` 0.6.1: γ and its derivatives, `GibbsExcessLiquid` on the same basis, `FlashVL` and `FlashVLN`;<br>- mpmath: NRTL's and UNIQUAC's closed forms, and Clapeyron;<br>- brute force: a tangent-plane scan around every three-phase answer;<br>- the ThermoML archive and, where it has nothing, papers' tables (criterion 8, as amended): experimental data, each set's Gibbs–Duhem consistency checked;<br>- planted mistakes, as every step has had. | Independent sources, as before. `thermo` is the one other open implementation of all of it, so a second check of each claim is from scratch. |
@@ -1393,18 +1397,252 @@ The four pass, run alone on the same library. The two V tests given new
 checks after the full runs pass under tcc, and `three_phase_test.v` under
 gcc too.
 
-### 9. Format 4, the decanter and report format 4
+### 9. Format 4, the decanter and report format 4 — done, with D12 amended
 - D11, D12, D13: `[model]`'s new keys, `[[model.pairs]]`, the decanter, the
   drum's two liquids, the reactors' refusal, and report format 4.
 - `reflux solve` on a flowsheet with NRTL and a decanter (criterion 10).
 
-### 10. Published data
+Steps 9 to 11 were built together at the owner's word, with one tcc check
+for the three (the bundle rule of 2026-11-24).
+
+**D12 is amended** (above), approved on 2026-11-24: Wilson's pairs
+are `lambda_ab` and `lambda_ba`, its Λ, not `tau_ab` and `tau_ba`; NRTL's
+and UNIQUAC's are τ as written.
+
+**Built:**
+- **[flowsheet/file.v](../flowsheet/file.v):** format 4. `[model]` is an
+  equation of state as before, or a γ–φ fluid by `liquid`, with `vapour`,
+  `kij` (a cubic vapour's), `poynting`, `henry`, `missing` and
+  `[[model.pairs]]`, each pair's parameters expressions in T with units,
+  checked at their own line (`activity.plain`). Format 3 and before refuse
+  `liquid`; format 4 refuses a γ–φ key beside `equation`, and either model
+  missing. `read_model` returns how the fluid was built (`Modelled`).
+- **[components/activity.v](../components/activity.v),
+  [gamma_phi.v](../components/gamma_phi.v):** `PairOverride` and
+  `PairSource.file`: a caller's pair in place of the bank's, turned to the
+  model's order, refused given twice, with the wrong count, naming a
+  Henry's-law solute, or for UNIFAC.
+- **[flowsheet/decanter.v](../flowsheet/decanter.v):** the decanter, a flash
+  drum's specification with outlets `vapour`, `light` and `heavy`, each
+  phase by its label: vapour, liquid, liquid2. A single liquid, D9's liquid,
+  leaves by `light`; D11 doesn't say, and the labels give no other answer.
+  It needs format 4. The flash drum's outcome warns when its liquid outlet
+  has two liquids.
+- **Report format 4 ([flowsheet/report.v](../flowsheet/report.v)):** `model`,
+  how the fluid was built: an equation of state's every kᵢⱼ with its source
+  (a bank's line, the file, or none listed: 0), and an α not the equation's
+  own; or a γ–φ fluid's activity model, vapour, Poynting and solutes, each
+  solvent pair's parameters as the expressions the model evaluates, its
+  source (`nrtl.ipd line 180: Methanol/Water p61 1/1a`, the file, or none
+  listed), and a warning for each pair given none. `reflux solve` prints a
+  γ–φ fluid's model and its warnings.
+- **Reactors and equilibrium** say they work in one phase (M6's D11, M9's
+  D9), where they said "which needs M6"; a reactor on a γ–φ fluid was
+  refused already, in `one_inlet`, and now has a test.
+- **[testdata/flowsheets/decanter.toml](../testdata/flowsheets/decanter.toml):**
+  water, 1-butanol and methanol by NRTL, heated to 364.2 K at 1 atm, where
+  it boils into a vapour over two liquids (as `m6_three_phase.json` has
+  it), and an adiabatic decanter: its golden report gives three phases and
+  each pair's source (criterion 10).
+
+**Tests:** `flowsheet/format4_test.v`, nine: the decanter's outlets the PT
+flash's phases to 1e-8, each out of its port, and the report's model; a
+decanter with no vapour, and with one liquid, out of light at the inlet's
+own flows; a drum's warning; a file's pair in place of the bank's, the
+bank's own numbers giving the same bits either way round, and the SI's form
+moving the answer; a missing pair refused, or ideal with its warning
+(UNIQUAC's "no residual interaction"); each model and vapour loading and
+solving, and an equation of state's ten kᵢⱼ with their sources; 27
+refusals, each at its line; a Henry's-law solute named, and a pair naming
+one refused, by the file and by the database's API; load, write, load.
+`reactors_test.v`: a γ–φ fluid refused by a reactor. The report's keys
+against report-format.md, now with `model` and `model.pairs[]`.
+
+**The golden reports** were all written again in report format 4: no number
+moved, only `format` (3 to 4) and `model` (checked: each JSON the same
+without those two keys). `decanter.json` is new. The golden test also
+holds each stream's phase labels and the model, and works out each phase's
+H again through the phase model, which a γ–φ fluid needs (it took a volume
+root before). For 0.5.0's CHANGELOG: `reference.json`, `every_unit.json`,
+`no_recycle.json`, `interlocking.json`, `saturated_loop.json`,
+`reactors/reformer.json` and `reactors/methanol.json` changed by name, and
+`decanter.json` added.
+
+### 10. Published data — done
 - The data sets from the ThermoML archive, each checked by the Van Ness
   point test, and every model's deviations recorded (criterion 8).
 
-### 11. Fitting NRTL and UNIQUAC
+**The archive has methanol–water after all.** Step 0 looked only at its
+files of two compounds. Papers on other systems check their stills on the
+binaries they're built from, and the archive holds those sets in the
+papers' own files: scanning every file with both compounds, of at most six,
+found five methanol–water sets and six ethanol–water at 101.3 kPa, T–x and
+y–x. So no paper's table was needed (criterion 8 as amended allows one).
+
+**Data** ([testdata/m6_published.json](../testdata/m6_published.json), from
+[tools/gen_m6_published.py](../tools/gen_m6_published.py)), every value as
+printed, with its paper's citation; none of these files gives an
+uncertainty:
+- methanol–water, 10 to 16 points a set, and ethanol–water, 7 to 21;
+- water–1-butanol's mutual solubilities at 303.15 and 313.15 K (two of
+  Gomis et al.'s papers), and its heteroazeotrope at 101.3 kPa, 365.85 K,
+  liquids of 0.021 and 0.362 butanol under a vapour of 0.246;
+- water + 1-butanol + p-xylene's 11 tie lines at 313.15 K (Gomis et al.,
+  J. Chem. Thermodyn. 79 (2014) 242).
+
+**The point test** ([fit/consistency.v](../fit/consistency.v),
+`fit.point_test`, design.md's "Fitting"): Fredenslund, Gmehling and
+Rasmussen's form of Van Ness, Byer and Gibbs' test, a four-term Legendre
+Gᴱ fitted to the pressures by Barker's method, then the mean |Δy| against
+0.01. Against SciPy's, set by set: coefficients to 6.1e-9 of their scale,
+|Δy| to 3.9e-10 (V's gradient test is 1e-10), and the same verdict. Nine of
+the eleven sets are consistent; methanol–water's
+10.1016/j.jct.2019.01.004 (mean |Δy| 0.011) and ethanol–water's
+10.1021/je3007138 (0.022) aren't, and aren't used. The test is for VLE;
+the LLE and VLLE sets have none.
+
+**Found:** Barker's fit has two minima on a set that covers part of the
+range: ethanol–water's 10.1016/j.fluid.2014.07.022, x₁ from 0.68 to 0.96
+alone, has Σr² 2.6e-6 at one (mean |Δy| 0.0025, consistent) and 6.6e-6 at
+the other (0.050, not), which SciPy from zero found while reflux found the
+lower. Both now start twice, from zero and from the Gᴱ the measured vapour
+implies, and keep the lower.
+
+**Deviations** (`components/published_test.v`, 74 numbers recorded, each
+rounded up to two figures, which can't grow), the vapour the ideal gas and
+Poynting on:
+
+| VLE at 101.3 kPa | mean \|ΔT\| | max \|ΔT\| | mean \|Δy\| | max \|Δy\| |
+|---|---|---|---|---|
+| methanol–water, NRTL | 0.38 K | 1.73 K | 0.0105 | 0.040 |
+| UNIQUAC | 0.41 | 1.93 | 0.0109 | 0.046 |
+| Wilson | 0.48 | 2.37 | 0.0128 | 0.056 |
+| UNIFAC | 0.42 | 1.73 | 0.0112 | 0.043 |
+| UNIFAC-Dortmund | 0.40 | 1.85 | 0.0106 | 0.045 |
+| ethanol–water, NRTL | 0.20 | 0.78 | 0.0043 | 0.025 |
+| UNIQUAC | 0.18 | 0.82 | 0.0044 | 0.023 |
+| Wilson | 0.16 | 0.67 | 0.0050 | 0.021 |
+| UNIFAC | 0.28 | 1.29 | 0.0070 | 0.033 |
+| UNIFAC-Dortmund | 0.25 | 0.54 | 0.0043 | 0.019 |
+
+| Water–1-butanol | LLE, max \|Δx\| | heteroazeotrope \|ΔT\| | organic \|Δx\| | aqueous \|Δx\| | vapour \|Δy\| |
+|---|---|---|---|---|---|
+| NRTL | 0.094 | 0.34 K | 0.050 | 0.0031 | 0.013 |
+| UNIQUAC | 0.117 | 0.18 | 0.174 | 0.0012 | 0.0064 |
+| UNIFAC | 0.016 | 0.39 | 0.088 | 0.010 | 0.0079 |
+| UNIFAC-LLE | 0.032 | 0.80 | 0.074 | 0.0096 | 0.020 |
+| UNIFAC-Dortmund | 0.146 | 0.10 | 0.174 | 0.0084 | 0.0001 |
+
+The tie lines of water, 1-butanol and p-xylene: mean |Δx| 0.012 by UNIFAC
+(max 0.065), 0.0073 by UNIFAC-LLE (0.033) and 0.039 by Dortmund's (0.146),
+each splitting all eleven. ChemSep LITE's banks pair neither water nor
+1-butanol with p-xylene, and pair 1-butanol only with water and methanol,
+so NRTL and UNIQUAC are refused there, saying so; the archive has no
+ternary LLE of water + methanol + 1-butanol or water + ethanol + ethyl
+acetate, the ternaries the banks cover.
+
+**Tests:** `components/published_test.v`, five: the point test against
+SciPy's; VLE, LLE, the heteroazeotrope (by bisection on T to 1e-8 K, two
+liquids below and a vapour above) and the tie lines, each model's
+deviations.
+
+### 11. Fitting NRTL and UNIQUAC — done
 - D16: M8's fit on a pair's NRTL or UNIQUAC parameters; against SciPy with
   `thermo`'s models (criterion 9).
+
+**Built:**
+- **[flowsheet/fits.v](../flowsheet/fits.v):** a fit's parameters may be an
+  activity model's pairs, `A[a, b]`, a's energy with b in J/mol, NRTL's
+  τ = A/RT or UNIQUAC's τ = exp(−A/RT) (R the SI's), and `alpha[a, b]`,
+  NRTL's α, in format 3 or 4. Each starts from the model's own pair at
+  298.15 K, A = τRT or −RT ln τ, which a bank's pair gives at any T, or
+  from the file's `start`. Refused: kᵢⱼ with them, α twice either way
+  round, α for UNIQUAC, either for UNIFAC or an equation of state, and a
+  pair naming a Henry's-law solute.
+- **[fit/vle.v](../fit/vle.v):** the bubble-point residuals on the γ–φ fluid
+  with the fitted pairs, the activity model built again from the
+  expressions at each evaluation; central differences of an energy by 1e-4
+  of itself or of 2500 J/mol, and α by 1e-4.
+- **[fit/report.v](../fit/report.v):** a fit of pairs writes them back as
+  `[[model.pairs]]`, each fitted energy `"A J/mol / (R*T)"` (UNIQUAC's in an
+  `exp`), the pair's other parameters as they were.
+- **Data** ([testdata/m6_fit/](../testdata/m6_fit), from
+  [tools/gen_m6_fits.py](../tools/gen_m6_fits.py)): methanol–water's
+  published bubble points (step 10's 10.1021/je200341c, 13 points), and
+  ethanol–water's drawn from thermo's NRTL and UNIQUAC at ChemSep's pair at
+  323.15, 343.15 and 363.15 K, with 0.5 % of P and 0.003 of y in seeded
+  noise.
+
+**Found:**
+- **The published set determines NRTL's two energies,** −413 ± 406 and
+  2639 ± 533 J/mol, **but not α besides** (0.20 ± 5.3), **nor UNIQUAC's
+  two** (correlated −1.0; no fit in 200 iterations). So the α fit and
+  UNIQUAC's are on the drawn ethanol–water data, more non-ideal and over
+  three T, where both are determined: α 0.297 ± 0.052 against the true
+  0.2937, UNIQUAC's 708 ± 43 and 482 ± 40 against 727 and 460.
+- **From zero energies and α 0.3, NRTL's fit finds α = −0.59,** s² 4.2
+  where the noise gives about 1, by SciPy's lm as by any; from the model's
+  own pair it finds the right one. The file starts it there, as a fit does
+  by default.
+- **Central differences of 1e-6 kept NRTL's α fit from the gradient test**
+  (the bubble points' rounding, 1e-12, over the step, about 1e-6 of J,
+  against a test at 1e-10), so the pairs step by 1e-4. A tolerance of
+  1e-14 on the bubble points, tried first, isn't needed with it.
+
+**Criterion 9** (`fit/pairs_test.v`): reflux's values and intervals agree
+with SciPy's to 1.5e-6 of their standard errors, and the errors to 4.0e-7,
+for all three fits, with the same Σr² to 1e-9 and t to 1e-12. A fitted
+pair written back loads as the file's, starts the fit where it ended, and
+comes back there. Also its starts, and what a fit of pairs refuses.
+
+**Planted mistakes** (the three steps): 48, in a scratch copy, one at a
+time. The first run caught 38; 9 survived and 1 didn't build. Each then got
+a test, had its code deleted, or is explained here, and a second run on the
+refreshed copy caught what the new tests should. In all, 44 caught and 1
+site deleted; 3 survive, explained.
+- **New tests:** a pair of the wrong count, refused by the database's API,
+  which the file can't give; a cubic vapour's kᵢⱼ, none with `kij = false`
+  and the bank's by default; an equation of state with no bank, every kᵢⱼ
+  "none listed: 0"; Mathias–Copeman's α, each a note in the model; and
+  NRTL's α fitted to the published methanol–water set, which the data don't
+  determine (0.20 ± 5.3) but the fit must still meet its test, which with
+  α stepped by 1e-6 it doesn't. Before the run, for survivors foreseen: a
+  Henry's-law solute named in a file and a pair naming one refused, UNIFAC
+  given pairs through the database's API, a decanter's one liquid at the
+  inlet's own flows, and a pair's start at 298.15 K for a pair that isn't
+  A/RT. The mutation that didn't build left an import unused, and was
+  written again to keep it.
+- **Deleted:** a tolerance of 1e-14 on the fit's bubble points, which the
+  steps of 1e-4 made unnecessary: with the flash's own 1e-12, every fit
+  meets its test and agrees with SciPy as closely.
+- **Explained:** the decanter's one liquid taken as a share of one phase
+  rather than the inlet's flows gives the same bits in every state tried
+  (Fᵢ·1·xᵢ with x = F/ΣF); the branch keeps them exact by construction, as
+  the drum's does. And the point test's second start, from the measured
+  vapour's Gᴱ, changes nothing the tests see, built right or wrong: reflux's
+  Levenberg–Marquardt from zero reaches the lower minimum on every set
+  here, including the one with two. It's there so that the verdict doesn't
+  rest on where a solver lands, as SciPy's did.
+
+**For 0.5.0's CHANGELOG entry:** format 4 (a γ–φ `[model]`,
+`[[model.pairs]]`, the decanter), report format 4 (`model`, `"liquid2"`),
+the changed golden reports above, a flash drum's two-liquid warning, the
+fit's `A[a, b]` and `alpha[a, b]`, and `fit.point_test`.
+
+**Checks:** the one tcc check for the bundle (32 min) ran 225 test files,
+of which 104 were another session's: a git worktree at
+`.claude/worktrees/sweet-bhabha-6bfc6e` (branch `m5a-water`, made on
+2026-11-24) is inside the tree, and `v test .`, `v fmt` and `v vet` take
+it in. Of reflux's own 121 test files, three of them new, two failed on
+texts this bundle changed (a fit file's formats; a report's format 4) and
+are brought to them; and step 8's sweep had a local `first` shadowing a
+test's function, a notice, renamed. Those three tests pass. The check stops
+at its tests, so its build, the demo, the reference flowsheet's reports,
+the missing file's exit 1 and the kinetics commands were run by hand, with
+the decanter flowsheet; all pass, as do `v fmt -verify` and `v vet`. The
+fit's tests were run again after its tolerance was deleted. No local gcc
+check: CI runs it on the push (the bundle rule). Both generators reproduce
+their output byte for byte.
 
 ### 12. DWSIM references
 - D17: by state, every difference explained (criterion 11).

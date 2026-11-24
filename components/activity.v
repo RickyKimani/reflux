@@ -731,6 +731,7 @@ pub fn parse_subgroups(text string, file string) ([]SubgroupLine, []TableDefect,
 // PairSource says where a binary model's pair came from.
 pub enum PairSource {
 	bank        // its bank's first listing of the pair
+	file        // the caller's, a file's [[model.pairs]] (D12)
 	ideal       // none listed, by the caller's leave: NRTL's τ = 0 or Wilson's Λ = 1, an ideal mixture of the two
 	no_residual // none listed, by the caller's leave: UNIQUAC's τ = 1, no residual interaction. r and q still count, so it isn't ideal
 }
@@ -746,6 +747,17 @@ pub:
 	texts   []string     // the parameters as expressions, i–j first
 }
 
+// PairOverride is a pair's parameters as a file gives them (D12), in place
+// of the bank's: a and b by CAS number, and each parameter an expression in
+// T, a's with b first: NRTL's τ_ab, τ_ba and α, UNIQUAC's τ_ab and τ_ba, or
+// Wilson's Λ_ab and Λ_ba.
+pub struct PairOverride {
+pub:
+	a     string
+	b     string
+	texts []string
+}
+
 @[params]
 pub struct ActivityOptions {
 pub:
@@ -754,6 +766,8 @@ pub:
 	// in NRTL and Wilson (PairSource.ideal). UNIQUAC's keeps its
 	// combinatorial term (PairSource.no_residual).
 	ideal bool
+	// overrides are pairs the caller gives, each in place of the bank's.
+	overrides []PairOverride
 }
 
 // BinaryModel is a binary model built from a bank, with how it got each
@@ -773,15 +787,42 @@ fn (db Database) records(cas []string) ![]Record {
 	return out
 }
 
-// pair_uses gives each listed pair's expressions, i–j orientation first,
-// by the bank's formula, and the uses; an unlisted pair is refused unless
-// opts.ideal, when its source is unlisted and its texts none_listed.
-fn pair_uses(bank PairBank, cas []string, names []string, opts ActivityOptions, texts fn (int, int, []string) []string, unlisted PairSource, none_listed []string) ![]PairUse {
+// pair_uses gives each pair's expressions, i–j orientation first: the
+// caller's override as given, or the bank's listing by its formula. An
+// unlisted pair is refused unless opts.ideal, when its source is unlisted
+// and its texts none_listed. swapped turns an override's texts from b–a to
+// a–b, the parameters' count being the model's.
+fn pair_uses(bank PairBank, cas []string, names []string, opts ActivityOptions, texts fn (int, int, []string) []string, unlisted PairSource, none_listed []string, swapped fn ([]string) []string) ![]PairUse {
 	mut out := []PairUse{}
 	mut missing := []string{}
+	for o in opts.overrides {
+		ia, ib := cas.index(o.a), cas.index(o.b)
+		if ia < 0 || ib < 0 || ia == ib {
+			return error("a pair ${o.a} with ${o.b}, which isn't two of the compounds")
+		}
+		if o.texts.len != none_listed.len {
+			return error('a pair of ${names[ia]} with ${names[ib]} has ${o.texts.len} parameters, where the model takes ${none_listed.len}')
+		}
+		if opts.overrides.filter((it.a == o.a && it.b == o.b) || (it.a == o.b && it.b == o.a)).len > 1 {
+			return error('the pair ${names[ia]} with ${names[ib]} is given twice')
+		}
+	}
 	for i in 0 .. cas.len {
 		for j in i + 1 .. cas.len {
 			listed := bank.for_pair(cas[i], cas[j])
+			given := opts.overrides.filter((it.a == cas[i] && it.b == cas[j])
+				|| (it.a == cas[j] && it.b == cas[i]))
+			if given.len > 0 {
+				o := given[0]
+				out << PairUse{
+					i:      i
+					j:      j
+					source: .file
+					others: listed
+					texts:  if o.a == cas[i] { o.texts.clone() } else { swapped(o.texts) }
+				}
+				continue
+			}
 			if listed.len == 0 {
 				if !opts.ideal {
 					missing << '${names[i]} with ${names[j]}'
@@ -816,6 +857,11 @@ fn pair_uses(bank PairBank, cas []string, names []string, opts ActivityOptions, 
 	return out
 }
 
+// swap_two is a pair's two parameters, b–a turned to a–b.
+fn swap_two(t []string) []string {
+	return [t[1], t[0]]
+}
+
 // nrtl is NRTL for compounds given by CAS number, on ChemSep's bank:
 // τᵢⱼ = Aᵢⱼ/(1.98721·T), A in cal/mol.
 pub fn (db Database) nrtl(cas []string, opts ActivityOptions) !BinaryModel[activity.Nrtl] {
@@ -824,7 +870,9 @@ pub fn (db Database) nrtl(cas []string, opts ActivityOptions) !BinaryModel[activ
 	bank := load_pair_bank(db.vendor, .nrtl)!
 	uses := pair_uses(bank, cas, names, opts, fn (i int, j int, t []string) []string {
 		return ['${t[0]} K / (${dechema_r}*T)', '${t[1]} K / (${dechema_r}*T)', t[2]]
-	}, .ideal, ['0', '0', '0.3'])!
+	}, .ideal, ['0', '0', '0.3'], fn (t []string) []string {
+		return [t[1], t[0], t[2]]
+	})!
 	mut pairs := []activity.NrtlPair{}
 	for u in uses {
 		pairs << activity.NrtlPair{
@@ -856,7 +904,7 @@ pub fn (db Database) uniquac(cas []string, opts ActivityOptions) !BinaryModel[ac
 	bank := load_pair_bank(db.vendor, .uniquac)!
 	uses := pair_uses(bank, cas, names, opts, fn (i int, j int, t []string) []string {
 		return ['exp(${t[0]} K / (-${dechema_r}*T))', 'exp(${t[1]} K / (-${dechema_r}*T))']
-	}, .no_residual, ['1', '1'])!
+	}, .no_residual, ['1', '1'], swap_two)!
 	mut pairs := []activity.UniquacPair{}
 	for u in uses {
 		pairs << activity.UniquacPair{
@@ -887,7 +935,7 @@ pub fn (db Database) wilson(cas []string, opts ActivityOptions) !BinaryModel[act
 	uses := pair_uses(bank, cas, names, opts, fn [v] (i int, j int, t []string) []string {
 		return ['${v[j]} / ${v[i]} * exp(${t[0]} K / (-${dechema_r}*T))',
 			'${v[i]} / ${v[j]} * exp(${t[1]} K / (-${dechema_r}*T))']
-	}, .ideal, ['1', '1'])!
+	}, .ideal, ['1', '1'], swap_two)!
 	mut pairs := []activity.WilsonPair{}
 	for u in uses {
 		pairs << activity.WilsonPair{

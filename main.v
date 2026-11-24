@@ -33,9 +33,9 @@ const usage = 'usage:
       the processors by default.
   reflux fit FILE [NAME] [--json OUT] [--csv OUT]
       Fit constants in the file to its data, by NAME if it has more than
-      one fit: rate constants to rates, or kij to bubble points. It prints
-      each with its 95% interval; --json and --csv write the fit and its
-      residuals (docs/report-format.md).
+      one fit: rate constants to rates, or kij or the pairs of an activity
+      model to bubble points. It prints each with its 95% interval; --json
+      and --csv write the fit and its residuals (docs/report-format.md).
   reflux kinetics check FILE [T P NAME=y ...]
   reflux kinetics explain FILE T P NAME=y ...
       Check the reactions in a file, or explain its rates at a state:

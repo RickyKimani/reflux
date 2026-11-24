@@ -1,5 +1,5 @@
 {
-  "format": 3,
+  "format": 4,
   "reflux": "0.4.0",
   "file": "testdata/flowsheets/saturated_loop.toml",
   "status": "solved",
@@ -11,6 +11,16 @@
       "molar_mass": 0.0440956
     }
   ],
+  "model": {
+    "equation": "PR",
+    "liquid": "",
+    "vapour": "",
+    "poynting": false,
+    "solutes": [],
+    "pairs": [],
+    "notes": [],
+    "warnings": []
+  },
   "streams": [
     {
       "name": "vapour",

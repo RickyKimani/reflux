@@ -403,7 +403,7 @@ fn verify_stable(m Mixture, t f64, p f64, r Result) ! {
 		return fail(.not_converged, "the answer's phase can't be tested: ${err.msg()}")
 	}
 	if !st.stable {
-		return fail(.two_phases, 'the equilibrium mixture at ${kinetics.sig(t)} K and ${kinetics.sig(p)} Pa would split into two phases, which needs M6')
+		return fail(.two_phases, "the equilibrium mixture at ${kinetics.sig(t)} K and ${kinetics.sig(p)} Pa would split into two phases, and an equilibrium here is of one phase (M9's D9)")
 	}
 }
 

@@ -273,7 +273,7 @@ fn check_phases(m thermo.PhaseModel, pt Point, r flash.FlashResult) ! {
 	for ph in r.phases {
 		sts << m.phase(r.t, r.p, ph.state.n, .stable)!
 	}
-	first := r.phases[0].state.n
+	base := r.phases[0].state.n
 	for i, z in r.z {
 		mut balance := 0.0
 		for k, ph in r.phases {
@@ -281,8 +281,8 @@ fn check_phases(m thermo.PhaseModel, pt Point, r flash.FlashResult) ! {
 			balance += ph.fraction * x[i]
 			// Below flash.trace_floor in a phase a component's amount there
 			// is zero to double precision, and its fugacities can't agree.
-			if k > 0 && z > 0.0 && x[i] >= flash.trace_floor && first[i] >= flash.trace_floor {
-				res := math.abs(math.log(x[i]) + sts[k].ln_phi[i] - math.log(first[i]) - sts[0].ln_phi[i])
+			if k > 0 && z > 0.0 && x[i] >= flash.trace_floor && base[i] >= flash.trace_floor {
+				res := math.abs(math.log(x[i]) + sts[k].ln_phi[i] - math.log(base[i]) - sts[0].ln_phi[i])
 				if res > 1e-10 {
 					return error('|ln f| of component ${i} differs by ${res} between phases 0 and ${k}')
 				}
