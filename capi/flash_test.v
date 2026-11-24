@@ -228,7 +228,14 @@ fn test_a_flash_that_fails_says_why() {
 	}
 	got3 := call_flash(three, flash_pt, 3, [350.0], [5e5], [0.5, 0.3, 0.2], 1)
 	assert got3.status == [point_more_phases]
-	assert got3.reason.starts_with('flash: a phase of the split at 350.0 K and 500000.0 Pa is unstable')
+	// The flash finds the three phases (M6's D8), which the layout has no
+	// place for until ABI 2 (D14).
+	assert got3.reason == 'flash: vapour, liquid, liquid2 at 350.0 K and 500000.0 Pa, and the C API takes one liquid and one vapour until ABI 2', got3.reason
+	// Water and n-decane alone at 300 K and 10 bar: two liquids, which the
+	// layout has no place for either.
+	ll := call_flash(three, flash_pt, 3, [300.0], [10e5], [0.6, 0.4, 0.0], 1)
+	assert ll.status == [point_more_phases]
+	assert ll.reason == 'flash: liquid, liquid2 at 300.0 K and 1e+06 Pa, and the C API takes one liquid and one vapour until ABI 2', ll.reason
 	// Beyond the model: H is NaN above 1e10 K, and at 1e-300 Pa the vapour's
 	// volume is past what a float holds.
 	hot := call_flash(fl, flash_pt, 2, [1e10], [1e5], [0.5, 0.5], 1)

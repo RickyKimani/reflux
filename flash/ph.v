@@ -81,6 +81,10 @@ struct StateFlash {
 	z       []f64
 	present []int
 	params  StateParams
+	// verified runs every PT flash of the search verified, which finds a
+	// third phase (M6's D10): the second search, where the first, on the
+	// quicker unverified flashes, missed the balance.
+	verified bool
 }
 
 // The temperatures a PH or PS flash may search.
@@ -164,7 +168,10 @@ fn (s StateFlash) flash_at(t f64, answer bool) !FlashResult {
 	if !(t >= state_t_min && t <= state_t_max) {
 		return fail(.bad_input, "${s.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
 	}
-	return pt(s.fl.model, t, s.p, s.z, tol: s.params.tol, verify: answer && s.params.verify)
+	return pt(s.fl.model, t, s.p, s.z,
+		tol:    s.params.tol
+		verify: (answer || s.verified) && s.params.verify
+	)
 }
 
 // ideal_t is the temperature at which the feed as an ideal gas has the
@@ -258,7 +265,24 @@ fn (s StateFlash) step_to(t f64, next f64) !(f64, f64) {
 	return fail(.bad_input, '${s.what()}: the model has no phase between ${t} K and ${next} K, so the specification is outside its range')
 }
 
+// mixture searches first on unverified PT flashes, which only steer T and
+// cost half as much (M4 step 9), then, if that misses the balance, again on
+// verified ones throughout. An unverified flash stays two-phase, so in a
+// region of three phases its H(T) is a false split's, and the answer's
+// verified flash, three phases, misses the balance (M6's D10).
 fn (s StateFlash) mixture() !FlashResult {
+	return s.search() or {
+		if s.verified || !s.params.verify {
+			return err
+		}
+		StateFlash{
+			...s
+			verified: true
+		}.search()!
+	}
+}
+
+fn (s StateFlash) search() !FlashResult {
 	lo, hi, mut steps := s.bracket(s.ideal_t())!
 	f := EnergyGap{s}
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3 * lo, max_iter: s.params.max_steps)!
@@ -319,7 +343,7 @@ fn (s StateFlash) mixture() !FlashResult {
 // its T misses the energy balance: each phase on its phase of lower G, the
 // fugacities equal to tol and the balance met to etol, and with
 // params.verify each phase stable with the other as a trial, as a PT
-// flash's split is shown.
+// flash's split is shown; named by D9, as a PT flash's are.
 fn (s StateFlash) from_newton(v []f64, steps int) !FlashResult {
 	nc := s.z.len
 	k := s.present.len
@@ -354,19 +378,8 @@ fn (s StateFlash) from_newton(v []f64, steps int) !FlashResult {
 			}
 		}
 	}
-	y_lighter := mass_density(m, sy) < mass_density(m, sx)
-	vap, liq := if y_lighter { sy, sx } else { sx, sy }
-	beta := if y_lighter { vt } else { lt }
-	return FlashResult{
-		t:          t
-		p:          s.p
-		z:          s.z
-		beta:       beta
-		phases:     [Phase{.vapor, vap, beta}, Phase{.liquid, liq, 1.0 - beta}]
-		path:       .newton
-		iterations: steps
-		stability:  stability(m, t, s.p, s.z)!
-	}
+	return labelled(m, t, s.p, s.z, [sy, sx], [vt, lt], .newton, steps, stability(m, t, s.p,
+		s.z)!)
 }
 
 // newton solves Q's stationary conditions in (v, ln T) together, from the

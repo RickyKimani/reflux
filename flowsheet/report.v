@@ -350,7 +350,7 @@ fn stream_report(fl thermo.Fluid, name string, st Stream, from ?string, to ?stri
 fn phase_report(fl thermo.Fluid, ph flash.Phase) PhaseReport {
 	pr := fl.props(ph.state)
 	return PhaseReport{
-		phase:          if ph.label == .vapor { 'vapour' } else { 'liquid' }
+		phase:          ph.label.name()
 		fraction:       ph.fraction
 		mole_fractions: ph.state.n.clone()
 		h:              pr.h

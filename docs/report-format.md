@@ -89,7 +89,7 @@ composition it was given. So it has fractions and a phase though its flows are
 
 | Key | |
 |---|---|
-| `phase` | `"vapour"` or `"liquid"`, as the flash labels it by the phase identification parameter. |
+| `phase` | `"vapour"`, `"liquid"` or `"liquid2"`, as the flash labels it (M6's D9): by the phase identification parameter for an equation of state, at most one vapour, and of two liquids the denser `"liquid2"`. A stream may have up to three phases. Report format 4 (M6 step 9) makes this its own. |
 | `fraction` | Its share of the stream's moles. |
 | `mole_fractions` | |
 | `H` | J/mol of the phase. |

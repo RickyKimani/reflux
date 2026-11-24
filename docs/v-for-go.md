@@ -533,6 +533,29 @@ if _ := qp(p) {
   set after it. `activity.eval` kept the last T through a refusal, and gave
   wrong ln γ at that T from then on ([activity/model.v](../activity/model.v),
   corrected after M6 step 3).
+- **`x0.map(it.clone())` of an immutable `[][]f64` still counts as
+  aliasing it.** Assigning to an element of the copy is refused: "`x`
+  aliases mutable data from an immutable value, clone it first", though
+  every row was cloned. Building the copy row by row passes. Probed in V
+  0.5.2:
+
+  ```v
+  fn grow(x0 [][]f64) [][]f64 {
+  	mut x := x0.map(it.clone()) // refused at x[0] = …
+  	mut y := [][]f64{}
+  	for row in x0 {
+  		y << row.clone() // fine
+  	}
+  	y[0] = [9.0]
+  	return y
+  }
+  ```
+
+  The three-phase split builds its phases this way
+  ([flash/multi.v](../flash/multi.v), M6 step 7).
+- **A loop variable can't take a parameter's name.** `for x in xs` inside a
+  function whose parameter is `x` is refused, "redefinition of value
+  iteration variable `x`", where Go would shadow it. Name it otherwise.
 - **An array of Options needs every element cast.** A function's return
   and a struct field turn `Kind.pr` into `?Kind` by themselves, but an array
   literal takes its type from its first element and converts nothing after

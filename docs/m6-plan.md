@@ -272,13 +272,13 @@ All checked by tests in CI, as before.
 | D5 | Calorics | The liquid's H, S and Cp come from its fugacities: h̄ᵢ − hᵢⁱᵍ = −RT²(∂ln φᵢᴸ/∂T) at constant P and x, through the same Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and γ. ΔHvap is then Clapeyron's from Pˢᵃᵗ's slope, and Hᴱ is the model's. `thermo`'s 'Poynting&PhiSat' basis is the reference.<br><br>No ΔHvap correlation enters. ChemSep's ΔHvap and liquid Cp are compared with the answer, as the model's accuracy, recorded and not asserted. | A drum's energy balance then agrees with its phase equilibrium. A separate ΔHvap, `thermo`'s 'Hvap' basis, gives a flash whose duty disagrees with its own Clapeyron. |
 | D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units.<br><br>**Amended in step 5,** approved on 2026-11-23:<br>- **A solute's γ* is 1.** Solutes are outside the activity model, which is over the solvents alone, on their own mole fractions. No bank pairs water, the one solvent with Henry's-law constants, with any of the 41 gases, and ChemSep's UNIFAC tables have no group for hydrogen, CO, CO₂, nitrogen, oxygen or the noble gases, so for those there's no γ∞ to form γ/γ∞ with. (The banks pair a few condensable ones, butane, isoprene, 1,3-butadiene, isobutene, thiophene and CS₂, with alcohols and aromatics, and the light hydrocarbons are made of UNIFAC's own groups: their γ∞ is a later piece, not M6's, every solute's γ* being 1 until then.) A solute adds no volume and has no Poynting term, since ChemSep gives no volume at infinite dilution. `thermo` gives a solute the symmetric γ of the whole model instead, so criterion 7 compares the two on ideal solvents.<br>- **Hᵢ,mix is `thermo`'s rule,** as read: Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ over the solvents present that have constants.<br>- **A component is a solute** when the file names it, or when it has constants in another compound present and its Tc is below the lowest T at which a compound that can only be a solvent has a vapour pressure. Wherever the liquid can be had, such a gas is above its Tc, so the roles don't change with T. A fluid in which no T has every solvent's correlations is refused when it's built, naming the solvent above its Tc there (criterion 7's refusal by name).<br><br>**Amended after step 6,** at the owner's word to choose what's best for hydrogen, approved on 2026-11-24: a gas in water that IAPWS's guideline covers (G7-04, Fernández-Prini, Alvarez and Harvey, 2003; 14 gases) takes IAPWS's Henry's constant in place of `henrys_law.ipd`'s row, ln(kH/p*) = A/Tr + B·τ^0.355/Tr + C·Tr^−0.41·e^τ on water's critical point, p* by Wagner and Pruss. The file's hydrogen is 5.95 times IAPWS's at 298 K and 62 times at 623 K, its neon 4.5e32 times, and its other eleven within 2.4 to 12% at 298 K but up to 55% off at their hottest. Equation 121 can't hold IAPWS's hydrogen (fitted, 16% off at 623 K), so the form is IAPWS's own. The bank's rows stand for the other 28 gases. | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
 | D7 | Models and parameters | **Wilson, NRTL and UNIQUAC:**<br>- each pair's τ (Wilson's Λ) and NRTL's α are expressions in T with units, `"-189.0469 cal/mol / (R*T)"`, so that Aspen's a + b/T + e·ln T + f·T or any paper's form goes in as printed;<br>- the tape gives their T-derivatives exactly;<br>- ChemSep's banks become those expressions in their own forms, A in cal/mol: NRTL's τ = A/RT, UNIQUAC's τ = exp(−A/RT), and Wilson's Λ = (Vⱼ/Vᵢ)·exp(−A/RT) on ChemSep's Wilson volumes. Step 0 confirms each form and the calorie.<br><br>**A pair with no parameters** is refused, naming it and the banks searched. `missing = "ideal"` sets such pairs' τ to 0, and the report lists them as a warning. The report gives each pair's source, as kᵢⱼ's are given: the file, a bank with its DECHEMA reference, or ideal.<br><br>**UNIFAC:** the original for VLE (Hansen et al., 1991), the LLE table (Magnussen et al., 1981) and Dortmund's published parameters (Gmehling et al.), each compound's groups from its component file.<br><br>**Amended in step 0,** approved on 2026-11-18. A bank's A is in thermochemical calories over DECHEMA's own R, 1.98721 cal/(mol·K), which it was fitted with: DWSIM's NRTL, on the same bank, is τ = A/(1.98721·T) to 4e-10 in ln γ, and the SI's R over 4.184 J is 5e-7 off ([spike-dwsim-activity.md](spike-dwsim-activity.md)). So a bank pair's τ keeps that R, its source saying why, as `reflux kinetics check` advises for a constant fitted with a typed R.<br><br>**Amended in step 1,** approved on 2026-11-20. UNIFAC's tables are ChemSep's, repaired where a file contradicts itself, by its own evidence (a subgroup's or a row's main group whose name is another's), and corrected where DDBST's published tables show a typo: the original's 11 values, the LLE table's 2 and Dortmund's 13 (C's Q, six ionic-liquid subgroups). Each repair and correction is reported in data-quality.md.<br><br>**Amended after step 3,** approved on 2026-11-22. `missing = "ideal"` gives a pair no energy of interaction: τ = 0 in NRTL and Λ = 1 in Wilson, an ideal pair, and τ = 1 in UNIQUAC, whose combinatorial term stays, so its source and warning say "no residual interaction", not ideal. And step 0's R is confirmed for NRTL's bank alone: for UNIQUAC's and Wilson's it's inferred, as is Wilson's form, until step 12. | Parameters are equations too, and typing them as text in a fixed form is what A9 rules out. A silently ideal pair is the kind of answer that looks right and isn't. |
-| D8 | Three phases | A PT flash finds up to three phases, for any phase model:<br>- **stage-wise,** as Michelsen (1982) does: two phases first, then each phase tested for stability by M3's test, an unstable one's trial starting a third phase;<br>- **the split:** successive substitution on a multiphase Rachford–Rice, by Okuno, Johns and Sepehrnoori's (2010) convex form, then Newton on G over every phase, a phase whose fraction falls to zero removed;<br>- **an answer only once every phase is stable** against every trial, as M3 verifies a split;<br>- **a fourth phase** is `.more_phases`, with its reason. | Stage-wise reuses M3's stability test and split, which are proven. The convex Rachford–Rice can't diverge, where the textbook form can with three phases. |
-| D9 | Labels | Phases are ordered by increasing mass density, and each is labelled vapour, liquid or liquid2:<br>- **a γ–φ phase** by the model that made it;<br>- **an equation of state's phase** by Π, with M9's four-covolume rule;<br>- **at most one vapour:** of phases Π calls vapour-like, the least dense;<br>- **phases Π calls liquid-like** are liquids, the denser being liquid2.<br><br>A two-phase split Π calls all liquid-like is then a liquid–liquid split, where M3's D6 called its lighter phase the vapour. Step 7 measures how many of M3's 10,000 sweep splits change label, near critical points, for the owner to judge. | With three phases density alone can't name them, and a liquid–liquid split by PR is mislabelled today. Π is what labels a single phase already. |
+| D8 | Three phases | A PT flash finds up to three phases, for any phase model:<br>- **stage-wise,** as Michelsen (1982) does: two phases first, then each phase tested for stability by M3's test, an unstable one's trial starting a third phase;<br>- **the split:** successive substitution on a multiphase Rachford–Rice, by Okuno, Johns and Sepehrnoori's (2010) convex form, then Newton on G over every phase, a phase whose fraction falls to zero removed;<br>- **an answer only once every phase is stable** against every trial, as M3 verifies a split;<br>- **a fourth phase** is `.more_phases`, with its reason.<br><br>**Amended in step 7,** approved on 2026-11-24:<br>- **The split's fractions come from Michelsen's (1994) multiphase Rachford–Rice,** Q(β) = Σⱼβⱼ − Σᵢzᵢ ln Σⱼβⱼ/φᵢⱼ minimised over β ≥ 0, in place of Okuno, Johns and Sepehrnoori's form. It is convex too, so D8's reason stands, but it needs no reference phase and no feasible start, and a phase leaves by its fraction reaching its bound of 0, where Σᵢxᵢ ≤ 1 says it is stable absent. Okuno's form would need a point inside its region to start from, and phase removal outside it.<br>- **Newton on G** works in variables scaled by √n, each component's moles in every phase but the one holding the most of it, which takes the rest: a trace such as water's 1e-29 of decane is then a variable of its own, not a difference of numbers near 0.3, and the Hessian's entries are all of order 1 where unscaled they ran from 1 to 1e29.<br>- **The new phase starts with 1% of the feed,** not none, so that no component is in no phase.<br>- **Three liquids,** which D9 names no more than two of, are `.more_phases` too. | Stage-wise reuses M3's stability test and split, which are proven. The convex Rachford–Rice can't diverge, where the textbook form can with three phases. |
+| D9 | Labels | Phases are ordered by increasing mass density, and each is labelled vapour, liquid or liquid2:<br>- **a γ–φ phase** by the model that made it;<br>- **an equation of state's phase** by Π, with M9's four-covolume rule;<br>- **at most one vapour:** of phases Π calls vapour-like, the least dense;<br>- **phases Π calls liquid-like** are liquids, the denser being liquid2.<br><br>A two-phase split Π calls all liquid-like is then a liquid–liquid split, where M3's D6 called its lighter phase the vapour. Step 7 measures how many of M3's 10,000 sweep splits change label, near critical points, for the owner to judge.<br><br>**Settled in step 7,** approved on 2026-11-24, as written. Of the sweep's 3,344 two-phase splits by PR, Π calls both phases liquid-like in 2,289, liquid–liquid splits labelled vapour and liquid until now; 1,055 are vapour–liquid as before; none has both phases vapour-like or the labels inverted. They aren't near critical points: the liquids' density gap runs from 0.04% to 98% of the denser's, median 27% (`spike/labels`). None of the golden flowsheets' 34 two-phase streams is renamed. Some are near critical points after all: M10a's exit script maps a natural gas's phases, and 125 of its 6,480 points, near its critical point at 225 to 228 K and 73 to 77 bar, are splits whose dense vapour Π calls liquid-like, now liquid and liquid2, which the C API refuses (D14). | With three phases density alone can't name them, and a liquid–liquid split by PR is mislabelled today. Π is what labels a single phase already. |
 | D10 | Which flashes take three phases | PT, PH and PS.<br><br>The vapour-fraction flashes (bubble and dew points) and TV and UV stay two-phase. A bubble point whose liquid would split is `.more_phases`, saying so. | PT, PH and PS are what units call. A heterogeneous bubble point is M7's, if its decanters need one. |
 | D11 | Units | **A `decanter`:** an inlet and three outlets, `vapour`, `light` and `heavy`, any of them possibly empty, at a T or a duty and a P, as the drum is.<br><br>**The `flash_drum`** sends both liquids out of its liquid port, as a vessel without a boot does, and its report says that liquid has two phases.<br><br>**Reactors** stay one-phase on a Helmholtz model (M9). A γ–φ fluid is refused there, saying why. | A two-liquid feed to a drum isn't an error. A reactor on γ–φ needs liquid-phase kinetics on activities, a later piece. |
 | D12 | The file | **Format 4.** `[model]` has:<br>- `equation` for an equation-of-state fluid, as before;<br>- or `liquid` for γ–φ: `"Wilson"`, `"NRTL"`, `"UNIQUAC"`, `"UNIFAC"`, `"UNIFAC-LLE"` or `"UNIFAC-Dortmund"`;<br>- `vapour`: `"ideal gas"` by default, or an equation;<br>- `poynting`: true by default;<br>- `henry`: solutes beyond those above their Tc;<br>- `missing`: `"refuse"` by default, or `"ideal"`.<br><br>`[[model.pairs]]`, `{ a, b, tau_ab, tau_ba, alpha }`, overrides a bank, each value an expression with units.<br><br>Formats 1 to 3 read as before. | A new model and a new unit are a new format, by the CHANGELOG's rules. |
 | D13 | Reports | **Report format 4:**<br>- a stream may have three phases, `phase` being `"vapour"`, `"liquid"` or `"liquid2"`;<br>- `model` gives each pair's parameters with their source, and any warnings;<br>- the decanter's outlets.<br><br>The fit report is unchanged. | The report says what was used, as it says which kᵢⱼ were. |
-| D14 | The C API and Python | Unchanged in M6: cubic fluids, two phases. A three-phase point stays `REFLUX_POINT_MORE_PHASES`.<br><br>γ–φ fluids and three phases from Python come with M10b, as ABI 2. | The layout (liquid 0, vapour 1) has no room for a second liquid. Changing it is an ABI break, which belongs with M10b's other changes. |
+| D14 | The C API and Python | Unchanged in M6: cubic fluids, two phases. A three-phase point stays `REFLUX_POINT_MORE_PHASES`.<br><br>γ–φ fluids and three phases from Python come with M10b, as ABI 2.<br><br>**Settled in step 7,** approved on 2026-11-24: an answer with two liquids, which D9 now names liquid and liquid2, has no place in the layout either, so it is `REFLUX_POINT_MORE_PHASES` too, with its reason, until M10b. | The layout (liquid 0, vapour 1) has no room for a second liquid. Changing it is an ABI break, which belongs with M10b's other changes. |
 | D15 | References and tests | <br>- `thermo` 0.6.1: γ and its derivatives, `GibbsExcessLiquid` on the same basis, `FlashVL` and `FlashVLN`;<br>- mpmath: NRTL's and UNIQUAC's closed forms, and Clapeyron;<br>- brute force: a tangent-plane scan around every three-phase answer;<br>- the ThermoML archive and, where it has nothing, papers' tables (criterion 8, as amended): experimental data, each set's Gibbs–Duhem consistency checked;<br>- planted mistakes, as every step has had. | Independent sources, as before. `thermo` is the one other open implementation of all of it, so a second check of each claim is from scratch. |
 | D16 | Fitting | M8's `[fit.NAME]` with VLE data takes a pair's NRTL parameters (A₁₂, A₂₁, and α if asked) or UNIQUAC's. The residuals are bubble P and each y, as M8's D15, and the derivatives central differences. Against SciPy with `thermo`'s NRTL and UNIQUAC on the same data. | ChemSep has 352 NRTL pairs. The rest come from data, and DWSIM's regression fitted nothing when a script ran it (M8 step 0). |
 | D17 | Comparing with DWSIM | <br>- NRTL and UNIQUAC VLE flashes on methanol–water;<br>- UNIFAC's and Dortmund's γ, by state;<br>- a three-phase flash, water–1-butanol or its water–benzene sample, if step 0 can drive it.<br><br>Each is compared by state, every difference explained. Step 0 finds its liquid enthalpy, vapour and Poynting settings, and its parameters' form. | As M3, M4, M9 and M8 compared. |
@@ -1185,17 +1185,213 @@ be had at, which moves only a gas whose Tc lies between that and water's
 build (26 min), and the quality report's test with the new section. The
 Python tests weren't run: the C API takes no γ–φ fluid.
 
-### 7. Three phases
+### 7. Three phases — done, with D8 amended, D9 and D14 settled
 - D8, D9: the stage-wise PT flash, the multiphase Rachford–Rice and Newton
   on G over every phase, on any phase model.
 - LLE and VLLE with activity models, water–hydrocarbon VLLE with PR.
   Against `FlashVLN`, and by tangent-plane scans (criterion 6).
 - The labels across M3's sweep, for the owner (D9).
 
-### 8. PH and PS with three phases, and the labels
+Built together with step 8, at the owner's word.
+
+**D9 and D14 first** (settled, above): by Π, 2,289 of the sweep's 3,344 PR
+splits are two liquids, labelled vapour and liquid until now, real
+liquid–liquid splits (their density gap a median 27%), none in a golden
+flowsheet; the owner adopted D9 as written, and the C API refusing an
+answer with two liquids until ABI 2 (`spike/labels`).
+
+**What was built** ([design.md](design.md), "Three phases" and "Phase
+identification"):
+- **[numeric/multiphase.v](../numeric/multiphase.v):** `multiphase_rr`,
+  Michelsen's multiphase Rachford–Rice, Q minimised over β ≥ 0 by Newton on
+  the free phases (D8 as amended).
+- **[flash/multi.v](../flash/multi.v):** the stage-wise split: a split's
+  unstable phase's trial grows it to three, substitution on the multiphase
+  Rachford–Rice, Newton on G in √n-scaled variables with each component's
+  dependent phase its largest holder, verification of every phase, a fourth
+  phase or three liquids refused; and `labelled`, D9's names in density's
+  order, with β the vapour's fraction or 0.
+- **[flash/pt.v](../flash/pt.v):** a split's verification grows it to
+  three; every split named by `labelled`.
+- **`thermo.PhaseLabel.liquid2`,** and `PhaseLabel.name()` for reports.
+
+**D8 is amended** (above), approved on 2026-11-24: Michelsen's
+multiphase Rachford–Rice in place of Okuno, Johns and Sepehrnoori's form,
+Newton on G scaled and with each component's dependent phase, the new
+phase starting at 1%, and three liquids refused.
+
+**Against `FlashVLN`** (criterion 6), 17 states, each polished on `thermo`'s
+own phases to 1e-14 in ln f, where `FlashVLN` agreed with itself
+everywhere and had reflux's phase count at every state:
+
+| System | Model | States | Phases |
+|---|---|---|---|
+| water, 1-butanol | NRTL | 6 (300, 320, 340 K; two feeds) | liquid, liquid2 |
+| water, 1-butanol, methanol | NRTL | 2 (300, 330 K) | liquid, liquid2 |
+| water, 1-butanol, methanol | NRTL | 3 (363.6 to 364.8 K, 1 atm) | vapour, liquid, liquid2 |
+| water, n-decane, methane | PR | 4 | vapour, liquid, liquid2 |
+| water, n-decane | PR | 2 | liquid, liquid2 |
+
+Fractions agree to 1.9e-13 (gcc 1.7e-13), compositions to 1.1e-13, and every answer is
+checked from scratch: each phase on its phase of lower G, every fugacity to
+1e-10, the balance to 1e-12, and a tangent-plane scan of every phase over
+the whole composition space (1/1000 for two components, 1/40 for three)
+finding nothing below it (lowest 0). A vapour and three liquids, a fourth
+phase, is refused with its reason.
+
+**Tests:**
+- [numeric/multiphase_test.v](../numeric/multiphase_test.v): two phases
+  against `rachford_rice` (171 seeded cases inside (0, 1) to 2e-15, 18
+  beyond as a single phase), three from a known answer with a fourth held
+  absent (1.2e-12), K from 1e-30 to 1e25, and bad input refused.
+- [flash/multi_internal_test.v](../flash/multi_internal_test.v): Newton on
+  G's gradient and Hessian against differences (2.1e-6 and 1.6e-7, their
+  rounding), Newton finishing from a real substitution iterate to
+  substitution's answer, and D9's labels from states alone.
+- [components/three_phase_test.v](../components/three_phase_test.v): the
+  table above, and the fourth phase.
+- [flash/pt_test.v](../flash/pt_test.v): three phases found and checked
+  from scratch where they used to be refused, D9's labels in every split.
+
+**Found:**
+- **Newton on G with one dependent phase for all is lost with a trace:**
+  water's 1e-29 of decane as z − Σ is rounding, and its gradient read 46.
+  So each component has its own dependent phase, and the variables are
+  scaled by √n, without which the Hessian's entries ran from 1 to 1e29
+  and Cholesky failed (D8 as amended).
+- **ChemSep's VLE-fitted NRTL gives water–ethyl acetate a gap of 0.507 to
+  0.921 water at 300 K,** against roughly 0.14 and 0.985 measured; the
+  flash and a tangent-plane scan agree on the model's. For step 10.
+- **V:** `x0.map(it.clone())` of an immutable `[][]f64` still counts as
+  aliasing it, and a loop variable can't take a parameter's name (the V
+  notes).
+
+### 8. PH and PS with three phases, and the labels — done
 - D10: PH and PS on the three-phase PT flash; the vapour-fraction flashes
   refusing a liquid that would split.
 - D9's labels wherever a phase is named.
+
+Built together with step 7.
+
+**What was built:**
+- **[flash/ph.v](../flash/ph.v):** PH and PS search first on unverified PT
+  flashes, then, missing the balance, again on verified ones, which find a
+  third phase; Brent finishes a split of three. Newton's own state is named
+  by D9.
+- **[flash/tv.v](../flash/tv.v):** TV and UV refuse an answer of three
+  phases (D10).
+- **The vapour-fraction flashes, a pure component's saturation pair and the
+  azeotrope** keep vapour and liquid, named by their specification; a
+  bubble point whose liquid would split is still `.more_phases`.
+- **[flowsheet/drum.v](../flowsheet/drum.v):** the vapour by the vapour
+  port, every liquid by the liquid port (D11): `of_phases`, any phases of a
+  flash as a stream. The report names a phase `vapour`, `liquid` or
+  `liquid2`.
+- **[capi/flash.v](../capi/flash.v):** two liquids or three phases are
+  `REFLUX_POINT_MORE_PHASES`, naming the phases (D14 as settled), and
+  `tools/capi_reference.v` refuses them alike. M10a's exit script's map of
+  a natural gas now has 125 such points of 6,480, near its critical point,
+  where the dense vapour is liquid-like by Π; its tests hold them so, every
+  other point a verified answer. Of M3's 39 splits by `thermo`, the
+  package's test finds one two liquids, and a TVF answer near the critical
+  region lands on a state a PT flash calls two liquids, checked from
+  scratch there.
+- **[sweep/](../sweep/sweep.v):** a split of any number of phases checked
+  from scratch, three-phase answers a class of their own, and `more_phases`
+  now a fourth phase or three liquids.
+
+**Tests:** PH and PS back to a three-phase state's T and phases (T to 1e-9);
+TV refusing three; the drum sending two liquids out of its liquid port,
+with a vapour and with none; the C API's three-phase refusal; the sweep's
+own checks refusing planted wrong splits of the new form.
+
+**M3's sweep** ([flash-robustness.md](flash-robustness.md)), its 10,000
+points again, PR on two to ten random compounds:
+
+| Outcome | Before | Now |
+|---|---|---|
+| One phase | 5,480 | 5,480 |
+| Two phases, every invariant checked | 3,344 | 3,356 |
+| Three phases, every invariant checked | | 303 |
+| Explained: a third phase (M3's refusal) | 1,176 | |
+| Explained: a fourth phase, or three liquids | | 856 |
+| Not solved: more than two phases, proved, but no convergence | | 5 |
+| Unexplained | 0 | 0 |
+
+The five not solved are cold mixtures of five to ten heavy compounds, 103
+to 137 K, where the sweep proves more than two phases itself (the split of
+two has an unstable phase by its own tangent-plane scan) and the split of
+three doesn't converge in 200 steps, or a stability test in its
+verification doesn't. They are listed as the flash's failures, with
+their reasons, not answers.
+
+On the way the sweep found three of the flash's bugs, each fixed and kept as
+a test:
+- **Newton on G with one dependent phase** (step 7's "found"): the first
+  run's 46 unexplained points were mostly splits of three that didn't
+  converge.
+- **A new phase at no moles:** seven points held a component almost only in
+  the trial, which then was in no phase, and the multiphase Rachford–Rice's
+  Hessian overflowed; it starts at 1% now (D8 as amended).
+- **A phase that leaves took its moles with it:** of two phases that come
+  together one was dropped and the fractions renormalised, and the next
+  step's fugacities passed before Rachford–Rice had rebalanced them, so
+  mercury and 1-methylnaphthalene came back with the balance 3.3e-3 off
+  (point 4386). A split now needs a fresh solve after a phase leaves, and
+  shows its balance to 1e-12 before it's returned.
+
+**Planted mistakes** (both steps): 35, in a scratch copy, one at a time.
+The first run caught 26, and 9 survived. Each survivor then got a test, had
+its code deleted, or is explained here, and two more runs on fresh copies
+caught what the new tests should. In all, 31 caught and 2 sites deleted;
+2 survive, explained.
+- **New tests:** Newton on G from the fifth iterate with the trial phase
+  first, where one dependent phase for every component holds the others'
+  traces as differences; the sweep's point 7199, whose new phase must begin
+  with moles; the C API refusing two liquids; a phase held at no moles
+  leaving after its three steps (water at 1% of the feed, all of it in the
+  vapour, and a trial of nearly pure water that goes to a water-rich liquid
+  of its own, never the same as another phase, so only its absence takes it
+  out); and a fourth phase's reason, given by the split of three's own
+  verification, not three liquids named after a split of four.
+- **Deleted:** the multiphase Rachford–Rice's last check of the bound
+  phases, which the free set already makes (a phase at 0 with g < 0 is
+  free, and every free |g| must be within tol); and the split's choice of
+  its largest phase as the residual's reference, which moved nothing: each
+  phase is measured against the first.
+- **Explained:** the multiphase Rachford–Rice's line search accepting a
+  rise of 1e-3 of Q's scale changes no answer, and no count of steps over
+  the tests: Q is convex, so from such a point the next Newton step is back
+  below it, and the answer is the gradient test's whatever the path. It
+  guards against a step that rises by more, as a full Newton step can from
+  far off (from 1.9 times a single phase's answer, Q = β − ln β rises by
+  0.59). And the split's balance check before it returns can't fail, since
+  a split returns only from a fresh Rachford–Rice solve (`balanced`), whose
+  fractions and compositions hold the balance to rounding; it stays, as
+  what a returned split must show besides its fugacities.
+
+**For 0.5.0's CHANGELOG entry** (the V API): `flash.max_phases`, a PT, PH
+or PS answer of up to three phases, labelled by D9 (`thermo.PhaseLabel`
+gains `liquid2`, a liquid–liquid split by an equation of state is liquid
+and liquid2 with β 0); `numeric.multiphase_rr`; TV and UV refuse three
+phases; the drum sends both liquids out of its liquid port; the C API's
+two liquids and three phases are `REFLUX_POINT_MORE_PHASES`.
+
+**Checks:** both full checks pass, tcc (18 min) and gcc with its `-prod`
+build (63 min): 118 test files, three of them new. Of the Python package's
+83 tests (`tools/python.vsh test`, 7 min), 79 passed and four held what D14
+as settled changes, and are brought to it:
+- the exit script's map, whose 125 refused points now have no β;
+- M3's 39 splits by `thermo`, one of which, methane and n-decane, is two
+  liquids by Π, refused (its test also asked a closed fluid for the reason);
+- the three-phase reason, now the C API's;
+- a TVF answer near the critical region, at 80.6 bar for 50, where a PT
+  flash finds two liquids: its fugacities are checked from scratch there
+  instead (ln f to 4.8e-14, the balance to 1.1e-16).
+
+The four pass, run alone on the same library. The two V tests given new
+checks after the full runs pass under tcc, and `three_phase_test.v` under
+gcc too.
 
 ### 9. Format 4, the decanter and report format 4
 - D11, D12, D13: `[model]`'s new keys, `[[model.pairs]]`, the decanter, the

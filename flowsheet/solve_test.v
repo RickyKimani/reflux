@@ -632,18 +632,23 @@ fn test_each_balance_is_checked_on_its_own() {
 }
 
 fn test_a_failure_in_a_loop_keeps_its_cause_and_history() {
-	// pt_test's water, n-decane and methane at 350 K and 5 bar has three phases.
-	// The cooler in this loop reaches it on the first pass.
-	fl := db.fluid(.pr, ['water', 'n-decane', 'methane'],
+	// pt_test's water, n-decane and methane, with n-dodecane that decane
+	// won't mix with, at 350 K and 5 bar: a vapour and three liquids, four
+	// phases, which the flash refuses (M6's D8). The cooler in this loop
+	// reaches it on the first pass.
+	fl := db.fluid(.pr, ['water', 'n-decane', 'methane', 'n-dodecane'],
 		kij:       false
 		overrides: [
 			kij_of('7732-18-5', '124-18-5', 0.5),
 			kij_of('7732-18-5', '74-82-8', 0.5),
 			kij_of('124-18-5', '74-82-8', 0.04),
+			kij_of('7732-18-5', '112-40-3', 0.5),
+			kij_of('124-18-5', '112-40-3', 0.5),
+			kij_of('74-82-8', '112-40-3', 0.04),
 		]
 	)!
 	mut f := Flowsheet{}
-	f.add_feed('feed', flowsheet.feed_tp(fl, [5.0, 3.0, 2.0], 500.0, 5e5)!)!
+	f.add_feed('feed', flowsheet.feed_tp(fl, [4.0, 2.5, 1.5, 2.0], 500.0, 5e5)!)!
 	f.add_unit(flowsheet.new_mixer('mixer', 2)!, {
 		'in1': 'feed'
 		'in2': 'back'
@@ -666,7 +671,7 @@ fn test_a_failure_in_a_loop_keeps_its_cause_and_history() {
 		assert e.history.len == 1 && e.history[0].tears == ['back'], err.msg()
 		return
 	}
-	assert false, 'a two-phase answer for a three-phase state'
+	assert false, 'an answer for a four-phase state'
 }
 
 fn kij_of(cas1 string, cas2 string, k f64) components.Kij {

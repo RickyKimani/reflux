@@ -77,24 +77,33 @@ fn check_stream(fl thermo.Fluid, s Stream, at string) ! {
 		assert st.stable, '${at}: a single phase that is unstable'
 		return
 	}
-	assert r.phases.len == 2, at
-	y, x := r.phases[0].state.n, r.phases[1].state.n
-	sy := thermo.solve_tp(fl.helmholtz()!, s.t, s.p, y, root_of(r.phases[0]))!
-	sx := thermo.solve_tp(fl.helmholtz()!, s.t, s.p, x, root_of(r.phases[1]))!
-	mut sum_x, mut sum_y := 0.0, 0.0
-	for i, zi in r.z {
-		sum_x += x[i]
-		sum_y += y[i]
-		assert math.abs(r.phases[0].fraction * y[i] + r.phases[1].fraction * x[i] - zi) <= 1e-12, '${at}: mass balance of component ${i}'
-		if zi > 0.0 {
-			res := math.abs(math.log(y[i]) + sy.ln_phi[i] - math.log(x[i]) - sx.ln_phi[i])
-			assert res <= 1e-10, '${at}: |ln fV − ln fL| of component ${i} is ${res}'
-		}
+	// Two phases or more (M6's D8): every fugacity against the first phase's.
+	mut sts := []thermo.State{}
+	for ph in r.phases {
+		sts << thermo.solve_tp(fl.helmholtz()!, s.t, s.p, ph.state.n, root_of(ph))!
 	}
-	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, at
-	for pair in [[x, y], [y, x]] {
-		st := flash.stability(fl.model, s.t, s.p, pair[0], trials: [pair[1]], tol: 1e-8)!
-		assert st.stable, '${at}: a phase of the split is unstable'
+	first := r.phases[0].state.n
+	for i, zi in r.z {
+		mut balance := 0.0
+		for k, ph in r.phases {
+			x := ph.state.n
+			balance += ph.fraction * x[i]
+			if k > 0 && zi > 0.0 {
+				res := math.abs(math.log(x[i]) + sts[k].ln_phi[i] - math.log(first[i]) - sts[0].ln_phi[i])
+				assert res <= 1e-10, '${at}: |ln f| of component ${i} in phase ${k} is ${res} off'
+			}
+		}
+		assert math.abs(balance - zi) <= 1e-12, '${at}: mass balance of component ${i}'
+	}
+	for k, ph in r.phases {
+		mut sum := 0.0
+		for v in ph.state.n {
+			sum += v
+		}
+		assert math.abs(sum - 1.0) <= 1e-14, '${at}: Σx of phase ${k}'
+		others := r.phases.filter(it.state.n != ph.state.n).map(it.state.n)
+		st := flash.stability(fl.model, s.t, s.p, ph.state.n, trials: others, tol: 1e-8)!
+		assert st.stable, '${at}: phase ${k} of the split is unstable'
 	}
 }
 
@@ -628,18 +637,22 @@ fn kij_of(cas1 string, cas2 string, k f64) components.Kij {
 }
 
 fn test_a_flash_failure_names_the_unit_and_keeps_its_kind() {
-	// pt_test's water, n-decane and methane at 350 K and 5 bar has three
-	// phases, which M4 doesn't handle (M6): the unit says so, by name, and
-	// the flash's own kind comes through.
-	fl := db.fluid(.pr, ['water', 'n-decane', 'methane'],
+	// pt_test's water, n-decane and methane, with n-dodecane that decane
+	// won't mix with, at 350 K and 5 bar: a vapour and three liquids, four
+	// phases, which the flash refuses (M6's D8). The unit says so, by name,
+	// and the flash's own kind comes through.
+	fl := db.fluid(.pr, ['water', 'n-decane', 'methane', 'n-dodecane'],
 		kij:       false
 		overrides: [
 			kij_of('7732-18-5', '124-18-5', 0.5),
 			kij_of('7732-18-5', '74-82-8', 0.5),
 			kij_of('124-18-5', '74-82-8', 0.04),
+			kij_of('7732-18-5', '112-40-3', 0.5),
+			kij_of('124-18-5', '112-40-3', 0.5),
+			kij_of('74-82-8', '112-40-3', 0.04),
 		]
 	)!
-	inlet := flowsheet.feed_tp(fl, [5.0, 3.0, 2.0], 500.0, 5e5)!
+	inlet := flowsheet.feed_tp(fl, [4.0, 2.5, 1.5, 2.0], 500.0, 5e5)!
 	assert inlet.beta == 1.0
 	// An enthalpy no temperature reaches fails in the mixer's and the valve's
 	// PH flash, and each names itself.
@@ -660,7 +673,7 @@ fn test_a_flash_failure_names_the_unit_and_keeps_its_kind() {
 		s: 1e30
 	}
 	pump := flowsheet.new_pump('pump', mode: .delta_p, value: 1e5, efficiency: 0.8)!
-	liquid := flowsheet.feed_tp(fl, [5.0, 0.0, 0.0], 300.0, 5e5)!
+	liquid := flowsheet.feed_tp(fl, [5.0, 0.0, 0.0, 0.0], 300.0, 5e5)!
 	refused(fn [fl, pump, liquid] () ! {
 		_ := pump.calculate(fl, [Stream{
 			...liquid
@@ -680,7 +693,7 @@ fn test_a_flash_failure_names_the_unit_and_keeps_its_kind() {
 		_ := d.calculate(fl, [inlet])!
 	}, .flash_failed, 'drum', 'flash: ')
 	x := flowsheet.new_component_separator('separator',
-		fractions: [1.0, 1.0, 1.0]
+		fractions: [1.0, 1.0, 1.0, 1.0]
 		t:         350.0
 		p:         5e5
 	)!
@@ -1018,6 +1031,35 @@ fn test_a_drum_with_one_phase_has_an_empty_outlet() {
 	// The empty outlet keeps a state, so it can go on through the flowsheet.
 	v := flowsheet.new_valve('V', mode: .delta_p, value: 1e5)!
 	assert run(fl, v, [a.outlets[1]])!.outlets[0].p == 29e5
+}
+
+// The drum sends each phase out by its name (M6's D9 and D11): the vapour
+// out of the vapour port, and both liquids out of the liquid port, the
+// liquid stream two phases at their shares. Water, n-decane and methane by
+// PR at 350 K and 5 bar are a vapour and two liquids; water and n-decane at
+// 300 K and 10 bar are two liquids, with nothing for the vapour port.
+fn test_a_drum_sends_two_liquids_out_of_its_liquid_port() {
+	fl := db.fluid(.pr, ['water', 'n-decane', 'methane'])!
+	inlet := flowsheet.feed_tp(fl, [50.0, 30.0, 20.0], 350.0, 5e5)!
+	assert inlet.result.phases.map(it.label) == [thermo.PhaseLabel.vapor, .liquid, .liquid2]
+	o := run(fl, flowsheet.new_flash_drum('D', mode: .outlet_t, value: 350.0)!, [inlet])!
+	check_unit(fl, [inlet], o, 'three phases')!
+	v, l := o.outlets[0], o.outlets[1]
+	beta := inlet.result.phases[0].fraction
+	assert v.beta == 1.0 && l.beta == 0.0
+	assert math.abs(v.total() - 100.0 * beta) <= 1e-9 && math.abs(l.total() - 100.0 * (1.0 - beta)) <= 1e-9
+	fr := l.result.phases.map(it.fraction)
+	assert fr[0] == 0.0 && math.abs(fr[1] + fr[2] - 1.0) <= 1e-15, '${fr}'
+	assert math.abs(fr[1] / fr[2] - inlet.result.phases[1].fraction / inlet.result.phases[2].fraction) <= 1e-12
+	for i in 0 .. 3 {
+		assert math.abs(v.flows[i] + l.flows[i] - inlet.flows[i]) <= 1e-9, '${i}'
+	}
+	two := db.fluid(.pr, ['water', 'n-decane'])!
+	ll := flowsheet.feed_tp(two, [60.0, 40.0], 300.0, 10e5)!
+	assert ll.result.phases.map(it.label) == [thermo.PhaseLabel.liquid, .liquid2] && ll.beta == 0.0
+	b := run(two, flowsheet.new_flash_drum('D', mode: .outlet_t, value: 300.0)!, [ll])!
+	assert b.outlets[0].total() == 0.0 && math.abs(b.outlets[1].total() - 100.0) <= 1e-9
+	assert b.outlets[1].result.phases.len == 2
 }
 
 fn test_a_drum_boils_a_pure_component() {

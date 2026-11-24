@@ -68,15 +68,71 @@ fn density(m thermo.Model, st thermo.State) f64 {
 	return mass / st.v
 }
 
+// check_phases checks a result of any number of phases from scratch: each
+// phase on its root of lower G, every fugacity within 1e-10 of the first
+// phase's, the mass balance to 1e-12, the fractions summing to 1, and no
+// composition of a ternary below any phase's tangent plane, by a scan at
+// steps of 1/40.
+fn check_phases(m thermo.Model, r flash.FlashResult, at string) ! {
+	nc := r.z.len
+	mut sts := []thermo.State{}
+	for ph in r.phases {
+		st := thermo.solve_tp(m, r.t, r.p, ph.state.n, .stable)!
+		assert math.abs(st.v / ph.state.v - 1.0) <= 1e-12, '${at}: a phase not on its root of lower G'
+		sts << st
+	}
+	mut total := 0.0
+	for ph in r.phases {
+		total += ph.fraction
+	}
+	assert math.abs(total - 1.0) <= 1e-14, at
+	for i in 0 .. nc {
+		mut z := 0.0
+		for k, ph in r.phases {
+			z += ph.fraction * ph.state.n[i]
+			if k > 0 {
+				a := r.phases[0].state.n
+				f := math.log(ph.state.n[i]) + sts[k].ln_phi[i] - math.log(a[i]) - sts[0].ln_phi[i]
+				assert math.abs(f) <= 1e-10, '${at}: ln f of ${i} in phase ${k}'
+			}
+		}
+		assert math.abs(z - r.z[i]) <= 1e-12, '${at}: the balance of ${i}'
+	}
+	if nc == 3 {
+		for k, ph in r.phases {
+			x := ph.state.n
+			for a in 0 .. 41 {
+				for b in 0 .. 41 - a {
+					w := [f64(a) / 40.0, f64(b) / 40.0, f64(40 - a - b) / 40.0].map(math.max(it,
+						1e-12))
+					sw := thermo.solve_tp(m, r.t, r.p, w, .stable)!
+					mut tpd := 0.0
+					for i in 0 .. 3 {
+						tpd += w[i] * (math.log(w[i]) + sw.ln_phi[i] - math.log(x[i]) - sts[k].ln_phi[i])
+					}
+					assert tpd >= -1e-9, '${at}: phase ${k} has a TPD of ${tpd} at ${w}'
+				}
+			}
+		}
+	}
+}
+
 // check_equilibrium checks exit criterion 3 on a two-phase result, from
 // scratch: fugacities equal, each component's mass balance, Σx = Σy = 1, and
-// neither phase unstable.
+// neither phase unstable. And M6's D9: the less dense phase first, named
+// vapour unless Π (with the four-covolume rule) calls it liquid-like too,
+// when the two are liquid and liquid2 and β is 0.
 fn check_equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	assert r.phases.len == 2, at
 	vap, liq := r.phases[0], r.phases[1]
-	assert vap.label == .vapor && liq.label == .liquid, at
-	assert density(m, vap.state) < density(m, liq.state), '${at}: the vapour is the less dense'
-	assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
+	assert density(m, vap.state) < density(m, liq.state), '${at}: the lighter phase first'
+	if thermo.phase_label(m, vap.state) == .liquid {
+		assert vap.label == .liquid && liq.label == .liquid2 && r.beta == 0.0, '${at}: two liquids'
+	} else {
+		assert vap.label == .vapor && liq.label == .liquid, at
+		assert r.beta > 0.0 && r.beta < 1.0 && vap.fraction == r.beta, at
+	}
+	assert vap.fraction > 0.0 && liq.fraction > 0.0, at
 	assert math.abs(vap.fraction + liq.fraction - 1.0) <= 1e-15, at
 	y, x := vap.state.n, liq.state.n
 	sy := thermo.solve_tp(m, r.t, r.p, y, .stable)!
@@ -124,7 +180,9 @@ fn test_pt_matches_thermos_splits() {
 			}
 		}
 		g := if d[0] <= d[1] { 0 } else { 1 }
-		assert math.abs(r.beta - c.thermo.betas[g]) <= 1e-8, '${at}: β ${r.beta} vs ${c.thermo.betas[g]}'
+		// The lighter phase's fraction: β where it's the vapour, and where Π
+		// calls both liquid-like, D9's liquid, β being 0.
+		assert math.abs(r.phases[0].fraction - c.thermo.betas[g]) <= 1e-8, '${at}: ${r.phases[0].fraction} vs ${c.thermo.betas[g]}'
 		for i in 0 .. vap.len {
 			assert math.abs(vap[i] - c.thermo.compositions[g][i]) <= 1e-8, '${at}: y[${i}]'
 			assert math.abs(r.phases[1].state.n[i] - c.thermo.compositions[1 - g][i]) <= 1e-8, '${at}: x[${i}]'
@@ -229,10 +287,13 @@ fn test_a_split_wilson_cannot_start_comes_from_the_other_trials() {
 	t, p := 224.0717225900757, 5.300771495603128e6
 	quick := flash.stability(thermo.by_roots(m), t, p, z, first_proof: true)!
 	assert !quick.stable && quick.stopped && quick.trials.len == 2
+	// Since M6's D8 a split's unstable phase starts a third, and here the
+	// water-rich liquid takes the place of the split's phase on the way,
+	// which leaves a split of two: the same answer the trials gave, by
+	// another road.
 	r := flash.pt(thermo.by_roots(m), t, p, z)!
 	check_equilibrium(m, r, 'hydrogen iodide, n-decane and water')!
-	assert r.stability.trials.len == 5 && !r.stability.stopped
-	assert math.abs(r.beta - 0.0750223285695649) <= 1e-8, '${r.beta}'
+	assert math.abs(r.phases[0].fraction - 0.0750223285695649) <= 1e-8, '${r.phases[0].fraction}'
 }
 
 fn test_a_single_phase_is_labelled_by_its_pip() {
@@ -317,7 +378,7 @@ fn test_an_extrapolation_that_overshoots_is_undone() {
 		r := flash.pt(thermo.by_roots(m), t, 81e5, gas_z)!
 		check_equilibrium(m, r, 'the gas at ${t} K and 81 bar')!
 		assert r.iterations <= 21, '${t} K: ${r.iterations} steps'
-		betas << r.beta
+		betas << r.phases[0].fraction
 	}
 	// β rises smoothly with T across them, about 0.0059 a kelvin: the two
 	// steps of 0.1 K differ by 0.26%, the curve's own bend.
@@ -362,12 +423,14 @@ fn test_light_and_heavy_side_by_side() {
 	assert low.phases[1].state.n[0] < 0.01 // a little dissolved nitrogen
 }
 
-fn test_three_phases_are_refused_not_hidden() {
+fn test_three_phases_are_found_not_hidden() {
 	// Water, n-decane and methane at 350 K and 5 bar: PR (with a large
 	// water–hydrocarbon kᵢⱼ) has a methane-rich vapour, nearly pure liquid
 	// water and a decane-rich liquid. A two-phase flash can't represent
-	// that. Re-testing each phase of its split finds the third, so the flash
-	// reports more_phases rather than a split that only looks converged.
+	// that. Re-testing each phase of its split finds the third, which the
+	// flash then splits into (M6's D8): each answer checked from scratch,
+	// every fugacity equal, the balance, and no composition of the ternary
+	// below any phase's tangent plane, by a scan at steps of 1/40.
 	water := Component{
 		name:  'water'
 		tc:    647.1
@@ -394,12 +457,11 @@ fn test_three_phases_are_refused_not_hidden() {
 	)!
 	z := [0.5, 0.3, 0.2]
 	for c in [[300.0, 10e5], [350.0, 5e5], [400.0, 20e5]] {
-		if r := flash.pt(thermo.by_roots(m), c[0], c[1], z) {
-			assert false, '${c}: a two-phase answer for a three-phase state (β ${r.beta})'
-		} else {
-			assert err is flash.FlashError
-			assert (err as flash.FlashError).kind == .more_phases, err.msg()
-		}
+		r := flash.pt(thermo.by_roots(m), c[0], c[1], z)!
+		assert r.phases.len == 3, '${c}: ${r.phases.len} phases'
+		assert r.phases.map(it.label) == [thermo.PhaseLabel.vapor, .liquid, .liquid2], '${c}'
+		assert r.beta == r.phases[0].fraction
+		check_phases(m, r, '${c}')!
 	}
 	// Without the re-test the flash returns that split, whose fugacities
 	// are equal (it's a stationary point of G) but which isn't the

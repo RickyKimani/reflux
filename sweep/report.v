@@ -15,7 +15,9 @@ pub struct Tally {
 pub mut:
 	single        int
 	split         int
-	three_phase   int
+	three         int
+	more_phases   int
+	unsolved      int
 	near_critical int
 	unexplained   int
 }
@@ -27,7 +29,9 @@ pub fn tally(outcomes []Outcome) Tally {
 		match o.class {
 			.single { t.single++ }
 			.split { t.split++ }
-			.three_phase { t.three_phase++ }
+			.three { t.three++ }
+			.more_phases { t.more_phases++ }
+			.unsolved { t.unsolved++ }
 			.near_critical { t.near_critical++ }
 			.unexplained { t.unexplained++ }
 		}
@@ -87,7 +91,7 @@ pub fn report(pool_size int, outcomes []Outcome) string {
 	b.writeln('- **The compounds:** each point has ${nc_min} to ${nc_max}, drawn from the ${pool_size} in the database with Tc, Pc, ω, M and an ideal-gas Cp.')
 	b.writeln('- **The states:** T is log-uniform over ${t_min}–${t_max} K, P over ${p_min / 1e5}–${p_max / 1e5} bar, and z is uniform over the simplex.')
 	b.writeln('- **The checks,** from scratch on every answer:')
-	b.writeln('  - for a split, exit criterion 3: fugacities to 1e-10, mass balance to 1e-12, Σx = Σy = 1, two distinct phases, and neither unstable;')
+	b.writeln('  - for a split of two or three phases (M6), exit criterion 3: fugacities to 1e-10, mass balance to 1e-12, Σx = 1 in each, distinct phases, and none unstable;')
 	b.writeln('  - for a single phase, stability re-tested, with five extra random trial phases;')
 	b.writeln("  - for stability, every trial composition's tangent-plane distance recomputed from the model alone, so that the verdict doesn't rest on the flash's own test.")
 	b.writeln('- **The CI subset:** `sweep/sweep_test.v` runs the first ${ci_count} points.')
@@ -96,16 +100,19 @@ pub fn report(pool_size int, outcomes []Outcome) string {
 	b.writeln('|---|---|---|')
 	b.writeln('| One phase, checked stable | ${all.single} | ${ci.single} |')
 	b.writeln('| Two phases, every invariant checked | ${all.split} | ${ci.split} |')
-	b.writeln('| Explained: a third phase (M6) | ${all.three_phase} | ${ci.three_phase} |')
+	b.writeln('| Three phases, every invariant checked (M6) | ${all.three} | ${ci.three} |')
+	b.writeln('| Explained: a fourth phase, or three liquids | ${all.more_phases} | ${ci.more_phases} |')
+	b.writeln('| Not solved: more than two phases, proved, but the flash did not converge | ${all.unsolved} | ${ci.unsolved} |')
 	b.writeln('| Explained: at a critical point | ${all.near_critical} | ${ci.near_critical} |')
 	b.writeln('| **Unexplained** | **${all.unexplained}** | **${ci.unexplained}** |')
 	b.writeln('')
 	b.writeln('## The classes')
 	b.writeln('')
-	b.writeln('- **A third phase** (`more_phases`). Every two-phase split the flash found, from every start, has a phase that stability proves unstable, by a negative tangent-plane distance (tm, below). There are three or more phases, and M3 handles two: VLLE is M6. The flash refuses rather than return a split it knows is wrong. The sweep proves each such verdict itself: unverified, the flash returns the split it refused, and one of its phases has a trial composition whose tangent-plane distance, computed from the model alone, is below −1e-8. The table gives that phase, the vapour being tried first, and its tm.')
+	b.writeln('- **A fourth phase, or three liquids** (`more_phases`). Since M6 the flash splits into a third phase where a split of two has an unstable one (D8), and refuses where a split of three has an unstable phase too, or three liquids, which D9 names no more than two of. The sweep proves more than two phases itself: unverified, the flash returns a split of two, and one of its phases has a trial composition whose tangent-plane distance, computed from the model alone, is below −1e-8. The table gives that phase, the lightest being tried first, and its tm.')
+	b.writeln("- **Not solved.** The flash didn't converge (a split of three, or a stability test in its verification) where the sweep proves more than two phases, as above. These are the flash's failures, each listed with its reason, not answers.")
 	b.writeln("- **At a critical point.** The split collapsed onto the feed: every |ln K| < 1e-4, and the two phases can't be told apart.")
 	b.writeln('- **Unexplained:** no convergence, a broken invariant, or a contradiction, such as a single-phase answer that stability calls unstable.')
-	for class in [Class.unexplained, .near_critical, .three_phase] {
+	for class in [Class.unexplained, .unsolved, .near_critical, .more_phases] {
 		list := outcomes.filter(it.class == class)
 		if list.len == 0 {
 			continue
@@ -113,12 +120,13 @@ pub fn report(pool_size int, outcomes []Outcome) string {
 		title := match class {
 			.unexplained { 'Unexplained' }
 			.near_critical { 'At a critical point' }
-			else { 'A third phase' }
+			.unsolved { 'Not solved' }
+			else { 'A fourth phase, or three liquids' }
 		}
 		b.writeln('')
 		b.writeln('## ${title}: ${list.len}')
 		b.writeln('')
-		last := if class == .three_phase { 'Unstable phase' } else { 'Reason' }
+		last := if class == .more_phases { 'Unstable phase' } else { 'Reason' }
 		b.writeln('| Point | T (K) | P (bar) | Feed | ${last} |')
 		b.writeln('|---|---|---|---|---|')
 		for o in list {

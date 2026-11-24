@@ -166,7 +166,7 @@ fn flash_at(spec i32, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashResult 
 		}
 	}
 	check_z(z)!
-	return match spec {
+	r := match spec {
 		flash_pt { flash.pt(f.model, a, b, z)! }
 		flash_ph { flash.ph(f, a, b, z)! }
 		flash_ps { flash.ps(f, a, b, z)! }
@@ -175,6 +175,13 @@ fn flash_at(spec i32, f thermo.Fluid, a f64, b f64, z []f64) !flash.FlashResult 
 		flash_tvf { flash.tvf(f.model, a, b, z)! }
 		else { flash.pvf(f.model, a, b, z)! }
 	}
+	// The layout has a liquid and a vapour (M10a's D6). Three phases, or two
+	// liquids, have no place in it until ABI 2 (M6's D14, as settled in step
+	// 7): the point is MORE_PHASES, saying which phases there are.
+	if r.phases.len > 2 || r.phases.any(it.label == .liquid2) {
+		return point_error(point_more_phases, 'flash: ${r.phases.map(it.label.name()).join(', ')} at ${r.t} K and ${r.p} Pa, and the C API takes one liquid and one vapour until ABI 2')
+	}
+	return r
 }
 
 fn check_finite(x f64, what string, unit string) ! {

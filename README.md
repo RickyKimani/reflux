@@ -133,6 +133,8 @@ numeric/
   jet.v             a value with its first two derivatives, whose arithmetic
                     differentiates as it goes: forward mode (M6)
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
+  multiphase.v      Michelsen's multiphase Rachford–Rice: Q minimised over the
+                    phases' fractions, β ≥ 0 (M6)
   ode.v             initial-value problems (M9): the interfaces, Hairer's
                     error norm and first step
   dopri5.v          Dormand and Prince's 5(4) pair, with stiffness detection
@@ -187,6 +189,8 @@ flash/
   stability.v       Michelsen's tangent-plane stability test, for any phase
                     model
   pt.v              the PT flash: stability, then the two-phase split
+  multi.v           three phases, stage-wise (M6): a split's unstable phase
+                    grows it, substitution and Newton on G; D9's labels
   vf.v              vapour-fraction flashes: bubble and dew points, T or P given
   ph.v              PH and PS flashes, pure components included
   azeotrope.v       an azeotrope at a given T or P, by Newton on x and T or P

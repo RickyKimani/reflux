@@ -222,6 +222,11 @@ fn flash_point(spec string, f thermo.Fluid, a f64, b f64, z []f64) FlashPoint {
 		}
 	}
 	r := run_flash(spec, f, a, b, z) or { return failed(status_of(err)) }
+	// The C API's layout has a liquid and a vapour: two liquids or three
+	// phases are MORE_PHASES there until ABI 2 (M6's D14), so here too.
+	if r.phases.len > 2 || r.phases.any(it.label == .liquid2) {
+		return failed(int(flash.Failure.more_phases) + 1)
+	}
 	mut phase := [nans(4), nans(4)]
 	mut x := [nans(nc), nans(nc)]
 	mut h, mut s, mut v := 0.0, 0.0, 0.0

@@ -17,14 +17,28 @@ fn first(db components.Database, class Class) !Point {
 	return error('no ${class} point in the first 100')
 }
 
-// refused asserts that check_split refuses r, for a reason that mentions
+// refused asserts that check_phases refuses r, for a reason that mentions
 // want.
 fn refused(m thermo.PhaseModel, pt Point, r flash.FlashResult, want string) ! {
-	check_split(m, pt, r) or {
+	check_phases(m, pt, r) or {
 		assert err.msg().contains(want), err.msg()
 		return
 	}
 	assert false, 'a wrong split passed: ${want}'
+}
+
+// with_fractions is r with its two phases' fractions replaced.
+fn with_fractions(r flash.FlashResult, a f64, b f64) flash.FlashResult {
+	return flash.FlashResult{
+		...r
+		phases: [flash.Phase{
+			...r.phases[0]
+			fraction: a
+		}, flash.Phase{
+			...r.phases[1]
+			fraction: b
+		}]
+	}
 }
 
 // with_phases is r with its phases' compositions replaced by y and x.
@@ -62,16 +76,17 @@ fn overlapping_split(db components.Database) !(Point, thermo.PhaseModel, flash.F
 	return error('no split with overlapping phases in the first 200 points')
 }
 
-fn test_check_split_refuses_a_wrong_split() {
+fn test_check_phases_refuses_a_wrong_split() {
 	db := components.load_default()!
 	pt, m, r := overlapping_split(db)!
-	check_split(m, pt, r)!
+	check_phases(m, pt, r)!
 	y, x := r.phases[0].state.n, r.phases[1].state.n
 	// Moving δ of a component from the vapour into the liquid, as moles
 	// rather than fractions, keeps the mass balance exact: x gains δ and y
 	// loses c·δ, where c = (1 − β)/β. Do it to the two components best
 	// present in both phases.
-	c := (1.0 - r.beta) / r.beta
+	b := r.phases[0].fraction
+	c := (1.0 - b) / b
 	mut order := []int{len: x.len, init: index}
 	order.sort_with_compare(fn [x, y] (a &int, b &int) int {
 		ma, mb := math.min(x[*a], y[*a]), math.min(x[*b], y[*b])
@@ -84,9 +99,10 @@ fn test_check_split_refuses_a_wrong_split() {
 		}
 	})
 	k, j := order[0], order[1]
-	// The mass balance, with β off by 1e-9: each component's is then off by
-	// 1e-9·|yᵢ − xᵢ|, far above 1e-12.
-	refused(m, pt, flash.FlashResult{ ...r, beta: r.beta + 1e-9 }, 'mass balance')!
+	// The mass balance, with the lighter phase's fraction 1e-9 more and the
+	// other's 1e-9 less: each component's is then off by 1e-9·|yᵢ − xᵢ|, far
+	// above 1e-12.
+	refused(m, pt, with_fractions(r, b + 1e-9, 1.0 - b - 1e-9), 'mass balance')!
 	// The sums, with δ = 1e-12/max(1, c) moved: Σx or Σy is then 1e-12
 	// from 1, while ln fₖ changes by δ/xₖ + c·δ/yₖ ≤ 1e-12·(1/xₖ + 1/yₖ),
 	// below 1e-10 since both are above 0.05.
@@ -104,10 +120,10 @@ fn test_check_split_refuses_a_wrong_split() {
 	x2[j] -= d
 	y2[k] -= c * d
 	y2[j] += c * d
-	refused(m, pt, with_phases(m, r, y2, x2)!, 'ln fV')!
+	refused(m, pt, with_phases(m, r, y2, x2)!, '|ln f| of component')!
 }
 
-fn test_check_split_refuses_a_split_that_is_not_one() {
+fn test_check_phases_refuses_a_split_that_is_not_one() {
 	db := components.load_default()!
 	// Two copies of a stable feed pass every check but these two.
 	pt := first(db, .single)!
@@ -131,14 +147,16 @@ fn test_check_split_refuses_a_split_that_is_not_one() {
 		]
 	}
 	refused(m, pt, two, 'the same')!
-	refused(m, pt, flash.FlashResult{ ...two, beta: 1.0 }, 'β')!
+	refused(m, pt, with_fractions(two, 1.0, 0.0), 'a fraction of')!
+	refused(m, pt, with_fractions(two, 0.5, 0.6), 'sum to')!
 }
 
-fn test_check_split_refuses_an_unstable_phase() {
-	// Unverified, the flash returns a split that has an unstable phase at a
-	// point the verified flash refuses. Only stability catches it.
+fn test_check_phases_refuses_an_unstable_phase() {
+	// Unverified, the flash returns a split of two that has an unstable
+	// phase at a point the verified flash splits into three. Only stability
+	// catches it.
 	db := components.load_default()!
-	pt := first(db, .three_phase)!
+	pt := first(db, .three)!
 	m := db.fluid(.pr, pt.cas)!.model
 	r := flash.pt(m, pt.t, pt.p, pt.z, verify: false)!
 	refused(m, pt, r, 'unstable')!
@@ -158,7 +176,7 @@ fn test_check_single_refuses_an_unstable_feed() {
 
 fn test_prove_more_phases_needs_an_unstable_phase() {
 	db := components.load_default()!
-	three := first(db, .three_phase)!
+	three := first(db, .three)!
 	proof := prove_more_phases(db.fluid(.pr, three.cas)!.model, three)!
 	assert proof.contains('tm = -'), proof
 	// A verified split and a single phase prove nothing.
@@ -186,14 +204,16 @@ fn test_the_report_counts_every_class() {
 		p:     1e5
 	}
 	mut outcomes := []Outcome{len: ci_count, init: Outcome{pt, .single, ''}}
-	for class in [Class.split, .three_phase, .near_critical, .unexplained] {
+	for class in [Class.split, .three, .more_phases, .unsolved, .near_critical, .unexplained] {
 		outcomes << Outcome{pt, class, 'why'}
 	}
 	text := report(640, outcomes)
-	assert text.contains('| Outcome | All 1004 | First 1000 (CI) |')
+	assert text.contains('| Outcome | All 1006 | First 1000 (CI) |')
 	assert text.contains('| One phase, checked stable | 1000 | 1000 |')
 	assert text.contains('| Two phases, every invariant checked | 1 | 0 |')
-	assert text.contains('| Explained: a third phase (M6) | 1 | 0 |')
+	assert text.contains('| Three phases, every invariant checked (M6) | 1 | 0 |')
+	assert text.contains('| Explained: a fourth phase, or three liquids | 1 | 0 |')
+	assert text.contains('| Not solved: more than two phases, proved, but the flash did not converge | 1 | 0 |')
 	assert text.contains('| Explained: at a critical point | 1 | 0 |')
 	assert text.contains('| **Unexplained** | **1** | **0** |')
 	assert text.contains('## Unexplained: 1\n\n| Point | T (K) | P (bar) | Feed | Reason |\n|---|---|---|---|---|\n| 0 | 300.0 | 1.0 | A 0.5, B 0.5 | why |')

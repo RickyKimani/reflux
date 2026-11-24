@@ -83,8 +83,8 @@ Keep this section current: update it whenever a step is committed.
       to a type that can't be in the interface compiles and returns a zero
       value (v-for-go); `numeric.newton` drops a model's reason at x0
       (step 6's to pass on).
-  - **Steps 5 and 6 are done,** built together at the owner's word, not
-    committed, and amend D4, D6 and criterion 3, approved on
+  - **Steps 5 and 6 are done,** built together at the owner's word
+    (committed at 2871df2), and amend D4, D6 and criterion 3, approved on
     2026-11-23.
     - Step 5: `thermo.GammaPhi`, a γ–φ fluid behind the seam (a solvent by
       γ, Pˢᵃᵗ, φˢᵃᵗ at the correlation's Pˢᵃᵗ and Poynting; a Henry's-law
@@ -107,12 +107,33 @@ Keep this section current: update it whenever a step is committed.
       takes φˢᵃᵗ at its EOS's own Pˢᵃᵗ, and its solute's γ is the symmetric
       one.
   - **After step 6, Henry's constants by IAPWS,** at the owner's word to
-    choose what's best for hydrogen, not committed, and amends D6,
-    approved on 2026-11-24: a gas in water that IAPWS's guideline covers
+    choose what's best for hydrogen, and amends D6, approved on
+    2026-11-24: a gas in water that IAPWS's guideline covers
     (G7-04, 14 gases) takes IAPWS's own form and constants, in place of the
     bank's row. Against it, ChemSep's hydrogen is 5.95 times off at 298 K
     (62 at 623 K), its neon 4.5e32, the other eleven within 12% at 298 K
-    (data-quality.md). Step 7 is next.
+    (data-quality.md). Committed at 2648ebb.
+  - **Steps 7 and 8 are done,** built together at the owner's word.
+    D9 and D14 are settled, approved on 2026-11-24 (by Π, 2,289
+    of M3's sweep's 3,344 PR splits are two liquids, now liquid and liquid2;
+    the C API refuses two liquids until ABI 2). D8 is amended, approved on
+    2026-11-24: Michelsen's multiphase Rachford–Rice (Q over β ≥ 0) in
+    place of Okuno's, Newton on G scaled by √n with each component's
+    dependent phase its largest holder, a new phase begun at 1% of the
+    feed, three liquids refused.
+    - Step 7: `flash/multi.v`, the stage-wise split to three phases,
+      `numeric.multiphase_rr`, D9's labels (`labelled`); against `FlashVLN`
+      on 17 NRTL and PR states to 1.9e-13, each checked from scratch.
+    - Step 8: PH and PS search again on verified flashes where the first
+      misses the balance; TV and UV refuse three phases; the drum sends both
+      liquids out of its liquid port; the C API and the sweep follow.
+    - The sweep: 303 three-phase answers, 856 fourth phases or three
+      liquids, 5 not solved (proved more than two, no convergence), 0
+      unexplained.
+    - From Python, D14 refuses 125 of the exit script's 6,480 map points
+      (near the natural gas's critical point), one of M3's 39 splits by
+      `thermo`, and the PT state of one TVF answer at 80.6 bar; their
+      tests hold each so.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as

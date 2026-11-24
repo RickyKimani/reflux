@@ -22,7 +22,7 @@ class Status(enum.IntEnum):
     BAD_INPUT = 1  # a value it can't use: not finite, T or P ≤ 0, z negative or all 0
     NO_CONVERGENCE = 2  # an iteration ran out of steps
     NO_VOLUME_ROOT = 3  # no volume root at a state it needed
-    MORE_PHASES = 4  # a flash's phase is itself unstable
+    MORE_PHASES = 4  # a phase is itself unstable, or two liquids or three phases, which the layout can't hold
     PHASES_SWAPPED = 5  # a vapour-fraction flash's phases swapped
     OUTSIDE_ENVELOPE = 6  # no such point on the phase envelope
     SUPERCRITICAL = 7  # at or above Tc: no vapour pressure

@@ -46,7 +46,8 @@ pub:
 //   |V − V_spec| ≤ vtol·V_spec.
 //
 // A pure component inside its saturation dome has P = Psat(T) and the
-// vapour fraction β = (V − Vᴸ)/(Vⱽ − Vᴸ).
+// vapour fraction β = (V − Vᴸ)/(Vⱽ − Vᴸ). An answer of three phases is
+// .more_phases: TV and UV take two (M6's D10).
 pub fn tv(m thermo.Model, t f64, v f64, z []f64, params VolumeParams) !FlashResult {
 	if !(t > 0.0) || !math.is_finite(t) {
 		return fail(.bad_input, 'T = ${t} K is not a temperature')
@@ -55,7 +56,14 @@ pub fn tv(m thermo.Model, t f64, v f64, z []f64, params VolumeParams) !FlashResu
 	if s.present.len == 1 {
 		return s.pure()!
 	}
-	return s.mixture()!
+	r := s.mixture()!
+	// The TV and UV flashes stay two-phase (M6's D10): their finish
+	// minimises A over two phases. Their search may pass through three on
+	// the way to two, but an answer of three is refused.
+	if r.phases.len > 2 {
+		return fail(.more_phases, '${s.what()}: ${r.phases.len} phases at ${r.p} Pa, and the TV and UV flashes take two')
+	}
+	return r
 }
 
 // VolumeFlash is one TV flash.

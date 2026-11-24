@@ -617,11 +617,84 @@ mixture above is the example. There, a two-phase flash, reflux's without
 the re-test or `thermo`'s FlashVL, returns a split whose fugacities are
 equal but which isn't the equilibrium.
 
-**Which phase is the vapour.** The phase of lower *mass* density, ΣnᵢMᵢ/V
-(D6, amended in step 6). Molar volume isn't a substitute. In methane with
+**The order of the phases.** By increasing *mass* density, ΣnᵢMᵢ/V (D6,
+amended in step 6). Molar volume isn't a substitute. In methane with
 n-decane at 300 K and 200 bar, the methane-rich phase has the smaller molar
 volume and yet weighs 168 kg/m³, against the decane-rich phase's 585. Step
 4 compared molar volumes and called the decane-rich phase the vapour.
+
+**Their names** (M6's D9, `labelled` in [flash/multi.v](../flash/multi.v)).
+Each phase is named by its model's `phase_label` (an equation of state's
+by Π and the four-covolume rule, above; a γ–φ fluid's by the model that
+made it); of the phases called vapour only the least dense stays so, the
+rest being liquids; and of the liquids the less dense is the liquid and
+the denser liquid2. A third liquid has no name and is refused. β is the
+vapour's fraction, or 0 with none. Until M6 the less dense phase of a split
+was the vapour whatever Π said, so a liquid–liquid split by an equation of
+state was called vapour and liquid: of M3's sweep's 3,344 splits by PR,
+2,289 are liquids by Π, now liquid and liquid2.
+
+## Three phases
+
+M6's D8 ([flash/multi.v](../flash/multi.v)), Michelsen's stage-wise flash.
+A two-phase split whose verification finds a phase unstable takes that
+phase's trial composition as a third phase: the split's two and the trial,
+the trial with 1% of the feed and the others 99% of theirs. With no moles
+the trial would hold a component that lives almost only in it in no phase
+at all.
+
+**The split.** Successive substitution: at each step each phase's φᵢⱼ at its
+composition, then the fractions and compositions from Michelsen's (1994)
+multiphase Rachford–Rice (`numeric.multiphase_rr`,
+[numeric/multiphase.v](../numeric/multiphase.v)) on Kᵢⱼ = 1/φᵢⱼ:
+
+    Q(β) = Σⱼ βⱼ − Σᵢ zᵢ ln Eᵢ,   Eᵢ = Σⱼ βⱼKᵢⱼ,   β ≥ 0,
+    xᵢⱼ = zᵢKᵢⱼ/Eᵢ,   ∂Q/∂βⱼ = 1 − Σᵢ xᵢⱼ,   ∂²Q/∂βⱼ∂βₖ = Σᵢ zᵢKᵢⱼKᵢₖ/Eᵢ².
+
+Q is convex, so its minimum over β ≥ 0 is unique; there each phase present
+has Σᵢ xᵢⱼ = 1 (so Σⱼ βⱼ = 1 and Σⱼ βⱼxᵢⱼ = zᵢ), and a phase held at 0 has
+Σᵢ xᵢⱼ ≤ 1, stable absent. Each component's K-values are scaled by its
+largest, so none overflows. Newton runs on the free phases, a phase at 0
+whose step would go below it held there and the step taken again; the step
+is cut short to keep β ≥ 0, and halved until Q falls or rises by no more
+than its rounding (near the minimum a Newton step moves Q by about the
+gradient squared). With two phases it is a Rachford–Rice with the negative
+flash cut off at 0 and 1: the same root inside, to 2e-15.
+
+A phase held at 0 three steps running leaves the split, and of two phases
+that come within 1e-4 in every ln x, one does. After 30 steps the split
+goes on by Newton on G.
+
+**Newton on G over the phases.** Each component present has a dependent
+phase rᵢ, the one holding the most of it, which takes the rest of the feed;
+its moles in every other phase are the variables. Then
+
+    gᵢⱼ = ln fᵢⱼ − ln fᵢᵣᵢ,
+    Hᵢⱼ,ₖₘ = (δⱼₘ − δⱼᵣₖ)Aʲᵢₖ − (δᵣᵢₘ − δᵣᵢᵣₖ)Aʳⁱᵢₖ,
+    Aʲᵢₖ = (δᵢₖ/xᵢⱼ − 1 + Φʲᵢₖ)/Nⱼ,
+
+the two-phase form, H = δⱼₘAʲ + Aˡ, when one phase l is every component's.
+With one dependent phase for all, a trace such as water's 1e-29 of decane is
+z − Σ of numbers near 0.3, rounding, and Newton is lost; as a variable of
+its own it keeps its digits. And the variables are scaled by √n: a trace's
+Hessian entry is 1/n, 1e29 beside entries of order 1, which Cholesky can't
+factor, and scaled every diagonal entry is of order 1 (Michelsen and
+Mollerup). The scaled gradient is s·g, so its test is held at the smallest
+s, and the stop is left to a step too small to move anything or a fall G's
+rounding can't show; the split holds the answer to tol in every ln f.
+
+**The answer** has every |ln fᵢⱼ − ln fᵢᵣ| ≤ tol and every fraction above 0,
+and with `verify` each phase is tested for stability, the others as
+trials. An unstable phase of a split of two grows it to three; of a split
+of three, it is a fourth, `.more_phases`. A phase that leaves on the way
+leaves a split of two, verified again.
+
+**PH and PS** (D10) search first on unverified PT flashes, which stay
+two-phase, and if that misses the energy balance, again on verified ones:
+in a region of three phases an unverified flash's H(T) is a false split's.
+Newton's finish in (v, ln T) is two-phase, so a split of three is finished
+by Brent alone, to etol. **TV and UV** stay two-phase: an answer of three
+is refused, `.more_phases`, though the search may pass through three.
 
 ## Vapour-fraction flashes
 
@@ -1907,7 +1980,9 @@ each unit balances as
   W = F (h_out − h_in) is below 0 for an expander.
 - **Flash drum.** The inlets blend as in a mixer, then a flash at the drum's
   pressure: PT at a given T, or PH at h = (Σⱼ Fⱼ hⱼ + Q) / F. A duty of 0 is
-  adiabatic. Each phase k leaves by its own outlet, with flows
+  adiabatic. Each phase k leaves by its label's outlet (M6's D9 and D11):
+  the vapour by the vapour port, and every liquid, liquid2 too, by the
+  liquid port, a stream of both at their shares. Its flows are
 
       nᵢₖ = F βₖ xᵢₖ
 
@@ -2755,9 +2830,12 @@ language, so its conventions are the same for every function (M10a's D2):
   spec saying what a point's two values are, (T, P) for the PT flash. It
   writes the whole's β, T, P, H, S and V per mole of feed, and each phase's
   fraction, V, H, S and composition in the place of its label: the
-  liquid's (0) then the vapour's (1). A split's less dense phase is the
-  vapour, and a single phase takes its label's place, the other NaN, so the
-  vapour's composition is always the same column of the arrays. The whole's
+  liquid's (0) then the vapour's (1). A single phase takes its label's
+  place, the other NaN, so the vapour's composition is always the same
+  column of the arrays. An answer with two liquids, which M6's D9 names
+  liquid and liquid2, or with three phases, has no place in the layout, so
+  it is `REFLUX_POINT_MORE_PHASES`, its reason naming the phases, until ABI 2
+  (M6's D14 as settled in step 7). The whole's
   H, S and V are its phases', summed in the flash's order, as
   `flowsheet.Stream` sums them.
 - **Held to the V API bit for bit.** `tools/capi_reference.v` computes a
