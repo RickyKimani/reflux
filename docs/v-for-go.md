@@ -615,6 +615,13 @@ in [flowsheet/drum.v](../flowsheet/drum.v) returns a `(Stream, Stream)`. As
 in Go, there's no tuple to hold them: `t := pick()` is a compile error for a
 function returning two values.
 
+**Nor can an array hold them.** Probed: `[]([]f64, f64){}` is accepted as a
+type, but no expression has it, since `([1.0], 2.0)` is "expression
+evaluated but not used", and appending each value is "cannot append `[]f64`
+to `[]([]f64, f64)`". Name a struct instead, as Go would: `At{x, t, v}`
+holds DWSIM's γ by state in
+[components/dwsim_activity_test.v](../components/dwsim_activity_test.v).
+
 **An interface can hold an interface.** `Translated` in
 [thermo/translated.v](../thermo/translated.v) has a field `inner Model` and
 implements `Model` itself, by evaluating `inner` at a shifted volume. So

@@ -25,10 +25,10 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M6 (activity models and liquid–liquid equilibrium) is under way** on
-  branch `m6-activity`. Its plan, `docs/m6-plan.md`, was approved on
-  2026-11-18: exit criteria 1–13, decisions D1–D20 and steps 0–15, ending in
-  v0.5.0.
+- **M6 (activity models and liquid–liquid equilibrium) is finished** on
+  branch `m6-activity`, with its exit review at the end of its plan, not yet
+  merged. Its plan, `docs/m6-plan.md`, was approved on 2026-11-18: exit
+  criteria 1–13, decisions D1–D20 and steps 0–15, ending in v0.5.0.
   - **Step 0 is done** (committed at ea977c2), and amends D7 and criterion
     8, both approved on 2026-11-18:
     - The seam (`spike/seam`): `flash`'s PT flash behind a phase-model
@@ -155,7 +155,7 @@ Keep this section current: update it whenever a step is committed.
       thermo's models to 1.5e-6 of the standard errors. The published
       methanol–water set determines NRTL's two energies but not α nor
       UNIQUAC's, so those fits are on drawn ethanol–water data.
-  - **Steps 12 and 13 are done,** built together, not committed. No
+  - **Steps 12 and 13 are done,** built together (committed at 74787ff). No
     decision amended.
     - Step 12: DWSIM 9's activity packages by state
       (`testdata/m6_dwsim.json`, `tools/gen_m6_dwsim.py`), every difference
@@ -173,7 +173,23 @@ Keep this section current: update it whenever a step is committed.
     - CI failed on d8a1e0c's Ubuntu jobs (both): the test of NRTL's α fitted
       where the data don't determine it, which stops at its rounding there
       (a gradient test of 2.3e-10) and converges on Windows. The test now
-      takes either outcome; not yet seen on CI.
+      takes either outcome; CI passed on 74787ff, all four jobs (run
+      45477152064).
+  - **Steps 14 and 15 are done,** built together (not yet committed): M6
+    is finished, its exit review at the end of its plan, every criterion
+    met but CI on this commit and the tag.
+    - Step 14: v.mod and the package at 0.5.0; the CHANGELOG entry, undated
+      until the tag on `main` after the merge; all eight golden reports
+      written again, only the version moved. The release gate refuses for
+      the tree, the branch and the date alone.
+    - Step 15: the README, the roadmap (M6 done; C5, E4, H4's fits),
+      data-format.md (the activity banks), the V note (no tuples in an
+      array), and the criterion-by-criterion review: 317 planted mistakes,
+      294 caught, 6 deleted, 17 explained.
+    - Carried forward (in its review): v0.5.0's tag; the merge with
+      `m5a-water`; `thermo.r_gas`, the owner's to decide; γ–φ and three
+      phases from Python (M10b, ABI 2); reports to DWSIM, `thermo`,
+      ChemSep and V.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as

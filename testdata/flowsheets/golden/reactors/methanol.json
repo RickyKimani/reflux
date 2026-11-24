@@ -1,6 +1,6 @@
 {
   "format": 4,
-  "reflux": "0.4.0",
+  "reflux": "0.5.0",
   "file": "testdata/flowsheets/methanol.toml",
   "status": "solved",
   "error": null,

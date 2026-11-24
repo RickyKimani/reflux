@@ -28,7 +28,8 @@ approved on 2026-11-23; Henry's constants by IAPWS amend D6 again, approved
 on 2026-11-24. Steps 7 and 8 are done, amending D8 and settling D9 and
 D14, approved on 2026-11-24. Steps 9 to 11 are done, built together, and
 amend D12, approved on 2026-11-24. Steps 12 and 13 are done, built
-together. Steps 14 and 15 are next.
+together. Steps 14 and 15 are done, built together: M6 is finished, with
+its exit review at the end of this plan.
 
 ## Goal
 
@@ -1786,13 +1787,196 @@ local gcc check: CI runs it on the push. `tools/gen_m6_dwsim.py`
 reproduces its output byte for byte; `tools/gen_m6_bench.py`, timings,
 can't.
 
-### 14. Release v0.5.0
+### 14. Release v0.5.0 — done
 - The CHANGELOG entry, the versions and the release gate, as for v0.4.0.
 
-### 15. Docs and exit review
+Steps 14 and 15 were built together, as M8's last two were.
+
+**Built:**
+- **The versions:** `v.mod` and the Python package's `pyproject.toml` at
+  0.5.0. The C API's version string comes from `v.mod`; its ABI stays 1
+  (D14).
+- **The CHANGELOG's 0.5.0 entry,** undated until the tag: what was added
+  (the activity models, ChemSep's banks and tables, the γ–φ fluid, Henry's
+  law, flashes on any phase model, three phases, the labels, format 4, the
+  decanter, report format 4, the point test, the pair fits, DWSIM, the
+  speed), what changed (two liquids by an equation of state named liquid
+  and liquid2, the C API refusing them, report format 4, the V API, the
+  reactors refusing a γ–φ fluid), what was fixed (PH's and PS's NaN
+  balance, `numeric.newton`'s reason), and the known limitations.
+- **The golden reports written again** by `tools/golden.vsh`, all eight,
+  each named in the entry (`decanter.json` new since 0.4.0). Compared line
+  by line with the committed ones by a script: only `reflux`'s version
+  moved, 0.4.0 to 0.5.0; no number, label or warning.
+
+**The release gate** (`v run tools/release.vsh`) refuses for three reasons
+only, each expected: the working tree has changes, the branch is
+`m6-activity` and not `main`, and the entry has no date. The tag comes on
+`main` after the merge, when the owner asks.
+
+### 15. Docs and exit review — done
 - README, roadmap, design notes, the data format, the file and report
   formats, data-quality.md, the V notes, and a criterion-by-criterion
   review.
+
+**Updated:**
+- **[README.md](../README.md):** a decanter's flowsheet and a pair fit among
+  the first commands; M6 done, with its checklist; v0.4.0 tagged and v0.5.0
+  to be tagged after M6's merge; next M10b, or M5 and M7.
+- **[roadmap.md](roadmap.md):** M6's entry done, with the plan's four
+  additions (D1) and what it did beyond the exit; C5, E4 and H4's NRTL and
+  UNIQUAC fits marked done.
+- **[design.md](design.md):** each step wrote its formulas when it was
+  built (the phase seam, phase identification, three phases, azeotropes,
+  the point test and the pair fits, the activity models, the γ–φ liquid and
+  Henry's law), so nothing more was needed.
+- **[data-format.md](data-format.md):** the data root's activity banks and
+  UNIFAC tables, and IAPWS's constants, which are the code's.
+- **[flowsheet-format.md](flowsheet-format.md) and
+  [report-format.md](report-format.md):** format 4 and report format 4,
+  from step 9.
+- **[data-quality.md](data-quality.md):** written again by
+  `tools/data_quality.vsh`, unchanged.
+- **[v-for-go.md](v-for-go.md):** an array can't hold a multiple return's
+  values either: name a struct (probed).
+- **The exit review,** below.
+
+**Planted mistakes:** none. Neither step changed V source but the version
+in `v.mod`, which the golden reports' test holds them to.
+
+## Exit review
+
+Checked on 2026-11-25 at the tip of `m6-activity`, `74787ff` with steps 14
+and 15 on it, under V 0.5.2 (eab77e7) on Windows 11.
+- **Locally:** the full tcc check, `v run tools/check.vsh`, on steps 14 and
+  15 (29 min): 227 test files, of which 104 are the M5a worktree's inside
+  the tree and reflux's own 123, 19 of them new in M6; then the build, the
+  demo and the CLI's runs. No local gcc check, by the bundle rule: CI runs
+  it. And `v run tools/python.vsh test` under the new version, 83 passed,
+  the bit-for-bit tests included.
+- **In CI:** every push of M6 ran its four jobs. The last, `74787ff` (run
+  45477152064), passed all four. `d8a1e0c`'s two Ubuntu jobs failed on step
+  11's test of an α the data don't determine, which stopped at its rounding
+  there; after step 13 the test takes either honest outcome. Steps 14 and
+  15 get their run when they're pushed.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Activity models are right | **met**, mpmath at 40 digits | `activity/models_test.v` (steps 2 and 3): Wilson, NRTL, UNIQUAC and the three UNIFACs on seven systems of two to five components, four seeded states each. Against `thermo`: ln γ to 3.1e-15, ∂/∂T 2.6e-14, ∂²/∂T² 1.4e-14, n·∂ln γᵢ/∂nⱼ 2.5e-13 of its row, Gᴱ, Hᴱ and Cpᴱ 5.0e-14. Against mpmath's closed forms for the binary models, 1.9e-15 to 4.9e-14. mpmath ran at 40 digits, not 50: the worst difference, 1e-15, is 25 orders above 40 digits' rounding. From scratch at every state: Gibbs–Duhem to 2.4e-14 of the sum's terms, and ln γᵢ against differences of nGᴱ/RT to 1.6e-9, the differences' own error. A pure component's γ is exactly 1 in every model. `activity/finite_test.v`: every answer finite, or refused with its reason. |
+| 2 | The data is what its sources say | **met** | `data/vendor/chemsep/NOTICE.md`: twenty files' sizes and SHA-256 sums, checked by its test with the six before them. `components/activity_test.v` (step 1): the strict readers, each line that can't be read a defect. Eight places where the UNIFAC files contradict themselves are repaired by their own evidence, and 26 typos corrected from DDBST's published tables (D7 as amended), each reported. `components/quality/activity_test.v`: every UNIFAC subgroup and parameter against `thermo`'s copy, the renumbering accounted for, every difference settled, in data-quality.md: one `thermo`'s typo (an R of 9183), and 12 of Dortmund's parameters where DDBST's page prints ChemSep's. |
+| 3 | The γ–φ liquid is consistent | **met**, as amended in step 5 | `components/gamma_phi_test.v` (step 5): against `GibbsExcessLiquid` on the Psat and Poynting bases, ln φ, its derivatives, H, S, Cp and V to 3.6e-12 at worst. On 'Poynting&PhiSat' with PR, all to 3.6e-13 but Cp, 7.9e-9 within the amended 1e-7: both take φˢᵃᵗ's second T-derivative by differences, and reflux's Cp is held to differences of its own H to 1.7e-11. A pure liquid's ΔHvap from H equals Clapeyron's to 4.4e-16, and Hᴱ from H the model's to 2.2e-15. |
+| 4 | Nothing a cubic does changes | **met**, but for D9's labels and D14's refusals, both approved | Step 4: step 4's trace, the CLI's 65 outputs and the C API's reference against the code before, every bit the same. The PT flash's time on M3's twelve cases: best times 0.994 to 1.011 of before; of 72 rounds' ratios, the median is 0.991. Step 6 kept every bit but 868 trace lines: 865 refusals now give their reason, and 3 refusals are now verified answers. By D9 (settled in step 7), 2,289 of the sweep's 3,344 PR splits are now liquid and liquid2, which the C API refuses (D14): 125 of the Python exit script's 6,480 points. No golden report's number or label moved (step 14). |
+| 5 | Activity-model flashes are right | **met** | `components/gamma_phi_test.v` (step 6): 210 flashes on methanol–water, ethanol–water, acetone–methanol and acetone–methanol–water by NRTL, and methanol–water by UNIFAC, against `FlashVL`. PT: β to 6.7e-11, x and y to 1.0e-12. Bubble and dew points: T to 5.7e-14, P to 8.6e-13. PH and PS: T to 1.1e-11. Each answer is checked from scratch: fugacities to 1e-10, the balance to 1e-12, and a TPD scan finding nothing below the tangent plane. The azeotropes, ethanol–water's at 351.53 K and acetone–methanol's at 328.53 K, match to 2.0e-14 in x. |
+| 6 | Three phases are right | **met** | `components/three_phase_test.v` (step 7): 17 states against `FlashVLN`, NRTL's LLE and VLLE and PR's water, n-decane and methane. Fractions agree to 1.9e-13 and compositions to 1.1e-13. Every phase is verified stable, and a tangent-plane scan over the whole composition space finds nothing below it. A fourth phase is refused with its reason. Step 8: PH and PS take three phases. M3's sweep gives 303 three-phase answers, every invariant checked, and 856 explained refusals (a fourth phase, or three liquids). 5 points are not solved: more than two phases proved, listed as failures. None is unexplained. |
+| 7 | Henry's law is right | **met** | `components/gamma_phi_test.v` (step 5, and after step 6): gases in water, and in water with ethylene glycol, against `thermo`'s Henry modes. ln φ agrees to 6.9e-15, its derivatives, H, S and Cp to 2.9e-14, and dn to 2.6e-11 (`thermo`'s by differences). Once IAPWS replaced the bank for its 14 gases in water, `thermo`'s comparison moved to ammonia, ethylene and propane, which IAPWS doesn't cover. IAPWS's constants are held to the `iapws` package's to 4.4e-16 at 350 points. Refused by name: a liquid of hydrogen and methanol. |
+| 8 | Published data are reproduced | **met**, as amended in step 0, from the archive alone | `components/published_test.v` (step 10), every set from ThermoML: 11 VLE sets at 101.3 kPa (5 methanol–water, 6 ethanol–water), water–1-butanol's LLE at two T, its heteroazeotrope, and water + 1-butanol + p-xylene's tie lines. Each VLE set first takes the point test, Fredenslund, Gmehling and Rasmussen's form of Van Ness's, with SciPy's verdict on every set. 9 sets are consistent; 2 aren't, recorded and not used. 74 deviations are recorded, rounded up, and can't grow. NRTL and UNIQUAC are refused on the ternary, saying so: the banks don't pair p-xylene. |
+| 9 | Fits are right | **met** | `fit/pairs_test.v` (step 11): NRTL's two energies on the published methanol–water set, and NRTL's α and UNIQUAC's pair on drawn ethanol–water data. Values and intervals agree with SciPy's, run with `thermo`'s models, to 1.5e-6 of their standard errors, and the errors to 4.0e-7. A fit the data don't determine says so: α's interval wide, or a stop at its rounding (CI's Ubuntu). |
+| 10 | Files and the CLI | **met** | `flowsheet/format4_test.v` (step 9): format 4's `[model]` with each activity model and vapour, Poynting, Henry's-law solutes and `[[model.pairs]]` as expressions with units, and the decanter's outlets. 27 refusals, each at its line. `reflux solve testdata/flowsheets/decanter.toml`, NRTL with a vapour over two liquids and an adiabatic decanter: its golden report gives the three phases and each pair's parameters with its source. |
+| 11 | Against DWSIM 9 | **met** | `components/dwsim_activity_test.v` (step 12): its six activity packages by state, NRTL and UNIQUAC PT flashes, and its three-phase flash of water–1-butanol by each approach. Every difference is explained, DWSIM's γ worked out again from its own code where it isn't reflux's. Its NRTL and both UNIFACs are reflux's to 1.7e-9. The differences: its Poynting term's \|P − Psat\|; vapour pressures 5e-5 higher; UNIQUAC's two records; Wilson's volumes and R; UNIFAC-LL's group fractions. NestedLoops is right; InsideOut and GibbsMinimization aren't. Its UNIFAC flashes, timed in step 13 (`benchmarks/m6_test.v`), differ by the same two departures, up to 2.3e-3 in β. |
+| 12 | Speed is measured | **met** | `benchmarks/m6_test.v` (step 13), methanol–water at 1 atm, one session: NRTL's PT flash takes 75 µs in reflux, 1.3 ms in `thermo` and 10.5 ms in DWSIM; bubble T 69 µs, 3.5 ms and 2.2 ms. UNIFAC's are alike. A γ–φ PT flash takes 0.52 of reflux's Peng–Robinson flash's time on the same states. |
+| 13 | CI green, docs updated, v0.5.0 | **met locally**; CI on this commit and the tag to come | The docs: README, roadmap, design notes, data-format.md, the file and report formats, data-quality.md, benchmarks.md, testdata/README.md and the V notes. v0.5.0's entry, versions and golden reports are ready, and the gate refuses only for the tree, the branch and the date (step 14). CI passed on `74787ff`. |
+
+**Planted mistakes.** 317 were planted across steps 0 to 13, one change at
+a time, in scratch copies. In the end 294 were caught, 6 sites had their
+code deleted, and 17 survive, each explained in its step: a change only to
+the time, a last digit below every reference, or a path no wrong answer
+reaches. Every survivor of a first run got a new test, had its code
+deleted, or was explained.
+
+| Steps | Planted | Caught | Deleted | Explained |
+|---|---|---|---|---|
+| 0 | 2 | 2 | | |
+| 1 to 3 | 34 | 34 | | |
+| Corrections after step 3 | 19 | 19 | | |
+| An answer finite or refused | 31 | 31 | (2, from an earlier run) | |
+| 4 | 41 | 41 | | |
+| 5 and 6 | 88 | 75 | 3 | 10 |
+| IAPWS, after step 6 | 12 | 11 | | 1 |
+| 7 and 8 | 35 | 31 | 2 | 2 |
+| 9 to 11 | 48 | 43 | 1 | 4 |
+| 12 and 13 | 7 | 7 | | |
+
+**Bugs found along the way,** each fixed in its step:
+- **in `activity`:** a refused T left its parameters in the `Work` under
+  the last T, so the next answer there was wrong; `numeric.Jet`'s log lost
+  ∂² below 1e-154 (both after step 3).
+- **in `flash`:**
+  - PH and PS took a NaN energy balance as met (step 4);
+  - `numeric.newton` dropped a model's reason at x0 (step 6);
+  - PH took no step back from a refused T (step 6);
+  - Newton on G with one dependent phase for all lost a trace in a
+    difference (step 7);
+  - a new phase begun at no moles left a component in no phase, and a
+    phase that left took its moles with it (step 8, found by the sweep).
+- **in M3's labels:** a liquid–liquid split by PR was labelled vapour and
+  liquid (D9, step 7).
+- **in `fit`:** Barker's fit has two minima on a set covering part of the
+  range, so the point test starts twice and keeps the lower (step 10).
+- **in the tests:** the UNIFAC comparison's rounding rule passed 342.4 for
+  300 (after step 3); a test of an undetermined α held on one platform's
+  rounding only (after step 13).
+
+**What M6 found outside reflux:**
+- **ChemSep LITE 8.50:**
+  - its UNIFAC files contradict themselves in eight places, and DDBST's
+    tables show 26 typos (step 1);
+  - `henrys_law.ipd`'s hydrogen is 5.95 times IAPWS's at 298 K and its neon
+    4.5e32 times; it names CAS 78-79-5, isoprene, "Isopentane" (step 5,
+    after step 6).
+- **`thermo` 0.6.1:**
+  - its UNIQUAC divides by xᵢ, and its Wilson, NRTL and UNIQUAC have no
+    second T-derivative (step 2);
+  - it takes φˢᵃᵗ at its equation's own Pˢᵃᵗ, and gives a solute the
+    symmetric γ (step 5);
+  - its UNIFAC-LLE table has an R of 9183 for 0.9183 (step 1);
+  - `FlashVL` contradicts its own liquid at one state (step 6).
+- **DWSIM 9.0.5** (steps 0 and 12, [spike-dwsim-activity.md](spike-dwsim-activity.md)):
+  - its Poynting term is exp(V·\|P − Psat\|/RT);
+  - its UNIQUAC for methanol–water mixes two records;
+  - its UNIFAC-LL is its VLE UNIFAC with wrong group fractions;
+  - its InsideOut and GibbsMinimization three-phase flashes are wrong;
+  - its Wilson takes R = 1.9872 and volumes from densities at 298.15 K, and
+    its activity packages take enthalpies from Lee–Kesler by default.
+- **NIST's ThermoML archive** has methanol–water inside other systems'
+  papers, which step 0's search of two-compound files missed (step 10).
+- **V 0.5.2:**
+  - `as` to a type that can't be in the interface compiles and returns a
+    zero value (step 4);
+  - an array has no `reduce`, and can't hold a multiple return's values
+    (steps 11 and 15).
+
+**Changed from the plan along the way,** each approved by the owner and
+marked in its table:
+- **Decisions amended:** D3 (step 4), D4 (step 5), D6 (step 5, and after
+  step 6), D7 (steps 0 and 1, and after step 3), D8 (step 7) and D12
+  (step 9). D9 and D14 settled as written (step 7).
+- **Criteria amended:** 3 (step 5) and 8 (step 0).
+- **Steps built together,** at the owner's word: 1 to 3, 5 and 6, 7 and 8,
+  9 to 11, 12 and 13, and 14 and 15.
+
+**Carried forward, not done in M6:**
+- **v0.5.0's tag,** after the merge: date its CHANGELOG entry, run
+  `tools/release.vsh` on `main`, then tag and push.
+- **CI on steps 14 and 15,** when they're pushed.
+- **The merge with `m5a-water`,** M5a's branch, built beside M6 from the
+  same `main`.
+- **reflux's `thermo.r_gas`** is N_A·k_B rounded, 1.84e-11 short of exact
+  (step 2): the owner's to decide, since changing it moves every golden
+  answer in its last digits.
+- **γ–φ fluids, two liquids and three phases from Python:** M10b, as ABI 2
+  (D14), which also answers the 125 points refused now.
+- **What "Not in M6" lists:** three-phase vapour-fraction flashes, and TV
+  and UV with γ–φ (M7, if columns need them); models per unit (to raise by
+  M7); reactors on a γ–φ fluid; electrolytes and Gᴱ mixing rules (M12);
+  Hayden–O'Connell vapours; NIST's modified UNIFAC.
+- **A solute's γ\*** is 1; γ∞ for the condensable solutes the banks pair is
+  a later piece (D6).
+- **The sweep's five points not solved,** cold mixtures of five to ten
+  heavy compounds where three phases don't converge.
+- **Reports to make upstream:** to DWSIM, its four bugs above; to `thermo`,
+  its UNIFAC-LLE typo, `FlashVL`'s contradiction and its UNIQUAC at xᵢ = 0;
+  to ChemSep, the hydrogen and neon rows, the isoprene name and the UNIFAC
+  files' contradictions; to V, `as` on an interface.
 
 ## Risks
 

@@ -9,6 +9,10 @@ v run . solve testdata/flowsheets/reference.toml --json results.json   # a flows
 ```
 
 ```bash
+v run . solve testdata/flowsheets/decanter.toml   # water, 1-butanol and methanol by NRTL: a vapour over two liquids, and a decanter
+```
+
+```bash
 v run . kinetics check testdata/kinetics/xu_froment.toml   # a file's reactions: every check (docs/flowsheet-format.md)
 ```
 
@@ -22,6 +26,10 @@ v run . optimize testdata/flowsheets/series.toml best   # an optimum, its multip
 
 ```bash
 v run . fit testdata/m8_fit/ethylene.toml   # rate constants fitted to data, each with its interval, written back
+```
+
+```bash
+v run . fit testdata/m6_fit/methanol_water.toml   # NRTL's pair fitted to published bubble points, written back as [[model.pairs]]
 ```
 
 ```bash
@@ -50,7 +58,7 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors,
   [docs/m8-plan.md](docs/m8-plan.md), specifications, studies, optimisation
   and fitting, and [docs/m6-plan.md](docs/m6-plan.md), activity models and
-  liquid–liquid equilibrium, under way.
+  liquid–liquid equilibrium.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
@@ -58,7 +66,7 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
   `thermo` and DWSIM 9 on the same flashes, and against DWSIM on the
   reference flowsheet, on the owner's reforming PFR and its 50-point study,
-  and on a spec and an optimisation.
+  on a spec and an optimisation, and on γ–φ flashes.
 - [CHANGELOG.md](CHANGELOG.md) is every release, and what a version
   promises.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
@@ -430,12 +438,13 @@ at the edges, i.e. input files and printed output.
 
 **M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash), M4
 (the first flowsheet), M10a (thermo and the flash from Python), M9
-(equations, kinetics and reactors) and M8 (specifications, studies,
-optimisation and fitting) are done.** The exit reviews are at the ends of
+(equations, kinetics and reactors), M8 (specifications, studies,
+optimisation and fitting) and M6 (activity models and liquid–liquid
+equilibrium) are done.** The exit reviews are at the ends of
 [docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
 [docs/m3-plan.md](docs/m3-plan.md), [docs/m4-plan.md](docs/m4-plan.md),
-[docs/m10a-plan.md](docs/m10a-plan.md), [docs/m9-plan.md](docs/m9-plan.md)
-and [docs/m8-plan.md](docs/m8-plan.md).
+[docs/m10a-plan.md](docs/m10a-plan.md), [docs/m9-plan.md](docs/m9-plan.md),
+[docs/m8-plan.md](docs/m8-plan.md) and [docs/m6-plan.md](docs/m6-plan.md).
 What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
@@ -628,11 +637,39 @@ And from M8, specifications, studies, optimisation and fitting:
       904 s, and the published reforming model in 13.4 ms a solve, from
       393, every answer keeping its bits
       ([docs/benchmarks.md](docs/benchmarks.md)).
-- [x] A fourth release, v0.4.0, to be tagged on `main` after M8's merge
+- [x] A fourth release, v0.4.0, tagged on `main` after M8's merge
       ([CHANGELOG.md](CHANGELOG.md)).
 
-By the roadmap, next is M10b, flowsheets from Python, or M5 to M7: steam,
-activity models and columns.
+And from M6, activity models and liquid–liquid equilibrium:
+
+- [x] Wilson, NRTL, UNIQUAC and three UNIFACs on ChemSep's banks and
+      tables, each with exact derivatives in T and composition; the UNIFAC
+      tables' contradictions repaired and their typos corrected, every one
+      reported ([docs/data-quality.md](docs/data-quality.md)).
+- [x] A γ–φ fluid: the liquid by its activity coefficients, vapour
+      pressures and Poynting term, its enthalpy from the same fugacities;
+      the vapour the ideal gas or a cubic; Henry's law for gases above their
+      critical point, by IAPWS's constants in water.
+- [x] Every flash on it, behind one seam with the cubics, whose every
+      answer kept its bits; azeotropes found.
+- [x] Three phases, two liquids and a vapour, for any model, each phase
+      shown stable, labelled vapour, liquid or liquid2.
+- [x] Flowsheet format 4, an activity model's pairs as expressions with
+      units, and the decanter; report format 4's model, each pair with its
+      source.
+- [x] Published data from NIST's ThermoML archive, each VLE set given the
+      point test for Gibbs–Duhem consistency, and each model's deviations
+      recorded.
+- [x] NRTL's and UNIQUAC's pairs fitted to bubble points, matching SciPy's.
+- [x] Compared with DWSIM 9's activity packages by state, every difference
+      explained, four of them bugs of its own.
+- [x] An NRTL flash in 75 µs, against 1.3 ms in thermo and 10.5 ms in DWSIM
+      ([docs/benchmarks.md](docs/benchmarks.md)).
+- [x] A fifth release, v0.5.0, to be tagged on `main` after M6's merge
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10b, flowsheets from Python, or M5 and M7: steam
+and columns.
 
 ## Roadmap
 
@@ -643,8 +680,9 @@ how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
 (ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
 ✓ → **M10a** thermo and flash from Python ✓. **M9** equations, kinetics and
-reactors ✓ and **M8** specifications, studies and optimisation ✓ build on
-M4. Next, **M10b** makes the flowsheets callable from Python.
+reactors ✓, **M8** specifications, studies and optimisation ✓ and **M6**
+activity models and liquid–liquid equilibrium ✓ build on M4. Next, **M10b**
+makes the flowsheets callable from Python.
 
 ## Development
 
