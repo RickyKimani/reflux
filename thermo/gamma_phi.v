@@ -56,18 +56,60 @@ pub:
 	henrys []Henry
 }
 
-// Henry is a solute's constant in one solvent, ChemSep's equation 121:
-// ln(H/Pa) = A + B/T + C ln T + D·Tᴱ, between tmin and tmax.
+// Henry is a solute's constant in one solvent, between tmin and tmax, in
+// one of two forms (HenryForm).
 pub struct Henry {
 pub:
 	solvent int
+	form    HenryForm
 	a       f64
 	b       f64
 	c       f64
-	d       f64
-	e       f64
+	d       f64 // equation 121's alone
+	e       f64 // equation 121's alone
 	tmin    f64
 	tmax    f64
+}
+
+// HenryForm is how a Henry's-law constant depends on T.
+pub enum HenryForm {
+	// ChemSep's equation 121, ln(H/Pa) = A + B/T + C ln T + D·Tᴱ.
+	chemsep_121
+	// IAPWS's for a gas in water (G7-04, Fernández-Prini, Alvarez and
+	// Harvey, 2003): ln(kH/p*) = A/Tr + B·τ^0.355/Tr + C·Tr^−0.41·e^τ, with
+	// Tr = T/Tc and τ = 1 − Tr on water's critical point, and p* water's
+	// vapour pressure by Wagner and Pruss.
+	iapws
+}
+
+// Water's critical point and Wagner and Pruss's vapour pressure, IAPWS's
+// supplementary release of 1992, which IAPWS G7-04 takes p* from:
+// ln(p*/pc) = (Tc/T)·Σ aᵢτ^bᵢ.
+const water_tc = 647.096
+const water_pc = 22.064e6
+const water_psat_a = [-7.85951783, 1.84408259, -11.7866497, 22.6807411, -15.9618719, 1.80122502]
+const water_psat_b = [1.0, 1.5, 3.0, 3.5, 4.0, 7.5]
+
+// jet is ln(H/Pa) at T with its first two T-derivatives: t is T along
+// itself (numeric.along(T)). Within tmin and tmax, which are below water's
+// critical point for IAPWS's form, it is finite.
+pub fn (h Henry) jet(t numeric.Jet) numeric.Jet {
+	c := numeric.constant
+	return match h.form {
+		.chemsep_121 {
+			c(h.a) + c(h.b) / t + c(h.c) * t.log() + c(h.d) * t.pow(h.e)
+		}
+		.iapws {
+			tr := t / c(water_tc)
+			tau := c(1.0) - tr
+			mut s := c(0.0)
+			for k, ak in water_psat_a {
+				s = s + c(ak) * tau.pow(water_psat_b[k])
+			}
+			c(math.log(water_pc)) + s / tr + c(h.a) / tr + c(h.b) * tau.pow(0.355) / tr +
+				c(h.c) * tr.pow(-0.41) * tau.exp()
+		}
+	}
 }
 
 // GammaWork keeps what depends on T alone until T moves (D4): each
@@ -213,8 +255,7 @@ fn (g GammaPhi) at_t(t f64, mut w GammaWork) ! {
 			if !(t >= h.tmin && t <= h.tmax) {
 				return g.refuse("${g.comps[s.i].name}'s Henry's-law constant in ${g.comps[h.solvent].name} is fitted from ${h.tmin} K to ${h.tmax} K, not at ${t} K")
 			}
-			c := numeric.constant
-			w.lnh[k][q] = c(h.a) + c(h.b) / tj + c(h.c) * tj.log() + c(h.d) * tj.pow(h.e)
+			w.lnh[k][q] = h.jet(tj)
 		}
 	}
 	w.t = t

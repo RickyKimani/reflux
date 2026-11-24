@@ -270,7 +270,7 @@ All checked by tests in CI, as before.
 | D3 | The seam | `flash` takes a phase model, not a `thermo.Model`. A phase model gives a phase at (T, P, n) as liquid-like, vapour-like or the one of lower G, each with:<br>- ln φᵢ and n·∂ln φᵢ/∂nⱼ, ∂ln φᵢ/∂T and ∂ln φᵢ/∂P;<br>- its molar volume and mass density;<br>- its residual H, S and Cp, which `Fluid` adds to the ideal gas's.<br><br>The two kinds:<br>- **a Helmholtz `Model`,** by its volume roots, exactly as `solve_tp` does now;<br>- **a γ–φ fluid,** by its liquid's γ and its vapour's model, the lower G again choosing.<br><br>The TV and UV flashes stay on `thermo.Model` and refuse a γ–φ fluid, saying why. `Cubic.work()` stays the reactors' path. Step 0 prototypes the seam and measures the cubic's bits and time through it.<br><br>**Amended in step 4,** approved on 2026-11-23:<br>- a phase's residual also has Cvʳ, (∂V/∂T)_P and (∂P/∂V)_T, which `Fluid.props` needs for the Cv, speed of sound and Joule–Thomson coefficient it already gives;<br>- it can't fail, as `props` can't, so what a model hasn't is NaN, and PH and PS take a NaN balance as unmet;<br>- ∂ln φ can refuse, with its reason, as an activity model does;<br>- a phase's mass density comes from its volume and the components' molar masses, so it's no method of its own. | It's the seam the flash already has in all but name: ln φ and its derivatives (Michelsen and Mollerup). A cubic behind it computes what it computes now, so its answers can't move. |
 | D4 | The γ–φ liquid | fᵢ = xᵢ γᵢ Pᵢˢᵃᵗ φᵢˢᵃᵗ exp(Vᵢᴸ (P − Pᵢˢᵃᵗ)/RT):<br>- **Pˢᵃᵗ** by the component's own correlation, and **Vᴸ** by its liquid density, incompressible over the Poynting integral. The liquid's volume is Σ xᵢ Vᵢᴸ, with no excess volume.<br>- **The vapour** is the ideal gas by default, or a cubic of the file's. φˢᵃᵗ is then that cubic's pure φ at Pˢᵃᵗ, and 1 for the ideal gas.<br>- **Poynting** is on by default, and can be turned off.<br>- **Kept until T moves:** Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and each τ depend on T alone (M8's D11).<br>- **Outside a correlation's range,** or above its Tc, a component is refused unless it's a Henry's-law solute (D6).<br><br>**Amended in step 5,** approved on 2026-11-23:<br>- **φˢᵃᵗ is taken at the correlation's Pˢᵃᵗ:** the vapour model's pure φ there, on its vapour root, not at the vapour model's own Pˢᵃᵗ, where `thermo` takes it. Only then is a pure liquid's fugacity its vapour's at its vapour pressure; `thermo`'s choice moves ln f by up to 9.0e-4 (ethanol under PR).<br>- **φˢᵃᵗ's second T-derivative is Richardson's extrapolation** of central differences of its exact first, since an equation of state has no third derivatives of F. The liquid's Cp with φˢᵃᵗ then agrees with differences of its own H to 1.7e-11, not to rounding (criterion 3 as amended).<br>- **A solvent's vapour pressure and density must be in a form with exact T-derivatives,** ChemSep's 10, 16, 101, 105 or 106, which 614 of its 642 compounds have both of. Another form is refused, naming these. | The textbook form, as Aspen's and `thermo`'s. Poynting costs nothing and matters at pressure. A file can match Aspen's NRTL, ideal gas and no Poynting, by saying so. |
 | D5 | Calorics | The liquid's H, S and Cp come from its fugacities: h̄ᵢ − hᵢⁱᵍ = −RT²(∂ln φᵢᴸ/∂T) at constant P and x, through the same Pˢᵃᵗ, Vᴸ, φˢᵃᵗ and γ. ΔHvap is then Clapeyron's from Pˢᵃᵗ's slope, and Hᴱ is the model's. `thermo`'s 'Poynting&PhiSat' basis is the reference.<br><br>No ΔHvap correlation enters. ChemSep's ΔHvap and liquid Cp are compared with the answer, as the model's accuracy, recorded and not asserted. | A drum's energy balance then agrees with its phase equilibrium. A separate ΔHvap, `thermo`'s 'Hvap' basis, gives a flash whose duty disagrees with its own Clapeyron. |
-| D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units.<br><br>**Amended in step 5,** approved on 2026-11-23:<br>- **A solute's γ* is 1.** Solutes are outside the activity model, which is over the solvents alone, on their own mole fractions. No bank pairs water, the one solvent with Henry's-law constants, with any of the 41 gases, and ChemSep's UNIFAC tables have no group for hydrogen, CO, CO₂, nitrogen, oxygen or the noble gases, so for those there's no γ∞ to form γ/γ∞ with. (The banks pair a few condensable ones, butane, isoprene, 1,3-butadiene, isobutene, thiophene and CS₂, with alcohols and aromatics, and the light hydrocarbons are made of UNIFAC's own groups: their γ∞ is a later piece, not M6's, every solute's γ* being 1 until then.) A solute adds no volume and has no Poynting term, since ChemSep gives no volume at infinite dilution. `thermo` gives a solute the symmetric γ of the whole model instead, so criterion 7 compares the two on ideal solvents.<br>- **Hᵢ,mix is `thermo`'s rule,** as read: Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ over the solvents present that have constants.<br>- **A component is a solute** when the file names it, or when it has constants in another compound present and its Tc is below the lowest T at which a compound that can only be a solvent has a vapour pressure. Wherever the liquid can be had, such a gas is above its Tc, so the roles don't change with T. A fluid in which no T has every solvent's correlations is refused when it's built, naming the solvent above its Tc there (criterion 7's refusal by name). | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
+| D6 | Henry's law | A Henry's-law solute's liquid fugacity is xᵢ γ*ᵢ Hᵢ,mix:<br>- γ* = γ/γ∞ in the solvent, the unsymmetric convention;<br>- Hᵢ,mix from the solvents with parameters, as `thermo`'s 'solvents_with_parameters' mode does (step 5 reads its rule).<br><br>A component is a solute when the file names it, or when it's above its Tc and has parameters. ChemSep's bank gives 41 gases in water. A file can give others, with units.<br><br>**Amended in step 5,** approved on 2026-11-23:<br>- **A solute's γ* is 1.** Solutes are outside the activity model, which is over the solvents alone, on their own mole fractions. No bank pairs water, the one solvent with Henry's-law constants, with any of the 41 gases, and ChemSep's UNIFAC tables have no group for hydrogen, CO, CO₂, nitrogen, oxygen or the noble gases, so for those there's no γ∞ to form γ/γ∞ with. (The banks pair a few condensable ones, butane, isoprene, 1,3-butadiene, isobutene, thiophene and CS₂, with alcohols and aromatics, and the light hydrocarbons are made of UNIFAC's own groups: their γ∞ is a later piece, not M6's, every solute's γ* being 1 until then.) A solute adds no volume and has no Poynting term, since ChemSep gives no volume at infinite dilution. `thermo` gives a solute the symmetric γ of the whole model instead, so criterion 7 compares the two on ideal solvents.<br>- **Hᵢ,mix is `thermo`'s rule,** as read: Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ over the solvents present that have constants.<br>- **A component is a solute** when the file names it, or when it has constants in another compound present and its Tc is below the lowest T at which a compound that can only be a solvent has a vapour pressure. Wherever the liquid can be had, such a gas is above its Tc, so the roles don't change with T. A fluid in which no T has every solvent's correlations is refused when it's built, naming the solvent above its Tc there (criterion 7's refusal by name).<br><br>**Amended after step 6,** at the owner's word to choose what's best for hydrogen, approved on 2026-11-24: a gas in water that IAPWS's guideline covers (G7-04, Fernández-Prini, Alvarez and Harvey, 2003; 14 gases) takes IAPWS's Henry's constant in place of `henrys_law.ipd`'s row, ln(kH/p*) = A/Tr + B·τ^0.355/Tr + C·Tr^−0.41·e^τ on water's critical point, p* by Wagner and Pruss. The file's hydrogen is 5.95 times IAPWS's at 298 K and 62 times at 623 K, its neon 4.5e32 times, and its other eleven within 2.4 to 12% at 298 K but up to 55% off at their hottest. Equation 121 can't hold IAPWS's hydrogen (fitted, 16% off at 623 K), so the form is IAPWS's own. The bank's rows stand for the other 28 gases. | Hydrogen, CO and CO₂ over a methanol–water liquid are the owner's case. Water as the only solvent ChemSep covers is a limit to state, not hide. |
 | D7 | Models and parameters | **Wilson, NRTL and UNIQUAC:**<br>- each pair's τ (Wilson's Λ) and NRTL's α are expressions in T with units, `"-189.0469 cal/mol / (R*T)"`, so that Aspen's a + b/T + e·ln T + f·T or any paper's form goes in as printed;<br>- the tape gives their T-derivatives exactly;<br>- ChemSep's banks become those expressions in their own forms, A in cal/mol: NRTL's τ = A/RT, UNIQUAC's τ = exp(−A/RT), and Wilson's Λ = (Vⱼ/Vᵢ)·exp(−A/RT) on ChemSep's Wilson volumes. Step 0 confirms each form and the calorie.<br><br>**A pair with no parameters** is refused, naming it and the banks searched. `missing = "ideal"` sets such pairs' τ to 0, and the report lists them as a warning. The report gives each pair's source, as kᵢⱼ's are given: the file, a bank with its DECHEMA reference, or ideal.<br><br>**UNIFAC:** the original for VLE (Hansen et al., 1991), the LLE table (Magnussen et al., 1981) and Dortmund's published parameters (Gmehling et al.), each compound's groups from its component file.<br><br>**Amended in step 0,** approved on 2026-11-18. A bank's A is in thermochemical calories over DECHEMA's own R, 1.98721 cal/(mol·K), which it was fitted with: DWSIM's NRTL, on the same bank, is τ = A/(1.98721·T) to 4e-10 in ln γ, and the SI's R over 4.184 J is 5e-7 off ([spike-dwsim-activity.md](spike-dwsim-activity.md)). So a bank pair's τ keeps that R, its source saying why, as `reflux kinetics check` advises for a constant fitted with a typed R.<br><br>**Amended in step 1,** approved on 2026-11-20. UNIFAC's tables are ChemSep's, repaired where a file contradicts itself, by its own evidence (a subgroup's or a row's main group whose name is another's), and corrected where DDBST's published tables show a typo: the original's 11 values, the LLE table's 2 and Dortmund's 13 (C's Q, six ionic-liquid subgroups). Each repair and correction is reported in data-quality.md.<br><br>**Amended after step 3,** approved on 2026-11-22. `missing = "ideal"` gives a pair no energy of interaction: τ = 0 in NRTL and Λ = 1 in Wilson, an ideal pair, and τ = 1 in UNIQUAC, whose combinatorial term stays, so its source and warning say "no residual interaction", not ideal. And step 0's R is confirmed for NRTL's bank alone: for UNIQUAC's and Wilson's it's inferred, as is Wilson's form, until step 12. | Parameters are equations too, and typing them as text in a fixed form is what A9 rules out. A silently ideal pair is the kind of answer that looks right and isn't. |
 | D8 | Three phases | A PT flash finds up to three phases, for any phase model:<br>- **stage-wise,** as Michelsen (1982) does: two phases first, then each phase tested for stability by M3's test, an unstable one's trial starting a third phase;<br>- **the split:** successive substitution on a multiphase Rachford–Rice, by Okuno, Johns and Sepehrnoori's (2010) convex form, then Newton on G over every phase, a phase whose fraction falls to zero removed;<br>- **an answer only once every phase is stable** against every trial, as M3 verifies a split;<br>- **a fourth phase** is `.more_phases`, with its reason. | Stage-wise reuses M3's stability test and split, which are proven. The convex Rachford–Rice can't diverge, where the textbook form can with three phases. |
 | D9 | Labels | Phases are ordered by increasing mass density, and each is labelled vapour, liquid or liquid2:<br>- **a γ–φ phase** by the model that made it;<br>- **an equation of state's phase** by Π, with M9's four-covolume rule;<br>- **at most one vapour:** of phases Π calls vapour-like, the least dense;<br>- **phases Π calls liquid-like** are liquids, the denser being liquid2.<br><br>A two-phase split Π calls all liquid-like is then a liquid–liquid split, where M3's D6 called its lighter phase the vapour. Step 7 measures how many of M3's 10,000 sweep splits change label, near critical points, for the owner to judge. | With three phases density alone can't name them, and a liquid–liquid split by PR is mislabelled today. Π is what labels a single phase already. |
@@ -965,9 +965,8 @@ activity model's to 2.2e-15.
 **For the owner: hydrogen's constant.** Either replace the row with a
 published fit, Fernández-Prini, Alvarez and Harvey's (2003), a new form; or
 correct it to the compilation's value and slope in equation 121's own form,
-reported as UNIFAC's corrections are (D7 as amended). Step 10's published
-data would check either. Until then a hydrogen solute is about 6 times too
-insoluble.
+reported as UNIFAC's corrections are (D7 as amended). Settled after step 6
+(below): IAPWS's own form, for every gas it covers.
 
 ### 6. VLE flashes with activity models — done
 - PT, bubble and dew points, PH and PS on γ–φ fluids, each split verified.
@@ -1112,6 +1111,79 @@ explained.
 build (31 min): 115 test files, two of them new. The Python package's
 tests pass (`tools/python.vsh test`, 5 min), the C API's reference being
 the same bytes as step 4's.
+
+### Henry's constants by IAPWS, after step 6 — done, with D6 amended
+
+The owner asked for what's best for hydrogen, short of step 7.
+
+**What IAPWS showed.** IAPWS's Guideline on the Henry's Constant and
+Vapor–Liquid Distribution Constant for Gases in H2O and D2O at High
+Temperatures (G7-04, 2004; Fernández-Prini, Alvarez and Harvey, J. Phys.
+Chem. Ref. Data 32, 903, 2003) covers 14 gases in water, 13 of them in
+`henrys_law.ipd`. Against it, by the `iapws` package's implementation
+([data-quality.md](data-quality.md) has the table):
+- **Hydrogen's row is wrong:** 5.95 times IAPWS's at 298 K, 62 times at
+  623 K.
+- **Neon's is wrong by 32 orders of magnitude:** with B's sign flipped it's
+  within 2% of IAPWS's at 298 K, but 1.36 times it at 273 K and a sixth of
+  it at 347 K, so it isn't one typo.
+- **The other eleven are rough fits:** within 2.4 to 12% at 298 K, drifting
+  to between 10 and 55% off at the hot end of their ranges.
+
+**The choice: IAPWS's own form, for every gas it covers** (D6 as amended,
+above). Equation 121 can't hold IAPWS's hydrogen: its best fit is 0.8% off
+at 298 K and 16% off at 623 K, IAPWS's form having τ^0.355 and e^τ in
+τ = 1 − T/Tc. So reflux takes the guideline as it's written, and since the
+form and the table are the same work for one gas or fourteen, a gas in
+water takes it wherever the guideline has it.
+
+**What was built:**
+- **[thermo/gamma_phi.v](../thermo/gamma_phi.v):** `HenryForm`, ChemSep's
+  equation 121 or IAPWS's; `Henry.jet`, ln H with its two T-derivatives in
+  either; water's vapour pressure by Wagner and Pruss.
+- **[components/gamma_phi.v](../components/gamma_phi.v):** the guideline's
+  Table 2 for H2O (`iapws_henry`, `iapws_henry_in_water`). A gas in water
+  that it has is a candidate solute, and takes IAPWS's constant in water in
+  place of the bank's, the setup's notes saying so; the bank's rows stand
+  for its other solvents and the other 28 gases.
+- **[components/quality/activity.v](../components/quality/activity.v):**
+  each of the 13 rows against IAPWS in data-quality.md, and the isoprene
+  name.
+- **[tools/gen_m6_henry.py](../tools/gen_m6_henry.py)** (the `iapws`
+  package, 1.5.4) writes
+  [testdata/m6_henry_iapws.json](../testdata/m6_henry_iapws.json): each
+  gas's A, B, C and range as the package has them, and ln kH at 25
+  temperatures across the range.
+- **The γ–φ fixture's Henry's-law cases** move to ammonia, ethylene and
+  propane, gases IAPWS hasn't, since `thermo` has only the bank's form; its
+  other sections keep their bytes.
+
+**Tests:**
+- [components/gamma_phi_test.v](../components/gamma_phi_test.v):
+  - the table's A, B, C and ranges equal the package's, ln kH matches it to
+    4.4e-16 at all 350 points, and its T-derivatives match differences of
+    itself to 8.1e-10;
+  - hydrogen's ln φ in water is ln kH − ln P to 1e-13, and the setup says
+    it took IAPWS's constant;
+  - nitrogen beyond IAPWS's range, refused by it;
+  - the bank of another data root's equation check, on ammonia.
+- Against `thermo`, Henry's law in water and in the mixed solvent, on the
+  new gases: within the limits as before.
+
+**Planted mistakes:** 12, in a scratch copy, one at a time: 11 caught (the
+form's every term, water's critical point and vapour pressure, a
+coefficient of the table, the bank's row kept beside IAPWS's or IAPWS's
+never taken, the note, and the quality report's sign), and 1 explained.
+That one drops a gas IAPWS has from the candidate solutes when the bank
+has no row for it: sulfur hexafluoride alone, whose Tc of 318.72 K is
+above every liquid's T, so it's a solute only when named. Unnamed, its
+vapour pressure's 215.15 K would count towards the lowest T a liquid can
+be had at, which moves only a gas whose Tc lies between that and water's
+263.15 K, and none of ChemSep's 41 does (krypton's is 209.4 K).
+
+**Checks:** both full checks pass, tcc (14 min) and gcc with its `-prod`
+build (26 min), and the quality report's test with the new section. The
+Python tests weren't run: the C API takes no γ–φ fluid.
 
 ### 7. Three phases
 - D8, D9: the stage-wise PT flash, the multiphase Rachford–Rice and Newton

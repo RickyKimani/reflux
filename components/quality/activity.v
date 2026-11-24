@@ -4,7 +4,9 @@ import activity
 import components
 import json2
 import math
+import numeric
 import os
+import thermo
 
 // M6's activity-model data (step 1, criterion 2): the NRTL, UNIQUAC, Wilson
 // and Henry's-law banks, and the three UNIFAC tables, each against thermo's
@@ -243,6 +245,8 @@ fn activity_lines(db components.Database) ![]string {
 	o << "R, 1.98721 cal/(mol·K). That's confirmed for NRTL's bank (M6 step 0), and"
 	o << "inferred for UNIQUAC's and Wilson's, as is Wilson's form, until M6 step 12."
 	o << ''
+	o << henry_lines(henry).join('
+')
 	th := read_thermo_tables()!
 	o << '### UNIFAC tables'
 	o << ''
@@ -332,4 +336,86 @@ fn activity_lines(db components.Database) ![]string {
 		}
 	}
 	return o
+}
+
+// henry_lines compares henrys_law.ipd's rows with IAPWS's Henry's constants
+// for the gases its guideline has (G7-04), which a gas in water takes in
+// their place (M6's D6 as amended after step 6): each row against IAPWS's
+// at 298.15 K, and at its worst over the range both cover, 81 points.
+fn henry_lines(bank components.HenryBank) []string {
+	mut o := []string{}
+	o << "### Henry's-law constants against IAPWS"
+	o << ''
+	o << "A gas in water that IAPWS's guideline covers (G7-04, Fernández-Prini,"
+	o << 'Alvarez and Harvey, 2003) takes its constant in place of the row here.'
+	o << "Each row's H over IAPWS's kH, at 298.15 K and where they're furthest"
+	o << 'apart over the range both cover:'
+	o << ''
+	o << '| Gas | CAS | Over both | H/kH at 298.15 K | Furthest apart |'
+	o << '|---|---|---|---|---|'
+	for e in bank.entries {
+		ref := components.iapws_henry_in_water(e.gas, 0) or { continue }
+		if e.solvent != '7732-18-5' || e.coeffs.len != 5 {
+			continue
+		}
+		k := e.coeffs
+		row := thermo.Henry{
+			form: .chemsep_121
+			a:    k[0]
+			b:    k[1]
+			c:    k[2]
+			d:    k[3]
+			e:    k[4]
+		}
+		lo, hi := math.max(e.tmin, ref.tmin), math.min(e.tmax, ref.tmax)
+		mut worst, mut where := 0.0, lo
+		for i in 0 .. 81 {
+			t := lo + (hi - lo) * f64(i) / 80.0
+			g := ln_gap(row, ref, t)
+			if math.abs(g) > math.abs(worst) {
+				worst, where = g, t
+			}
+		}
+		o << '| ${md(e.comment)} | ${e.gas} | ${kelvin(lo)} to ${kelvin(hi)} K | ${ratio(math.exp(ln_gap(row, ref, 298.15)))} | ${ratio(math.exp(worst))} at ${kelvin(where)} K |'
+	}
+	o << ''
+	o << "Hydrogen's row is wrong outright, in its value and its slope, and neon's"
+	o << 'by orders of magnitude; the others are rough fits, close at 298.15 K and'
+	o << 'drifting towards the hot end of their range.'
+	o << ''
+	o << 'The file names CAS 78-79-5 "${name_of(bank, '78-79-5')}": that\'s isoprene\'s'
+	o << "number (isopentane's is 78-78-4), and the NRTL bank names it isoprene,"
+	o << "so which compound the row's constants are for is unknown."
+	o << ''
+	return o
+}
+
+// ln_gap is ln H − ln kH at t.
+fn ln_gap(row thermo.Henry, ref thermo.Henry, t f64) f64 {
+	return row.jet(numeric.along(t)).v - ref.jet(numeric.along(t)).v
+}
+
+// kelvin is a temperature to 0.01 K, rounded by math.round (printf rounds
+// ties differently under tcc and gcc).
+fn kelvin(t f64) string {
+	return '${math.round(t * 100.0) / 100.0}'
+}
+
+// ratio is a ratio near 1 to four figures, and one far from it as a power
+// of ten.
+fn ratio(r f64) string {
+	if r > 0.01 && r < 100.0 {
+		return '${math.round(r * 1e4) / 1e4}'
+	}
+	e := math.floor(math.log10(r))
+	return '${math.round(r / math.pow(10, e) * 10.0) / 10.0}e${int(e)}'
+}
+
+fn name_of(bank components.HenryBank, cas string) string {
+	for e in bank.entries {
+		if e.gas == cas {
+			return e.comment
+		}
+	}
+	return ''
 }

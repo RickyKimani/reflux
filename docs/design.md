@@ -2552,12 +2552,27 @@ ChemSep's banks, tables and component files.
 
 **A Henry's-law solute's** is xᵢHᵢ,mix, so ln φᵢᴸ = ln Hᵢ,mix − ln P, with
 
-    ln Hᵢ,mix = Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ,   ln Hᵢⱼ = A + B/T + C ln T + D·Tᴱ,
+    ln Hᵢ,mix = Σⱼ xⱼ ln Hᵢⱼ / Σⱼ xⱼ,
 
 the sums over the solvents that have constants for it, an absent one
-weighing nothing, which is
-`thermo`'s 'solvents_with_parameters' mode, and ln Hᵢⱼ ChemSep's equation
-121 in Pa. A solute is outside the activity model, so its γ* is 1 (the
+weighing nothing, which is `thermo`'s 'solvents_with_parameters' mode. Each
+Hᵢⱼ, in Pa, is in one of two forms:
+- **IAPWS's, for a gas in water** that its guideline covers (G7-04;
+  Fernández-Prini, Alvarez and Harvey, 2003; 14 gases), with A, B and C
+  from its Table 2:
+
+      ln(kH/p*) = A/Tr + B·τ^0.355/Tr + C·Tr^−0.41·e^τ,   Tr = T/Tc, τ = 1 − Tr,
+      ln(p*/pc) = (Tc/T)·Σ aᵢτ^bᵢ,
+
+  on water's critical point (647.096 K, 22.064 MPa), p* being Wagner and
+  Pruss's vapour pressure (IAPWS, 1992), whose six aᵢ and bᵢ the guideline
+  gives. It takes the place of ChemSep's row (D6 as amended after step 6):
+  ChemSep's hydrogen is 5.95 times it at 298 K and its neon 4.5e32 times
+  (data-quality.md). Equation 121 can't hold it, so it's this form, on jets.
+- **ChemSep's equation 121,** ln H = A + B/T + C ln T + D·Tᴱ, for every
+  other gas and solvent.
+
+A solute is outside the activity model, so its γ* is 1 (the
 unsymmetric convention with no correction), it adds no volume, and it has
 no Poynting term. ChemSep's banks pair water, the one solvent with
 constants, with none of the gases, and its UNIFAC tables have no group for
@@ -2567,7 +2582,8 @@ groups, could take theirs from it, a later piece), and no gas's volume at
 infinite dilution. (`thermo`
 gives a solute the symmetric γ from the whole model, and Poynting on any
 volume it's given; the two agree on an ideal solvent, which is how they're
-compared.) ChemSep's bank has 41 gases, all in water.
+compared.) ChemSep's bank has 41 gases, all in water, and IAPWS 14, all
+but sulfur hexafluoride among them.
 
 **Which compounds are solutes:** those named, and any with a constant in
 another compound present whose Tc is below the lowest T at which a

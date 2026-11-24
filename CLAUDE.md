@@ -103,9 +103,16 @@ Keep this section current: update it whenever a step is committed.
       now with their reason, 3 refusals (one state's PH and PS) now its
       verified answer.
     - Found: ChemSep's hydrogen row in `henrys_law.ipd` is 5.9 times
-      Sander's compilation at 298 K, slope 920 K against 490 (for the
-      owner); `thermo` takes φˢᵃᵗ at its EOS's own Pˢᵃᵗ, and its solute's γ
-      is the symmetric one.
+      Sander's compilation at 298 K, slope 920 K against 490; `thermo`
+      takes φˢᵃᵗ at its EOS's own Pˢᵃᵗ, and its solute's γ is the symmetric
+      one.
+  - **After step 6, Henry's constants by IAPWS,** at the owner's word to
+    choose what's best for hydrogen, not committed, and amends D6,
+    approved on 2026-11-24: a gas in water that IAPWS's guideline covers
+    (G7-04, 14 gases) takes IAPWS's own form and constants, in place of the
+    bank's row. Against it, ChemSep's hydrogen is 5.95 times off at 298 K
+    (62 at 623 K), its neon 4.5e32, the other eleven within 12% at 298 K
+    (data-quality.md). Step 7 is next.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as
@@ -636,6 +643,11 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     PYTHONIOENCODING=utf-8 uv run --python "C:/Users/Ricky/AppData/Roaming/uv/python/cpython-3.13.17-windows-x86_64-none/python.exe" tools/gen_m3_fixtures.py
     ```
 
+  - `tools/gen_m6_henry.py` (the `iapws` package) writes
+    `testdata/m6_henry_iapws.json`, IAPWS's Henry's constants for gases in
+    water; `tools/gen_m6_gamma_phi.py` (thermo, chemicals, mpmath, SciPy)
+    `testdata/m6_gamma_phi.json`, the γ–φ liquid, Henry's law and the
+    flashes against `thermo`.
   - `tools/gen_m6_activity.py` (thermo, mpmath) writes
     `testdata/m6_activity.json`, the activity models on ChemSep's banks and
     tables, and `testdata/m6_unifac_tables.json`, thermo's UNIFAC tables.

@@ -8,6 +8,7 @@ import components
 import flash
 import json2
 import math
+import numeric
 import os
 import tdep
 import thermo
@@ -96,6 +97,21 @@ struct HenryState {
 	p      f64 @[json: 'P']
 	x      []f64
 	thermo Answer
+}
+
+struct IapwsGas {
+	name    string
+	cas     string
+	abc     []f64
+	tmin    f64
+	tmax    f64
+	t       []f64 @[json: 'T']
+	ln_kh   []f64
+	ln_psat []f64
+}
+
+struct IapwsFixture {
+	gases []IapwsGas
 }
 
 struct HenryMixed {
@@ -281,7 +297,7 @@ fn test_henrys_law_against_thermo() {
 	db := components.load_default()!
 	mut worst := Worst{}
 	for c in f.henry {
-		s := db.gamma_phi(c.cas, poynting: false)!
+		s := db.gamma_phi(c.cas, henry: c.cas[1..], poynting: false)!
 		assert s.solutes == c.cas[1..], '${s.solutes}'
 		compare(mut worst, 'Henry', s.fluid, c.t, c.p, c.x, c.thermo, f.source.r_thermo)!
 	}
@@ -297,8 +313,8 @@ fn test_henrys_law_against_thermo() {
 	}
 }
 
-// Henry's law in a mixed solvent (criterion 7): CO₂ and hydrogen in water
-// and ethylene glycol, mixed as thermo's 'solvents_with_parameters' mode
+// Henry's law in a mixed solvent (criterion 7): ethylene and propane in
+// water and ethylene glycol, mixed as thermo's 'solvents_with_parameters' mode
 // mixes them, Σ xⱼ ln Hᵢⱼ / Σ xⱼ. ChemSep's bank has water alone as a
 // solvent, so each gas's constant in the glycol is the fixture's, synthetic,
 // and water's is the bank's, the fixture's too. No bank lists water with the
@@ -308,7 +324,7 @@ fn test_henrys_law_in_a_mixed_solvent() {
 	f := fixture()!
 	db := components.load_default()!
 	hm := f.henry_mixed
-	s := db.gamma_phi(hm.cas, henry: [hm.cas[2]], ideal: true, poynting: false)!
+	s := db.gamma_phi(hm.cas, henry: hm.cas[2..], ideal: true, poynting: false)!
 	assert s.solutes == hm.cas[2..], '${s.solutes}'
 	mut solutes := []thermo.Solute{}
 	for sol in s.model.solutes {
@@ -316,7 +332,16 @@ fn test_henrys_law_in_a_mixed_solvent() {
 		assert henrys.len == 1 && henrys[0].solvent == 0
 		for c in hm.constants.filter(it.solute == sol.i) {
 			k := c.abcde
-			h := thermo.Henry{c.solvent, k[0], k[1], k[2], k[3], k[4], c.tmin, c.tmax}
+			h := thermo.Henry{
+				solvent: c.solvent
+				a:       k[0]
+				b:       k[1]
+				c:       k[2]
+				d:       k[3]
+				e:       k[4]
+				tmin:    c.tmin
+				tmax:    c.tmax
+			}
 			if c.solvent == 0 {
 				assert h == henrys[0], "the bank's constant in water, not the fixture's"
 			} else {
@@ -714,13 +739,22 @@ fn test_dn_against_differences() {
 		worst = math.max(worst, dn_gap(m, t, 3e6, [0.3, 0.6, 0.06, 0.04])!)
 	}
 	hm := f.henry_mixed
-	s := db.gamma_phi(hm.cas, henry: [hm.cas[2]], ideal: true, poynting: false)!
+	s := db.gamma_phi(hm.cas, henry: hm.cas[2..], ideal: true, poynting: false)!
 	mut solutes := []thermo.Solute{}
 	for sol in s.model.solutes {
 		mut henrys := sol.henrys.clone()
 		for c in hm.constants.filter(it.solute == sol.i && it.solvent == 1) {
 			k := c.abcde
-			henrys << thermo.Henry{c.solvent, k[0], k[1], k[2], k[3], k[4], c.tmin, c.tmax}
+			henrys << thermo.Henry{
+				solvent: c.solvent
+				a:       k[0]
+				b:       k[1]
+				c:       k[2]
+				d:       k[3]
+				e:       k[4]
+				tmin:    c.tmin
+				tmax:    c.tmax
+			}
 		}
 		solutes << thermo.Solute{sol.i, henrys}
 	}
@@ -855,7 +889,8 @@ fn test_new_gamma_phi_refuses_bad_parts() {
 // every row of which is a gas in water by equation 121, on another data
 // root's: a gas's constant in itself, which mustn't make it a solute (with
 // it, water would be one, and nothing a solvent); a gas's constant in
-// another solute, skipped; and another equation, refused by its line.
+// another solute, skipped; and another equation, refused by its line
+// (ammonia's: a gas IAPWS has takes IAPWS's constant in water).
 fn test_a_henry_bank_of_another_data_root() {
 	db := components.load_default()!
 	dir := os.join_path(os.temp_dir(), 'reflux_henry_${os.getpid()}')
@@ -864,28 +899,21 @@ fn test_a_henry_bank_of_another_data_root() {
 		os.rmdir_all(dir) or {}
 	}
 	os.cp(os.join_path(db.vendor, 'nrtl.ipd'), os.join_path(dir, 'nrtl.ipd'))!
-	base := os.read_file(os.join_path(db.vendor, 'henrys_law.ipd'))!.trim_right('
-')
+	base := os.read_file(os.join_path(db.vendor, 'henrys_law.ipd'))!.trim_right('\r\n')
 	other := components.Database{
 		...db
 		vendor: dir
 	}
 	bank := os.join_path(dir, 'henrys_law.ipd')
-	os.write_file(bank, base + '
- 7732-18-5    7732-18-5   1 121      273.15   373.15   20.0  0  0  0  1  Water
-')!
+	os.write_file(bank, base + '\n 7732-18-5    7732-18-5   1 121      273.15   373.15   20.0  0  0  0  1  Water\n')!
 	s := other.gamma_phi(['water', 'nitrogen'])!
 	assert s.solutes == ['7727-37-9'], '${s.solutes}'
-	os.write_file(bank, base + '
- 7727-37-9    1333-74-0   1 121      273.15   373.15   20.0  0  0  0  1  Nitrogen
-')!
+	os.write_file(bank, base + '\n 7727-37-9    1333-74-0   1 121      273.15   373.15   20.0  0  0  0  1  Nitrogen\n')!
 	s2 := other.gamma_phi(['water', 'nitrogen', 'hydrogen'])!
 	assert s2.solutes == ['7727-37-9', '1333-74-0'], '${s2.solutes}'
 	assert s2.model.solutes[0].henrys.map(it.solvent) == [0]
-	os.write_file(bank, base + '
- 7727-37-9    7732-18-5   1 120      273.15   373.15   20.0  0  0  0  1  Nitrogen
-')!
-	if _ := other.gamma_phi(['water', 'nitrogen']) {
+	os.write_file(bank, base + '\n 7664-41-7    7732-18-5   1 120      273.15   373.15   20.0  0  0  0  1  Ammonia\n')!
+	if _ := other.gamma_phi(['water', 'ammonia'], henry: ['ammonia']) {
 		assert false, 'equation 120'
 	} else {
 		assert err.msg().contains('is equation 120, not 121'), err.msg()
@@ -907,6 +935,60 @@ fn test_the_vapour_is_the_cubics() {
 		seen << a.ln_phi[0]
 	}
 	assert seen[0] != seen[1], "kᵢⱼ didn't move the vapour"
+}
+
+// IAPWS's Henry's constants for gases in water (G7-04) against the iapws
+// package's (testdata/m6_henry_iapws.json, tools/gen_m6_henry.py): the
+// table's A, B, C and ranges as the package has them, ln kH at 25
+// temperatures across each gas's range, and its T-derivatives against
+// Richardson's differences of itself. And a gas in water takes it, saying
+// so: hydrogen's ln φ in a liquid of water is ln kH − ln P.
+fn test_iapws_henrys_constants() {
+	f := json2.decode[IapwsFixture](os.read_file(os.join_path(@VMODROOT, 'testdata', 'm6_henry_iapws.json'))!)!
+	assert f.gases.len == 14
+	mut worst, mut worst_d := 0.0, 0.0
+	for g in f.gases {
+		h := components.iapws_henry_in_water(g.cas, 0) or {
+			assert false, '${g.name}: not in the table'
+			continue
+		}
+		assert [h.a, h.b, h.c] == g.abc && h.tmin == g.tmin && h.tmax == g.tmax, g.name
+		for k, t in g.t {
+			worst = math.max(worst, math.abs(h.jet(numeric.along(t)).v / g.ln_kh[k] - 1.0))
+		}
+		for t in [g.tmin + 5.0, 0.5 * (g.tmin + g.tmax), g.tmax - 5.0] {
+			j := h.jet(numeric.along(t))
+			step := 0.05
+			mut v := []f64{}
+			mut d := []f64{}
+			for dt in [step, -step, step / 2.0, -step / 2.0] {
+				q := h.jet(numeric.along(t + dt))
+				v << q.v
+				d << q.d
+			}
+			dv := (4.0 * (v[2] - v[3]) / step - (v[0] - v[1]) / (2.0 * step)) / 3.0
+			dd := (4.0 * (d[2] - d[3]) / step - (d[0] - d[1]) / (2.0 * step)) / 3.0
+			worst_d = math.max(worst_d, math.max(math.abs(j.d - dv) / math.abs(j.d), math.abs(j.dd - dd) / math.max(math.abs(j.dd),
+				1e-6)))
+		}
+	}
+	println("IAPWS's ln kH: ${worst:.1e}; its derivatives against differences ${worst_d:.1e}")
+	// Measured: the package and reflux take τ^b and e^τ each their own way,
+	// a few ulps of ln kH; the differences' truncation and rounding.
+	assert worst <= 1e-14, '${worst}'
+	assert worst_d <= 1e-7, '${worst_d}'
+	db := components.load_default()!
+	s := db.gamma_phi(['water', 'hydrogen'])!
+	assert s.notes.any(it == "Hydrogen in Water: IAPWS's Henry's constant (G7-04), in place of henrys_law.ipd's"), '${s.notes}'
+	// Sulfur hexafluoride has no row in the bank, so IAPWS's replaces none.
+	sf6 := db.gamma_phi(['water', 'sulfur hexafluoride'], henry: ['sulfur hexafluoride'])!
+	assert sf6.notes.any(it == "Sulfur hexafluoride in Water: IAPWS's Henry's constant (G7-04)"), '${sf6.notes}'
+	assert sf6.model.solutes[0].henrys.map(it.form) == [thermo.HenryForm.iapws]
+	h2 := f.gases.filter(it.name == 'H2')[0]
+	for k in [0, 12, 24] {
+		st := s.fluid.model.phase(h2.t[k], 3e7, [0.999, 0.001], .liquid)!
+		assert math.abs(st.ln_phi[1] + math.log(3e7) - h2.ln_kh[k]) <= 1e-13 * h2.ln_kh[k], '${h2.t[k]} K'
+	}
 }
 
 // A workspace for one thread (thermo.Scoped) keeps what depends on T alone
@@ -968,13 +1050,13 @@ fn test_the_refusals() {
 	} else {
 		assert err.msg().contains('not at 250.0 K'), err.msg()
 	}
-	// A solute outside its constant's range: nitrogen's in water ends at
-	// 473.162 K.
+	// A solute outside its constant's range: nitrogen's in water, IAPWS's,
+	// ends at 636.46 K.
 	n2 := db.gamma_phi(['water', 'nitrogen'])!.fluid.model
-	if _ := n2.phase(480.0, 5e6, [0.999, 0.001], .liquid) {
+	if _ := n2.phase(640.0, 5e6, [0.999, 0.001], .liquid) {
 		assert false, "nitrogen beyond its Henry's-law range"
 	} else {
-		assert err.msg().contains("Nitrogen's Henry's-law constant in Water is fitted from 273.162 K to 473.162 K, not at 480.0 K"), err.msg()
+		assert err.msg().contains("Nitrogen's Henry's-law constant in Water is fitted from 278.12 K to 636.46 K, not at 640.0 K"), err.msg()
 	}
 	h2 := db.gamma_phi(['water', 'hydrogen'])!.fluid.model
 	if _ := h2.phase(330.0, 1e5, [0.0, 1.0], .liquid) {

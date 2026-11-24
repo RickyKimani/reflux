@@ -34,7 +34,8 @@ pub:
 	// henry names the Henry's-law solutes, by name or CAS number (D6). A
 	// compound with constants in a solvent present whose Tc is below every
 	// solvent's vapour pressure's range is one too, whether named or not:
-	// wherever the liquid can be had, it's above its critical point.
+	// wherever the liquid can be had, it's above its critical point. In
+	// water, a gas IAPWS covers takes IAPWS's constant, the bank's elsewhere.
 	henry []string
 	// ideal lets a pair the bank doesn't list have no energy of
 	// interaction (D7 as amended).
@@ -49,7 +50,7 @@ pub:
 	records []Record
 	solutes []string  // by CAS number
 	pairs   []PairUse // each solvent pair's source, for the binary models
-	notes   []string  // a vapour pressure taken from its Antoine record, and why
+	notes   []string  // a vapour pressure from its Antoine record; a gas's constant from IAPWS
 }
 
 // gamma_phi builds a γ–φ fluid of the compounds named.
@@ -111,7 +112,7 @@ pub fn (db Database) gamma_phi(names []string, opts GammaPhiOptions) !GammaPhiSe
 	mut candidate := []bool{len: nc}
 	for i, r in records {
 		candidate[i] = bank.entries.any(it.gas == r.ids.cas && it.solvent in cas
-			&& it.solvent != r.ids.cas)
+			&& it.solvent != r.ids.cas) || (r.ids.cas in iapws_henry && water_cas in cas)
 	}
 	for i in 0 .. nc {
 		if !solute[i] && !candidate[i] && usable[i] && psat[i].c.tmin < lowest {
@@ -134,16 +135,41 @@ pub fn (db Database) gamma_phi(names []string, opts GammaPhiOptions) !GammaPhiSe
 			continue
 		}
 		mut henrys := []thermo.Henry{}
+		// In water, IAPWS's constant where it has one, not the bank's row
+		// (D6 as amended after step 6).
+		w := cas.index(water_cas)
+		mut by_iapws := false
+		if w >= 0 && !solute[w] {
+			if h := iapws_henry_in_water(r.ids.cas, w) {
+				henrys << h
+				by_iapws = true
+			}
+		}
+		if by_iapws {
+			replaced := bank.entries.any(it.gas == r.ids.cas && it.solvent == water_cas)
+			notes << "${r.name} in ${records[w].name}: IAPWS's Henry's constant (G7-04)" +
+				if replaced { ", in place of ${bank.file}'s" } else { '' }
+		}
 		for e in bank.entries {
 			j := cas.index(e.solvent)
-			if e.gas != r.ids.cas || j < 0 || solute[j] {
+			if e.gas != r.ids.cas || j < 0 || solute[j] || (by_iapws && j == w) {
 				continue
 			}
 			if e.eq != 121 || e.coeffs.len != 5 {
 				return error('${bank.file} line ${e.line}: ${r.name} in ${records[j].name} is equation ${e.eq}, not 121')
 			}
 			k := e.coeffs
-			henrys << thermo.Henry{j, k[0], k[1], k[2], k[3], k[4], e.tmin, e.tmax}
+			henrys << thermo.Henry{
+				solvent: j
+				form:    .chemsep_121
+				a:       k[0]
+				b:       k[1]
+				c:       k[2]
+				d:       k[3]
+				e:       k[4]
+				tmin:    e.tmin
+				tmax:    e.tmax
+			}
 		}
 		if henrys.len == 0 {
 			return error("${r.name} is a Henry's-law solute, and ${bank.file} has no constant for it in any of the solvents")
@@ -240,4 +266,55 @@ fn liquid_top(a thermo.Scaled, b thermo.Scaled) f64 {
 
 fn liquid_bottom(a thermo.Scaled, b thermo.Scaled) f64 {
 	return if a.c.tmin > b.c.tmin { a.c.tmin } else { b.c.tmin }
+}
+
+const water_cas = '7732-18-5'
+
+// IapwsHenry is one gas's Henry's constant in water by IAPWS (G7-04).
+struct IapwsHenry {
+	a    f64
+	b    f64
+	c    f64
+	tmin f64 // K, the range of the data it was fitted to
+	tmax f64
+}
+
+// iapws_henry is IAPWS's Guideline on the Henry's Constant and Vapor–Liquid
+// Distribution Constant for Gases in H2O and D2O at High Temperatures
+// (G7-04, 2004; Fernández-Prini, Alvarez and Harvey, J. Phys. Chem. Ref.
+// Data 32, 903, 2003), Table 2, for H2O, by each gas's CAS number. A gas in
+// water takes it in place of henrys_law.ipd's row: there hydrogen's is 5.95
+// times IAPWS's at 298 K and neon's 4.5e32 times, and the other eleven's
+// drift to 10 to 55% off at their hottest (data-quality.md).
+const iapws_henry = {
+	'7440-59-7': IapwsHenry{-3.52839, 7.12983, 4.47770, 273.21, 553.18} // helium
+	'7440-01-9': IapwsHenry{-3.18301, 5.31448, 5.43774, 273.20, 543.36} // neon
+	'7440-37-1': IapwsHenry{-8.40954, 4.29587, 10.52779, 273.19, 568.36} // argon
+	'7439-90-9': IapwsHenry{-8.97358, 3.61508, 11.29963, 273.19, 525.56} // krypton
+	'7440-63-3': IapwsHenry{-14.21635, 4.00041, 15.60999, 273.22, 574.85} // xenon
+	'1333-74-0': IapwsHenry{-4.73284, 6.08954, 6.06066, 273.15, 636.09} // hydrogen
+	'7727-37-9': IapwsHenry{-9.67578, 4.72162, 11.70585, 278.12, 636.46} // nitrogen
+	'7782-44-7': IapwsHenry{-9.44833, 4.43822, 11.42005, 274.15, 616.52} // oxygen
+	'630-08-0':  IapwsHenry{-10.52862, 5.13259, 12.01421, 278.15, 588.67} // carbon monoxide
+	'124-38-9':  IapwsHenry{-8.55445, 4.01195, 9.52345, 274.19, 642.66} // carbon dioxide
+	'7783-06-4': IapwsHenry{-4.51499, 5.23538, 4.42126, 273.15, 533.09} // hydrogen sulfide
+	'74-82-8':   IapwsHenry{-10.44708, 4.66491, 12.12986, 275.46, 633.11} // methane
+	'74-84-0':   IapwsHenry{-19.67563, 4.51222, 20.62567, 275.44, 473.46} // ethane
+	'2551-62-4': IapwsHenry{-16.56118, 2.15289, 20.35440, 283.14, 505.55} // sulfur hexafluoride
+}
+
+// iapws_henry_in_water is IAPWS's Henry's constant for a gas in water, by
+// its CAS number, with water at index solvent, or none if IAPWS hasn't it:
+// for the quality report and the tests.
+pub fn iapws_henry_in_water(cas string, solvent int) ?thermo.Henry {
+	c := iapws_henry[cas] or { return none }
+	return thermo.Henry{
+		solvent: solvent
+		form:    .iapws
+		a:       c.a
+		b:       c.b
+		c:       c.c
+		tmin:    c.tmin
+		tmax:    c.tmax
+	}
 }

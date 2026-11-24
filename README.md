@@ -157,7 +157,8 @@ components/
                     correction repaired and reported; the models built (M6)
   gamma_phi.v       a γ–φ fluid from the database: the activity model, each
                     solvent's Pˢᵃᵗ and density, which compounds are Henry's-law
-                    solutes and their constants, the vapour (M6)
+                    solutes and their constants (IAPWS's for gases in water),
+                    the vapour (M6)
   formula.v         a compound's formula, where two of its structure, SMILES
                     and molar mass agree (M9)
   formation.v       ΔG°f against ΔH°f and S°, with the elements' entropies

@@ -13,12 +13,13 @@ testdata/m6_gamma_phi.json.
   Peng-Robinson's pure phi at Psat.
 - "henry": gases in water by Henry's law, ChemSep's henrys_law.ipd, basis
   'Psat' with the ideal solution (a solute's own gamma is 1 in reflux's
-  convention, and water alone is ideal).
-- "henry_mixed": CO2 and hydrogen in water and ethylene glycol, a pair no
+  convention, and water alone is ideal): ammonia, ethylene and propane,
+  which IAPWS's guideline hasn't (reflux takes IAPWS's for those it has).
+- "henry_mixed": ethylene and propane in water and ethylene glycol, a pair no
   bank lists, so an ideal solution in reflux too ('ideal'). ChemSep's bank
   has water alone as a solvent, so each gas's constant in the glycol is
-  synthetic, given here: water's with A less 0.33 and ln 8 (CO2) or ln 3
-  (hydrogen), and D more 1e-3/K.
+  synthetic, given here: water's with A less 0.33 and ln 8 (ethylene) or
+  ln 3 (propane), and D more 1e-3/K.
   thermo mixes them by its 'solvents_with_parameters' mode; it has no
   composition derivatives, so dn is Richardson's extrapolation of central
   differences of its ln phi.
@@ -63,7 +64,9 @@ LIQUID_SYSTEMS = [
     ("NRTL", ["67-64-1", "67-56-1", "7732-18-5"]),
     ("UNIFAC", ["67-56-1", "7732-18-5"]),
 ]
-HENRY_SYSTEMS = [["7732-18-5", "1333-74-0"], ["7732-18-5", "7727-37-9", "7782-44-7"]]
+# Gases IAPWS hasn't, whose constant in water is the bank's (thermo has the
+# bank's form alone): ammonia, ethylene and propane.
+HENRY_SYSTEMS = [["7732-18-5", "7664-41-7"], ["7732-18-5", "74-85-1", "74-98-6"]]
 
 
 def correlation(rec, key):
@@ -459,7 +462,7 @@ def azeotropes():
     return out
 
 
-HENRY_MIXED = ["7732-18-5", "107-21-1", "124-38-9", "1333-74-0"]
+HENRY_MIXED = ["7732-18-5", "107-21-1", "74-85-1", "74-98-6"]
 
 
 def henry_mixed(rng):

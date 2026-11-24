@@ -914,6 +914,37 @@ for kᵢⱼ. The banks' A are in cal/mol, and reflux puts each over DECHEMA's
 R, 1.98721 cal/(mol·K). That's confirmed for NRTL's bank (M6 step 0), and
 inferred for UNIQUAC's and Wilson's, as is Wilson's form, until M6 step 12.
 
+### Henry's-law constants against IAPWS
+
+A gas in water that IAPWS's guideline covers (G7-04, Fernández-Prini,
+Alvarez and Harvey, 2003) takes its constant in place of the row here.
+Each row's H over IAPWS's kH, at 298.15 K and where they're furthest
+apart over the range both cover:
+
+| Gas | CAS | Over both | H/kH at 298.15 K | Furthest apart |
+|---|---|---|---|---|
+| Hydrogen | 1333-74-0 | 273.16 to 623.16 K | 5.9519 | 62.0433 at 623.16 K |
+| Helium | 7440-59-7 | 273.21 to 548.16 K | 0.9852 | 0.7984 at 489.73 K |
+| Argon | 7440-37-1 | 273.19 to 568.16 K | 1.033 | 1.1668 at 568.16 K |
+| Neon | 7440-01-9 | 273.2 to 347.15 K | 4.5e32 | 6.0e35 at 273.2 K |
+| Krypton | 7439-90-9 | 273.19 to 347.15 K | 1.1243 | 0.6865 at 347.15 K |
+| Xenon | 7440-63-3 | 273.22 to 346.15 K | 1.0417 | 1.2011 at 273.22 K |
+| Oxygen | 7782-44-7 | 274.15 to 616.52 K | 1.017 | 1.127 at 616.52 K |
+| Nitrogen | 7727-37-9 | 278.12 to 473.16 K | 1.0262 | 1.2032 at 473.16 K |
+| Hydrogen Sulfide | 7783-06-4 | 273.16 to 533.09 K | 1.0144 | 1.1052 at 409.62 K |
+| Carbon Monoxide | 630-08-0 | 278.15 to 573.16 K | 0.9805 | 0.6471 at 573.16 K |
+| Carbon Dioxide | 124-38-9 | 274.19 to 607.05 K | 0.9759 | 1.3015 at 607.05 K |
+| Methane | 74-82-8 | 275.46 to 523.16 K | 1.007 | 1.1535 at 523.16 K |
+| Ethane | 74-84-0 | 275.44 to 444.27 K | 0.9836 | 1.1727 at 427.39 K |
+
+Hydrogen's row is wrong outright, in its value and its slope, and neon's
+by orders of magnitude; the others are rough fits, close at 298.15 K and
+drifting towards the hot end of their range.
+
+The file names CAS 78-79-5 "Isopentane": that's isoprene's
+number (isopentane's is 78-78-4), and the NRTL bank names it isoprene,
+so which compound the row's constants are for is unknown.
+
 ### UNIFAC tables
 
 Each table is ChemSep's base file with its extension. Where a file
