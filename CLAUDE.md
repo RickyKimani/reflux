@@ -25,6 +25,39 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
+- **M5a (water and steam) is in progress** on branch `m5a-water`, from
+  `main` at v0.4.0, while M6 continues on `m6-activity`. Its plan,
+  `docs/m5-plan.md`, was approved on 2026-11-24 as drafted: exit criteria
+  1–12, decisions D1–D18 and steps 0–12, ending in v0.5.0 if it merges
+  before M6, else v0.6.0 (D17). Its "With M6" section lists the merge's
+  conflicts.
+  - D1 splits the roadmap's M5: M5a is IAPWS-95 as a `thermo.Model`, IF97
+    with its region-3 supplements as steam-table functions, water's
+    transport by IAPWS, `equation = "IAPWS-95"` in the file, `reflux water`
+    and IAPWS-95 in the C API; M5b is mixtures' transport and IF97 behind
+    the flash on M6's seam. CoolProp isn't linked, only a fixture source.
+  - **Step 0 is done** (`spike/water/`, Python, porting `thermo`'s solvers
+    line for line):
+    - IAPWS-95's isotherms inside the dome have spurious roots with Gibbs
+      energies up to 1e19 RT too low (910 of 2,508 grid states), so the
+      stable root is only ever chosen between the two physical branches'.
+      The generic solvers mostly do that, but the vapour start p/RT landed
+      in the loops (300 K, 42 MPa gave 322 kg/m³), the liquid walk returned
+      an artificial vmin as a root, and near Tc each solver could return the
+      other branch's root. D7: an optional interface (IAPWS-95's alone)
+      bounding the vapour start by SR1-86's ρ'' and splitting the branches at
+      ρc below Tc, a liquid walk that must reach p, and a bracketed start for
+      `saturation_pressure` (which failed from 646 K, and now converges to
+      0.1 mK below Tc). A convexity guard, tried first, refused real liquid
+      roots at 251–260 K.
+    - IAPWS-95's R (8.314371357587) is carried in F (D4), so its tables
+      match exactly; water's ln φ is then about 1e-4, not 0, at low P.
+    - Table 5's 0/0 at δ = 1 is removable; only (Tc, ρc) is singular
+      (φʳ_ττ → −∞, D8). The `iapws` package is GPL-3.0: fixtures only (D10).
+    - DWSIM 9.0.5's CoolProp package is IAPWS-95 to 1e-9 kJ/kg; its Steam
+      Tables (IF97) returns h = s = −1 silently in region 3, has no region 5,
+      and its region-3 PH flash lands 1080 K off.
+  - Step 1 is next: `thermo.PlanckEinstein` and `water.iapws95()`.
 - **M8 (specifications, sensitivity studies and optimisation) is done,**
   merged in PR #7 (`44fb1c7`), with v0.4.0 dated on `main` and to be tagged.
   Its plan, `docs/m8-plan.md`, was

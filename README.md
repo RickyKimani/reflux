@@ -49,7 +49,8 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python,
   [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors, and
   [docs/m8-plan.md](docs/m8-plan.md), specifications, studies, optimisation
-  and fitting.
+  and fitting. [docs/m5-plan.md](docs/m5-plan.md) is M5a's, water and
+  steam, in progress.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
@@ -364,6 +365,8 @@ spike/study/        warm starts by hand, threads' bits and a solve's
                     allocations (M8 step 0)
 spike/eq16/         what K(T) costs, and equation 16 by a fixed rule (M8 step 1)
 spike/warm/         what a warm start must carry (M8 step 5)
+spike/water/        IAPWS-95 under thermo's volume solvers and Psat, its
+                    critical point, and DWSIM 9's water packages (M5a step 0)
 .v-version          the V commit CI builds
 ```
 
