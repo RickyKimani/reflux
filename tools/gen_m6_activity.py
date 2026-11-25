@@ -49,12 +49,13 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 VENDOR = ROOT / "data" / "vendor" / "chemsep"
 COMPONENTS = ROOT / "data" / "components"
 R_DECHEMA = 1.98721
-# reflux's R, thermo.r_gas and activity.r_gas: N_A*k_B rounded, 1.84e-11 short
-# of the exact 8.31446261815324, which thermo (the Python package) uses.
-# mpmath's G^E, H^E and Cp^E are on reflux's; thermo's on its own, which
-# the tests scale by the ratio.
-R = 8.314462618
+# R is N_A*k_B, 8.31446261815324 to the last digit, as thermo (the Python
+# package) and reflux (quantity.molar_gas_constant, since 0.6.0) have it.
+# Until 0.6.0 reflux's was 8.314462618, and mpmath's G^E, H^E and Cp^E were
+# on that; the fixture names the R each source used, and the tests scale by
+# the ratio.
 R_THERMO = 8.31446261815324
+R = R_THERMO
 SEED = 6
 
 SYSTEMS = [

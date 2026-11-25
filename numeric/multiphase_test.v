@@ -109,6 +109,39 @@ fn test_three_phases_from_a_known_answer() {
 	assert worst <= 1e-10, '${worst}'
 }
 
+// A phase that leaves reaches 0 exactly. Two components in three phases,
+// water and 1-butanol by NRTL a step from their heteroazeotrope's T (the
+// published data's test, after 0.6.0's R moved it): the Hessian is
+// singular, Newton's steps are 1e5 long, and the middle phase, cut to its
+// bound each step, kept a residue of β·ε, until at 1.6e-319 its step −β/d
+// underflowed to 0 and nothing moved. The inputs are the doubles that
+// failed. Its answer is checked from scratch: the phases present have
+// Σx = 1, the one held has Σx ≤ 1, and the feed is their sum.
+fn test_a_leaving_phase_reaches_zero() {
+	z := [0.8, 0.2]
+	lnk := [[0.25265486030507067, -2.126001781856114], [-0.0, -0.0],
+		[-0.4854475926527495, 0.778552092635867]]
+	m := multiphase_rr(z, lnk, [0.21045616834899977, 0.7795438316510003, 0.01], 1e-14)!
+	assert m.beta.filter(it == 0.0).len == 1, '${m.beta}'
+	for j in 0 .. 3 {
+		if m.beta[j] > 0.0 {
+			assert math.abs(m.sum_x[j] - 1.0) <= 1e-14, '${m.sum_x}'
+		} else {
+			assert m.sum_x[j] <= 1.0, '${m.sum_x}'
+		}
+	}
+	for i in 0 .. 2 {
+		mut back := 0.0
+		for j in 0 .. 3 {
+			back += m.beta[j] * m.x[j][i]
+		}
+		assert math.abs(back - z[i]) <= 1e-14, 'component ${i}: ${back}'
+	}
+	println('a leaving phase: β = ${m.beta} in ${m.iterations} steps')
+	// Measured: 4 steps.
+	assert m.iterations <= 10
+}
+
 // K-values from 1e-30 to 1e25 are scaled, never overflowed: a heavy
 // component's mole fraction 1e-30 in the light phase keeps its digits.
 fn test_extreme_k_values() {

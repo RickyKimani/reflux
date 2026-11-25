@@ -80,8 +80,8 @@ def test_the_energies_keep_their_definitions(fl):
                              np.abs(T * r.s)), (r.u, r.h - P * r.v, np.abs(r.h))):
         assert np.all(np.abs(got - want) <= 1e-12 * (scale + np.abs(want)))
     assert np.all(r.cp > r.cv) and np.all(r.w > 0)
-    # Z = Pv/RT.
-    assert np.allclose(r.z, P * r.v / (8.314462618 * T), rtol=1e-12, atol=0)
+    # Z = Pv/RT, R being N_A*k_B to the last digit, as reflux's is (0.6.0).
+    assert np.allclose(r.z, P * r.v / (8.31446261815324 * T), rtol=1e-12, atol=0)
     # At 1 Pa, an ideal gas: Z = 1 and ln φ = 0, to a few parts in 10⁶.
     low = fl.props(300.0, 1.0, [0.3, 0.7])
     assert abs(low.z - 1) < 1e-6 and np.all(np.abs(low.ln_phi) < 1e-6)

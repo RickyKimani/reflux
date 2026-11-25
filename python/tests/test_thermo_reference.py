@@ -17,7 +17,7 @@ from support import ROOT
 
 FIXTURE = json.loads((ROOT / "testdata" / "m1_thermo.json").read_text(encoding="utf-8"))
 CAS = {"methane": "74-82-8", "n-butane": "106-97-8", "carbon dioxide": "124-38-9"}
-R = 8.314462618
+R = 8.31446261815324  # N_A*k_B, reflux's R since 0.6.0
 
 
 @pytest.fixture(scope="module")

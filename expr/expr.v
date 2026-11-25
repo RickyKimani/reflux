@@ -149,7 +149,7 @@ pub:
 // and standard gravity and the standard pressure, exact by definition. R is
 // N_A·k_B and F is N_A·e, each the double nearest the exact product.
 pub const constants = [
-	Constant{'R', 8.31446261815324, 'J/(mol*K)', quantity.dim(1, 2, -2, -1, -1, 0), 'the molar gas constant, N_A·k_B'},
+	Constant{'R', quantity.molar_gas_constant, 'J/(mol*K)', quantity.dim(1, 2, -2, -1, -1, 0), 'the molar gas constant, N_A·k_B'},
 	Constant{'N_A', 6.02214076e23, '1/mol', quantity.dim(0, 0, 0, 0, -1, 0), 'the Avogadro constant'},
 	Constant{'k_B', 1.380649e-23, 'J/K', quantity.dim(1, 2, -2, -1, 0, 0), 'the Boltzmann constant'},
 	Constant{'h', 6.62607015e-34, 'J*s', quantity.dim(1, 2, -1, 0, 0, 0), 'the Planck constant'},

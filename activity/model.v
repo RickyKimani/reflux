@@ -15,9 +15,9 @@ import math
 import numeric
 import quantity
 
-// r_gas is the molar gas constant, J/(mol·K): N_A·k_B, exact since the 2019
-// SI, as thermo.r_gas and expr's R.
-pub const r_gas = 8.314462618
+// r_gas is the molar gas constant, J/(mol·K): quantity's, N_A·k_B, exact
+// since the 2019 SI, as thermo.r_gas and expr's R are.
+pub const r_gas = quantity.molar_gas_constant
 
 // least_normal is the smallest normal double, 2⁻¹⁰²². Below it a number has
 // lost digits, and at 0 all of them, so a parameter there (a G, τ, Λ or ψ,

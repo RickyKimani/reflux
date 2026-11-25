@@ -61,7 +61,7 @@ Keep this section current: update it whenever a step is committed.
       1.9e-15, dn 4.9e-14 of its row; against thermo, its own rounding.
     - Step 3: UNIFAC in three variants, a pure component's γ exactly 1.
     - Found: `thermo.r_gas` is N_A·k_B rounded, 1.84e-11 short of exact
-      (for the owner); thermo's UNIQUAC divides by xᵢ.
+      (made exact after M6, below); thermo's UNIQUAC divides by xᵢ.
     - Corrected after them (the plan, below step 3): a refused T left its
       parameters in the `Work` under the last T, so the next answer there
       was wrong; the comparison's rounding rule passed 342.4 for 300 (no
@@ -187,9 +187,9 @@ Keep this section current: update it whenever a step is committed.
       data-format.md (the activity banks), the V note (no tuples in an
       array), and the criterion-by-criterion review: 317 planted mistakes,
       294 caught, 6 deleted, 17 explained.
-    - Carried forward (in its review): the merge with `m5a-water`; `thermo.r_gas`, the owner's to decide; γ–φ and three
-      phases from Python (M10b, ABI 2); reports to DWSIM, `thermo`,
-      ChemSep and V.
+    - Carried forward (in its review): the merge with `m5a-water`;
+      `thermo.r_gas` (done after M6, below); γ–φ and three phases from
+      Python (M10b, ABI 2); reports to DWSIM, `thermo`, ChemSep and V.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
     `wilson.ipd`, `henrys_law.ipd` and the UNIFAC tables, from
     `%LOCALAPPDATA%\ChemSepL8v50\ipd`, under the same licence assumption as
@@ -388,7 +388,8 @@ Keep this section current: update it whenever a step is committed.
 - **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`,
   v0.2.0 (M10a), tagged on 2026-11-08, v0.3.0 (M9), tagged on 2026-11-15,
   v0.4.0 (M8), tagged on 2026-11-18 at `18eb317`, and v0.5.0 (M6), tagged
-  on 2026-11-25, all on `main`: source releases, annotated tags, pushed. The
+  on 2026-11-25 at `862cd2c`, all on `main`: source releases, annotated
+  tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
 - **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, now
@@ -623,6 +624,35 @@ Keep this section current: update it whenever a step is committed.
   - M10b (flowsheets from Python) follows; M5 to M8 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
+- **One gas constant, after M6,** at the owner's word on 2026-11-25, on
+  branch `r-exact`, for its PR into `main`: R is `quantity.molar_gas_constant`,
+  N_A·k_B = 8.31446261815324, the SI's exact value, and `thermo.r_gas`,
+  `activity.r_gas`, `kinetics.gas_constant`, an expression's `R` and the
+  fits' are that one constant (`fit/gas_constant_test.v`). The first two
+  were 8.314462618, 1.84e-11 short, and a Gibbs reactor or PFR mixed both.
+  - It begins 0.6.0's CHANGELOG entry, with v.mod and the package at 0.6.0:
+    the next milestone adds to it.
+  - The eight golden reports moved by at most 3.2e-11 of each number (the
+    reformer's PFR step positions by 7.9e-8, the same 472 steps); no label,
+    warning, pass or step count changed.
+  - The flash sweep moved at five cold heavy mixtures whose three-phase
+    split is at the edge of converging: 4 not solved, from 5; 857 fourth
+    phases or three liquids, from 856; none unexplained.
+  - The full check then found an M6 bug: `numeric.multiphase_rr` left a
+    leaving phase at β·ε each step, not 0, until its step underflowed (20
+    steps, water–1-butanol by its heteroazeotrope, `published_test.v`).
+    The phase bounding the step now goes to exactly 0, held by a test on
+    the failing doubles; no golden or sweep outcome moved.
+  - Fixtures whose generators typed reflux's old R were made again on the
+    exact one: `m6_activity.json` (mpmath's Gᴱ, Hᴱ, Cpᴱ, by 1.84e-11),
+    `m6_unifac_tables.json`, `m1_coolprop_butane.json` (Sʳ's R ln Z),
+    `m1_thermo.json` and `m9_equilibrium.json` (no number moved). Two
+    Python tests typed it too.
+  - Tests that held old rounding: `gamma_phi_test.v` counted only nonzero
+    worsts, so its now-exact ∂P keys went missing (four limits tighten to
+    1e-13); a vdW Cvʳ difference held to an exact 0 (now its rounding,
+    ε|Uʳ|/h); the heater's sensitivity margin, its true error rounding
+    (floor 5, measured 10.6).
 - **The owner's CAT 1, an SMR–SOFC flowsheet,** offered on 2026-11-25 as a
   reference flowsheet, goes into the next milestone's plan (the owner's
   word), as a step. It has a Gibbs reformer, conversion reactors for the
@@ -895,7 +925,9 @@ The modules depend in one direction: `numeric` ← `tdep` ← `thermo` ←
 `components`. `quantity`, units of measure (M4) and M9's dimension algebra
 (compound units, exact rational exponents of kg, m, s, K, mol, A), depends
 on nothing, and so do `release`, the release gate's logic, and `chem`
-(M9), the elements, formulas and SMILES strings. `expr` (M9), the
+(M9), the elements, formulas and SMILES strings. `quantity` also holds
+reflux's one R, `quantity.molar_gas_constant`, which `thermo`, `activity`,
+`kinetics`, `expr` and `fit` take as theirs. `expr` (M9), the
 expression language, uses `quantity`, and has M8's dotted names for a
 flowsheet's variables; `kinetics` (M9), reactions, uses
 `chem`, `expr`, `quantity` and `thermo`, and its tests `components`.

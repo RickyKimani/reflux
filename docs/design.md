@@ -96,6 +96,12 @@ and P° = 1 bar. For component i:
     Hᵢⁱᵍ(T) = ΔH°f,i + ∫_T°^T Cp,i dT
     Sᵢⁱᵍ(T, P) = S°ᵢ + ∫_T°^T Cp,i/T dT − R ln(P/P°)
 
+**R** here and everywhere is `quantity.molar_gas_constant`, N_A·k_B =
+8.31446261815324 J/(mol·K), the 2019 SI's exact value and the double
+nearest it. reflux has one R: `thermo.r_gas`, `activity.r_gas`,
+`kinetics.gas_constant` and an expression's `R` are that constant, and a
+test holds them so (`fit/gas_constant_test.v`).
+
 With this convention a reactor's energy balance needs no separate heat of
 reaction. ΔH°f and S° are Options; if either is missing, `Props.absolute`
 is false. Differences between states of the same composition are still
@@ -658,8 +664,12 @@ largest, so none overflows. Newton runs on the free phases, a phase at 0
 whose step would go below it held there and the step taken again; the step
 is cut short to keep β ≥ 0, and halved until Q falls or rises by no more
 than its rounding (near the minimum a Newton step moves Q by about the
-gradient squared). With two phases it is a Rachford–Rice with the negative
-flash cut off at 0 and 1: the same root inside, to 2e-15.
+gradient squared). The phase that cuts the step short goes to 0 exactly:
+β + (−β/d)·d rounds to about β·ε, not 0, and a phase leaving by such
+residues shrinks by ε a step until −β/d underflows and nothing moves, as two
+components in three phases, with a singular Hessian, did after 20 steps
+(0.6.0). With two phases it is a Rachford–Rice with the negative flash cut
+off at 0 and 1: the same root inside, to 2e-15.
 
 A phase held at 0 three steps running leaves the split, and of two phases
 that come within 1e-4 in every ln x, one does. After 30 steps the split
@@ -2596,9 +2606,11 @@ The f64 instance gives ln γ; the jet's value is the same bits.
     Gᴱ = RT Σ xᵢ ln γᵢ,   Hᴱ = −RT² Σ xᵢ ∂ln γᵢ/∂T,   Sᴱ = (Hᴱ − Gᴱ)/T,
     Cpᴱ = ∂Hᴱ/∂T = −RT(2Σ xᵢ ∂ln γᵢ/∂T + TΣ xᵢ ∂²ln γᵢ/∂T²).
 
-`thermo.r_gas` is 8.314462618, N_A·k_B rounded to the CODATA value: 1.84e-11
-below the exact product 8.31446261815324 that `expr`'s `R` and the Python
-`thermo` use. An energy differs by that fraction; ln γ doesn't involve R.
+`thermo.r_gas` is `quantity.molar_gas_constant`, reflux's one R: N_A·k_B =
+8.31446261815324 J/(mol·K), exactly, as `expr`'s `R`, the kinetics' and the
+Python `thermo`'s are. Until 0.6.0 `thermo.r_gas` and `activity.r_gas` were
+8.314462618, the exact value rounded, 1.84e-11 below it, so a Gibbs reactor
+or a PFR mixed two R's. ln γ doesn't involve R.
 
 **Parameters** are expressions in T, dimensionless, parsed by `expr` (D7):
 any paper's form goes in as printed. Their T-derivatives come from the jet

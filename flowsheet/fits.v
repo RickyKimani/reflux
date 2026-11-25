@@ -384,14 +384,10 @@ fn kij_parameter(w string, names []string, fl ?thermo.Fluid) !FitParameter {
 // start for any other.
 pub const pair_start_t = 298.15
 
-// molar_gas_constant is R as an expression has it, the SI's exact value.
+// molar_gas_constant is R as an expression has it, quantity's, the SI's
+// exact value.
 pub fn molar_gas_constant() f64 {
-	for c in expr.constants {
-		if c.name == 'R' {
-			return c.value
-		}
-	}
-	return 0.0
+	return quantity.molar_gas_constant
 }
 
 // pair_names are the two names in a pair parameter, NAME[a, b].

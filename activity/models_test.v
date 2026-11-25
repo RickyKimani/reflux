@@ -95,9 +95,14 @@ fn test_the_models_against_thermo_and_mpmath() {
 				continue
 			}
 			tag := if src == c.mpmath { 'mpmath' } else { 'thermo' }
-			// thermo's energies are on its R, N_A·k_B to every digit; reflux's
-			// r_gas is that rounded, 1.84e-11 below.
-			scale := if tag == 'thermo' { activity.r_gas / f.source.r_thermo } else { 1.0 }
+			// Each source's energies are on the R the fixture names: thermo's
+			// N_A·k_B, and since 0.6.0 mpmath's too, reflux's own. A source on
+			// another R is scaled to reflux's.
+			scale := activity.r_gas / if tag == 'thermo' {
+				f.source.r_thermo
+			} else {
+				f.source.r_mpmath
+			}
 			for i in 0 .. nc {
 				worst.note('${tag} ln γ', gap(w.ln_gamma[i], src.ln_gamma[i], 1.0))
 				worst.note('${tag} dT', gap(w.dt[i], src.dt[i], 1e-4))

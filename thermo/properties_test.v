@@ -252,12 +252,16 @@ fn test_residual_props_match_finite_differences() {
 			gm := thermo.residual_props(c.eos, solve(c, pt.t, pt.p - hp, c.n, pt.root)).g
 			v_res := st.v - total(c.n) * thermo.r_gas * pt.t / pt.p
 			assert close(v_res, (gp - gm) / (2.0 * hp), 0.0), '${at}: ∂Gʳ/∂P'
-			// At constant V: Cvʳ = ∂Uʳ/∂T, with Uʳ = −RT²·F_T.
+			// At constant V: Cvʳ = ∂Uʳ/∂T, with Uʳ = −RT²·F_T. The difference
+			// carries Uʳ's rounding, about ε|Uʳ|/h: a van der Waals fluid's
+			// Uʳ = −n²a/V doesn't depend on T, so its Cvʳ is 0 and its
+			// difference that rounding alone (3.6e-12 J/K for n-butane at
+			// 400 K), measured against 1e-8·|Uʳ|/h, 45 times one ulp's.
 			ur := fn [c, st] (t f64) f64 {
 				return -thermo.r_gas * t * t * c.eos.residual(t, st.v, c.n).f_t
 			}
 			fd_cv := (ur(pt.t + ht) - ur(pt.t - ht)) / (2.0 * ht)
-			assert close(rp.cv, fd_cv, 0.0), '${at}: Cvʳ ${rp.cv} vs ${fd_cv}'
+			assert close(rp.cv, fd_cv, 1e-8 * math.abs(ur(pt.t)) / ht), '${at}: Cvʳ ${rp.cv} vs ${fd_cv}'
 		}
 	}
 }

@@ -1,7 +1,10 @@
 module thermo
 
-// Gas constant, J/(mol·K). Exact since the 2019 SI redefinition.
-pub const r_gas = 8.314462618
+import quantity
+
+// r_gas is the molar gas constant, J/(mol·K): quantity's, N_A·k_B, exact
+// since the 2019 SI.
+pub const r_gas = quantity.molar_gas_constant
 
 // Component holds the constants every model can rely on. Parameters that
 // belong to one model (PRSV's κ₁, CPA's association energy, PC-SAFT's
