@@ -25,9 +25,9 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M6 (activity models and liquid–liquid equilibrium) is finished** on
-  branch `m6-activity`, with its exit review at the end of its plan, not yet
-  merged. Its plan, `docs/m6-plan.md`, was approved on 2026-11-18: exit
+- **M6 (activity models and liquid–liquid equilibrium) is done,** merged
+  in PR #8 (`28724c1`) and released as v0.5.0, with its exit review at the
+  end of its plan. Its plan, `docs/m6-plan.md`, was approved on 2026-11-18: exit
   criteria 1–13, decisions D1–D20 and steps 0–15, ending in v0.5.0.
   - **Step 0 is done** (committed at ea977c2), and amends D7 and criterion
     8, both approved on 2026-11-18:
@@ -175,9 +175,10 @@ Keep this section current: update it whenever a step is committed.
       (a gradient test of 2.3e-10) and converges on Windows. The test now
       takes either outcome; CI passed on 74787ff, all four jobs (run
       45477152064).
-  - **Steps 14 and 15 are done,** built together (not yet committed): M6
+  - **Steps 14 and 15 are done,** built together (committed at f3fd1ca): M6
     is finished, its exit review at the end of its plan, every criterion
-    met but CI on this commit and the tag.
+    met. CI passed on f3fd1ca (run 45496466774) and on the merge,
+    `28724c1` (run 45501449501).
     - Step 14: v.mod and the package at 0.5.0; the CHANGELOG entry, undated
       until the tag on `main` after the merge; all eight golden reports
       written again, only the version moved. The release gate refuses for
@@ -186,8 +187,7 @@ Keep this section current: update it whenever a step is committed.
       data-format.md (the activity banks), the V note (no tuples in an
       array), and the criterion-by-criterion review: 317 planted mistakes,
       294 caught, 6 deleted, 17 explained.
-    - Carried forward (in its review): v0.5.0's tag; the merge with
-      `m5a-water`; `thermo.r_gas`, the owner's to decide; γ–φ and three
+    - Carried forward (in its review): the merge with `m5a-water`; `thermo.r_gas`, the owner's to decide; γ–φ and three
       phases from Python (M10b, ABI 2); reports to DWSIM, `thermo`,
       ChemSep and V.
   - The data is ChemSep LITE's own: `nrtl.ipd`, `uniquac.ipd`,
@@ -387,8 +387,8 @@ Keep this section current: update it whenever a step is committed.
     unit failures.
 - **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`,
   v0.2.0 (M10a), tagged on 2026-11-08, v0.3.0 (M9), tagged on 2026-11-15,
-  and v0.4.0 (M8), tagged on 2026-11-18 at `18eb317`, all on `main`: source
-  releases, annotated tags, pushed. The
+  v0.4.0 (M8), tagged on 2026-11-18 at `18eb317`, and v0.5.0 (M6), tagged
+  on 2026-11-25, all on `main`: source releases, annotated tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
 - **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, now
@@ -623,6 +623,16 @@ Keep this section current: update it whenever a step is committed.
   - M10b (flowsheets from Python) follows; M5 to M8 build on M4.
 - **The owner's own benchmark,** for M8 and M9: a one-PFR methane steam
   reforming flowsheet, 15 to 18 s a solve in DWSIM, in `docs/roadmap.md`.
+- **The owner's CAT 1, an SMR–SOFC flowsheet,** offered on 2026-11-25 as a
+  reference flowsheet, goes into the next milestone's plan (the owner's
+  word), as a step. It has a Gibbs reformer, conversion reactors for the
+  fuel cell and afterburner, and a water recycle. A probe solved it to
+  within 0.3 kW of DWSIM's duties.
+  - Found: a conversion reactor warns that a complete combustion is past
+    equilibrium (Q/K infinite), a false alarm to fix in that step.
+  - The owner's DWSIM file and the paper stay out of the repository. Whether
+    the splitter takes a flow spec, as DWSIM's does, is the owner's to
+    decide.
 
 ## How we work
 

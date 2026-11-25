@@ -37,7 +37,7 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
-## [0.5.0]
+## [0.5.0] — 2026-11-25
 
 Activity models and liquid–liquid equilibrium: the roadmap's M6. reflux now
 flashes the liquids a cubic describes badly, polar and hydrogen-bonding
