@@ -180,15 +180,15 @@ mut:
 	m map[string]f64
 }
 
+// note keeps each key's worst, an exact match (0) included, so that a key
+// compared is a key counted.
 fn (mut w Worst) note(key string, v f64) {
-	if v > (w.m[key] or { 0.0 }) {
-		w.m[key] = v
-	}
+	w.m[key] = math.max(w.m[key] or { 0.0 }, v)
 }
 
 // compare notes how far the phase at (t, p, x) is from thermo's answer.
 // thermo's energies are on its R, N_A·k_B to every digit, and reflux's on
-// thermo.r_gas, 1.84e-11 below: scaled.
+// thermo.r_gas, the same since 0.6.0: a fixture on another R is scaled.
 fn compare(mut worst Worst, tag string, fl thermo.Fluid, t f64, p f64, x []f64, want Answer, r_thermo f64) ! {
 	m := fl.model
 	st := m.phase(t, p, x, .liquid)!
@@ -251,13 +251,13 @@ fn test_the_liquid_against_thermo() {
 	for k in keys {
 		println('  ${k}: ${worst.m[k]:.2e}')
 	}
-	// Measured, under tcc. Without Poynting's factor, a few ulps of ln φ's
-	// terms, and of dn's (∂ᵢⱼ − Σₖ xₖ∂ᵢₖ). With it, V(P − Pˢᵃᵗ)/RT is on
-	// thermo's R, 1.84e-11 from reflux's, which moves ln φ and ∂P by that
-	// share of the term: 4.7e-13 and 1.6e-12. Cp is the closed form's, held
-	// also to differences of reflux's own H (3.2e-12 to 1.7e-11, their
-	// truncation and rounding); with φˢᵃᵗ, both sides take its second
-	// derivative by differences, which leaves 8e-9.
+	// Measured, under tcc. A few ulps of ln φ's terms, and of dn's
+	// (∂ᵢⱼ − Σₖ xₖ∂ᵢₖ); ∂P exactly. Until 0.6.0 reflux's R was 1.84e-11 below
+	// thermo's, which moved Poynting's V(P − Pˢᵃᵗ)/RT by that share and so
+	// ln φ and ∂P: 4.7e-13 and 1.6e-12, now 6.7e-15 and 0. Cp is the closed
+	// form's, held also to differences of reflux's own H (2.6e-12 to
+	// 1.0e-11, their truncation and rounding); with φˢᵃᵗ, both sides take its
+	// second derivative by differences, which leaves 8e-9.
 	limits := {
 		'Psat ln φ':                        1e-13
 		'Psat ∂T':                          1e-13
@@ -266,19 +266,20 @@ fn test_the_liquid_against_thermo() {
 		'Psat S':                           1e-13
 		'Psat Cp':                          1e-12
 		'Psat V':                           1e-14
+		'Psat ∂P':                          1e-13
 		'Psat Cp against ∂H/∂T':            1e-10
-		'Poynting ln φ':                    5e-12
+		'Poynting ln φ':                    1e-13
 		'Poynting ∂T':                      5e-12
-		'Poynting ∂P':                      1e-11
+		'Poynting ∂P':                      1e-13
 		'Poynting dn':                      1e-12
 		'Poynting H':                       5e-12
 		'Poynting S':                       5e-12
 		'Poynting Cp':                      5e-11
 		'Poynting V':                       1e-14
 		'Poynting Cp against ∂H/∂T':        1e-10
-		'Poynting&PhiSat ln φ':             5e-12
+		'Poynting&PhiSat ln φ':             1e-13
 		'Poynting&PhiSat ∂T':               5e-12
-		'Poynting&PhiSat ∂P':               1e-11
+		'Poynting&PhiSat ∂P':               1e-13
 		'Poynting&PhiSat dn':               1e-12
 		'Poynting&PhiSat H':                5e-12
 		'Poynting&PhiSat S':                5e-12
@@ -381,13 +382,14 @@ fn test_henrys_law_in_a_mixed_solvent() {
 		println('  ${k}: ${worst.m[k]:.2e}')
 	}
 	// Measured: a few ulps of each ln φ's terms and of H, S and Cp, and ∂P
-	// is −1/P on both sides, to the bit (so never noted). In dn,
+	// is −1/P on both sides, to the bit (its limit 0). In dn,
 	// a solvent's column to Richardson's truncation and rounding; a gas's,
 	// thermo's differences' rounding alone, an ln φ near 8 over a step down
 	// to 5e-6 mol, which against compare's floor of 1e-3 is 1.3e-7.
 	limits := {
 		'mixed ln φ':                              1e-13
 		'mixed ∂T':                                1e-12
+		'mixed ∂P':                                0.0
 		'mixed dn':                                1e-6
 		'mixed dn, a solvent column':              1e-9
 		'mixed dn, a gas column, thermo absolute': 1e-9

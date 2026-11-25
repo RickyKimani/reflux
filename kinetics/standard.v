@@ -1,11 +1,12 @@
 module kinetics
 
 import math
+import quantity
 import thermo
 
-// gas_constant is R = N_A·k_B, the 2019 SI's exact value, as expr's
-// built-in constant R is: K(T) appears in rates that use that R.
-pub const gas_constant = 8.31446261815324
+// gas_constant is R = N_A·k_B, the 2019 SI's exact value: quantity's, as
+// expr's built-in constant R is, for K(T) appears in rates that use it.
+pub const gas_constant = quantity.molar_gas_constant
 
 // Standard is a reaction's standard properties at T, its species ideal
 // gases at 1 bar (D7): ΔH°, ΔS° and ΔG°, ln K = −ΔG°/RT, and d ln K/dT =

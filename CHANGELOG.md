@@ -37,6 +37,44 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
+## [0.6.0]
+
+Begun after 0.5.0 with one fix; the next milestone adds to it.
+
+### Fixed
+
+- **reflux has one gas constant,** N_A·k_B = 8.31446261815324 J/(mol·K),
+  the 2019 SI's exact value, in `quantity.molar_gas_constant`.
+  `thermo.r_gas` and `activity.r_gas` were 8.314462618, that value rounded,
+  1.84e-11 below the R that expressions, the kinetics and the fits used,
+  though their comment called it exact; a Gibbs reactor and a PFR used
+  both. They are now the one constant, as `kinetics.gas_constant` and an
+  expression's `R` are. An answer that depends on R moves by about that
+  fraction, and no more, except where a flash refuses at the edge of
+  converging: at five of the flash robustness sweep's 10,000 states, cold
+  mixtures of five to ten heavy compounds, the refusal's reason moves
+  between a fourth phase and a three-phase split that doesn't converge.
+  The sweep has 4 states not solved, from 5, and none unexplained.
+- **A phase leaving a split of three reaches 0** (`numeric.multiphase_rr`).
+  The step that took a leaving phase to its bound left a residue of about
+  β·ε, so the phase shrank by ε a step; where Newton's steps were long, as
+  for two components in three phases, its step underflowed to 0 after
+  about 20 and the flash refused, saying Q fell no further. Water and
+  1-butanol a step from their heteroazeotrope's T did so once the gas
+  constant above moved them there. The phase that bounds the step now goes
+  to 0 exactly; no golden result and no outcome of the flash sweep moves.
+
+### Changed
+
+- **The golden flowsheets' reports** were written again, all eight
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json`, `saturated_loop.json`, `decanter.json`, and
+  `reactors/reformer.json` and `reactors/methanol.json`), for the gas
+  constant above and for this version. Each number moved by at most 3.2e-11
+  of itself, beyond the balances' own rounding; no label, warning, pass or
+  step count changed. The reformer's PFR takes its 472 steps at volumes up
+  to 7.9e-8 of themselves away, and its outlet moves by 2e-11.
+
 ## [0.5.0] — 2026-11-25
 
 Activity models and liquid–liquid equilibrium: the roadmap's M6. reflux now

@@ -19,7 +19,7 @@ import time
 const n_states = 1000
 const calls_per_round = 200 * n_states
 const rounds = 9
-const r_gas = 8.31446261815324
+const r_gas = quantity.molar_gas_constant
 
 fn context() expr.Context {
 	species := ['CH4', 'H2O', 'H2', 'CO', 'CO2']

@@ -3,10 +3,10 @@
   "generator": "tools/gen_m6_activity.py",
   "thermo": "0.6.1",
   "mpmath": "1.3.0",
-  "generated": "2026-11-20",
+  "generated": "2026-11-25",
   "seed": 6,
   "R_thermo": 8.31446261815324,
-  "R_mpmath": 8.314462618
+  "R_mpmath": 8.31446261815324
  },
  "note": "thermo's copies of the published UNIFAC tables, by their own numbers: the original (UFSG, UFIP), the LLE table (LLEUFSG, LLEUFIP), Dortmund's 2016 (DOUFSG, DOUFIP2016), and Dortmund's 2006 parameters (DOUFIP2006, with DOUFSG's subgroups). abc is a, b, c; the original's and LLE's b and c are 0.",
  "UNIFAC": {

@@ -38,7 +38,7 @@ import CoolProp.CoolProp as CP
 import thermo
 from thermo import PR, PRMIX, SRK, SRKMIX
 
-R = 8.314462618  # J/(mol K); the same value as reflux and thermo
+R = 8.31446261815324  # J/(mol K), N_A*k_B: thermo's, and reflux's since 0.6.0
 OUT = pathlib.Path(__file__).resolve().parent.parent / "testdata"
 
 # Smith, Van Ness & Abbott, Table B.1 (critical constants, acentric factor),

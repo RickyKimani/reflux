@@ -119,10 +119,18 @@ pub fn multiphase_rr(z []f64, ln_k [][]f64, beta0 []f64, tol f64) !MultiphaseSpl
 		// rises by no more than its rounding: near the minimum a Newton step
 		// moves Q by about the gradient squared, far below a few ulps of the
 		// terms it's summed from, and is the step to take.
+		//
+		// The phase that sets the longest step reaches its bound, so it goes
+		// to 0 exactly: β + (−β/d)·d rounds to a residue of about β·ε, not 0,
+		// and a phase leaving by residues shrinks by ε a step until −β/d
+		// underflows to 0 and no step moves at all (two components in three
+		// phases, whose Hessian is singular, did so in 20 steps).
 		mut alpha := 1.0
+		mut block := -1
 		for a, ja in loose {
-			if d[a] < 0.0 {
-				alpha = math.min(alpha, -beta[ja] / d[a])
+			if d[a] < 0.0 && -beta[ja] / d[a] <= alpha {
+				alpha = -beta[ja] / d[a]
+				block = a
 			}
 		}
 		mut scale := sum(beta)
@@ -130,10 +138,14 @@ pub fn multiphase_rr(z []f64, ln_k [][]f64, beta0 []f64, tol f64) !MultiphaseSpl
 			scale += z[i] * math.abs(math.log(e[i]))
 		}
 		mut moved := false
-		for _ in 0 .. 60 {
+		for halving in 0 .. 60 {
 			mut trial := beta.clone()
 			for a, ja in loose {
-				trial[ja] = math.max(0.0, beta[ja] + alpha * d[a])
+				trial[ja] = if a == block && halving == 0 {
+					0.0
+				} else {
+					math.max(0.0, beta[ja] + alpha * d[a])
+				}
 			}
 			if qt := multiphase_q(z, k, trial, mut e) {
 				if trial != beta && qt <= q + 8.0 * f64_epsilon * scale {

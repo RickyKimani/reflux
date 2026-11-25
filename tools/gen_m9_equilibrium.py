@@ -26,7 +26,7 @@ or Peng–Robinson, each solved here at 50 digits, independently of reflux:
 - **Peng–Robinson,** written out here: Ωa and Ωb from the critical-point
   cubic (Michelsen and Mollerup), Soave's α with Peng and Robinson's m(ω),
   van der Waals mixing with every kᵢⱼ zero, the root of lower Gibbs energy,
-  and the textbook ln φᵢ; R for the cubic 8.314462618, thermo's.
+  and the textbook ln φᵢ; R for the cubic N_A·k_B, reflux's since 0.6.0.
 
 The output is the same, byte for byte, for the same versions.
 """
@@ -49,7 +49,7 @@ DATA = ROOT / "data" / "components"
 OUT = ROOT / "testdata" / "m9_equilibrium.json"
 
 R = rx.R
-R_PR = mp.mpf("8.314462618")
+R_PR = R  # reflux's cubic's R: until 0.6.0, 8.314462618
 P0 = mp.mpf(100000)
 
 CH4, H2O, H2, CO, CO2 = "74-82-8", "7732-18-5", "1333-74-0", "630-08-0", "124-38-9"
@@ -302,7 +302,7 @@ def main():
                       "alone, otherwise) and what they conserve at the feed's, to a residual below 1e-40",
             "data": "mu°/RT = (H° - TS°)/RT from ChemSep's data in data/components/, by mpmath; R = "
                     "8.31446261815324, p° = 1 bar; Peng-Robinson written out with every kij zero, Soave's alpha "
-                    "with Peng and Robinson's m(omega), R 8.314462618 for the cubic",
+                    "with Peng and Robinson's m(omega), the same R for the cubic",
             "units": "T in K, P in Pa, amounts in mol; ln_y is each species' ln y (null where it's zero); inert "
                      "lists species held at their feed",
         },
