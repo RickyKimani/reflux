@@ -45,7 +45,7 @@ fn (mut o Out) say(s string) {
 
 fn (mut o Out) state(tag string, st thermo.State, fl thermo.Fluid) {
 	pr := fl.props(st)
-	o.say('${tag} v=${b(st.v)} z=${b(st.z)} lnphi=${bs(st.ln_phi)} h=${b(pr.h)} s=${b(pr.s)} cp=${b(pr.cp)} cv=${b(pr.cv)} w=${b(pr.w)} jt=${b(pr.mu_jt)} label=${thermo.phase_label(fl.model, st)}')
+	o.say('${tag} v=${b(st.v)} z=${b(st.z)} lnphi=${bs(st.ln_phi)} h=${b(pr.h)} s=${b(pr.s)} cp=${b(pr.cp)} cv=${b(pr.cv)} w=${b(pr.w)} jt=${b(pr.mu_jt)} label=${fl.model.phase_label(st)}')
 }
 
 fn (mut o Out) result(tag string, r flash.FlashResult, fl thermo.Fluid) {
@@ -62,6 +62,7 @@ fn (mut o Out) fail(tag string, err IError) {
 
 fn (mut o Out) flash_all(tag string, fl thermo.Fluid, pt sweep.Point, full bool) {
 	m := fl.model
+	eos := fl.helmholtz() or { panic(err) }
 	st := flash.stability(m, pt.t, pt.p, pt.z) or {
 		o.fail('${tag} stab', err)
 		flash.Stability{}
@@ -76,7 +77,7 @@ fn (mut o Out) flash_all(tag string, fl thermo.Fluid, pt sweep.Point, full bool)
 		return
 	}
 	for root in [thermo.Root.liquid, .vapor, .stable] {
-		s := thermo.solve_tp(m, pt.t, pt.p, pt.z, root) or {
+		s := thermo.solve_tp(eos, pt.t, pt.p, pt.z, root) or {
 			o.fail('${tag} root ${root}', err)
 			continue
 		}
@@ -115,7 +116,7 @@ fn (mut o Out) flash_all(tag string, fl thermo.Fluid, pt sweep.Point, full bool)
 	} else {
 		o.fail('${tag} ps', err)
 	}
-	if a := flash.tv(m, pt.t, v, pt.z) {
+	if a := flash.tv(eos, pt.t, v, pt.z) {
 		o.result('${tag} tv', a, fl)
 	} else {
 		o.fail('${tag} tv', err)
@@ -143,7 +144,7 @@ fn main() {
 			srk := db.fluid(.srk, pt.cas) or { panic(err) }
 			o.flash_all('${pt.index} srk', srk, pt, true)
 			shift := pr.model.components().map(0.1 * it.tc * thermo.r_gas / it.pc * 0.05)
-			tr := thermo.translate(pr.model, shift) or { panic(err) }
+			tr := thermo.translate(pr.helmholtz() or { panic(err) }, shift) or { panic(err) }
 			trf := thermo.new_fluid(tr, pr.ideal) or { panic(err) }
 			o.flash_all('${pt.index} shifted', trf, pt, true)
 		}
@@ -161,7 +162,7 @@ fn main() {
 		for f in [0.5, 0.7, 0.9, 0.99, 0.9999] {
 			t := f * c.tc
 			tag := 'pure ${k} ${f}'
-			ps := thermo.saturation_pressure(fl.model, t) or {
+			ps := thermo.saturation_pressure(fl.helmholtz() or { panic(err) }, t) or {
 				o.fail('${tag} psat', err)
 				0.0
 			}

@@ -229,7 +229,7 @@ fn sub(a string, b string) string {
 fn test_a_wrong_field_is_refused_with_its_line_and_reason() {
 	feed := '[feed.feed]\n'
 	// The format.
-	refused(sub('format = 1', 'format = 4'), lined('format = 1'), 'format', 'reads format 1, 2 or 3, not 4',
+	refused(sub('format = 1', 'format = 5'), lined('format = 1'), 'format', 'reads format 1, 2, 3 or 4, not 5',
 		'')
 	refused(sub('format = 1', 'format = "1"'), lined('format = 1'), 'format', 'a whole number',
 		'')
@@ -487,7 +487,7 @@ fn test_a_files_data_follows_the_databases_root() {
 		'106-97-8   .313e-1'))!
 	copy := components.open(root, [])!
 	l := flowsheet.load_text(sub('names = [', 'data = ["mine"]\nnames = ['), db: copy, dir: root)!
-	m := l.fluid.model
+	m := l.fluid.helmholtz()!
 	if m is thermo.Cubic {
 		// Methane is the first of five compounds, and n-butane the fourth.
 		assert m.kij[3] == 0.0313 && m.kij[15] == 0.0313

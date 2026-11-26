@@ -5,8 +5,11 @@ pub enum Failure {
 	bad_input      // a specification it can't use: a negative mole fraction, T ≤ 0, …
 	no_convergence // the iteration ran out of steps without an answer it could prove
 	no_volume_root // the model has no volume root at a state it needed
-	// more_phases: a phase of the two-phase split is itself unstable. There
-	// are three or more phases, or a better split, and M3 handles two (M6).
+	// more_phases: more phases than the flash can give. A PT, PH or PS split
+	// of three has a phase that is itself unstable, a fourth, or its phases
+	// are three liquids, which D9 can't name (M6 step 7); a flash that keeps
+	// two phases, TV, UV or a vapour fraction, found an unstable phase or
+	// three phases.
 	more_phases
 	// phases_swapped: a vapour-fraction flash converged, but the phase it
 	// gave the fraction β is the denser one, so by D6 the answer's vapour

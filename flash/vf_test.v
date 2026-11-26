@@ -132,7 +132,7 @@ fn equilibrium(m thermo.Model, r flash.FlashResult, at string) ! {
 	}
 	assert math.abs(sum_x - 1.0) <= 1e-14 && math.abs(sum_y - 1.0) <= 1e-14, '${at}: Σx − 1 = ${sum_x - 1.0}, Σy − 1 = ${sum_y - 1.0}'
 	for pair in [[x, y], [y, x]] {
-		s := flash.stability(m, r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
+		s := flash.stability(thermo.by_roots(m), r.t, r.p, pair[0], trials: [pair[1]], tol: 1e-8)!
 		assert s.stable, '${at}: a phase is unstable'
 	}
 }
@@ -145,7 +145,7 @@ fn is_boundary(m thermo.Model, r flash.FlashResult, given_t bool, at string) ! {
 	mut sides := []f64{}
 	for d in [1e-7, -1e-7] {
 		t, p := if given_t { r.t, r.p * (1.0 + d) } else { r.t * (1.0 + d), r.p }
-		s := flash.pt(m, t, p, r.z)!
+		s := flash.pt(thermo.by_roots(m), t, p, r.z)!
 		if s.phases.len == 1 {
 			sides << 0.0
 			continue
@@ -182,9 +182,9 @@ fn test_bubble_and_dew_points_match_thermo() {
 		at := '${c.eos} ${c.components} z ${c.z}, ${c.spec} given, vf ${c.vf}'
 		m := cubic(f, c.eos, c.components, c.kij)!
 		r := if c.spec == 'p' {
-			flash.pvf(m, c.p, c.vf, c.z)!
+			flash.pvf(thermo.by_roots(m), c.p, c.vf, c.z)!
 		} else {
-			flash.tvf(m, c.t, c.vf, c.z)!
+			flash.tvf(thermo.by_roots(m), c.t, c.vf, c.z)!
 		}
 		equilibrium(m, r, at)!
 		assert r.path == .newton, at
@@ -215,9 +215,9 @@ fn test_pure_saturation_matches_thermo() {
 		at := '${c.components} ${c.spec} given, vf ${c.vf}'
 		m := cubic(f, 'pr', c.components, c.kij)!
 		r := if c.spec == 'p' {
-			flash.pvf(m, c.p, c.vf, [1.0])!
+			flash.pvf(thermo.by_roots(m), c.p, c.vf, [1.0])!
 		} else {
-			flash.tvf(m, c.t, c.vf, [1.0])!
+			flash.tvf(thermo.by_roots(m), c.t, c.vf, [1.0])!
 		}
 		worst = math.max(worst, if c.spec == 'p' {
 			math.abs(r.t - c.t) / c.t
@@ -252,13 +252,13 @@ fn test_round_trips_from_pt_splits() {
 		at := '${c.eos} ${c.components} z ${c.z} at ${c.t} K, ${c.p} Pa'
 		m := cubic(f, c.eos, c.components, c.kij)!
 		beta := c.phases[0].fraction
-		rp := flash.tvf(m, c.t, beta, c.z)!
-		mut rt := flash.pvf(m, c.p, beta, c.z)!
+		rp := flash.tvf(thermo.by_roots(m), c.t, beta, c.z)!
+		mut rt := flash.pvf(thermo.by_roots(m), c.p, beta, c.z)!
 		equilibrium(m, rp, at)!
 		equilibrium(m, rt, at)!
 		if math.abs(rt.t - c.t) > 1e-6 * c.t {
 			twins++
-			rt = flash.pvf(m, c.p, beta, c.z, estimate: 1.02 * c.t)!
+			rt = flash.pvf(thermo.by_roots(m), c.p, beta, c.z, estimate: 1.02 * c.t)!
 			equilibrium(m, rt, at)!
 		}
 		worst_p = math.max(worst_p, math.abs(rp.p - c.p) / c.p)
@@ -289,23 +289,23 @@ fn test_nothing_above_the_cricondenbar() {
 	f := read_thermo()!
 	m := model_of(f, methane_butane)!
 	z := [0.4, 0.6]
-	cool := flash.bubble_t(m, 90e5, z)!
-	hot := flash.bubble_t(m, 90e5, z, estimate: 375.0)!
+	cool := flash.bubble_t(thermo.by_roots(m), 90e5, z)!
+	hot := flash.bubble_t(thermo.by_roots(m), 90e5, z, estimate: 375.0)!
 	for r in [cool, hot] {
 		equilibrium(m, r, 'bubble point at 90 bar, ${r.t} K')!
 		is_boundary(m, r, false, 'bubble point at 90 bar, ${r.t} K')!
 	}
 	assert cool.t > 320.0 && cool.t < 330.0 && hot.t > 375.0 && hot.t < 383.0, '${cool.t} and ${hot.t}'
-	if _ := flash.dew_t(m, 90e5, z) {
+	if _ := flash.dew_t(thermo.by_roots(m), 90e5, z) {
 		assert false, 'a dew point at 90 bar'
 	} else {
 		assert err is flash.FlashError && (err as flash.FlashError).kind == .no_convergence, err.msg()
 	}
 	for k in 0 .. 61 {
-		assert flash.pt(m, 200.0 + 5.0 * f64(k), 100e5, z)!.phases.len == 1
+		assert flash.pt(thermo.by_roots(m), 200.0 + 5.0 * f64(k), 100e5, z)!.phases.len == 1
 	}
 	for beta in [0.0, 1.0] {
-		if _ := flash.pvf(m, 100e5, beta, z) {
+		if _ := flash.pvf(thermo.by_roots(m), 100e5, beta, z) {
 			assert false, 'a point with β = ${beta} above the cricondenbar'
 		} else {
 			assert err is flash.FlashError && (err as flash.FlashError).kind == .outside_envelope, err.msg()
@@ -321,17 +321,17 @@ fn test_no_dew_point_past_the_cricondentherm() {
 	f := read_thermo()!
 	m := model_of(f, methane_butane)!
 	z := [0.4, 0.6]
-	lower := flash.dew_p(m, 393.0, z)!
-	upper := flash.dew_p(m, 393.0, z, estimate: 77e5)!
+	lower := flash.dew_p(thermo.by_roots(m), 393.0, z)!
+	upper := flash.dew_p(thermo.by_roots(m), 393.0, z, estimate: 77e5)!
 	for r in [lower, upper] {
 		equilibrium(m, r, 'dew point at 393 K, ${r.p} Pa')!
 		is_boundary(m, r, true, 'dew point at 393 K, ${r.p} Pa')!
 	}
 	assert lower.p > 57e5 && lower.p < 59e5 && upper.p > 77e5 && upper.p < 78e5, '${lower.p} and ${upper.p}'
 	for k in 0 .. 41 {
-		assert flash.pt(m, 400.0, 1e5 * math.pow(10.0, 0.06 * f64(k)), z)!.phases.len == 1
+		assert flash.pt(thermo.by_roots(m), 400.0, 1e5 * math.pow(10.0, 0.06 * f64(k)), z)!.phases.len == 1
 	}
-	if _ := flash.dew_p(m, 400.0, z) {
+	if _ := flash.dew_p(thermo.by_roots(m), 400.0, z) {
 		assert false, 'a dew point past the cricondentherm'
 	} else {
 		assert err is flash.FlashError && (err as flash.FlashError).kind == .outside_envelope, err.msg()
@@ -345,8 +345,8 @@ fn test_two_dew_pressures_of_a_gas_condensate() {
 	// start at 200 bar finds the upper; both are boundaries.
 	f := read_thermo()!
 	m := model_of(f, condensate)!
-	lower := flash.dew_p(m, 400.0, condensate_z)!
-	upper := flash.dew_p(m, 400.0, condensate_z, estimate: 200e5)!
+	lower := flash.dew_p(thermo.by_roots(m), 400.0, condensate_z)!
+	upper := flash.dew_p(thermo.by_roots(m), 400.0, condensate_z, estimate: 200e5)!
 	for r in [lower, upper] {
 		equilibrium(m, r, 'condensate dew point at 400 K, ${r.p} Pa')!
 		is_boundary(m, r, true, 'condensate dew point at 400 K, ${r.p} Pa')!
@@ -392,14 +392,14 @@ fn test_three_phases_are_refused() {
 		},
 	], kij: [0.0, 0.5, 0.5, 0.5, 0.0, 0.04, 0.5, 0.04, 0.0])!
 	z := [0.5, 0.3, 0.2]
-	false_split := flash.pt(m, 350.0, 5e5, z, verify: false)!
+	false_split := flash.pt(thermo.by_roots(m), 350.0, 5e5, z, verify: false)!
 	assert false_split.phases.len == 2
-	if _ := flash.tvf(m, 350.0, false_split.beta, z) {
+	if _ := flash.tvf(thermo.by_roots(m), 350.0, false_split.beta, z) {
 		assert false, 'a two-phase answer for a three-phase state'
 	} else {
 		assert err is flash.FlashError && (err as flash.FlashError).kind == .more_phases, err.msg()
 	}
-	r := flash.tvf(m, 350.0, false_split.beta, z, verify: false)!
+	r := flash.tvf(thermo.by_roots(m), 350.0, false_split.beta, z, verify: false)!
 	assert math.abs(r.p - 5e5) <= 1e-8 * 5e5, '${r.p}'
 }
 
@@ -412,13 +412,13 @@ fn test_a_pure_component_from_a_poor_start() {
 	m := cubic(f, 'pr', [3], [0.0])!
 	psat := thermo.saturation_pressure(m, 300.0)!
 	for est in [10.0 * psat, 0.1 * psat] {
-		r := flash.tvf(m, 300.0, 0.5, [1.0], estimate: est)!
+		r := flash.tvf(thermo.by_roots(m), 300.0, 0.5, [1.0], estimate: est)!
 		assert math.abs(r.p - psat) <= 1e-9 * psat, 'from ${est} Pa: ${r.p}'
 	}
-	tsat := flash.pvf(m, psat, 0.5, [1.0])!.t
+	tsat := flash.pvf(thermo.by_roots(m), psat, 0.5, [1.0])!.t
 	assert math.abs(tsat - 300.0) <= 1e-9 * 300.0
 	for est in [200.0, 400.0] {
-		r := flash.pvf(m, psat, 0.5, [1.0], estimate: est)!
+		r := flash.pvf(thermo.by_roots(m), psat, 0.5, [1.0], estimate: est)!
 		assert math.abs(r.t - 300.0) <= 1e-9 * 300.0, 'from ${est} K: ${r.t}'
 	}
 }
@@ -437,9 +437,9 @@ fn test_the_tolerance_contract() {
 			at := '${c.eos} ${c.components} z ${c.z}, ${c.spec} given, vf ${c.vf}, tol ${tol}'
 			m := cubic(f, c.eos, c.components, c.kij)!
 			r := if c.spec == 'p' {
-				flash.pvf(m, c.p, c.vf, c.z, tol: tol)!
+				flash.pvf(thermo.by_roots(m), c.p, c.vf, c.z, tol: tol)!
 			} else {
-				flash.tvf(m, c.t, c.vf, c.z, tol: tol)!
+				flash.tvf(thermo.by_roots(m), c.t, c.vf, c.z, tol: tol)!
 			}
 			y, x := r.phases[0].state.n, r.phases[1].state.n
 			for i, z in r.z {
@@ -458,31 +458,31 @@ fn test_bad_input() {
 	z := [0.4, 0.6]
 	bad := {
 		'β < 0':            fn [m, z] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, -0.1, z)
+			return flash.tvf(thermo.by_roots(m), 250.0, -0.1, z)
 		}
 		'β > 1':            fn [m, z] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, 1.5, z)
+			return flash.tvf(thermo.by_roots(m), 250.0, 1.5, z)
 		}
 		'T = 0':            fn [m, z] () !flash.FlashResult {
-			return flash.tvf(m, 0.0, 0.5, z)
+			return flash.tvf(thermo.by_roots(m), 0.0, 0.5, z)
 		}
 		'P < 0':            fn [m, z] () !flash.FlashResult {
-			return flash.pvf(m, -1.0, 0.5, z)
+			return flash.pvf(thermo.by_roots(m), -1.0, 0.5, z)
 		}
 		'a negative z':     fn [m] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, 0.5, [0.4, -0.6])
+			return flash.tvf(thermo.by_roots(m), 250.0, 0.5, [0.4, -0.6])
 		}
 		'too few z':        fn [m] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, 0.5, [1.0])
+			return flash.tvf(thermo.by_roots(m), 250.0, 0.5, [1.0])
 		}
 		'no moles':         fn [m] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, 0.5, [0.0, 0.0])
+			return flash.tvf(thermo.by_roots(m), 250.0, 0.5, [0.0, 0.0])
 		}
 		'a negative start': fn [m, z] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, 0.5, z, estimate: -1.0)
+			return flash.tvf(thermo.by_roots(m), 250.0, 0.5, z, estimate: -1.0)
 		}
 		'tol = 0':          fn [m, z] () !flash.FlashResult {
-			return flash.tvf(m, 250.0, 0.5, z, tol: 0.0)
+			return flash.tvf(thermo.by_roots(m), 250.0, 0.5, z, tol: 0.0)
 		}
 	}
 	// Each must be refused for its own reason, not some later one.

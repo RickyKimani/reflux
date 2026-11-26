@@ -342,6 +342,33 @@ it a struct holding `&Solver` whose `at` calls the solver's `mut` methods
 with the sections made from it the same way, one `&Readings` between them
 ([flowsheet/section.v](../flowsheet/section.v)).
 
+The other way through is a `mut` copy of the pointer, and the field needn't
+be under `mut:` at all: probed in V 0.5.2,
+
+```v
+@[heap]
+struct Work {
+mut:
+	n int
+}
+
+struct Model {
+	w &Work
+}
+
+fn (m Model) bump() {
+	m.w.n++        // refused: "field `w` of struct `Model` is immutable"
+	mut w := m.w
+	w.n++          // fine: the copy is mut, and it points where m.w does
+}
+```
+
+So `mut` is checked on the path you write, not on what it reaches. The γ–φ
+model keeps its workspace this way: `GammaPhi`'s methods take it
+immutably, as `thermo.PhaseModel` asks, and `mut w := g.workspace()` gives
+them the `&GammaWork` that one flash's copy holds
+([thermo/gamma_phi.v](../thermo/gamma_phi.v), M6 step 5).
+
 ---
 
 ## 4. Errors and options: `!T`, `?T`, and `or {}`
@@ -519,6 +546,50 @@ if _ := qp(p) {
   for where a rate is zero returns `?[]f64`, none where it isn't zero
   anywhere, and takes a rate it can't evaluate there as NaN, which ends the
   search the same way ([equilibrium/consistency.v](../equilibrium/consistency.v)).
+- **A `!` leaves a `mut` argument half written,** as Go's `return err` does
+  a slice, but it's one character and easy to read past: `out[i] = half(x)!`
+  over [4, 3, 8] into [9, 9, 9] fails and leaves [2, 9, 9]. So whatever says
+  that a cache holds a value is cleared before a fill that can fail, and
+  set after it. `activity.eval` kept the last T through a refusal, and gave
+  wrong ln γ at that T from then on ([activity/model.v](../activity/model.v),
+  corrected after M6 step 3).
+- **`x0.map(it.clone())` of an immutable `[][]f64` still counts as
+  aliasing it.** Assigning to an element of the copy is refused: "`x`
+  aliases mutable data from an immutable value, clone it first", though
+  every row was cloned. Building the copy row by row passes. Probed in V
+  0.5.2:
+
+  ```v
+  fn grow(x0 [][]f64) [][]f64 {
+  	mut x := x0.map(it.clone()) // refused at x[0] = …
+  	mut y := [][]f64{}
+  	for row in x0 {
+  		y << row.clone() // fine
+  	}
+  	y[0] = [9.0]
+  	return y
+  }
+  ```
+
+  The three-phase split builds its phases this way
+  ([flash/multi.v](../flash/multi.v), M6 step 7).
+- **A loop variable can't take a parameter's name.** `for x in xs` inside a
+  function whose parameter is `x` is refused, "redefinition of value
+  iteration variable `x`", where Go would shadow it. Name it otherwise.
+- **An array of Options needs every element cast.** A function's return
+  and a struct field turn `Kind.pr` into `?Kind` by themselves, but an array
+  literal takes its type from its first element and converts nothing after
+  it. Probed in V 0.5.2:
+
+  | Literal | |
+  |---|---|
+  | `[Kind.pr, none]` | refused: "cannot use `?void` as `Kind`" |
+  | `[?Kind(none), Kind.pr]` or `[?Kind(none), .pr]` | refused: "cannot use `Kind` as `?Kind`" |
+  | `[?Kind(none), ?Kind(.pr)]` | fine |
+
+  The γ–φ tests run each pure liquid with the ideal gas and with PR as
+  `for vapour in [?thermo.CubicKind(none), ?thermo.CubicKind(.pr)]`
+  ([components/gamma_phi_test.v](../components/gamma_phi_test.v), M6 step 5).
 
 ---
 
@@ -563,6 +634,13 @@ expression at all. `return if r.beta == 1.0 { full, empty } else { empty, full }
 in [flowsheet/drum.v](../flowsheet/drum.v) returns a `(Stream, Stream)`. As
 in Go, there's no tuple to hold them: `t := pick()` is a compile error for a
 function returning two values.
+
+**Nor can an array hold them.** Probed: `[]([]f64, f64){}` is accepted as a
+type, but no expression has it, since `([1.0], 2.0)` is "expression
+evaluated but not used", and appending each value is "cannot append `[]f64`
+to `[]([]f64, f64)`". Name a struct instead, as Go would: `At{x, t, v}`
+holds DWSIM's γ by state in
+[components/dwsim_activity_test.v](../components/dwsim_activity_test.v).
 
 **An interface can hold an interface.** `Translated` in
 [thermo/translated.v](../thermo/translated.v) has a field `inner Model` and
@@ -620,6 +698,30 @@ every call: 704 of the 944 bytes `solve_tp` allocated
 ([thermo/work.v](../thermo/work.v)). And `if mut w := s.work { … }` on an
 Option field of type `?&T` gives the reference itself, to call its `mut`
 methods.
+
+**An adapter struct is how every type of one interface gets another's
+methods,** as in Go, where you can't add methods to an interface either.
+`thermo.VolumeRoots` holds a `Model` and has `PhaseModel`'s five methods
+([thermo/phases.v](../thermo/phases.v)). It's boxed once, when it's made,
+and a call through it allocates nothing (probed: 0 bytes in 10,000 calls).
+Methods on `Cubic` itself would have boxed a `Cubic` as a `Model` in every
+call, to pass it on to `solve_tp`.
+
+**A type assertion to a type that can't be in the interface is caught only
+by `is`.** Go refuses to compile both `x.(Cubic)` and `case Cubic:` where
+`Cubic` hasn't x's methods. V 0.5.2 refuses one form of three, so changing
+a field's interface type doesn't show every downcast of it (found in M6
+step 4, when `Fluid.model` became a `PhaseModel`):
+
+| Written, with `p` a `Phases` that a `Cubic` can't be | What V does |
+|---|---|
+| `p is Cubic`, `p !is Cubic` | a compile error |
+| `p as Cubic` | compiles, and returns a zero `Cubic`, with no panic |
+| `?Model(p)`, to another interface | passes `v -check`, then fails in C |
+
+An `as` between a type and an interface it does have panics properly when
+it's wrong. So after such a change, search for `as` by hand, and build the
+tests: `v -check` isn't enough.
 
 **A method with a value receiver can still count its calls,** through a
 pointer field. `numeric.Function` is `at(x f64) f64`, with no `mut`, so a
@@ -714,6 +816,24 @@ A `match` on an enum is exhaustive too. See `CubicKind.consts()` in
 Forget to name the type in an array literal, as in `for kind in [.pr, .srk]`,
 and the error is misleading: `cannot use int as thermo.CubicKind`. Nothing
 tells V which enum `.pr` belongs to, so the elements fall back to ints.
+
+**A flag enum** is a set of bits, as Go's `const ( T Want = 1 << iota; N )`:
+
+```v
+@[flag]
+pub enum Want { t n }
+
+eval(m, t, x, .t | .n, mut w)!   // both
+if want.has(.t) { … }
+```
+
+It has no member for the empty set, and its empty value is awkward to
+reach from outside its module. `Want.zero()` works in the enum's own module,
+but `activity.Want.zero()` from another was `unknown function` in 0.5.2.
+And `Want(0)` is refused: "casting numbers to enums, should be done inside
+`unsafe{}` blocks" (a probe, V 0.5.2). So the module names it once, `pub
+const ln_gamma_only = unsafe { Want(0) }` in
+[activity/model.v](../activity/model.v), and callers use the name.
 
 ---
 
@@ -991,6 +1111,15 @@ or `i64`. The Python spike found this the hard way. A `status &int` array
 filled from a 4-byte NumPy buffer corrupted the heap
 ([docs/spike-python-ffi.md](spike-python-ffi.md)). Go programmers who've
 used cgo know this as `C.int` versus `int`.
+
+**Gotcha: an array has `map`, `filter`, `any` and `all`, but no `reduce`.**
+`xs.map(math.abs(it)).reduce(math.max, 0.0)` is "unknown function: reduce".
+vlib's `arrays` module has them as functions, `arrays.reduce(xs, fn (acc f64,
+x f64) f64 {...})!`, a Result for an empty array, and `arrays.fold(xs, 0.0,
+fn ...)`, as a probe showed, but each takes a closure, which this code keeps
+out of anything run often (§10). A loop is what
+[components/published_test.v](../components/published_test.v) uses, as Go
+would.
 
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
@@ -1331,6 +1460,43 @@ fx := read_fixture[ThermoFixture]('m1_thermo.json')!
 `@FILE` is the path of the source file, filled in at compile time, so the
 test finds `testdata/` from wherever it's run. (Note: V 0.5's old `json`
 module is gone; it's `json2` now.)
+
+**One formula on two number types.** A generic function works on any type
+whose operators its body uses, and V's operators can be defined for a
+struct. So M6's activity models are written once, generic over `f64` and
+`numeric.Jet` (a value with its first two derivatives, whose `+ - * /`
+differentiate as they go), and `$if N is f64 { } $else { }` picks what
+differs, decided at compile time. From [activity/num.v](../activity/num.v):
+
+```v
+fn lift[N](c f64) N {
+	$if N is f64 {
+		return c
+	} $else {
+		return numeric.constant(c)   // a jet that doesn't move
+	}
+}
+
+fn wilson[N](nc int, p []N, x []N, mut s []N, mut out []N) {
+	…
+	mut v := lift[N](1.0) - nlog[N](s[i])
+	…
+}
+
+wilson[f64](nc, values, x, mut s, mut ln_gamma)      // the value
+wilson[numeric.Jet](nc, jets, xj, mut sj, mut out)   // its derivatives
+```
+
+A probe ran one such formula both ways under tcc and gcc `-prod`: the jet's
+value was the f64 one's bits, and its derivatives agreed with central
+differences. A generic function's `mut` parameter is written `mut out []N`,
+before the name, as anywhere else; `out mut []N` doesn't parse. A bare
+`0.0 * x[i]` builds for `f64` and not for the struct: V has no
+`f64 * Jet`, and the C it writes is refused ("invalid operand types for
+binary operation", from a planted mistake in M6 step 3). So every constant
+in such a formula is lifted first. Go's
+generics can't do this: Go has no operator overloading, so a formula over a
+type parameter can't use `*` on a struct.
 
 A key the struct doesn't have is ignored, as Go's `encoding/json` ignores
 it, nested objects included, so a test reads only the fields it uses from

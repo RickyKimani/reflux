@@ -55,7 +55,7 @@ fn call_props(fluid i64, nc int, c PropsCall) PropsOut {
 
 // expect checks point k of a call against the V API for (t, p, z).
 fn expect(f thermo.Fluid, root thermo.Root, t f64, p f64, z []f64, got PropsOut, k int, n int) ! {
-	st := thermo.solve_tp(f.model, t, p, z, root)!
+	st := thermo.solve_tp(f.helmholtz()!, t, p, z, root)!
 	pr := f.props(st)
 	tot := z[0] + z[1]
 	want := {
@@ -75,7 +75,7 @@ fn expect(f thermo.Fluid, root thermo.Root, t f64, p f64, z []f64, got PropsOut,
 		assert got.out[m * n + k] == want[name], '${name} at point ${k}'
 	}
 	assert got.ln_phi[k * 2..k * 2 + 2] == st.ln_phi
-	label := if thermo.phase_label(f.model, st) == .liquid { liquid } else { vapor }
+	label := if thermo.phase_label(f.helmholtz()!, st) == .liquid { liquid } else { vapor }
 	assert got.phase[k] == label && got.status[k] == point_ok
 }
 
@@ -249,7 +249,7 @@ fn test_vapour_pressure_is_each_compounds_own() {
 	defer {
 		remove(fl) or {}
 	}
-	m := s.fluid.model as thermo.Cubic
+	m := s.fluid.helmholtz()! as thermo.Cubic
 	t := [150.0, 300.0, math.nan(), 425.0]
 	// n-butane's Tc is 425.12 K, methane's 190.56 K.
 	for j, want in [

@@ -108,8 +108,10 @@ pub fn points(pool []components.IndexEntry, count int) []Point {
 pub enum Class {
 	single // one phase, checked stable
 	split  // two phases, every invariant of exit criterion 3 checked
+	three  // three phases (M6's D8), every invariant checked
 	// The explained failures (D8):
-	three_phase   // the flash found a third phase (more_phases): M6's job
+	more_phases   // the flash found a fourth phase, or three liquids (more_phases)
+	unsolved      // more than two phases, proved, but the flash didn't converge
 	near_critical // the split collapsed onto the feed: a critical point
 	// Anything else is unexplained: no convergence, a broken invariant, or a
 	// contradiction.
@@ -136,10 +138,19 @@ pub fn run(db components.Database, pt Point) Outcome {
 				proof := prove_more_phases(m, pt) or {
 					return Outcome{pt, .unexplained, "a third phase the sweep can't confirm: ${err}"}
 				}
-				return Outcome{pt, .three_phase, proof}
+				return Outcome{pt, .more_phases, proof}
 			}
 			if e.kind == .no_convergence && e.reason.contains('collapsed onto the feed') {
 				return Outcome{pt, .near_critical, e.reason}
+			}
+			// The flash didn't converge where the sweep proves more than two
+			// phases: a split of three, or its verification, that didn't
+			// finish. Its own class, listed with the flash's reason, never a
+			// success.
+			if e.kind == .no_convergence {
+				if proof := prove_more_phases(m, pt) {
+					return Outcome{pt, .unsolved, '${proof}; ${e.reason}'}
+				}
 			}
 		}
 		return Outcome{pt, .unexplained, err.msg()}
@@ -148,8 +159,8 @@ pub fn run(db components.Database, pt Point) Outcome {
 		check_single(m, pt, r) or { return Outcome{pt, .unexplained, err.msg()} }
 		return Outcome{pt, .single, ''}
 	}
-	check_split(m, pt, r) or { return Outcome{pt, .unexplained, err.msg()} }
-	return Outcome{pt, .split, ''}
+	check_phases(m, pt, r) or { return Outcome{pt, .unexplained, err.msg()} }
+	return Outcome{pt, if r.phases.len == 2 { Class.split } else { .three }, ''}
 }
 
 // trials are five seeded random compositions, an independent probe of a
@@ -168,7 +179,7 @@ fn trials(pt Point) [][]f64 {
 // check_single re-tests a single-phase answer for stability, with extra
 // random trials and to the flash's own tolerance, 1e-10: a composition
 // below the feed's tangent plane contradicts the flash.
-fn check_single(m thermo.Model, pt Point, r flash.FlashResult) ! {
+fn check_single(m thermo.PhaseModel, pt Point, r flash.FlashResult) ! {
 	lowest := lowest_tpd(m, pt.t, pt.p, r.z, pt, 1e-10)!
 	if lowest < -1e-10 {
 		return error('a single-phase answer with a phase below its tangent plane (tm = ${lowest})')
@@ -178,9 +189,9 @@ fn check_single(m thermo.Model, pt Point, r flash.FlashResult) ! {
 // tpd is the normalised tangent-plane distance of w against a phase x,
 // Σ wᵢ(ln wᵢ + ln φᵢ(w) − ln xᵢ − ln φᵢ(x)), straight from the model and
 // independent of flash.stability. Negative proves x unstable.
-fn tpd(m thermo.Model, t f64, p f64, x []f64, w []f64) !f64 {
-	sx := thermo.solve_tp(m, t, p, x, .stable)!
-	sw := thermo.solve_tp(m, t, p, w, .stable)!
+fn tpd(m thermo.PhaseModel, t f64, p f64, x []f64, w []f64) !f64 {
+	sx := m.phase(t, p, x, .stable)!
+	sw := m.phase(t, p, w, .stable)!
 	mut sum := 0.0
 	for i in 0 .. x.len {
 		if w[i] > 0.0 {
@@ -196,7 +207,7 @@ fn tpd(m thermo.Model, t f64, p f64, x []f64, w []f64) !f64 {
 // tpd's, so a wrong verdict from stability can't pass. (A phase of a
 // converged split is no use as a trial for the other: it sits on that
 // phase's tangent plane, a stationary point with tm = 0.)
-fn lowest_tpd(m thermo.Model, t f64, p f64, x []f64, pt Point, tol f64) !f64 {
+fn lowest_tpd(m thermo.PhaseModel, t f64, p f64, x []f64, pt Point, tol f64) !f64 {
 	s := flash.stability(m, t, p, x, trials: trials(pt), tol: tol)!
 	mut lowest := 0.0
 	for tr in s.trials {
@@ -212,7 +223,7 @@ fn lowest_tpd(m thermo.Model, t f64, p f64, x []f64, pt Point, tol f64) !f64 {
 // returns the first split it finds, which is the one the verified flash
 // found first and refused. One of its phases must then have a composition
 // below its tangent plane by more than 1e-8.
-fn prove_more_phases(m thermo.Model, pt Point) !string {
+fn prove_more_phases(m thermo.PhaseModel, pt Point) !string {
 	r := flash.pt(m, pt.t, pt.p, pt.z, verify: false)!
 	if r.phases.len != 2 {
 		return error('unverified, the flash gives one phase')
@@ -220,56 +231,74 @@ fn prove_more_phases(m thermo.Model, pt Point) !string {
 	for ph in r.phases {
 		lowest := lowest_tpd(m, r.t, r.p, ph.state.n, pt, 1e-8)!
 		if lowest < -1e-8 {
-			name := if ph.label == .vapor { 'vapour' } else { 'liquid' }
-			return 'the ${name}, tm = ${round_sig(lowest, 4)}'
+			return 'the ${ph.label.name()}, tm = ${round_sig(lowest, 4)}'
 		}
 	}
 	return error('neither phase of the split is unstable')
 }
 
-// check_split checks exit criterion 3 on a split, from scratch.
-fn check_split(m thermo.Model, pt Point, r flash.FlashResult) ! {
-	vap, liq := r.phases[0], r.phases[1]
-	if !(r.beta > 0.0 && r.beta < 1.0) {
-		return error('a split with β = ${r.beta}')
+// check_phases checks a split of two or more phases from scratch: exit
+// criterion 3 for each pair, against the first phase. Every fraction in
+// (0, 1) and their sum 1; the phases distinct; each component's balance to
+// 1e-12; every fugacity within 1e-10 of the first phase's; Σx = 1 in each;
+// and no phase unstable.
+fn check_phases(m thermo.PhaseModel, pt Point, r flash.FlashResult) ! {
+	np := r.phases.len
+	mut total := 0.0
+	for ph in r.phases {
+		if !(ph.fraction > 0.0 && ph.fraction < 1.0) {
+			return error('a phase with a fraction of ${ph.fraction}')
+		}
+		total += ph.fraction
 	}
-	y, x := vap.state.n, liq.state.n
+	if math.abs(total - 1.0) > 1e-14 {
+		return error("the phases' fractions sum to ${total}")
+	}
 	// Two copies of the feed pass every other check, so the phases must
 	// differ by more than the flash's own test for a collapsed split.
-	mut distinct := false
-	for i, z in r.z {
-		if z > 0.0 && !(math.abs(math.log(y[i] / x[i])) < 1e-4) {
-			distinct = true
-		}
-	}
-	if !distinct {
-		return error('the two phases are the same')
-	}
-	sy := thermo.solve_tp(m, r.t, r.p, y, .stable)!
-	sx := thermo.solve_tp(m, r.t, r.p, x, .stable)!
-	mut sum_x, mut sum_y := 0.0, 0.0
-	for i, z in r.z {
-		sum_x += x[i]
-		sum_y += y[i]
-		if math.abs(r.beta * y[i] + (1.0 - r.beta) * x[i] - z) > 1e-12 {
-			return error('the mass balance of component ${i} is off')
-		}
-		// Below flash.trace_floor in a phase a component's amount there is
-		// zero to double precision, and its fugacities can't agree.
-		if z > 0.0 && x[i] >= flash.trace_floor && y[i] >= flash.trace_floor {
-			res := math.abs(math.log(y[i]) + sy.ln_phi[i] - math.log(x[i]) - sx.ln_phi[i])
-			if res > 1e-10 {
-				return error('|ln fV − ln fL| of component ${i} is ${res}')
+	for a in 0 .. np {
+		for b in a + 1 .. np {
+			mut distinct := false
+			for i, z in r.z {
+				if z > 0.0 && !(math.abs(math.log(r.phases[a].state.n[i] / r.phases[b].state.n[i])) < 1e-4) {
+					distinct = true
+				}
+			}
+			if !distinct {
+				return error('phases ${a} and ${b} are the same')
 			}
 		}
 	}
-	if math.abs(sum_x - 1.0) > 1e-14 || math.abs(sum_y - 1.0) > 1e-14 {
-		return error('Σx − 1 = ${sum_x - 1.0}, Σy − 1 = ${sum_y - 1.0}')
+	mut sts := []thermo.State{}
+	for ph in r.phases {
+		sts << m.phase(r.t, r.p, ph.state.n, .stable)!
 	}
-	for ph in [x, y] {
-		lowest := lowest_tpd(m, r.t, r.p, ph, pt, 1e-8)!
+	base := r.phases[0].state.n
+	for i, z in r.z {
+		mut balance := 0.0
+		for k, ph in r.phases {
+			x := ph.state.n
+			balance += ph.fraction * x[i]
+			// Below flash.trace_floor in a phase a component's amount there
+			// is zero to double precision, and its fugacities can't agree.
+			if k > 0 && z > 0.0 && x[i] >= flash.trace_floor && base[i] >= flash.trace_floor {
+				res := math.abs(math.log(x[i]) + sts[k].ln_phi[i] - math.log(base[i]) - sts[0].ln_phi[i])
+				if res > 1e-10 {
+					return error('|ln f| of component ${i} differs by ${res} between phases 0 and ${k}')
+				}
+			}
+		}
+		if math.abs(balance - z) > 1e-12 {
+			return error('the mass balance of component ${i} is off')
+		}
+	}
+	for k, ph in r.phases {
+		if math.abs(numeric.sum(ph.state.n) - 1.0) > 1e-14 {
+			return error('Σx − 1 = ${numeric.sum(ph.state.n) - 1.0} in phase ${k}')
+		}
+		lowest := lowest_tpd(m, r.t, r.p, ph.state.n, pt, 1e-8)!
 		if lowest < -1e-8 {
-			return error('a phase of the split is unstable (tm = ${lowest})')
+			return error('phase ${k} of the split is unstable (tm = ${lowest})')
 		}
 	}
 }

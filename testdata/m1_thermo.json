@@ -1,8 +1,8 @@
 {
  "source": {
-  "generated": "2026-10-25",
+  "generated": "2026-11-25",
   "generator": "tools/gen_m1_fixtures.py",
-  "python": "3.14.9",
+  "python": "3.13.17",
   "thermo": "0.6.1",
   "coolprop": "8.0.0"
  },

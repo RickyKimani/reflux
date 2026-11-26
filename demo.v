@@ -87,8 +87,8 @@ fn alpha_example(db components.Database, mut c Console) ! {
 	soave := db.fluid(.pr, ['water'])!
 	mc := db.setup(.pr, ['water'], alpha: .mathias_copeman)!
 	c.say('Water at its normal boiling point, ${tb} K (measured Psat: 1.01325 bar)')
-	c.say('  PR, Soave α             ${thermo.saturation_pressure(soave.model, tb)! / 1e5:.4f} bar')
-	c.say('  PR, Mathias–Copeman α   ${thermo.saturation_pressure(mc.fluid.model, tb)! / 1e5:.4f} bar  (${mc.alphas[0]})')
+	c.say('  PR, Soave α             ${thermo.saturation_pressure(soave.helmholtz()!, tb)! / 1e5:.4f} bar')
+	c.say('  PR, Mathias–Copeman α   ${thermo.saturation_pressure(mc.fluid.helmholtz()!, tb)! / 1e5:.4f} bar  (${mc.alphas[0]})')
 }
 
 fn mixture_example(db components.Database, mut c Console) ! {
@@ -101,7 +101,7 @@ fn mixture_example(db components.Database, mut c Console) ! {
 		c.say('  kij = ${pair.k}, from ${s.kij.bank} line ${u.line} (${u.comment}; ${pair.others.len} other listings)')
 	}
 	for root in [thermo.Root.liquid, .vapor] {
-		st := thermo.solve_tp(s.fluid.model, t, p, n, root)!
+		st := s.fluid.model.phase(t, p, n, root)!
 		phi := st.ln_phi.map(math.exp(it))
 		c.say('  ${root:-7} Z = ${st.z:.5f}  phi(methane) = ${phi[0]:.4f}  phi(n-butane) = ${phi[1]:.4f}')
 	}
@@ -120,7 +120,7 @@ fn fluid_example(db components.Database, mut c Console) ! {
 		'liquid 300 K 30 bar': [300.0, 30e5]
 	} {
 		root := if label.starts_with('vapor') { thermo.Root.vapor } else { thermo.Root.liquid }
-		pr := fl.props(thermo.solve_tp(fl.model, pt[0], pt[1], [1.0], root)!)
+		pr := fl.props(fl.model.phase(pt[0], pt[1], [1.0], root)!)
 		c.say('${label:-20} ${pr.h / 1e3:9.3f} ${pr.s:8.2f} ${pr.cp:8.2f} ${pr.cv:8.2f} ${pr.w:8.1f} ${pr.mu_jt * 1e5:8.3f}')
 	}
 }

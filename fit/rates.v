@@ -7,8 +7,9 @@ import math
 import numeric
 import quantity
 
-// R as expr has it, N_A·k_B, the constant the rates' exponents use.
-const gas_r = 8.31446261815324
+// R as expr has it, quantity's N_A·k_B, the constant the rates' exponents
+// use.
+const gas_r = quantity.molar_gas_constant
 
 // RateColumn is a measured rate: its column in the data, its rate among
 // the kinetics', and its weight.

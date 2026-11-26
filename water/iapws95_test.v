@@ -100,7 +100,7 @@ fn test_table_7_through_thermo() {
 	_, ds := reference_offsets(fl)
 	for row in table7 {
 		rho := row.rho.f64() / molar_mass
-		st := state_at_density(fl.model, row.t, rho)
+		st := state_at_density(fl.helmholtz()!, row.t, rho)
 		pr := fl.props(st)
 		assert printed_ok(st.p * 1e-6, row.p), 'p at ${row.t} K, ${row.rho}: ${st.p * 1e-6} against ${row.p}'
 		assert printed_ok(per_kg_k(pr.cv), row.cv), 'cv at ${row.t} K, ${row.rho}: ${per_kg_k(pr.cv)}'
@@ -125,7 +125,7 @@ fn test_the_references_differ_by_constants() {
 	mut worst_x := 0.0
 	for row in table7 {
 		rho := row.rho.f64() / molar_mass
-		st := state_at_density(fl.model, row.t, rho)
+		st := state_at_density(fl.helmholtz()!, row.t, rho)
 		pr := fl.props(st)
 		ia := props95(row.t, rho)
 		worst_h = math.max(worst_h, math.abs(pr.h - ia.h - dh0) / math.abs(ia.h))
@@ -184,7 +184,7 @@ fn test_the_critical_point_s_properties() {
 	// step 1): thermo's formula is the cubics', and every cubic's w would
 	// move with it.
 	fl := fluid(-241814.0, 188.724)!
-	st := state_at_density(fl.model, critical_t, critical_rho)
+	st := state_at_density(fl.helmholtz()!, critical_t, critical_rho)
 	assert math.abs(st.p / critical_p - 1.0) < 1e-12, 'P at the critical point: ${st.p}'
 	pr := fl.props(st)
 	assert math.is_inf(pr.cv, 1) && math.is_inf(pr.cp, 1)

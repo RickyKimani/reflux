@@ -144,7 +144,7 @@ fn (sys CstrSystem) eval(x []f64, mut f []f64, mut jac []f64) ! {
 		// F·H(T, P, F) − target, and its derivatives: each species' partial
 		// molar enthalpy, and Cp.
 		props := sys.fl.props(src.st)
-		lp := thermo.ln_phi_derivs(sys.fl.model, src.st)
+		lp := sys.fl.model.ln_phi_derivs(src.st)!
 		e := sys.scale * thermo.r_gas * sys.inlet.t
 		f[n] = (props.h - sys.target) / e
 		for k in 0 .. n {
@@ -239,7 +239,7 @@ fn (c Cstr) outcome(fl thermo.Fluid, inlets []flowsheet.Stream, from ?flowsheet.
 		t_fixed: if c.t > 0 { c.t } else { inlet.t }
 		target:  enthalpy_flow(inlet) + if c.thermal == .duty { c.duty } else { 0.0 }
 		scale:   inlet.total()
-		src:     new_source(c.name, c.k, c.reactions, c.loading, fl.model)!
+		src:     new_source(c.name, c.k, c.reactions, c.loading, fl.helmholtz()!)!
 	}
 	mut x0 := inlet.flows.clone()
 	if has_t {

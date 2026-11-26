@@ -106,7 +106,7 @@ fn test_stability_agrees_with_the_references() {
 	for c in f.cases {
 		at := '${c.eos} ${c.components} z ${c.z} at ${c.t} K, ${c.p} Pa'
 		m := model_for(f, c)!
-		s := flash.stability(m, c.t, c.p, c.z)!
+		s := flash.stability(thermo.by_roots(m), c.t, c.p, c.z)!
 		assert s.stable == c.stable, '${at}: reflux says stable ${s.stable}'
 		if b := c.brute {
 			if !c.stable {
@@ -135,7 +135,7 @@ fn test_the_iteration_budget() {
 	mut total, mut finishes := 0, 0
 	for c in f.cases {
 		m := model_for(f, c)!
-		s := flash.stability(m, c.t, c.p, c.z)!
+		s := flash.stability(thermo.by_roots(m), c.t, c.p, c.z)!
 		for tr in s.trials {
 			total += tr.iterations
 			if tr.newton {
@@ -156,7 +156,7 @@ fn test_an_unstable_verdict_comes_with_its_proof() {
 			continue
 		}
 		m := model_for(f, c)!
-		s := flash.stability(m, c.t, c.p, c.z)!
+		s := flash.stability(thermo.by_roots(m), c.t, c.p, c.z)!
 		inc := s.incipient() or { panic('unstable with no incipient phase') }
 		check := tpd(m, c.t, c.p, c.z, inc.w)!
 		assert check < -1e-10, '${c.components} ${c.z} at ${c.t} K, ${c.p} Pa: tm ${check}'
@@ -185,7 +185,7 @@ fn test_a_stable_feed_has_no_negative_stationary_point() {
 			continue
 		}
 		m := model_for(f, c)!
-		s := flash.stability(m, c.t, c.p, c.z)!
+		s := flash.stability(thermo.by_roots(m), c.t, c.p, c.z)!
 		assert s.incipient() == none
 		for tr in s.trials {
 			if tr.trivial {
@@ -205,7 +205,7 @@ fn test_the_trivial_solution_is_flagged_and_never_offered() {
 	f := read_fixture()!
 	for c in f.cases {
 		m := model_for(f, c)!
-		s := flash.stability(m, c.t, c.p, c.z)!
+		s := flash.stability(thermo.by_roots(m), c.t, c.p, c.z)!
 		for tr in s.trials {
 			mut gap := 0.0
 			for i, z in c.z {
@@ -237,7 +237,7 @@ fn test_the_phases_of_a_split_are_stable() {
 		m := model_for(f, c)!
 		x, y := c.thermo.compositions[0], c.thermo.compositions[1]
 		for pair in [[x, y], [y, x]] {
-			s := flash.stability(m, c.t, c.p, pair[0], trials: [pair[1]])!
+			s := flash.stability(thermo.by_roots(m), c.t, c.p, pair[0], trials: [pair[1]])!
 			assert s.stable, '${c.components} at ${c.t} K, ${c.p} Pa: a phase of the split is unstable'
 			given := s.trials.filter(it.start == .given)[0]
 			assert !given.trivial && math.abs(given.tm) < 1e-9, 'tm ${given.tm}'
@@ -271,33 +271,34 @@ fn test_stability_edge_cases() {
 	}
 	m := thermo.new_cubic(.pr, [methane, butane, decane])!
 	// A pure component can't split by composition: stable, with no trials.
-	s := flash.stability(m, 250.0, 30e5, [0.0, 1.0, 0.0])!
+	s := flash.stability(thermo.by_roots(m), 250.0, 30e5, [0.0, 1.0, 0.0])!
 	assert s.stable && s.trials.len == 0
 	// An absent component stays absent in every trial, and the rest is the
 	// methane/n-butane binary, unstable here.
-	b := flash.stability(m, 250.0, 30e5, [0.4, 0.6, 0.0])!
+	b := flash.stability(thermo.by_roots(m), 250.0, 30e5, [0.4, 0.6, 0.0])!
 	assert !b.stable
 	for tr in b.trials {
 		assert tr.w[2] == 0.0
 	}
 	// z is normalised, so its scale doesn't matter.
-	scaled := flash.stability(m, 250.0, 30e5, [4.0, 6.0, 0.0])!
+	scaled := flash.stability(thermo.by_roots(m), 250.0, 30e5, [4.0, 6.0, 0.0])!
 	assert scaled.stable == b.stable
 	assert math.abs(scaled.incipient()?.tm - b.incipient()?.tm) <= 1e-13
 	// Bad input is a FlashError, never a panic.
 	for args in [[250.0, 30e5, 0.4, 0.6], [250.0, 30e5, 0.4, -0.6, 0.0], [250.0, 30e5, 0.0, 0.0,
 		0.0], [0.0, 30e5, 0.4, 0.6, 0.0], [250.0, -1.0, 0.4, 0.6, 0.0]] {
-		flash.stability(m, args[0], args[1], args[2..]) or {
+		flash.stability(thermo.by_roots(m), args[0], args[1], args[2..]) or {
 			assert err is flash.FlashError
 			assert (err as flash.FlashError).kind == .bad_input
 			continue
 		}
 		assert false, '${args} should be refused'
 	}
-	if _ := flash.stability(m, 250.0, 30e5, [0.4, 0.6, 0.0], trials: [[0.5, 0.5]]) {
+	short_trial := [[0.5, 0.5]]
+	if _ := flash.stability(thermo.by_roots(m), 250.0, 30e5, [0.4, 0.6, 0.0], trials: short_trial) {
 		assert false, 'a given trial of the wrong length should be refused'
 	}
-	if _ := flash.stability(m, 250.0, 30e5, [0.4, 0.6, 0.0], max_steps: 0) {
+	if _ := flash.stability(thermo.by_roots(m), 250.0, 30e5, [0.4, 0.6, 0.0], max_steps: 0) {
 		assert false, 'max_steps = 0 should be refused'
 	}
 }
@@ -320,11 +321,11 @@ fn test_a_trial_out_of_steps() {
 	m := thermo.new_cubic(.pr, [methane, butane], kij: [0.0, 0.02, 0.02, 0.0])!
 	// A stable feed whose trials need more than one step: out of steps
 	// without proving anything, it's a FlashError, never "stable".
-	flash.stability(m, 400.0, 10e5, [0.5, 0.5], max_steps: 1) or {
+	flash.stability(thermo.by_roots(m), 400.0, 10e5, [0.5, 0.5], max_steps: 1) or {
 		assert err is flash.FlashError
 		assert (err as flash.FlashError).kind == .no_convergence
 		// With room to finish, the same feed is stable.
-		assert flash.stability(m, 400.0, 10e5, [0.5, 0.5])!.stable
+		assert flash.stability(thermo.by_roots(m), 400.0, 10e5, [0.5, 0.5])!.stable
 		return
 	}
 	assert false, 'one step should not settle this feed'
@@ -348,7 +349,7 @@ fn test_an_unconverged_trial_still_proves_instability() {
 	m := thermo.new_cubic(.pr, [methane, butane], kij: [0.0, 0.02, 0.02, 0.0])!
 	// Two steps from Wilson's vapour-like start are far from converged, but
 	// already below the tangent plane: any W with tm < 0 is a proof.
-	s := flash.stability(m, 250.0, 30e5, [0.4, 0.6], max_steps: 2)!
+	s := flash.stability(thermo.by_roots(m), 250.0, 30e5, [0.4, 0.6], max_steps: 2)!
 	assert !s.stable
 	inc := s.incipient()?
 	assert !inc.converged && inc.tm < -1e-10
@@ -386,8 +387,8 @@ fn test_pure_trials_find_what_wilson_misses() {
 		kij: [0.0, 0.5, 0.5, 0.5, 0.0, 0.04, 0.5, 0.04, 0.0]
 	)!
 	x := [0.7066684313380365, 0.00809338270313943, 0.28523818595882405]
-	assert flash.stability(m, 350.0, 5e5, x, pure_trials: false)!.stable
-	s := flash.stability(m, 350.0, 5e5, x)!
+	assert flash.stability(thermo.by_roots(m), 350.0, 5e5, x, pure_trials: false)!.stable
+	s := flash.stability(thermo.by_roots(m), 350.0, 5e5, x)!
 	assert !s.stable
 	inc := s.incipient()?
 	assert inc.start == .pure && inc.w[0] > 0.99, '${inc.w}'

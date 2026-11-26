@@ -311,6 +311,12 @@ fn (d Dimension) absolute() bool {
 	return d == .temperature || d == .pressure
 }
 
+// molar_gas_constant is R, J/(mol·K): N_A·k_B, exact since the 2019 SI,
+// 6.02214076e23 /mol × 1.380649e-23 J/K = 8.31446261815324 to the last
+// digit, and the double nearest it. It's reflux's one R: thermo's, the
+// activity models', the kinetics', the fits' and expressions' `R` are this.
+pub const molar_gas_constant = 8.31446261815324
+
 // The exact definitions (NIST SP 811, appendix B).
 const pound = 0.45359237 // kg
 const inch = 0.0254 // m

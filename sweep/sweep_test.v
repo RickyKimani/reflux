@@ -18,7 +18,7 @@ fn test_the_first_thousand_points() {
 	t := sweep.tally(outcomes)
 	println(t)
 	assert t.unexplained == 0
-	assert t.single + t.split + t.three_phase + t.near_critical == sweep.ci_count
+	assert t.single + t.split + t.three + t.more_phases + t.unsolved + t.near_critical == sweep.ci_count
 }
 
 // The points of the full sweep, beyond the first 1,000, that found the
@@ -26,9 +26,12 @@ fn test_the_first_thousand_points() {
 // Rachford–Rice (1523 and 1879), a split that ran out of steps from one
 // start (7301), a third phase hidden behind a later start's failure (1269
 // and 1989), and a Newton step that never ended (3430, when DEM's K went
-// unclamped). Points 322 and 449 are in the CI subset.
-const found_bugs = [1269, 1523, 1879, 1989, 2423, 3119, 3430, 3613, 5116, 7301, 8792, 9175, 9497,
-	9961]
+// unclamped). Points 322 and 449 are in the CI subset. M6 step 7 added
+// 4386, mercury and 1-methylnaphthalene, whose split of three lost a phase
+// that came together with another without its moles, and returned with
+// the balance 3.3e-3 off.
+const found_bugs = [1269, 1523, 1879, 1989, 2423, 3119, 3430, 3613, 4386, 5116, 7301, 8792, 9175,
+	9497, 9961]
 
 fn test_the_points_that_found_bugs() {
 	db := components.load_default()!

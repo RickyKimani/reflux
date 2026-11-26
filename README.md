@@ -9,6 +9,10 @@ v run . solve testdata/flowsheets/reference.toml --json results.json   # a flows
 ```
 
 ```bash
+v run . solve testdata/flowsheets/decanter.toml   # water, 1-butanol and methanol by NRTL: a vapour over two liquids, and a decanter
+```
+
+```bash
 v run . kinetics check testdata/kinetics/xu_froment.toml   # a file's reactions: every check (docs/flowsheet-format.md)
 ```
 
@@ -22,6 +26,10 @@ v run . optimize testdata/flowsheets/series.toml best   # an optimum, its multip
 
 ```bash
 v run . fit testdata/m8_fit/ethylene.toml   # rate constants fitted to data, each with its interval, written back
+```
+
+```bash
+v run . fit testdata/m6_fit/methanol_water.toml   # NRTL's pair fitted to published bubble points, written back as [[model.pairs]]
 ```
 
 ```bash
@@ -47,10 +55,11 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m3-plan.md](docs/m3-plan.md), the flash, and
   [docs/m4-plan.md](docs/m4-plan.md), the first flowsheet, and
   [docs/m10a-plan.md](docs/m10a-plan.md), thermo and the flash from Python,
-  [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors, and
+  [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors,
   [docs/m8-plan.md](docs/m8-plan.md), specifications, studies, optimisation
-  and fitting. [docs/m5-plan.md](docs/m5-plan.md) is M5a's, water and
-  steam, in progress.
+  and fitting, and [docs/m6-plan.md](docs/m6-plan.md), activity models and
+  liquid–liquid equilibrium. [docs/m5-plan.md](docs/m5-plan.md) is M5a's,
+  water and steam, in progress.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
@@ -58,7 +67,7 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/benchmarks.md](docs/benchmarks.md) is reflux timed against
   `thermo` and DWSIM 9 on the same flashes, and against DWSIM on the
   reference flowsheet, on the owner's reforming PFR and its 50-point study,
-  and on a spec and an optimisation.
+  on a spec and an optimisation, and on γ–φ flashes.
 - [CHANGELOG.md](CHANGELOG.md) is every release, and what a version
   promises.
 - [docs/design.md](docs/design.md) explains how the thermodynamics is built,
@@ -77,7 +86,9 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/spike-dwsim-pfr.md](docs/spike-dwsim-pfr.md) for its plug-flow
   reactor, for M9, and
   [docs/spike-dwsim-study.md](docs/spike-dwsim-study.md) for its
-  sensitivity analysis, Adjust, optimiser and regression, for M8.
+  sensitivity analysis, Adjust, optimiser and regression, for M8, and
+  [docs/spike-dwsim-activity.md](docs/spike-dwsim-activity.md) for its
+  activity-coefficient packages, for M6.
 - [docs/v-for-go.md](docs/v-for-go.md) is V for Go programmers. It points
   back into this code for every feature.
 
@@ -116,7 +127,8 @@ numeric/
   cholesky.v        Cholesky factorisation, the positive-definiteness test
   vec.v             small vector helpers
   integrate.v       adaptive Gauss–Kronrod quadrature
-  newton.v          Newton for nonlinear systems: line search or dogleg
+  newton.v          Newton for nonlinear systems: line search or dogleg, and
+                    why a system can't be evaluated at its start
   broyden.v         Broyden's quasi-Newton method, with no Jacobian
   minimize.v        Newton minimisation with a Levenberg–Marquardt shift
   qp.v              convex quadratic programmes: Goldfarb and Idnani's dual
@@ -127,7 +139,11 @@ numeric/
   least_squares.v   nonlinear least squares: Levenberg–Marquardt on QR, with
                     (JᵀJ)⁻¹ for the intervals (M8)
   student_t.v       Student's t, for the intervals (M8)
+  jet.v             a value with its first two derivatives, whose arithmetic
+                    differentiates as it goes: forward mode (M6)
   rachford_rice.v   two-phase Rachford–Rice, negative flash, extreme K
+  multiphase.v      Michelsen's multiphase Rachford–Rice: Q minimised over the
+                    phases' fractions, β ≥ 0 (M6)
   ode.v             initial-value problems (M9): the interfaces, Hairer's
                     error norm and first step
   dopri5.v          Dormand and Prince's 5(4) pair, with stiffness detection
@@ -135,7 +151,9 @@ numeric/
                     on the problem's own Jacobian
 tdep/
   tdep.v            temperature-dependent correlations (ChemSep and DIPPR
-                    forms): value, derivative and both integrals
+                    forms): value, derivative and both integrals; a vapour
+                    pressure's or density's two exact T-derivatives as a jet
+                    (M6)
 components/
   record.v          a compound as a component file holds it (docs/data-format.md)
   file.v, index.v   the TOML component files and index: deterministic writer,
@@ -145,10 +163,18 @@ components/
                     correlations in SI per mol
   params.v, kij.v   ChemSep's kᵢⱼ (PR, SRK) and Mathias–Copeman (PR) files,
                     and kᵢⱼ matrices with a report of where each value came from
+  activity.v        ChemSep's NRTL, UNIQUAC, Wilson and Henry's-law banks and
+                    UNIFAC tables, each self-contradiction and published
+                    correction repaired and reported; the models built (M6)
+  gamma_phi.v       a γ–φ fluid from the database: the activity model, each
+                    solvent's Pˢᵃᵗ and density, which compounds are Henry's-law
+                    solutes and their constants (IAPWS's for gases in water),
+                    the vapour (M6)
   formula.v         a compound's formula, where two of its structure, SMILES
                     and molar mass agree (M9)
   formation.v       ΔG°f against ΔH°f and S°, with the elements' entropies
-  quality/          the sweep behind docs/data-quality.md
+  quality/          the sweep behind docs/data-quality.md, and each UNIFAC
+                    table against thermo's copy of the published one (M6)
   chemsep/          the ChemSep XML importer: strict, with every repair reported
 thermo/
   model.v           the Model contract F(T, V, n), with F at fixed T and n for
@@ -160,7 +186,13 @@ thermo/
   translated.v      Péneloux volume shift, as a wrapper around any Model
   ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee, Planck–Einstein)
                     and formation data
-  fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
+  phases.v          the flash's seam (M6): a phase at (T, P, n), and any Model
+                    behind it by its volume roots; a workspace for one flash
+  gamma_phi.v       the γ–φ fluid (M6): a liquid by its activity coefficients,
+                    vapour pressures, Poynting's term and φˢᵃᵗ, Henry's-law
+                    solutes, calorics from its fugacities
+  fluid.v           phase model + ideal gas → total H, S, G, Cp, Cv, speed of
+                    sound, μ_JT
   saturation.v      pure-component Psat, for any Model
   phase.v           phase identification parameter and liquid/vapour labels
 water/              water and steam (M5a)
@@ -182,10 +214,15 @@ water/              water and steam (M5a)
     coefficients.v, coefficients_sr3.v, coefficients_sr5.v
                     the releases' tables, by tools/extract_if97.py
 flash/
-  stability.v       Michelsen's tangent-plane stability test, for any Model
+  stability.v       Michelsen's tangent-plane stability test, for any phase
+                    model
   pt.v              the PT flash: stability, then the two-phase split
+  multi.v           three phases, stage-wise (M6): a split's unstable phase
+                    grows it, substitution and Newton on G; D9's labels
   vf.v              vapour-fraction flashes: bubble and dew points, T or P given
   ph.v              PH and PS flashes, pure components included
+  azeotrope.v       an azeotrope at a given T or P, by Newton on x and T or P
+                    (M6)
   tv.v              TV and UV flashes, in the model's own variables (T, V, n)
   wilson.v          Wilson's K-values
   error.v           FlashError: every failure, typed, never a panic
@@ -206,11 +243,22 @@ expr/               the expression language (M9): every equation a user gives
   render.v          plain text that reads back, Unicode and LaTeX
   expr.v            nodes, contexts, built-in constants, definitions
   eval.v, lint.v    the tree's value; numbers that look like a constant
+  jet.v             the tree's value with two derivatives along one input, for
+                    a parameter's τ(T) (M6)
   value.v           a value, or why there's none, never ±∞ (M8)
   equation.v        equations, =, <= and >=, for specs and constraints (M8)
   tape.v            expressions compiled to a tape: folded, merged, fused;
                     evaluation into the caller's buffer, and the gradient by
                     one reverse sweep
+activity/           liquid activity models (M6): Wilson, NRTL, UNIQUAC and
+                    UNIFAC (original, LLE, Dortmund), each formula written
+                    once over f64 and jets, so that its T- and composition
+                    derivatives are exact
+  model.v           the interface, Work (kept until T moves), eval (a
+                    finite answer or a refusal), the excess properties,
+                    parameters as expressions in T
+  nrtl.v, uniquac.v, wilson.v, pairs.v  the binary models
+  unifac.v          UNIFAC's tables and model
 kinetics/           reactions (M9)
   species.v         a compound as reactions know it, found by name, CAS
                     number or formula
@@ -276,6 +324,7 @@ flowsheet/
   pump.v            pump: v·ΔP/η, liquid only
   compressor.v      compressor and expander: isentropic by PS, then η
   drum.v            flash drum: mixed inlets, saturated vapour and liquid out
+  decanter.v        decanter: a flash drum with vapour, light and heavy outlets (M6)
   separator.v       component separator: a fraction of each component
   sheet.v           Flowsheet: units joined by named streams, and its plan
   graph.v           strongly connected components, elementary cycles, order
@@ -300,11 +349,13 @@ study/              studies (M8): one or two inputs over their values, in
   optimize.v        an optimisation (M8): the SQP on the flowsheet, scaled,
                     every evaluation a converged solve
   optimize_report.v the optimisation's report: JSON, CSV and the table
-fit/                fits (M8): rate constants to rates, and kᵢⱼ to bubble
-                    points, each with its 95% interval
+fit/                fits (M8): rate constants to rates, and kᵢⱼ or an
+                    activity model's pairs (M6) to bubble points, each with
+                    its 95% interval
   data.v            a fit's CSV, every column with its unit
   rates.v           rate constants, on the tape's exact derivatives, centred
-  vle.v             kᵢⱼ, on bubble points
+  vle.v             kᵢⱼ, or NRTL's and UNIQUAC's pairs, on bubble points
+  consistency.v     the point test of VLE data for Gibbs–Duhem consistency (M6)
   fit.v             the statistics, in the file's own form
   report.v          the fit's report: JSON, CSV, the table and the fitted
                     constants as file text
@@ -312,8 +363,9 @@ sweep/              the flash robustness sweep: seeded database mixtures,
                     every answer checked, every failure classified
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
-                    flowsheet, on the owner's reforming PFR, and on M8's
-                    study, optimisation and spec (docs/benchmarks.md)
+                    flowsheet, on the owner's reforming PFR, on M8's study,
+                    optimisation and spec, and on M6's γ–φ flashes
+                    (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
 capi/               the C API (M10a): reflux.h, and the functions it declares,
@@ -365,6 +417,12 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (data to fit, and SciPy's fits of them), gen_m8_dwsim.py
                     (DWSIM 9's spec, optimiser and PFR on M8's problems),
                     gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM),
+                    gen_m6_activity.py (the activity models by thermo and
+                    mpmath on ChemSep's banks, and thermo's UNIFAC tables),
+                    gen_m6_published.py (ThermoML's data sets), gen_m6_fits.py
+                    (SciPy's NRTL and UNIQUAC fits), gen_m6_dwsim.py (DWSIM 9's
+                    activity packages by state), gen_m6_bench.py and
+                    bench_m6.v (M6's speed against DWSIM and thermo),
                     gen_m5_iapws95.py (IAPWS-95's φʳ by mpmath, and water's
                     states and saturation by the iapws package and CoolProp),
                     extract_if97.py (IF97's coefficients from its releases'
@@ -389,6 +447,12 @@ spike/study/        warm starts by hand, threads' bits and a solve's
                     allocations (M8 step 0)
 spike/eq16/         what K(T) costs, and equation 16 by a fixed rule (M8 step 1)
 spike/warm/         what a warm start must carry (M8 step 5)
+spike/dwsim_activity/ DWSIM 9's activity-coefficient packages, and each
+                    model's own liquid split by thermo (M6 step 0)
+spike/seam/         the PT flash behind a phase-model interface: its bits
+                    and its time against flash's (M6 step 0)
+spike/thermoml/     what the ThermoML archive holds for M6's binaries
+                    (M6 step 0)
 spike/water/        IAPWS-95 under thermo's volume solvers and Psat, its
                     critical point, and DWSIM 9's water packages (M5a step 0);
                     trace/, every cubic answer's bits, before and after D7
@@ -403,12 +467,13 @@ at the edges, i.e. input files and printed output.
 
 **M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash), M4
 (the first flowsheet), M10a (thermo and the flash from Python), M9
-(equations, kinetics and reactors) and M8 (specifications, studies,
-optimisation and fitting) are done.** The exit reviews are at the ends of
+(equations, kinetics and reactors), M8 (specifications, studies,
+optimisation and fitting) and M6 (activity models and liquid–liquid
+equilibrium) are done.** The exit reviews are at the ends of
 [docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
 [docs/m3-plan.md](docs/m3-plan.md), [docs/m4-plan.md](docs/m4-plan.md),
-[docs/m10a-plan.md](docs/m10a-plan.md), [docs/m9-plan.md](docs/m9-plan.md)
-and [docs/m8-plan.md](docs/m8-plan.md).
+[docs/m10a-plan.md](docs/m10a-plan.md), [docs/m9-plan.md](docs/m9-plan.md),
+[docs/m8-plan.md](docs/m8-plan.md) and [docs/m6-plan.md](docs/m6-plan.md).
 What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
@@ -455,7 +520,8 @@ And from M2:
 - [x] Every correlation swept for sanity. What fails is listed, not hidden,
       in [docs/data-quality.md](docs/data-quality.md).
 
-And from M3, for any `thermo.Model`:
+And from M3, for any `thermo.Model` (since M6 step 4, for any phase model,
+with or without an F):
 
 - [x] Michelsen's stability test, with Wilson's trials and a nearly pure
       phase of each component. It agrees with `thermo` and with brute-force
@@ -600,11 +666,39 @@ And from M8, specifications, studies, optimisation and fitting:
       904 s, and the published reforming model in 13.4 ms a solve, from
       393, every answer keeping its bits
       ([docs/benchmarks.md](docs/benchmarks.md)).
-- [x] A fourth release, v0.4.0, to be tagged on `main` after M8's merge
+- [x] A fourth release, v0.4.0, tagged on `main` after M8's merge
       ([CHANGELOG.md](CHANGELOG.md)).
 
-By the roadmap, next is M10b, flowsheets from Python, or M5 to M7: steam,
-activity models and columns.
+And from M6, activity models and liquid–liquid equilibrium:
+
+- [x] Wilson, NRTL, UNIQUAC and three UNIFACs on ChemSep's banks and
+      tables, each with exact derivatives in T and composition; the UNIFAC
+      tables' contradictions repaired and their typos corrected, every one
+      reported ([docs/data-quality.md](docs/data-quality.md)).
+- [x] A γ–φ fluid: the liquid by its activity coefficients, vapour
+      pressures and Poynting term, its enthalpy from the same fugacities;
+      the vapour the ideal gas or a cubic; Henry's law for gases above their
+      critical point, by IAPWS's constants in water.
+- [x] Every flash on it, behind one seam with the cubics, whose every
+      answer kept its bits; azeotropes found.
+- [x] Three phases, two liquids and a vapour, for any model, each phase
+      shown stable, labelled vapour, liquid or liquid2.
+- [x] Flowsheet format 4, an activity model's pairs as expressions with
+      units, and the decanter; report format 4's model, each pair with its
+      source.
+- [x] Published data from NIST's ThermoML archive, each VLE set given the
+      point test for Gibbs–Duhem consistency, and each model's deviations
+      recorded.
+- [x] NRTL's and UNIQUAC's pairs fitted to bubble points, matching SciPy's.
+- [x] Compared with DWSIM 9's activity packages by state, every difference
+      explained, four of them bugs of its own.
+- [x] An NRTL flash in 75 µs, against 1.3 ms in thermo and 10.5 ms in DWSIM
+      ([docs/benchmarks.md](docs/benchmarks.md)).
+- [x] A fifth release, v0.5.0, to be tagged on `main` after M6's merge
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M10b, flowsheets from Python, or M5 and M7: steam
+and columns.
 
 ## Roadmap
 
@@ -615,8 +709,9 @@ how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
 (ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
 ✓ → **M10a** thermo and flash from Python ✓. **M9** equations, kinetics and
-reactors ✓ and **M8** specifications, studies and optimisation ✓ build on
-M4. Next, **M10b** makes the flowsheets callable from Python.
+reactors ✓, **M8** specifications, studies and optimisation ✓ and **M6**
+activity models and liquid–liquid equilibrium ✓ build on M4. Next, **M10b**
+makes the flowsheets callable from Python.
 
 ## Development
 

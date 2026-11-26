@@ -68,7 +68,7 @@ pub fn read_ipd(path string) !KijBank {
 // parse_ipd reads the text of an .ipd file. Each data line is
 // `CAS1 CAS2 k12 comment…`.
 pub fn parse_ipd(text string, file string) !KijBank {
-	comment, lines := lib_section(text, 'IPD') or { return error('${file}: ${err}') }
+	comment, _, lines := lib_section(text, 'IPD') or { return error('${file}: ${err}') }
 	mut entries := []Kij{}
 	mut defects := []Defect{}
 	for l in lines {
@@ -152,7 +152,7 @@ pub fn read_lib(path string) !McBank {
 // parse_lib reads the text of a Mathias–Copeman .lib file. Each data line is
 // `CAS c1 c2 c3`, then either `# name` or tab-separated name and fit error.
 pub fn parse_lib(text string, file string) !McBank {
-	comment, lines := lib_section(text, 'LIB') or { return error('${file}: ${err}') }
+	comment, _, lines := lib_section(text, 'LIB') or { return error('${file}: ${err}') }
 	mut entries := []McEntry{}
 	mut defects := []Defect{}
 	for l in lines {
@@ -226,16 +226,17 @@ struct Line {
 	text string
 }
 
-// lib_section returns a section's Comment= text and its data lines: everything
-// after the `[name]` header that isn't blank, a `#` comment, or the Comment=
-// line itself.
-fn lib_section(text string, name string) !(string, []Line) {
+// lib_section returns a section's Comment= text, its Units= text (M6's
+// activity banks state theirs) and its data lines: everything after the
+// `[name]` header that isn't blank, a `#` comment, or one of those two.
+fn lib_section(text string, name string) !(string, string, []Line) {
 	lines := text.split_into_lines()
 	header := lines.index('[${name}]')
 	if header < 0 {
 		return error('no [${name}] section')
 	}
 	mut comment := ''
+	mut units := ''
 	mut data := []Line{}
 	for i in header + 1 .. lines.len {
 		l := lines[i]
@@ -247,12 +248,16 @@ fn lib_section(text string, name string) !(string, []Line) {
 			comment = t.all_after('Comment=').trim_space()
 			continue
 		}
+		if t.starts_with('Units=') {
+			units = t.all_after('Units=').trim_space()
+			continue
+		}
 		if t.starts_with('[') {
 			break // the next section
 		}
 		data << Line{i + 1, l}
 	}
-	return comment, data
+	return comment, units, data
 }
 
 // leading_fields splits off the first n whitespace-separated fields (tabs

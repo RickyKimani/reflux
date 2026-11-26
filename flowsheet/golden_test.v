@@ -18,7 +18,7 @@ fn close(got f64, want f64, scale f64, at string) {
 
 fn test_every_golden_flowsheet_solves_to_its_results() {
 	files := os.ls(golden_dir)!.filter(it.ends_with('.json'))
-	assert files.len == 5, '${files}'
+	assert files.len == 6, '${files}'
 	for f in files {
 		want := json2.decode[Report](os.read_file(os.join_path(golden_dir, f))!)!
 		assert want.file == 'testdata/flowsheets/${f.all_before('.json')}.toml'
@@ -33,7 +33,13 @@ fn test_every_golden_flowsheet_solves_to_its_results() {
 
 fn same(got Report, want Report, at string) {
 	assert got.status == 'solved' && want.status == 'solved', at
+	assert got.format == want.format, at
+	// How the fluid was built, each pair's source and parameters (format 4).
+	assert json2.encode(got.model) == json2.encode(want.model), at
 	assert got.streams.map(it.name) == want.streams.map(it.name), at
+	for k, w in want.streams {
+		assert got.streams[k].phases.map(it.phase) == w.phases.map(it.phase), '${at} ${w.name}'
+	}
 	assert got.units.map(it.name) == want.units.map(it.name), at
 	mut feed := 0.0
 	mut streams := map[string]flowsheet.StreamReport{}
@@ -149,8 +155,9 @@ fn test_every_golden_flowsheet_balances_from_scratch() {
 }
 
 // tally adds a stream's flows to c with its sign, and returns its enthalpy
-// flow, F·H, with H from scratch: each phase's volume root solved again at the
-// stream's T and P.
+// flow, F·H, with H from scratch: each phase made again by the fluid's phase
+// model at the stream's T and P, a volume root for an equation of state and
+// the liquid or the vapour for a γ–φ fluid (M6's D3).
 fn tally(mut c []f64, fl thermo.Fluid, s Stream, sign f64) !f64 {
 	for i, x in s.flows {
 		c[i] += sign * x
@@ -161,7 +168,7 @@ fn tally(mut c []f64, fl thermo.Fluid, s Stream, sign f64) !f64 {
 			continue
 		}
 		root := if phase.label == .vapor { thermo.Root.vapor } else { thermo.Root.liquid }
-		h += phase.fraction * fl.props(thermo.solve_tp(fl.model, s.t, s.p, phase.state.n, root)!).h
+		h += phase.fraction * fl.props(fl.model.phase(s.t, s.p, phase.state.n, root)!).h
 	}
 	return sign * s.total() * h
 }

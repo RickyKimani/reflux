@@ -1,0 +1,21 @@
+# Methanol and water by NRTL (M6 step 11): its pair's two energies fitted to
+# a published set of bubble points at 101.32 kPa in methanol_water.csv
+# (Yang, Ma and Yin, J. Chem. Eng. Data 56 (2011) 3747, from the ThermoML
+# archive), starting from ChemSep's pair, alpha its 0.2999.
+# tools/gen_m6_fits.py wrote the data, and SciPy's fit of them with thermo's
+# NRTL into testdata/m6_fits.json. These data don't determine alpha as well:
+# ethanol_water.toml fits it.
+#
+#     reflux fit testdata/m6_fit/methanol_water.toml
+format = 4
+
+[components]
+names = ["methanol", "water"]
+
+[model]
+liquid = "NRTL"
+
+[fit.nrtl]
+data = "methanol_water.csv"
+parameters = ["A[methanol, water]", "A[water, methanol]"]
+weights = { P = "1 %", "y[methanol]" = "0.005" }

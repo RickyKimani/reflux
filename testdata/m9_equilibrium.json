@@ -2,7 +2,7 @@
  "source": {
   "by": "tools/gen_m9_equilibrium.py, with mpmath 1.3.0 at 50 digits",
   "method": "each case solved for every species' ln n by Newton: each reaction of a basis at ln Q = ln K (a basis of every reaction the elements allow, for a Gibbs minimisation; the chosen reactions alone, otherwise) and what they conserve at the feed's, to a residual below 1e-40",
-  "data": "mu°/RT = (H° - TS°)/RT from ChemSep's data in data/components/, by mpmath; R = 8.31446261815324, p° = 1 bar; Peng-Robinson written out with every kij zero, Soave's alpha with Peng and Robinson's m(omega), R 8.314462618 for the cubic",
+  "data": "mu°/RT = (H° - TS°)/RT from ChemSep's data in data/components/, by mpmath; R = 8.31446261815324, p° = 1 bar; Peng-Robinson written out with every kij zero, Soave's alpha with Peng and Robinson's m(omega), the same R for the cubic",
   "units": "T in K, P in Pa, amounts in mol; ln_y is each species' ln y (null where it's zero); inert lists species held at their feed"
  },
  "cases": [

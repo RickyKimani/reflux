@@ -97,7 +97,8 @@ fn cases() []Case {
 }
 
 fn solve(c Case, t f64, p f64) thermo.State {
-	return thermo.solve_tp(c.fluid.model, t, p, c.n, c.root) or { panic('${c.label}: ${err}') }
+	eos := c.fluid.helmholtz() or { panic(err) }
+	return thermo.solve_tp(eos, t, p, c.n, c.root) or { panic('${c.label}: ${err}') }
 }
 
 fn props_at(c Case, t f64, p f64) thermo.Props {
@@ -107,7 +108,8 @@ fn props_at(c Case, t f64, p f64) thermo.Props {
 // state_tv solves at the temperature t and the volume v, by finding the
 // pressure the model gives there and solving back from (t, P).
 fn state_tv(c Case, t f64, v f64) thermo.State {
-	p := thermo.pressure(c.fluid.model, t, v, c.n)
+	eos := c.fluid.helmholtz() or { panic(err) }
+	p := thermo.pressure(eos, t, v, c.n)
 	st := solve(c, t, p)
 	assert math.tolerance(st.v, v, 1e-9), '${c.label}: state_tv landed on another root'
 	return st
@@ -127,7 +129,7 @@ fn test_reference_state() {
 	for c in [cases()[0], cases()[2]] {
 		st := solve(c, thermo.t_ref, thermo.p_ref)
 		pr := c.fluid.props(st)
-		rp := thermo.residual_props(c.fluid.model, st)
+		rp := thermo.residual_props(c.fluid.helmholtz()!, st)
 		mut h0 := 0.0
 		mut s0 := 0.0
 		for i, ig in c.fluid.ideal {
@@ -143,7 +145,7 @@ fn test_reference_state() {
 
 fn test_missing_formation_data_shifts_the_zero_only() {
 	c := cases()[0]
-	no_data := thermo.new_fluid(c.fluid.model, [
+	no_data := thermo.new_fluid(c.fluid.helmholtz()!, [
 		thermo.IdealGas{
 			cp: butane_ig().cp
 		},
@@ -225,7 +227,7 @@ fn test_speed_of_sound_matches_an_isentropic_finite_difference() {
 					break
 				}
 			}
-			p_at[k] = thermo.pressure(c.fluid.model, t, v, c.n)
+			p_at[k] = thermo.pressure(c.fluid.helmholtz()!, t, v, c.n)
 			rho[k] = mass / v
 		}
 		w2_fd := (p_at[0] - p_at[1]) / (rho[0] - rho[1])
@@ -277,8 +279,8 @@ fn test_a_component_mixed_with_itself_only_adds_mixing_entropy() {
 	eos2 := thermo.new_cubic(.pr, [butane, butane])!
 	twice := thermo.new_fluid(eos2, [butane_ig(), butane_ig()])!
 	n := [0.4, 0.6]
-	p1 := pure.props(thermo.solve_tp(pure.model, 400.0, 5e5, [1.0], .vapor)!)
-	p2 := twice.props(thermo.solve_tp(twice.model, 400.0, 5e5, n, .vapor)!)
+	p1 := pure.props(thermo.solve_tp(pure.helmholtz()!, 400.0, 5e5, [1.0], .vapor)!)
+	p2 := twice.props(thermo.solve_tp(twice.helmholtz()!, 400.0, 5e5, n, .vapor)!)
 	s_mix := -thermo.r_gas * (0.4 * math.log(0.4) + 0.6 * math.log(0.6))
 	assert math.tolerance(p2.s - p1.s, s_mix, 1e-10)
 	assert math.tolerance(p2.h, p1.h, 1e-12)

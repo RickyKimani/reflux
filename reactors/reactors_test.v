@@ -286,7 +286,7 @@ fn test_source_derivatives() {
 	k := xu_froment()
 	records := k.species.map(db.find(it.cas) or { panic(err) })
 	fl := db.fluid(.pr, records.map(it.name), kij: false)!
-	mut src := new_source('src', k, [0, 1, 2], 1000, fl.model)!
+	mut src := new_source('src', k, [0, 1, 2], 1000, fl.helmholtz()!)!
 	flows := [1.0, 3, 0.3, 0.2, 0.1]
 	t, p := 900.0, 10e5
 	n := 5
@@ -381,7 +381,7 @@ fn test_cstr_jacobian() {
 		t_fixed: 1000
 		target:  inlet.total() * inlet.h
 		scale:   inlet.total()
-		src:     new_source('cstr', k, [0, 1, 2], 100, fl.model)!
+		src:     new_source('cstr', k, [0, 1, 2], 100, fl.helmholtz()!)!
 	}
 	x := [0.7, 2.6, 1.0, 0.25, 0.05, 950]
 	m := x.len
@@ -433,6 +433,24 @@ fn test_a_given_drop() {
 	}
 }
 
+// A reactor works in one phase, by an equation of state (M6's D11): on a
+// γ–φ fluid, carbon dioxide and hydrogen over methanol and water, it's
+// refused, saying why, as each of the five checks its inlet the same way.
+fn test_a_gamma_phi_fluid_is_refused() {
+	cas := ['124-38-9', '1333-74-0', '67-56-1', '7732-18-5']
+	ms, _, mrs := setup(cas, ['CO2 + 3 H2 = CH3OH + H2O'])
+	gp := db.gamma_phi(cas, henry: ['124-38-9'])!.fluid
+	c := new_conversion_reactor('conv',
+		species: ms
+		steps:   [Conversion{ reaction: mrs[0], key: 0, conversion: 0.5 }]
+		t:       400
+	)!
+	mut why := ''
+	c.calculate(gp, [feed(gp, [1.0, 3, 0.5, 0.5], 330, 50e5)]) or { why = err.msg() }
+	assert why.contains('a reactor has one phase, by an equation of state'), why
+	assert why.contains('F(T, V, n)'), why
+}
+
 // What a reactor refuses: an integration whose T and the energy balance's
 // disagree (a rate that doesn't fall with T, cooling ethane past where it's
 // a gas); an outlet that would split into two phases (methanol and water
@@ -453,7 +471,7 @@ fn test_refused() {
 	)!
 	why = ''
 	c.calculate(mfl, [feed(mfl, [1.0, 3, 0, 0], 500, 50e5)]) or { why = err.msg() }
-	assert why.contains('would split into two phases'), why
+	assert why.contains('would split into 2 phases'), why
 	gs, gfl, grs := setup(['74-82-8', '7732-18-5', '1333-74-0', '630-08-0', '124-38-9'],
 		['CH4 + H2O = CO + 3 H2', 'CO + H2O = CO2 + H2', 'CH4 + 2 H2O = CO2 + 4 H2'])
 	for bad in [
@@ -483,6 +501,62 @@ fn test_refused() {
 	inlet := feed(gfl, [1.0, 2, 0.1, 0, 0.5], 900, 1e5)
 	o := g.calculate(gfl, [inlet])!
 	assert o.outlets[0].flows[4] == 0.5
+}
+
+// WithoutF is a phase model with no F(T, V, n) to give, as a γ–φ fluid's.
+struct WithoutF {
+	inner thermo.PhaseModel
+}
+
+fn (m WithoutF) components() []thermo.Component {
+	return m.inner.components()
+}
+
+fn (m WithoutF) phase(t f64, p f64, n []f64, root thermo.Root) !thermo.State {
+	return m.inner.phase(t, p, n, root)
+}
+
+fn (m WithoutF) ln_phi_derivs(st thermo.State) !thermo.LnPhiDerivs {
+	return m.inner.ln_phi_derivs(st)
+}
+
+fn (m WithoutF) phase_label(st thermo.State) thermo.PhaseLabel {
+	return m.inner.phase_label(st)
+}
+
+fn (m WithoutF) phase_residual(st thermo.State) thermo.PhaseResidual {
+	return m.inner.phase_residual(st)
+}
+
+// All five reactors have one phase by an equation of state (M6's D11), and
+// refuse a fluid without one, saying why, before they calculate anything.
+fn test_a_fluid_without_f_is_refused() {
+	sp, fl, rs := setup(['106-97-8', '75-28-5'], ['n-butane = isobutane'])
+	k := first_order(sp, rs, '2e-5 mol/(m^3*s*Pa)', '106-97-8')
+	hidden := thermo.new_phase_fluid(WithoutF{fl.model}, fl.ideal)!
+	inlet := feed(fl, [1.0, 0], 400, 1e5)
+	units := [
+		flowsheet.Unit(new_pfr('pfr', k: k, reactions: [0], volume: 1)!),
+		new_cstr('cstr', k: k, reactions: [0], volume: 1)!,
+		new_gibbs('gibbs', species: sp, t: 400)!,
+		new_equilibrium_reactor('equilibrium', species: sp, reactions: rs, t: 400)!,
+		new_conversion_reactor('conversion',
+			species: sp
+			steps:   [Conversion{ reaction: rs[0], key: 0, conversion: 0.5 }]
+			t:       400
+		)!,
+	]
+	for u in units {
+		u.calculate(fl, [inlet])!
+		if _ := u.calculate(hidden, [inlet]) {
+			assert false, '${u.name} ran with no F(T, V, n)'
+		} else {
+			assert err is flowsheet.FlowsheetError, err.msg()
+			e := err as flowsheet.FlowsheetError
+			assert e.kind == .bad_specification && e.unit == u.name, err.msg()
+			assert e.reason.contains('equation of state') && e.reason.contains('F(T, V, n)'), e.reason
+		}
+	}
 }
 
 // A reactor's conserved rows are its species' elements, in order of atomic
@@ -528,7 +602,7 @@ fn test_a_flow_below_zero() {
 	k := xu_froment()
 	records := k.species.map(db.find(it.cas) or { panic(err) })
 	fl := db.fluid(.pr, records.map(it.name), kij: false)!
-	mut src := new_source('src', k, [0, 1, 2], 1000, fl.model)!
+	mut src := new_source('src', k, [0, 1, 2], 1000, fl.helmholtz()!)!
 	st := src.state(900, 1e6, [1.0, 3, 0.3, -1e-20, 0.1])!
 	assert st.y[3] == 0 && math.abs(st.y[0] - 1 / 4.4) <= 1e-16
 }

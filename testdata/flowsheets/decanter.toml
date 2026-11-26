@@ -1,0 +1,32 @@
+# M6's criterion 10: water, 1-butanol and methanol by NRTL on ChemSep's
+# bank, the vapour the ideal gas. The feed, a cold liquid, is heated to
+# 364.2 K at 1 atm, where it boils into a vapour over two liquids (as
+# testdata/m6_three_phase.json has it, against thermo's FlashVLN), and an
+# adiabatic decanter sends each phase out of its own port.
+format = 4
+
+[components]
+names = ["water", "1-butanol", "methanol"]
+
+[model]
+liquid = "NRTL"
+
+[feed.feed]
+T = "300 K"
+P = "1 atm"
+flow = "10 mol/s"
+mole_fractions = { water = 0.75, 1-butanol = 0.2, methanol = 0.05 }
+
+[unit.heater]
+type = "heater"
+in = "feed"
+out = "hot"
+outlet_T = "364.2 K"
+
+[unit.decanter]
+type = "decanter"
+in = "hot"
+vapour = "vapour"
+light = "organic"
+heavy = "aqueous"
+duty = "0 W"

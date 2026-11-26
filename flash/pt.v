@@ -27,12 +27,12 @@ pub:
 	t f64
 	p f64
 	z []f64 // the feed, normalised
-	// beta is the vapour fraction: in a split, the fraction of the less
-	// dense phase (D6); for a single phase, 1 if it's labelled vapour and 0
-	// if liquid.
+	// beta is the vapour fraction: the fraction of the phase labelled
+	// vapour, or 0 with none (M6's D9).
 	beta f64
-	// phases are in order of increasing mass density, so a split's vapour
-	// comes first. M3 finds one or two; the type allows more, for M6.
+	// phases are in order of increasing mass density, one to max_phases of
+	// them (M6's D8), labelled by D9: at most one vapour, and of two
+	// liquids the denser liquid2.
 	phases []Phase
 	path   Path
 	// iterations counts the split's successive-substitution and Newton
@@ -48,9 +48,10 @@ pub:
 	// A split is converged when every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol.
 	tol f64 = 1e-12
 	// verify re-tests each phase of a split for stability, with the other
-	// phase as a trial (D3). An unstable phase means a third phase or a
-	// better split, which is a FlashError (.more_phases) since M3 handles
-	// two phases. It roughly doubles the cost of a split.
+	// phases as trials (D3). An unstable phase starts one more, up to
+	// max_phases (M6's D8); one beyond is a FlashError (.more_phases). It
+	// roughly doubles the cost of a split. Without it, a split is two
+	// phases, as converged.
 	verify    bool = true
 	max_steps int  = 200
 }
@@ -74,7 +75,8 @@ fn k_of(lnk f64) f64 {
 	return math.exp(math.max(-ln_k_max, math.min(ln_k_max, lnk)))
 }
 
-// pt flashes a feed z at (T, P), for any thermo.Model (D4).
+// pt flashes a feed z at (T, P), for any thermo.PhaseModel (D4, and M6's
+// D3): an equation of state's by thermo.by_roots, or a Fluid's own.
 //
 // It first tests the feed's stability. A stable feed is one phase, labelled
 // by its phase identification parameter. An unstable one is split into two
@@ -95,26 +97,36 @@ fn k_of(lnk f64) f64 {
 // trials have run (first_proof). If no split from its trials stands, or a
 // phase of one is unstable, it runs all its trials, and the split starts from
 // each unstable one in turn, lowest tm first.
-// Each phase takes its volume root of lower Gibbs energy, and the phase of
-// lower mass density is the vapour (D6).
+// Each phase is the model's of lower Gibbs energy (an equation of state's
+// volume root).
 //
-// A split is accepted only with every |ln fᵢⱽ − ln fᵢᴸ| ≤ tol and
-// 0 < β < 1, and, with params.verify, only if neither phase is unstable.
-// Anything else is a FlashError.
-pub fn pt(m thermo.Model, t f64, p f64, z []f64, params FlashParams) !FlashResult {
+// With params.verify, each phase of the split is tested for stability with
+// the other as a trial, and an unstable one's trial starts a third phase
+// (M6's D8, Michelsen's stage-wise flash): the three split by substitution
+// on the multiphase Rachford–Rice and Newton on G (multi.v), and verified
+// in turn. A phase that leaves on the way leaves a split of two, verified
+// again. A fourth phase is .more_phases.
+//
+// The phases are named by D9 (labelled): by their model's phase_label, at
+// most one vapour, and of two liquids the denser liquid2, in order of
+// increasing mass density. A split is accepted only with every |ln fᵢⱼ −
+// ln fᵢₖ| ≤ tol, every fraction in (0, 1), and, with params.verify, no
+// phase unstable. Anything else is a FlashError.
+pub fn pt(model thermo.PhaseModel, t f64, p f64, z []f64, params FlashParams) !FlashResult {
 	if !(params.tol > 0.0) || params.max_steps < 1 {
 		return fail(.bad_input, 'tol and max_steps must be positive')
 	}
+	m := thermo.for_one_thread(model)
 	// One proof of instability is enough to start a split from, so the trials
 	// stop at the first after Wilson's two. A split that doesn't stand from
 	// those gets them all.
 	stab := stability(m, t, p, z, first_proof: true)!
 	feed := normalised(z)
 	if stab.stable {
-		st := thermo.solve_tp(m, t, p, feed, .stable) or {
+		st := m.phase(t, p, feed, .stable) or {
 			return fail(.no_volume_root, 'the feed at ${t} K and ${p} Pa: ${err}')
 		}
-		label := thermo.phase_label(m, st)
+		label := m.phase_label(st)
 		return FlashResult{
 			t:         t
 			p:         p
@@ -169,7 +181,7 @@ fn (sp Splitter) from_trials(stab Stability) !FlashResult {
 
 // check_feed refuses a feed that isn't one: the wrong length for the
 // model, a negative or non-finite amount, or no moles at all.
-fn check_feed(m thermo.Model, z []f64) ! {
+fn check_feed(m thermo.PhaseModel, z []f64) ! {
 	if z.len != m.components().len {
 		return fail(.bad_input, 'z has ${z.len} entries, but the model has ${m.components().len} components')
 	}
@@ -190,7 +202,7 @@ fn normalised(z []f64) []f64 {
 
 // Splitter is one two-phase split at (T, P).
 struct Splitter {
-	m       thermo.Model
+	m       thermo.PhaseModel
 	t       f64
 	p       f64
 	z       []f64
@@ -234,7 +246,7 @@ fn (sp Splitter) starts(stab Stability) [][]f64 {
 
 // state is a phase of composition x at the root of lower Gibbs energy.
 fn (sp Splitter) state(x []f64) !thermo.State {
-	return thermo.solve_tp(sp.m, sp.t, sp.p, x, .stable) or {
+	return sp.m.phase(sp.t, sp.p, x, .stable) or {
 		return fail(.no_volume_root, 'a phase at ${sp.t} K and ${sp.p} Pa: ${err}')
 	}
 }
@@ -429,8 +441,8 @@ fn (sp Splitter) gibbs(v []f64, mut g []f64, mut h []f64) !f64 {
 	}
 	sy := sp.state(y)!
 	sx := sp.state(x)!
-	dy := thermo.ln_phi_derivs(sp.m, sy).dn
-	dx := thermo.ln_phi_derivs(sp.m, sx).dn
+	dy := sp.m.ln_phi_derivs(sy)!.dn
+	dx := sp.m.ln_phi_derivs(sx)!.dn
 	mut gibbs := 0.0
 	for j, i in sp.present {
 		fy := math.log(y[i]) + sy.ln_phi[i]
@@ -480,7 +492,7 @@ fn (sp Splitter) gibbs_scale(v []f64) !f64 {
 // different sizes, the methane-rich phase of methane and n-decane at 300 K
 // and 200 bar has the smaller molar volume, yet weighs 168 kg/m³ against
 // the decane-rich phase's 585.
-fn mass_density(m thermo.Model, st thermo.State) f64 {
+fn mass_density(m thermo.PhaseModel, st thermo.State) f64 {
 	comps := m.components()
 	mut mass := 0.0
 	for i, n in st.n {
@@ -496,8 +508,9 @@ fn verify_tol(tol f64) f64 {
 	return math.max(1e-8, 10.0 * tol)
 }
 
-// result labels a split's phases, the less dense by mass being the vapour,
-// and with params.verify re-tests each for stability.
+// result verifies a split's two phases with params.verify, each with the
+// other as a trial, and grows it by an unstable one's trial to three (D8);
+// then names them by D9.
 fn (sp Splitter) result(s Split, stab Stability) !FlashResult {
 	if sp.params.verify {
 		for pair in [[s.x, s.y], [s.y, s.x]] {
@@ -506,23 +519,21 @@ fn (sp Splitter) result(s Split, stab Stability) !FlashResult {
 				tol:    verify_tol(sp.params.tol)
 			)!
 			if !check.stable {
-				tm := if inc := check.incipient() { inc.tm } else { 0.0 }
-				return fail(.more_phases, 'a phase of the split at ${sp.t} K and ${sp.p} Pa is unstable (tm = ${tm}): three or more phases, or a better split')
+				inc := check.incipient() or {
+					return fail(.more_phases, 'a phase of the split at ${sp.t} K and ${sp.p} Pa is unstable')
+				}
+				mu := Multi{
+					m:       sp.m
+					t:       sp.t
+					p:       sp.p
+					z:       sp.z
+					present: sp.present
+					params:  sp.params
+				}
+				return mu.grown([s.y, s.x], [s.beta, s.liquid], inc.w, stab)
 			}
 		}
 	}
-	// y is the vapour when it's the less dense; otherwise swap.
-	y_lighter := mass_density(sp.m, s.sy) < mass_density(sp.m, s.sx)
-	vap, liq := if y_lighter { s.sy, s.sx } else { s.sx, s.sy }
-	beta, liquid := if y_lighter { s.beta, s.liquid } else { s.liquid, s.beta }
-	return FlashResult{
-		t:          sp.t
-		p:          sp.p
-		z:          sp.z
-		beta:       beta
-		phases:     [Phase{.vapor, vap, beta}, Phase{.liquid, liq, liquid}]
-		path:       s.path
-		iterations: s.iterations
-		stability:  stab
-	}
+	return labelled(sp.m, sp.t, sp.p, sp.z, [s.sy, s.sx], [s.beta, s.liquid], s.path, s.iterations,
+		stab)
 }

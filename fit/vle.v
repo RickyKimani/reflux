@@ -1,5 +1,7 @@
 module fit
 
+import activity
+import components
 import flash
 import flowsheet
 import math
@@ -9,6 +11,99 @@ import thermo
 // The step of a kᵢⱼ's central difference: kᵢⱼ is of order 0.01, its bubble
 // points' rounding about 1e-12, so the difference is good to about 1e-7.
 const kij_step = 1e-6
+
+// An activity model's pair is stepped further (M6's D16): a pair energy by
+// 1e-4 of its value, or of 2500 J/mol, about RT, where that's larger, and
+// NRTL's α by 1e-4. Its bubble points' rounding, 1e-12, over the step is
+// then about 1e-8 of the Jacobian, and a central difference's bias about
+// as much, which moves the answer by as little of its standard error but
+// stops no convergence. With 1e-6 the rounding was 1e-6 of J, and kept the
+// published methanol–water set's fit of NRTL's α from its gradient test.
+const energy_step = 1e-4
+
+const energy_floor = 2500.0
+
+const alpha_step = 1e-4
+
+// step_of is a parameter's central-difference step at its value v.
+fn step_of(par flowsheet.FitParameter, v f64) f64 {
+	return match par.part {
+		.pair_energy { energy_step * math.max(math.abs(v), energy_floor) }
+		.alpha { alpha_step }
+		else { kij_step }
+	}
+}
+
+// GammaPairs is a γ–φ fluid whose activity model's pairs a fit varies (M6's
+// D16): the fluid as built, its NRTL or UNIQUAC, the solvents' names, each
+// solvent pair's expressions, and UNIQUAC's r and q.
+struct GammaPairs {
+	base   thermo.GammaPhi
+	liquid string
+	names  []string
+	uses   []components.PairUse
+	r      []f64
+	q      []f64
+}
+
+// pair_text is τ as an expression of a pair's energy A, J/mol: NRTL's A/RT,
+// UNIQUAC's exp(−A/RT). V writes a double as the shortest decimal that
+// reads back to it, so the expression's A is the fit's.
+pub fn pair_text(liquid string, a f64) string {
+	return if liquid == 'NRTL' {
+		'${a} J/mol / (R*T)'
+	} else {
+		'exp(${-a} J/mol / (R*T))'
+	}
+}
+
+// model is the fluid with θ's pairs: each fitted energy's τ and α in place
+// of the expressions it was built with, the rest as they were.
+fn (g &GammaPairs) model(parameters []flowsheet.FitParameter, theta []f64) !thermo.PhaseModel {
+	mut texts := g.uses.map(it.texts.clone())
+	for q, par in parameters {
+		ia, ib := g.base.solvents.index(par.i), g.base.solvents.index(par.j)
+		for k, u in g.uses {
+			forward := u.i == ia && u.j == ib
+			if !forward && !(u.i == ib && u.j == ia) {
+				continue
+			}
+			if par.part == .alpha {
+				texts[k][2] = theta[q].str()
+			} else {
+				texts[k][if forward { 0 } else { 1 }] = pair_text(g.liquid, theta[q])
+			}
+		}
+	}
+	liquid := if g.liquid == 'NRTL' {
+		mut pairs := []activity.NrtlPair{}
+		for k, u in g.uses {
+			pairs << activity.NrtlPair{
+				i:      u.i
+				j:      u.j
+				tau_ij: activity.plain(texts[k][0], 'τ')!
+				tau_ji: activity.plain(texts[k][1], 'τ')!
+				alpha:  activity.plain(texts[k][2], 'α')!
+			}
+		}
+		activity.Model(activity.new_nrtl(g.names, pairs)!)
+	} else {
+		mut pairs := []activity.UniquacPair{}
+		for k, u in g.uses {
+			pairs << activity.UniquacPair{
+				i:      u.i
+				j:      u.j
+				tau_ij: activity.plain(texts[k][0], 'τ')!
+				tau_ji: activity.plain(texts[k][1], 'τ')!
+			}
+		}
+		activity.Model(activity.new_uniquac(g.names, g.r, g.q, pairs)!)
+	}
+	return thermo.PhaseModel(thermo.new_gamma_phi(thermo.GammaPhi{
+		...g.base
+		liquid: liquid
+	})!)
+}
 
 // VleRow is a measured bubble point: T and the liquid's composition, and
 // the measured P and vapour fractions, NaN where one isn't measured.
@@ -21,10 +116,13 @@ struct VleRow {
 
 // VleProblem is VLE data as least squares' residuals (D15): each bubble
 // point's P and each measured vapour fraction less the model's, over their
-// weights, the model the file's cubic with the fitted kᵢⱼ. Its Jacobian is
-// by central differences, each kᵢⱼ ± 1e-6.
+// weights, the model the file's cubic with the fitted kᵢⱼ, or its γ–φ fluid
+// with the fitted pairs (M6's D16). Its Jacobian is by central differences,
+// each kᵢⱼ and α ± 1e-6, each energy ± 1e-6 of itself (step_of).
 struct VleProblem {
-	base       thermo.Cubic
+	nc         int
+	cubic      ?thermo.Cubic
+	gamma      ?GammaPairs
 	parameters []flowsheet.FitParameter
 	rows       []VleRow
 	p_weight   flowsheet.Weight
@@ -34,19 +132,30 @@ mut:
 	flashes int
 }
 
+// model_at is the model at θ: the cubic with its fitted kᵢⱼ, or the γ–φ
+// fluid with its fitted pairs.
+fn (p &VleProblem) model_at(theta []f64) !thermo.PhaseModel {
+	if base := p.cubic {
+		nc := p.nc
+		mut kij := base.kij.clone()
+		for q, par in p.parameters {
+			kij[par.i * nc + par.j] = theta[q]
+			kij[par.j * nc + par.i] = theta[q]
+		}
+		return thermo.by_roots(thermo.Cubic{
+			...base
+			kij: kij
+		})
+	}
+	g := p.gamma or { return error('the fit has no model') }
+	return g.model(p.parameters, theta)!
+}
+
 // residuals are the weighted residuals at θ, each row's P first and then
 // each measured y.
 fn (mut p VleProblem) residuals(theta []f64) ![]f64 {
-	nc := p.base.comps.len
-	mut kij := p.base.kij.clone()
-	for q, par in p.parameters {
-		kij[par.i * nc + par.j] = theta[q]
-		kij[par.j * nc + par.i] = theta[q]
-	}
-	model := thermo.Cubic{
-		...p.base
-		kij: kij
-	}
+	nc := p.nc
+	model := p.model_at(theta)!
 	mut out := []f64{}
 	for row in p.rows {
 		p.flashes++
@@ -56,7 +165,7 @@ fn (mut p VleProblem) residuals(theta []f64) ![]f64 {
 		if b.phases.len != 2 {
 			return error('the bubble point at T = ${row.t} K and x = ${row.x} has ${b.phases.len} phases')
 		}
-		y := b.phases[0].state.n
+		y := b.phases.filter(it.label == .vapor)[0].state.n
 		sigma_p := if p.p_weight.relative { p.p_weight.value * row.p } else { p.p_weight.value }
 		out << (b.p - row.p) / sigma_p
 		for i in 0 .. nc {
@@ -83,8 +192,9 @@ fn (mut p VleProblem) eval(theta []f64, mut r []f64, mut j []f64) ! {
 	for q in 0 .. n {
 		mut up := theta.clone()
 		mut down := theta.clone()
-		up[q] += kij_step
-		down[q] -= kij_step
+		h := step_of(p.parameters[q], theta[q])
+		up[q] += h
+		down[q] -= h
 		ru := p.residuals(up)!
 		rd := p.residuals(down)!
 		for i in 0 .. r0.len {
@@ -93,15 +203,40 @@ fn (mut p VleProblem) eval(theta []f64, mut r []f64, mut j []f64) ! {
 	}
 }
 
-// fit_vle fits a file's kᵢⱼ to bubble points (D15): T, P, the liquid's
-// composition and the vapour's, P and each y weighted by its error, which
-// the file must give, since they're of different kinds.
+// fit_vle fits a file's kᵢⱼ to bubble points (D15), or its activity model's
+// pairs (M6's D16): T, P, the liquid's composition and the vapour's, P and
+// each y weighted by its error, which the file must give, since they're of
+// different kinds.
 fn fit_vle(file flowsheet.FitFile, plan flowsheet.FitPlan, data Data) Fitted {
 	fl := file.fluid or { return failed(plan, 'the file has no [model]') }
-	if fl.model !is thermo.Cubic {
-		return failed(plan, "kij is a cubic's, and the model is not one")
+	mut cubic := ?thermo.Cubic(none)
+	mut gamma := ?GammaPairs(none)
+	if plan.parameters[0].part == .kij {
+		eos := fl.helmholtz() or { return failed(plan, "kij is a cubic's, and the model is not one") }
+		if eos !is thermo.Cubic {
+			return failed(plan, "kij is a cubic's, and the model is not one")
+		}
+		cubic = eos as thermo.Cubic
+	} else {
+		g := file.gamma_phi or {
+			return failed(plan, "A and alpha are an activity model's pairs, and the model is not one")
+		}
+		mut r, mut q := []f64{}, []f64{}
+		if file.liquid == 'UNIQUAC' {
+			for i in g.model.solvents {
+				r << g.records[i].parameters.uniquac_r or { 0.0 }
+				q << g.records[i].parameters.uniquac_q or { 0.0 }
+			}
+		}
+		gamma = GammaPairs{
+			base:   g.model
+			liquid: file.liquid
+			names:  g.model.solvents.map(g.records[it].name)
+			uses:   g.pairs
+			r:      r
+			q:      q
+		}
 	}
-	base := fl.model as thermo.Cubic
 	nc := file.names.len
 	t_col, p_col := data.index('T'), data.index('P')
 	if t_col < 0 || p_col < 0 {
@@ -205,7 +340,9 @@ fn fit_vle(file flowsheet.FitFile, plan flowsheet.FitPlan, data Data) Fitted {
 		}
 	}
 	mut problem := VleProblem{
-		base:       base
+		nc:         nc
+		cubic:      cubic
+		gamma:      gamma
 		parameters: plan.parameters
 		rows:       rows
 		p_weight:   p_weight
@@ -245,20 +382,13 @@ fn fit_vle(file flowsheet.FitFile, plan flowsheet.FitPlan, data Data) Fitted {
 
 // vle_residuals is each measurement against the model at the answer.
 fn vle_residuals(mut p VleProblem, theta []f64, weighted []f64) ![]Residual {
-	nc := p.base.comps.len
-	mut kij := p.base.kij.clone()
-	for q, par in p.parameters {
-		kij[par.i * nc + par.j] = theta[q]
-		kij[par.j * nc + par.i] = theta[q]
-	}
-	model := thermo.Cubic{
-		...p.base
-		kij: kij
-	}
+	nc := p.nc
+	model := p.model_at(theta)!
 	mut out := []Residual{}
 	mut k := 0
 	for r, row in p.rows {
 		b := flash.bubble_p(model, row.t, row.x)!
+		vapour := b.phases.filter(it.label == .vapor)[0]
 		out << Residual{
 			row:      r
 			column:   'P'
@@ -274,7 +404,7 @@ fn vle_residuals(mut p VleProblem, theta []f64, weighted []f64) ![]Residual {
 						row:      r
 						column:   p.y_names[i]
 						measured: row.y[i]
-						model:    b.phases[0].state.n[i]
+						model:    vapour.state.n[i]
 						weighted: weighted[k]
 					}
 					k++

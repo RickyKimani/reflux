@@ -104,7 +104,7 @@ fn test_the_profile_in_the_report() {
 	l := load(chain + reactions())!
 	sol := l.solve()!
 	j := json2.decode[json2.Any](json2.encode(l.report(sol)))!.as_map()
-	assert j['format']!.int() == 3
+	assert j['format']!.int() == 4
 	units := j['units']!.as_array()
 	for u in units {
 		m := u.as_map()

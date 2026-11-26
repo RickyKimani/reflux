@@ -10,8 +10,9 @@ import v.vmod
 // The report's own format (D11), which docs/report-format.md describes. What
 // reads a report can rely on it: it changes only with a new number. Format 2
 // (M9) adds a reactor's profile to its unit, and a unit's warnings; format 3
-// (M8) adds the specs, and each block's.
-pub const report_format = 3
+// (M8) adds the specs, and each block's; format 4 (M6) adds the model, and a
+// phase may be liquid2.
+pub const report_format = 4
 
 // Report is a solve's results, or its failure: what the command line writes as
 // JSON and CSV, and prints as a stream table. Every number is SI, and every
@@ -25,6 +26,7 @@ pub:
 	status     string // 'solved' or 'failed'
 	error      ?ErrorReport @[json_null]
 	components []ComponentReport
+	model      ?ModelReport @[json_null] // how the fluid was built (format 4)
 	streams    []StreamReport // the feeds, then each unit's outlets, unit by unit
 	units      []UnitReport
 	solver     ?SolverReport @[json_null]
@@ -48,6 +50,39 @@ pub:
 	lhs      f64
 	rhs      f64
 	residual f64
+}
+
+// ModelReport is how the file's fluid was built (format 4, M6's D13): an
+// equation of state, or a γ–φ fluid's activity model, vapour, Poynting and
+// Henry's-law solutes; and each pair's parameters with their source, as an
+// expression in T, or kᵢⱼ as a number.
+pub struct ModelReport {
+pub:
+	equation string   // an equation of state, or '' for a γ–φ fluid
+	liquid   string   // a γ–φ fluid's activity model, or ''
+	vapour   string   // a γ–φ fluid's vapour, 'ideal gas' or an equation, or ''
+	poynting bool     // whether a γ–φ liquid has the Poynting correction
+	solutes  []string // a γ–φ fluid's Henry's-law solutes
+	pairs    []PairReport
+	notes    []string // where a value was taken from, beyond the pairs
+	warnings []string // what the answers should be read with: a pair given none
+}
+
+// PairReport is one pair's parameters, a before b, and where they came from:
+// a bank's line, the file, or none listed.
+pub struct PairReport {
+pub:
+	a          string
+	b          string
+	parameters []ParameterReport
+	source     string
+}
+
+// ParameterReport is a parameter by the file's name for it, as written.
+pub struct ParameterReport {
+pub:
+	name string
+	text string
 }
 
 pub struct ComponentReport {
@@ -84,7 +119,7 @@ pub:
 // PhaseReport is one of a stream's phases, per mole of the phase.
 pub struct PhaseReport {
 pub:
-	phase          string // 'vapour' or 'liquid', as the flash labels it
+	phase          string // 'vapour', 'liquid' or 'liquid2', as the flash labels it (M6's D9)
 	fraction       f64    // of the stream's moles
 	mole_fractions []f64
 	h              f64 @[json: 'H'] // J/mol
@@ -187,6 +222,7 @@ pub fn (l Loaded) report(sol Solution) Report {
 		reflux:     version()
 		status:     'solved'
 		components: l.component_reports()
+		model:      l.model
 		streams:    streams
 		units:      units
 		solver:     l.solver_report()
@@ -246,6 +282,7 @@ pub fn (l Loaded) failure(err IError) Report {
 		status:     'failed'
 		error:      error_report(err)
 		components: l.component_reports()
+		model:      l.model
 		solver:     l.solver_report()
 		blocks:     block_reports(l.sheet, l.plan, history, l.specs)
 		notes:      l.plan.notes
@@ -350,7 +387,7 @@ fn stream_report(fl thermo.Fluid, name string, st Stream, from ?string, to ?stri
 fn phase_report(fl thermo.Fluid, ph flash.Phase) PhaseReport {
 	pr := fl.props(ph.state)
 	return PhaseReport{
-		phase:          if ph.label == .vapor { 'vapour' } else { 'liquid' }
+		phase:          ph.label.name()
 		fraction:       ph.fraction
 		mole_fractions: ph.state.n.clone()
 		h:              pr.h

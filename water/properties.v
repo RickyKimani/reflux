@@ -11,7 +11,7 @@ import thermo
 // 838.025 kg/m³.
 pub fn reference_offsets(fl thermo.Fluid) (f64, f64) {
 	t, rho := 500.0, 838.025 / molar_mass
-	pr := fl.props(state_at_density(fl.model, t, rho))
+	pr := fl.props(state_at_density(iapws95(), t, rho))
 	ia := props95(t, rho)
 	return pr.h - ia.h, pr.s - ia.s
 }

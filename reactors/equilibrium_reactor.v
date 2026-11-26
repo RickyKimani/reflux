@@ -99,7 +99,7 @@ struct EquilibriumAt {
 fn (a EquilibriumAt) outlet_at(t f64) !flowsheet.Stream {
 	m := equilibrium.Mixture{
 		species: a.e.species
-		model:   a.fl.model
+		model:   a.fl.helmholtz()!
 	}
 	ln_k := equilibrium.ln_k_gibbs(a.e.reactions, a.e.species, t) or {
 		return failed(a.e.name, err.msg())

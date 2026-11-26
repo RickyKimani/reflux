@@ -180,7 +180,7 @@ fn test_the_json_reads_back_as_the_report() {
 
 fn test_the_json_is_laid_out_a_value_to_a_line() {
 	_, _, r := solved(cases['reference'].text)!
-	assert r.json().starts_with('{\n  "format": 3,\n  "reflux": "')
+	assert r.json().starts_with('{\n  "format": 4,\n  "reflux": "')
 	assert r.json().contains('\n      "molar_flows": [\n        70,\n        10,\n')
 	assert r.json().ends_with('\n}\n')
 }
@@ -190,7 +190,7 @@ fn test_the_json_is_the_solution() {
 		types := sheet.types
 		l, sol, r := solved(sheet.text)!
 		j := parse(r.json())
-		assert j['format']!.int() == 3 && j['status']!.str() == 'solved'
+		assert j['format']!.int() == 4 && j['status']!.str() == 'solved'
 		assert j['reflux']!.str() == flowsheet.version()
 		assert j['error']! is json2.Null
 		// The components, from the database itself.
@@ -528,6 +528,10 @@ fn test_the_json_is_as_documented() {
 	assert list(j['blocks']!)[0].keys() == doc['blocks[]']
 	assert j['balance']!.as_map().keys() == doc['balance']
 	assert j['worst_unit']!.as_map().keys() == doc['worst_unit']
+	// How the fluid was built (format 4): an equation of state's kᵢⱼ here.
+	model := j['model']!.as_map()
+	assert model.keys() == doc['model']
+	assert list(model['pairs']!)[0].keys() == doc['model.pairs[]']
 	// A spec's report, from a file with one (format 3).
 	text := read_flowsheet('reference.toml').replace('format = 1', 'format = 3') +
 		'
@@ -547,9 +551,9 @@ until = "gas.F = 60 mol/s"
 		all.sort()
 		// A profile's keys are checked with a reactor's report, in
 		// reactors/flowsheet_test.v.
-		assert all == ['', 'balance', 'blocks[]', 'components[]', 'error', 'solver', 'specs[]',
-			'streams[]', 'streams[].phases[]', 'units[]', 'units[].balance', 'units[].energy[]',
-			'units[].profile[]', 'worst_unit']
+		assert all == ['', 'balance', 'blocks[]', 'components[]', 'error', 'model', 'model.pairs[]',
+			'solver', 'specs[]', 'streams[]', 'streams[].phases[]', 'units[]', 'units[].balance',
+			'units[].energy[]', 'units[].profile[]', 'worst_unit']
 		return
 	}
 	assert false, 'format 2 loaded'

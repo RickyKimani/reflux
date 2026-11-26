@@ -54,10 +54,26 @@ def test_every_flash_lands_on_the_pt_state(db):
         # same β, and Newton finds the one its start leads to: here one of ten
         # splits gives 80.6 bar back for 50. So each answer must be a state
         # with that β, which a PT flash there confirms, and the rest land on
-        # the state they came from.
+        # the state they came from. At 80.6 bar Π calls both phases
+        # liquid-like, liquid and liquid2 (M6's D9), which the C API refuses
+        # until ABI 2 (D14): there each fugacity is checked from scratch, the
+        # same in both phases on their roots of lower G, and the balance.
+        # Measured: 4.8e-14 in ln f, the balance 1.1e-16, TVF's alone.
+        refusals = 0
         for r in (tvf, pvf):
             back = f.flash_pt(r.t, r.p, z)
-            assert np.all(np.abs(back.beta - pt.beta[two]) <= 1e-8)
+            refused = back.status == Status.MORE_PHASES
+            assert np.all(back.ok | refused)
+            assert np.all(np.abs(back.beta - pt.beta[two])[~refused] <= 1e-8)
+            for i in np.flatnonzero(refused):
+                assert back.reason(i).startswith("flash: liquid, liquid2 at ")
+                x, y = r.liquid.x[i], r.vapor.x[i]
+                lx = f.props(r.t[i], r.p[i], x).ln_phi
+                ly = f.props(r.t[i], r.p[i], y).ln_phi
+                assert np.all(np.abs(np.log(y) + ly - np.log(x) - lx) <= 1e-10)
+                assert np.all(np.abs(r.beta[i] * y + (1 - r.beta[i]) * x - z) <= 1e-12)
+                refusals += 1
+        assert refusals == 1
         assert np.sum(np.abs(tvf.p - Pb) <= 1e-8 * Pb) >= 9
         assert np.sum(np.abs(pvf.t - Tb) <= 1e-8 * Tb) >= 9
 

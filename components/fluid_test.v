@@ -33,13 +33,13 @@ fn test_setup_wires_the_database_into_thermo() {
 	eos := thermo.new_cubic(.pr, comps, kij: [0.0, 0.0244, 0.0244, 0.0])!
 	by_hand := thermo.new_fluid(eos, ideal)!
 	for root in [thermo.Root.liquid, .vapor] {
-		st := thermo.solve_tp(s.fluid.model, 300.0, 10e5, [0.3, 0.7], root)!
+		st := thermo.solve_tp(s.fluid.helmholtz()!, 300.0, 10e5, [0.3, 0.7], root)!
 		st2 := thermo.solve_tp(eos, 300.0, 10e5, [0.3, 0.7], root)!
 		assert s.fluid.props(st) == by_hand.props(st2)
 	}
 	// db.fluid is the same thing without the record.
 	fl := db9.fluid(.pr, ['methane', 'n-butane'])!
-	assert fl.props(thermo.solve_tp(fl.model, 300.0, 10e5, [0.3, 0.7], .vapor)!).h == s.fluid.props(thermo.solve_tp(s.fluid.model,
+	assert fl.props(thermo.solve_tp(fl.helmholtz()!, 300.0, 10e5, [0.3, 0.7], .vapor)!).h == s.fluid.props(thermo.solve_tp(s.fluid.helmholtz()!,
 		300.0, 10e5, [0.3, 0.7], .vapor)!).h
 }
 
@@ -64,7 +64,7 @@ fn test_mathias_copeman_alpha() {
 	assert s.alphas[0] == 'Mathias–Copeman, mc-PR.lib line 99'
 	// 3-chloropropene isn't in mc-PR.lib, so it keeps PR's own α, and says so.
 	assert s.alphas[1] == "the equation's own: mc-PR.lib has no 3-Chloropropene"
-	m := s.fluid.model
+	m := s.fluid.helmholtz()!
 	if m is thermo.Cubic {
 		assert m.alphas[0] == thermo.Alpha(thermo.MathiasCopeman{
 			c1: 0.652753
@@ -194,7 +194,7 @@ fn test_m1_results_with_database_constants() {
 	text := os.read_file(os.join_path(@VMODROOT, 'testdata', 'm1_coolprop_butane.json'))!
 	fx := json2.decode[M1Fixture](text)!
 	assert fx.points.len == 6
-	eos := db9.fluid(.pr, ['n-butane'])!.model
+	eos := db9.fluid(.pr, ['n-butane'])!.helmholtz()!
 	for pt in fx.points {
 		at := '${pt.phase} ${pt.t} K, ${pt.p / 1e5} bar'
 		st := thermo.solve_tp(eos, pt.t, pt.p, [1.0], root_of(pt.phase))!
@@ -251,7 +251,7 @@ fn recorded(what string, got f64, want f64, tol f64) {
 }
 
 fn test_psat_end_to_end() {
-	eos := db9.fluid(.pr, ['n-butane'])!.model
+	eos := db9.fluid(.pr, ['n-butane'])!.helmholtz()!
 	// Smith, Van Ness & Abbott's Example 3.9, measured: 9.4573 bar at 350 K.
 	recorded('Psat(350 K) against SVA', thermo.saturation_pressure(eos, 350.0)! / 9.4573e5 - 1.0,
 		0.0018438, 1e-6)
@@ -280,7 +280,7 @@ fn test_enthalpy_changes_end_to_end() {
 	mut ours := map[string]f64{}
 	mut theirs := map[string]f64{}
 	for s in refs.states {
-		st := thermo.solve_tp(fl.model, s.t, s.p, [1.0], root_of(s.phase))!
+		st := thermo.solve_tp(fl.helmholtz()!, s.t, s.p, [1.0], root_of(s.phase))!
 		ours[s.label] = fl.props(st).h
 		theirs[s.label] = s.h
 	}

@@ -1,0 +1,21 @@
+# Ethanol and water by NRTL (M6 step 11): its pair's two energies and alpha
+# fitted to 30 bubble points at 323.15, 343.15 and 363.15 K in
+# ethanol_water_nrtl.csv, which tools/gen_m6_fits.py drew from thermo's NRTL
+# at ChemSep's pair, with noise; from the model's own pair, the bank's.
+# From zero energies and alpha 0.3 it would find a minimum at alpha = -0.59,
+# with s^2 four times the noise's. SciPy's fit of the same data is in
+# testdata/m6_fits.json.
+#
+#     reflux fit testdata/m6_fit/ethanol_water.toml
+format = 4
+
+[components]
+names = ["ethanol", "water"]
+
+[model]
+liquid = "NRTL"
+
+[fit.nrtl_alpha]
+data = "ethanol_water_nrtl.csv"
+parameters = ["A[ethanol, water]", "A[water, ethanol]", "alpha[ethanol, water]"]
+weights = { P = "0.5 %", "y[ethanol]" = "0.003" }

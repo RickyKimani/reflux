@@ -37,6 +37,191 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
+## [0.6.0]
+
+Begun after 0.5.0 with one fix; the next milestone adds to it.
+
+### Fixed
+
+- **reflux has one gas constant,** N_A·k_B = 8.31446261815324 J/(mol·K),
+  the 2019 SI's exact value, in `quantity.molar_gas_constant`.
+  `thermo.r_gas` and `activity.r_gas` were 8.314462618, that value rounded,
+  1.84e-11 below the R that expressions, the kinetics and the fits used,
+  though their comment called it exact; a Gibbs reactor and a PFR used
+  both. They are now the one constant, as `kinetics.gas_constant` and an
+  expression's `R` are. An answer that depends on R moves by about that
+  fraction, and no more, except where a flash refuses at the edge of
+  converging: at five of the flash robustness sweep's 10,000 states, cold
+  mixtures of five to ten heavy compounds, the refusal's reason moves
+  between a fourth phase and a three-phase split that doesn't converge.
+  The sweep has 4 states not solved, from 5, and none unexplained.
+- **A phase leaving a split of three reaches 0** (`numeric.multiphase_rr`).
+  The step that took a leaving phase to its bound left a residue of about
+  β·ε, so the phase shrank by ε a step; where Newton's steps were long, as
+  for two components in three phases, its step underflowed to 0 after
+  about 20 and the flash refused, saying Q fell no further. Water and
+  1-butanol a step from their heteroazeotrope's T did so once the gas
+  constant above moved them there. The phase that bounds the step now goes
+  to 0 exactly; no golden result and no outcome of the flash sweep moves.
+
+### Changed
+
+- **The golden flowsheets' reports** were written again, all eight
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json`, `saturated_loop.json`, `decanter.json`, and
+  `reactors/reformer.json` and `reactors/methanol.json`), for the gas
+  constant above and for this version. Each number moved by at most 3.2e-11
+  of itself, beyond the balances' own rounding; no label, warning, pass or
+  step count changed. The reformer's PFR takes its 472 steps at volumes up
+  to 7.9e-8 of themselves away, and its outlet moves by 2e-11.
+
+## [0.5.0] — 2026-11-25
+
+Activity models and liquid–liquid equilibrium: the roadmap's M6. reflux now
+flashes the liquids a cubic describes badly, polar and hydrogen-bonding
+mixtures, by Wilson, NRTL, UNIQUAC and three UNIFACs on ChemSep's
+parameters, with Henry's law for gases above their critical point; and it
+finds up to three phases, two liquids and a vapour, for any model, Peng–
+Robinson's included. A flowsheet takes an activity model in format 4, with
+a decanter to separate the liquids. NRTL and UNIQUAC parameters can be
+fitted to data, checked first for Gibbs–Duhem consistency. Like 0.4.0, it's
+a source release (`v -prod -cc gcc -o reflux .`).
+
+### Added
+
+- **Activity models** (`activity`): Wilson, NRTL, UNIQUAC, and UNIFAC in
+  its original form for VLE, its LLE table (Magnussen et al.) and Dortmund's
+  modification. Each gives ln γ with its T-derivatives and its composition
+  derivatives exactly, from one formula over doubles and forward jets, and
+  holds Gibbs–Duhem by construction; a pure component's γ is exactly 1. Each
+  answers finitely or refuses, saying why.
+- **ChemSep's banks and tables,** vendored byte for byte: `nrtl.ipd`,
+  `uniquac.ipd`, `wilson.ipd`, `henrys_law.ipd` and the three UNIFAC
+  tables with their extensions. A bank's A is in cal/mol over DECHEMA's R,
+  1.98721, which it was fitted with. The UNIFAC files contradict themselves
+  in eight places, repaired by their own evidence, and DDBST's published
+  tables settle 26 typos; every repair and every difference from `thermo`'s
+  copy is listed in [data-quality.md](docs/data-quality.md).
+- **The γ–φ fluid** (`components.Database.gamma_phi`, `thermo.GammaPhi`): a
+  liquid of fugacity xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ with the Poynting correction, each
+  compound's vapour pressure and density from its component file; the
+  vapour the ideal gas or a cubic. Its enthalpy, entropy and heat capacity
+  come from the same fugacities, so a pure liquid's latent heat is
+  Clapeyron's and a drum's duty agrees with its phase equilibrium. It
+  matches `thermo`'s `GibbsExcessLiquid` to 4.7e-13 in ln φ.
+- **Henry's law:** a gas above its critical point in a liquid is a solute,
+  with its Henry's constant mixed over the solvents. In water, a gas
+  IAPWS's guideline G7-04 covers (14 gases) takes IAPWS's form and
+  constants; others take ChemSep's bank. A compound above its Tc with
+  neither is refused, by name.
+- **Flashes on any phase model:** `flash` takes a `thermo.PhaseModel`, a
+  phase at (T, P, n), which an equation of state gives by its volume roots
+  and a γ–φ fluid by its liquid and vapour. PT, PH, PS, bubble and dew
+  points and the vapour-fraction flashes work on both, and
+  `flash.azeotrope_t` and `azeotrope_p` find a model's azeotrope.
+- **Three phases:** a PT, PH or PS flash finds up to three phases,
+  stage-wise, each phase shown stable against every trial
+  (`flash.max_phases`). The fractions come from Michelsen's multiphase
+  Rachford–Rice (`numeric.multiphase_rr`), then Newton on G over every
+  phase. A fourth phase, or three liquids, is refused with its reason. It
+  matches `thermo`'s `FlashVLN` to 1.9e-13 in the fractions.
+- **Phase labels:** each phase is vapour, liquid or liquid2, in order of
+  mass density: an equation of state's by its phase identification
+  parameter, a γ–φ fluid's by the model that made it; at most one vapour,
+  and of two liquids the denser liquid2.
+- **Flowsheet file format 4** ([flowsheet-format.md](docs/flowsheet-format.md)):
+  `[model]` may give `liquid`, an activity model, with `vapour`, `poynting`,
+  `henry`, `missing` and `[[model.pairs]]`, each pair's parameters typed as
+  expressions with units (`tau_ab = "3317.08 J/mol / (R*T)"`). A pair the
+  bank lacks is refused by name, or made ideal by `missing = "ideal"`, with
+  a warning. Formats 1 to 3 read as before.
+- **The decanter,** a flash drum with outlets for the vapour and the light
+  and heavy liquids. A flash drum sends two liquids out of its liquid port,
+  and warns that it does.
+- **Report format 4:** `model`, how the fluid was built, each pair's
+  parameters with their source (a bank's line and its DECHEMA reference,
+  the file, or none listed) and any warnings; and a phase `"liquid2"`.
+- **Published data and the point test:** `fit.point_test`, Fredenslund et
+  al.'s test of a binary's VLE data for Gibbs–Duhem consistency. The models
+  are held against data sets from NIST's ThermoML archive
+  (`testdata/m6_published.json`): methanol–water and ethanol–water VLE at
+  1 atm, water–1-butanol's LLE and heteroazeotrope, and a ternary LLE, each
+  model's deviations recorded.
+- **Fitting NRTL and UNIQUAC:** a fit's `A[a, b]`, a pair's energy in J/mol,
+  and `alpha[a, b]`, on bubble points, written back as `[[model.pairs]]`.
+  The fits match SciPy's with `thermo`'s models to 1.5e-6 of their standard
+  errors.
+- **Compared with DWSIM 9** (`testdata/m6_dwsim.json`), by state, every
+  difference explained: its NRTL and UNIFACs are reflux's to 1.7e-9; its
+  Poynting term loses its sign below the vapour pressure; its UNIQUAC for
+  methanol–water mixes two records; its Wilson takes other volumes and R;
+  its UNIFAC-LL is its VLE UNIFAC with wrong group fractions; its default
+  three-phase flash is right, two of its others aren't.
+- **Speed** ([benchmarks.md](docs/benchmarks.md)): an NRTL flash of
+  methanol–water in 75 µs, against 1.3 ms in `thermo` and 10.5 ms in DWSIM;
+  half the time of reflux's own Peng–Robinson flash.
+
+### Changed
+
+- **A liquid–liquid split by an equation of state is liquid and liquid2.**
+  Until now the less dense phase of any split was the vapour. By the phase
+  identification parameter, 2,289 of the flash robustness sweep's 3,344
+  Peng–Robinson splits are two liquids, and a few near critical points are
+  too. `flash.FlashResult.beta` is the vapour's fraction, 0 with none.
+- **The C API refuses two liquids,** as it refuses three phases:
+  `REFLUX_POINT_MORE_PHASES`, with the phases named in its reason. Its
+  layout of one liquid and one vapour can't hold them; γ–φ fluids and three
+  phases come to it with M10b, as ABI 2. So the Python package's natural-gas
+  map has 125 points of 6,480 refused near the critical point, where it had
+  answers. The ABI version is still 1.
+- **The report is format 4.** It has `model`, and a phase may be
+  `"liquid2"`.
+- **The V API,** as 0.x allows:
+  - `flash` takes a `thermo.PhaseModel` where it took a `thermo.Model`;
+    `thermo.by_roots(model)` makes any `Model` one, and `tv` and `uv` still
+    take a `Model`;
+  - `thermo.Fluid.model` is a `PhaseModel`, and `Fluid.helmholtz()` gives
+    its `Model` where it has one;
+  - `thermo.PhaseLabel` has `liquid2`, and a `FlashResult` may have three
+    phases;
+  - `flash.Failure.more_phases` is a fourth phase, three liquids, or more
+    phases than a two-phase flash can give;
+  - `flowsheet.Loaded` has `model`, and `flowsheet.FitFile` the γ–φ
+    fluid's setup;
+  - there's a new module, `activity`.
+- **The reactors and the equilibrium refuse a γ–φ fluid,** saying they work
+  in one phase by an equation of state.
+- **The golden flowsheets' reports** were written again, all seven
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json`, `saturated_loop.json`, and `reactors/reformer.json`
+  and `reactors/methanol.json`), in report format 4 and for this version.
+  Each gains `model`. No number in them moved, nor any phase's label.
+  `decanter.json` is new.
+
+### Fixed
+
+- **PH and PS took a NaN energy balance as met.** A balance that isn't a
+  number is now unmet.
+- **`numeric.newton` dropped a system's reason** when it refused at its
+  start; it now gives it.
+
+### Known limitations
+
+- **No γ–φ fluids or three phases from Python or the C API** until M10b,
+  ABI 2; two liquids are refused there too.
+- **A γ–φ fluid's vapour-fraction flashes, TV and UV** keep two phases:
+  a bubble point whose liquid would split is refused, and TV and UV refuse a
+  γ–φ fluid and three phases.
+- **Reactors work in one phase,** on an equation of state.
+- **No electrolytes, Gᴱ mixing rules or associating vapours** (Hayden and
+  O'Connell's); a Henry's-law solute's γ* is 1.
+- **The Wilson and UNIQUAC banks' R** is inferred to be DECHEMA's, as
+  NRTL's is shown to be.
+- **A fit of parameters the data don't determine,** NRTL's α with both
+  energies on one isobaric binary, says so in its interval, or stops at its
+  residuals' rounding, which differs by platform.
+- **Windows and Linux,** with V 0.5.2 (eab77e7).
+
 ## [0.4.0] — 2026-11-18
 
 Specifications, sensitivity studies, optimisation and fitting: the roadmap's

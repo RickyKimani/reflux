@@ -261,7 +261,7 @@ one of `reflux.Status`:
 | `BAD_INPUT` (1) | a value it can't use: not finite, T or P ≤ 0, an amount below 0, or none at all |
 | `NO_CONVERGENCE` (2) | an iteration ran out of steps |
 | `NO_VOLUME_ROOT` (3) | no volume root at a state it needed |
-| `MORE_PHASES` (4) | a phase of the split is itself unstable: a third phase |
+| `MORE_PHASES` (4) | three phases, or two liquids (M6), which the layout of one liquid and one vapour can't hold until ABI 2; or a fourth phase |
 | `PHASES_SWAPPED` (5) | a vapour-fraction flash's phases swapped |
 | `OUTSIDE_ENVELOPE` (6) | there's no such point on the phase envelope |
 | `SUPERCRITICAL` (7) | at or above Tc, where there's no vapour pressure |
@@ -444,4 +444,8 @@ where the fluid is neither, at about 275 to 305 K.
 
 Its tests check that its numbers are the V API's bit for bit, that the T–x–y's
 ends are each compound's saturation and its tie lines close, and that the map
-splits exactly where the feed is unstable.
+splits exactly where the feed is unstable. Since M6, 125 of the map's points,
+near the critical point at 225 to 228 K and 73 to 77 bar, are `MORE_PHASES`:
+there the dense vapour is liquid-like by its phase identification parameter,
+so the split is two liquids (M6's D9), which the layout can't hold until ABI 2.
+The figure was drawn before.

@@ -25,7 +25,9 @@ pub:
 
 // tv flashes a feed z at temperature T to its molar volume V, in m³ per
 // mole of feed: it finds P and the split. A Model is enough, since the
-// ideal gas's part of the Helmholtz energy doesn't depend on the split.
+// ideal gas's part of the Helmholtz energy doesn't depend on the split. It
+// takes nothing less: it works in F(T, V, n), which a PhaseModel needn't
+// have (M6's D3), so a Fluid gives its model by helmholtz, or refuses.
 //
 // At fixed T and V the equilibrium minimises the Helmholtz energy A, and
 // with Q(P) = G − P·V_spec (Michelsen's state function, D5),
@@ -44,7 +46,8 @@ pub:
 //   |V − V_spec| ≤ vtol·V_spec.
 //
 // A pure component inside its saturation dome has P = Psat(T) and the
-// vapour fraction β = (V − Vᴸ)/(Vⱽ − Vᴸ).
+// vapour fraction β = (V − Vᴸ)/(Vⱽ − Vᴸ). An answer of three phases is
+// .more_phases: TV and UV take two (M6's D10).
 pub fn tv(m thermo.Model, t f64, v f64, z []f64, params VolumeParams) !FlashResult {
 	if !(t > 0.0) || !math.is_finite(t) {
 		return fail(.bad_input, 'T = ${t} K is not a temperature')
@@ -53,12 +56,20 @@ pub fn tv(m thermo.Model, t f64, v f64, z []f64, params VolumeParams) !FlashResu
 	if s.present.len == 1 {
 		return s.pure()!
 	}
-	return s.mixture()!
+	r := s.mixture()!
+	// The TV and UV flashes stay two-phase (M6's D10): their finish
+	// minimises A over two phases. Their search may pass through three on
+	// the way to two, but an answer of three is refused.
+	if r.phases.len > 2 {
+		return fail(.more_phases, '${s.what()}: ${r.phases.len} phases at ${r.p} Pa, and the TV and UV flashes take two')
+	}
+	return r
 }
 
 // VolumeFlash is one TV flash.
 struct VolumeFlash {
 	m       thermo.Model
+	roots   thermo.PhaseModel // m's, for the PT flashes
 	t       f64
 	v       f64 // V_spec, m³/mol
 	z       []f64
@@ -76,13 +87,15 @@ fn volume_flash(m thermo.Model, t f64, v f64, z []f64, params VolumeParams) !Vol
 	if !(params.estimate >= 0.0) || !math.is_finite(params.estimate) {
 		return fail(.bad_input, 'estimate = ${params.estimate} must be positive, or 0 for the default start')
 	}
-	check_feed(m, z)!
+	roots := thermo.by_roots(m)
+	check_feed(roots, z)!
 	feed := normalised(z)
 	if !(v > m.min_volume(feed)) {
 		return fail(.bad_input, "V = ${v} m³/mol is below the model's smallest volume for this feed, ${m.min_volume(feed)}")
 	}
 	return VolumeFlash{
 		m:       m
+		roots:   roots
 		t:       t
 		v:       v
 		z:       feed
@@ -109,7 +122,7 @@ fn (s VolumeFlash) flash_at(lnp f64) !FlashResult {
 	if !(p >= 1e-6 && p <= 1e12) {
 		return fail(.bad_input, "${s.what()}: no pressure from 1e-6 Pa to 1e12 Pa gives it, so the specification is outside the model's range")
 	}
-	return pt(s.m, s.t, p, s.z, tol: s.params.tol, verify: s.params.verify)
+	return pt(s.roots, s.t, p, s.z, tol: s.params.tol, verify: s.params.verify)
 }
 
 fn (s VolumeFlash) mixture() !FlashResult {
@@ -232,6 +245,23 @@ fn (s StepBack) outside(x f64) bool {
 		return m.branches(t, s.z).no_state
 	}
 	return false
+}
+
+// step_back is a fluid's StepBack: its equation of state's, if its phases
+// have one behind them (thermo.Fluid.helmholtz; M6's γ–φ liquid has none,
+// and so no Branches), and the zero value's otherwise.
+fn step_back(fl thermo.Fluid, z []f64, ln_t bool) StepBack {
+	m := fl.helmholtz() or {
+		return StepBack{
+			z:    z
+			ln_t: ln_t
+		}
+	}
+	return StepBack{
+		m:    m
+		z:    z
+		ln_t: ln_t
+	}
 }
 
 // at_or_closer is f at next, a search's step from x, the last point that
@@ -357,8 +387,7 @@ fn (s VolumeFlash) helmholtz_eval(x []f64, mut g []f64, mut h []f64) !f64 {
 // the critical temperature, the one phase's pressure is the model's
 // P(T, V).
 fn (s VolumeFlash) pure() !FlashResult {
-	m := s.m
-	if sat := tvf(m, s.t, 0.5, s.z, tol: s.params.tol) {
+	if sat := tvf(s.roots, s.t, 0.5, s.z, tol: s.params.tol) {
 		vap, liq := sat.phases[0].state, sat.phases[1].state
 		vv, vl := vap.molar_volume(), liq.molar_volume()
 		// Just outside the dome is a single phase at P(T, V), so no margin
@@ -396,7 +425,7 @@ fn (s VolumeFlash) single(root thermo.Root) !FlashResult {
 		phases:     [Phase{label, st, 1.0}]
 		path:       .single_phase
 		iterations: 1
-		stability:  stability(s.m, s.t, p, s.z)!
+		stability:  stability(s.roots, s.t, p, s.z)!
 	}
 }
 
@@ -411,13 +440,15 @@ fn (s VolumeFlash) single(root thermo.Root) !FlashResult {
 // Helmholtz conditions plus the energy balance; otherwise Brent goes on.
 // The answer is a verified TV flash at the final T, held to
 // |U − U_spec| ≤ etol·RT. iterations counts the TV flashes, the expensive
-// part: a Newton step costs a small fraction of one.
+// part: a Newton step costs a small fraction of one. A fluid with no
+// F(T, V, n) is refused, saying so (bad_input).
 pub fn uv(fl thermo.Fluid, u f64, v f64, z []f64, params VolumeParams) !FlashResult {
 	if !math.is_finite(u) {
 		return fail(.bad_input, 'the specified U = ${u} is not a number')
 	}
+	m := fl.helmholtz() or { return fail(.bad_input, "the UV flash can't run: ${err.msg()}") }
 	// The temperature here only fixes the checks; each step sets its own.
-	s := volume_flash(fl.model, 300.0, v, z, params)!
+	s := volume_flash(m, 300.0, v, z, params)!
 	e := EnergyFlash{
 		fl:  fl
 		u:   u
@@ -443,7 +474,7 @@ fn (e EnergyFlash) at(lnt f64) !FlashResult {
 	if !(t >= state_t_min && t <= state_t_max) {
 		return fail(.bad_input, "${e.what()}: no temperature from ${state_t_min} K to ${state_t_max} K reaches it, so the specification is outside the model's range")
 	}
-	return tv(e.fl.model, t, e.tvs.v, e.tvs.z,
+	return tv(e.tvs.m, t, e.tvs.v, e.tvs.z,
 		tol:    e.tvs.params.tol
 		vtol:   e.tvs.params.vtol
 		verify: e.tvs.params.verify
@@ -514,11 +545,7 @@ fn (e EnergyFlash) solve() !FlashResult {
 	} else {
 		t0 = 300.0
 	}
-	lo, hi, bsteps := bracket_down(neg, math.log(t0), math.log(1.5), e.what(), StepBack{
-		m:    e.fl.model
-		z:    e.tvs.z
-		ln_t: true
-	})!
+	lo, hi, bsteps := bracket_down(neg, math.log(t0), math.log(1.5), e.what(), step_back(e.fl, e.tvs.z, true))!
 	steps += bsteps
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3, max_iter: e.tvs.params.max_steps)!
 	steps += coarse.evaluations

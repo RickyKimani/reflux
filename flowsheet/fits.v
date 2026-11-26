@@ -1,5 +1,7 @@
 module flowsheet
 
+import activity
+import components
 import expr
 import kinetics
 import math
@@ -14,13 +16,16 @@ import toml.ast
 // runs them. docs/flowsheet-format.md describes the keys.
 
 // FitFile is a file's fits with what they fit: its components, its
-// reactions if it has any, and its fluid if it has a [model].
+// reactions if it has any, and its fluid if it has a [model], with a γ–φ
+// fluid's setup and activity model, whose pairs a fit may vary (M6's D16).
 pub struct FitFile {
 pub:
-	names    []string
-	kinetics ?kinetics.Kinetics
-	fluid    ?thermo.Fluid
-	fits     []FitPlan
+	names     []string
+	kinetics  ?kinetics.Kinetics
+	fluid     ?thermo.Fluid
+	gamma_phi ?components.GammaPhiSetup
+	liquid    string // the activity model as the file names it, '' for an equation of state
+	fits      []FitPlan
 }
 
 // FitKind is what a fit fits: rate constants to rates, or kᵢⱼ to bubble
@@ -32,19 +37,22 @@ pub enum FitKind {
 
 // Part is which number of a named constant a fit varies: an Arrhenius
 // constant's A or Eₐ, a van 't Hoff constant's A or ΔH, a constant's whole
-// value, or a pair's kᵢⱼ.
+// value, or a pair's kᵢⱼ; or an activity model's pair (M6's D16), its energy
+// Aᵢⱼ, NRTL's τᵢⱼ = Aᵢⱼ/RT or UNIQUAC's τᵢⱼ = exp(−Aᵢⱼ/RT), or NRTL's α.
 pub enum Part {
 	a
 	ea
 	dh
 	value
 	kij
+	pair_energy
+	alpha
 }
 
 // FitParameter is a number a fit varies, as the file names it, k1.A,
-// K_E.dH, K_H or kij[ethane, propane], with its start in SI, its dimension,
-// and the unit the file wrote it in, for the fitted section ('' for a pure
-// number or SI).
+// K_E.dH, K_H, kij[ethane, propane], A[methanol, water] or
+// alpha[methanol, water], with its start in SI, its dimension, and the unit
+// the file wrote it in, for the fitted section ('' for a pure number or SI).
 pub struct FitParameter {
 pub:
 	name     string
@@ -109,8 +117,8 @@ pub fn load_fits_text(text string, params LoadParams) !FitFile {
 		text:  text
 	}
 	given := top.integer('format')!
-	if given != 3 {
-		return top.fail('format', 'fits need format 3, not ${given}', [])
+	if given != 3 && given != 4 {
+		return top.fail('format', 'fits need format 3, or 4 for an activity model, not ${given}', [])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!
@@ -130,9 +138,14 @@ pub fn load_fits_text(text string, params LoadParams) !FitFile {
 		species << species_of(r)
 	}
 	mut fluid := ?thermo.Fluid(none)
+	mut gamma := ?components.GammaPhiSetup(none)
+	mut liquid := ''
 	if top.has('model') {
 		mut m := top.child('model')!
-		fluid = read_model(mut m, db, component_names, names_line)!
+		modelled := read_model(mut m, db, component_names, names_line, int(given))!
+		fluid = modelled.fluid
+		gamma = modelled.gamma_phi
+		liquid = modelled.report.liquid
 	}
 	mut k := ?kinetics.Kinetics(none)
 	if top.has('reaction') {
@@ -148,22 +161,24 @@ pub fn load_fits_text(text string, params LoadParams) !FitFile {
 		mut all := top.child('fit')!
 		for name in all.table.keys() {
 			mut t := all.child(name)!
-			fits << read_fit(mut t, name, component_names, k, fluid, params.dir)!
+			fits << read_fit(mut t, name, component_names, k, fluid, gamma, liquid, params.dir)!
 		}
 	}
 	top.finish()!
 	return FitFile{
-		names:    component_names
-		kinetics: k
-		fluid:    fluid
-		fits:     fits
+		names:     component_names
+		kinetics:  k
+		fluid:     fluid
+		gamma_phi: gamma
+		liquid:    liquid
+		fits:      fits
 	}
 }
 
 // read_fit reads one [fit.NAME]: data, a CSV file beside this one;
 // parameters, the numbers it varies; start, their first values if not the
 // file's; and weights, each measured column's error.
-fn read_fit(mut t Section, name string, names []string, k ?kinetics.Kinetics, fluid ?thermo.Fluid, dir string) !FitPlan {
+fn read_fit(mut t Section, name string, names []string, k ?kinetics.Kinetics, fluid ?thermo.Fluid, gamma ?components.GammaPhiSetup, liquid string, dir string) !FitPlan {
 	data := t.text('data')!
 	path := if os.is_abs_path(data) { data } else { os.join_path(dir, data) }
 	wanted := t.strings('parameters')!
@@ -171,9 +186,15 @@ fn read_fit(mut t Section, name string, names []string, k ?kinetics.Kinetics, fl
 		return t.fail('parameters', 'a fit varies at least one parameter, as ["k1.A", "k1.Ea"]',
 			[])
 	}
-	vle := wanted.any(it.starts_with('kij'))
-	if vle && wanted.any(!it.starts_with('kij')) {
-		return t.fail('parameters', 'a fit is of rates or of kij, not both: fit them in two [fit.NAME]',
+	kij := wanted.any(it.starts_with('kij['))
+	pairs := wanted.any(it.starts_with('A[') || it.starts_with('alpha['))
+	vle := kij || pairs
+	if vle && wanted.any(!it.starts_with('kij[') && !it.starts_with('A[') && !it.starts_with('alpha[')) {
+		return t.fail('parameters', "a fit is of rates or of a model's pairs, not both: fit them in two [fit.NAME]",
+			[])
+	}
+	if kij && pairs {
+		return t.fail('parameters', "kij is an equation of state's and A and alpha an activity model's: a fit is of one model's pairs",
 			[])
 	}
 	mut starts := map[string]string{}
@@ -193,7 +214,17 @@ fn read_fit(mut t Section, name string, names []string, k ?kinetics.Kinetics, fl
 		if parameters.any(it.name == w) {
 			return t.fail('parameters', '${w} is listed twice', [])
 		}
-		p := if vle {
+		if w.starts_with('alpha[') {
+			// α is the pair's, either way round.
+			a, b := pair_names(w) or { '', '' }
+			if parameters.any(it.name == 'alpha[${b}, ${a}]') {
+				return t.fail('parameters', "${w} is listed twice, as alpha[${b}, ${a}]: α is the pair's",
+					[])
+			}
+		}
+		p := if pairs {
+			pair_parameter(w, names, gamma, liquid) or { return t.fail('parameters', err.msg(), []) }
+		} else if vle {
 			kij_parameter(w, names, fluid) or { return t.fail('parameters', err.msg(), []) }
 		} else {
 			rate_parameter(w, k) or {
@@ -333,15 +364,95 @@ fn kij_parameter(w string, names []string, fl ?thermo.Fluid) !FitParameter {
 	if i == j {
 		return error('${w}: a pair needs two components')
 	}
-	if f.model !is thermo.Cubic {
+	eos := f.helmholtz() or { return error("${w}: kij is a cubic's, and the model is not one") }
+	if eos !is thermo.Cubic {
 		return error("${w}: kij is a cubic's, and the model is not one")
 	}
-	c := f.model as thermo.Cubic
+	c := eos as thermo.Cubic
 	return FitParameter{
 		name:  w
 		part:  .kij
 		start: c.kij[i * names.len + j]
 		dim:   quantity.Dim{}
+		i:     i
+		j:     j
+	}
+}
+
+// The T at which an activity model's pair gives its fit's start, A = τRT
+// (NRTL) or −RT ln τ (UNIQUAC): exact for a bank's pair, A/RT itself, and a
+// start for any other.
+pub const pair_start_t = 298.15
+
+// molar_gas_constant is R as an expression has it, quantity's, the SI's
+// exact value.
+pub fn molar_gas_constant() f64 {
+	return quantity.molar_gas_constant
+}
+
+// pair_names are the two names in a pair parameter, NAME[a, b].
+fn pair_names(w string) ?(string, string) {
+	if !w.ends_with(']') || w.count(',') != 1 || !w.contains('[') {
+		return none
+	}
+	inner := w.all_after('[').all_before_last(']')
+	return inner.all_before(',').trim_space(), inner.all_after(',').trim_space()
+}
+
+// pair_parameter is an activity model's pair (M6's D16): A[a, b], a's energy
+// with b, in J/mol, NRTL's τ_ab = A/RT or UNIQUAC's τ_ab = exp(−A/RT); or
+// alpha[a, b], NRTL's α. It starts from the model's own pair at
+// pair_start_t.
+fn pair_parameter(w string, names []string, gamma ?components.GammaPhiSetup, liquid string) !FitParameter {
+	g := gamma or {
+		return error('${w}: an activity model\'s pair needs a [model] with liquid = "NRTL" or "UNIQUAC"')
+	}
+	kind := w.all_before('[')
+	if liquid !in ['NRTL', 'UNIQUAC'] || (kind == 'alpha' && liquid != 'NRTL') {
+		what := if kind == 'alpha' { "NRTL's α" } else { "NRTL's or UNIQUAC's pair energy" }
+		return error('${w}: ${kind} is ${what}, and the model is ${liquid}')
+	}
+	a, b := pair_names(w) or { return error('${w}: a pair is written ${kind}[a, b], two of the components') }
+	i, j := names.index(a), names.index(b)
+	if i < 0 || j < 0 {
+		bad := if i < 0 { a } else { b }
+		return error('${w}: ${bad} is not one of the components')
+	}
+	if i == j {
+		return error('${w}: a pair needs two components')
+	}
+	si, sj := g.model.solvents.index(i), g.model.solvents.index(j)
+	if si < 0 || sj < 0 {
+		bad := if si < 0 { a } else { b }
+		return error("${w}: ${bad} is a Henry's-law solute, outside the activity model")
+	}
+	uses := g.pairs.filter((it.i == si && it.j == sj) || (it.i == sj && it.j == si))
+	if uses.len != 1 {
+		return error('${w}: the model has no pair of ${a} and ${b}')
+	}
+	u := uses[0]
+	forward := u.i == si
+	t := pair_start_t
+	r := molar_gas_constant()
+	if kind == 'alpha' {
+		alpha := activity.plain(u.texts[2], 'α')!.at(t).v
+		return FitParameter{
+			name:  w
+			part:  .alpha
+			start: alpha
+			dim:   quantity.Dim{}
+			i:     i
+			j:     j
+		}
+	}
+	tau := activity.plain(u.texts[if forward { 0 } else { 1 }], 'τ')!.at(t).v
+	start := if liquid == 'NRTL' { tau * r * t } else { -r * t * math.log(tau) }
+	return FitParameter{
+		name:  w
+		part:  .pair_energy
+		start: start
+		dim:   quantity.Dimension.molar_enthalpy.dim()
+		unit:  'J/mol'
 		i:     i
 		j:     j
 	}

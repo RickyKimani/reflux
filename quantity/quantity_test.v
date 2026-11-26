@@ -626,3 +626,12 @@ fn test_random_units_never_panic() {
 	}
 	assert accepted > 1000
 }
+
+// R is N_A·k_B to the last digit: 602214076 × 1380649 = 831446261815324, so
+// the decimal 8.31446261815324 is the product itself, and the shortest
+// decimal that reads back to the constant is that one, so the constant is
+// the double nearest the product.
+fn test_molar_gas_constant_is_avogadro_times_boltzmann() {
+	assert i64(602214076) * 1380649 == 831446261815324
+	assert quantity.molar_gas_constant.str() == '8.31446261815324'
+}

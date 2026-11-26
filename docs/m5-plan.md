@@ -23,10 +23,11 @@ spikes ran for the draft, and D7 took its final form from them before
 approval. The four bundles below, and bundle B's skipped full check, were
 allowed on 2026-11-25. Bundle A, steps 1 and 2, is done (`181e456`), and
 amends D7 and D8, approved on 2026-11-26. Bundle B, steps 3 to 5, is done,
-and amends criterion 6, for the owner's approval; bundle C is next, when
-the owner says. M5a's
-version is set at its release, as the next one on `main` then: M6 finished
-with v0.5.0 on its branch, and the owner has fixes on another (D17).
+and amends criterion 6, for the owner's approval. `main` (M6 and the gas
+constant's fix) was merged in after it ("With M6", below); bundle C is next,
+when the owner says. M5a's
+version is set at its release, as the next one on `main` then (D17): 0.6.0,
+whose CHANGELOG entry the gas constant's fix began.
 
 ## Goal
 
@@ -926,6 +927,35 @@ touches none of it. What to expect when the second of the two merges:
   `docs/design.md`, `testdata/README.md`, `docs/v-for-go.md` and the roadmap
   all gain sections on both branches: textual conflicts, each kept whole.
 - **Fixtures:** both use the `iapws` package, pinned to 1.5.4 on both.
+
+**Merged, after bundle B** (2026-11-26, at the owner's word, so that steps
+7 and 8 meet M6's seam and format 4): `main` at `e63ebc3`, M6 (v0.5.0) and
+the gas constant's fix that begins 0.6.0, into `m5a-water`.
+- **Textual conflicts:** the four shared docs alone (CLAUDE.md, the README,
+  design.md, the roadmap), each side kept whole. `flash/ph.v`,
+  `flash/tv.v`, `thermo/phase.v`, `docs/v-for-go.md` and
+  `testdata/README.md` merged by themselves.
+- **What didn't conflict but broke:** `Fluid.model` is a `PhaseModel`. The
+  flash's step back now asks the fluid for its equation of state,
+  `step_back(fl, …)` over `Fluid.helmholtz()`, and has none for M6's γ–φ
+  liquid, which has no `Branches`; `reference_offsets` takes `iapws95()`
+  itself; `water`'s tests take `helmholtz()` where they need a `Model` and
+  `by_roots` where the flash needs a `PhaseModel`; the trace likewise. M6's
+  own step back, in the two-phase search's bracket where a γ–φ liquid
+  refuses a T, and M5a's, in the single-phase search and UV's bracket where
+  a model has no state, are in different searches.
+- **The gas constant:** reflux's R is now exact, 1.84e-11 above the old,
+  so D4's k = R₉₅/R moves by as much: no printed figure of Tables 6 to 8, and
+  no digit given here, moves.
+- **D12 and D17:** format 4 is on the branch now, so `equation =
+  "IAPWS-95"` is format 4's (D12); the release is 0.6.0, whose entry `main`
+  began (D17).
+- **Checked:** the trace (ported to the seam) gives every cubic answer's
+  bits on `main` and on the merge, 85,448 lines byte for byte, gcc
+  `-prod`, so D7 still moves no cubic answer behind M6's seam; the full tcc
+  check passed, 134 test files; step 2's sweep in full
+  (`REFLUX_WATER_SWEEP=all`), every flash back from all 925 states within
+  its iteration budget.
 
 ## Risks
 

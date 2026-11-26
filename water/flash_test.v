@@ -354,7 +354,7 @@ fn by_kind(kind string, fl thermo.Fluid, t f64, p f64, h f64, s f64, u f64, v f6
 	return match kind {
 		'ph' { flash.ph(fl, p, h, [1.0])! }
 		'ps' { flash.ps(fl, p, s, [1.0])! }
-		'tv' { flash.tv(fl.model, t, v, [1.0])! }
+		'tv' { flash.tv(fl.helmholtz()!, t, v, [1.0])! }
 		else { flash.uv(fl, u, v, [1.0])! }
 	}
 }
@@ -383,7 +383,7 @@ fn test_every_flash_from_each_state() {
 		r := flash.pt(m, row.t, row.p, [1.0]) or {
 			// Above P(T, vmin), or a state the formulation has no root for:
 			// solve_tp refuses it too (test_the_volume_roots_are_the_branches).
-			thermo.solve_tp(m, row.t, row.p, [1.0], .stable) or { continue }
+			thermo.solve_tp(fl.helmholtz()!, row.t, row.p, [1.0], .stable) or { continue }
 			assert false, 'PT at ${row.t} K, ${row.p} Pa: ${err}'
 			continue
 		}
@@ -472,7 +472,7 @@ fn test_labels_are_the_branches() {
 		st := thermo.solve_tp(m, c[0], c[1], [1.0], .stable)!
 		want := if c[2] == 0.0 { thermo.PhaseLabel.liquid } else { .vapor }
 		assert thermo.phase_label(m, st) == want, '${c[0]} K, ${c[1]} Pa: ${thermo.phase_label(m, st)}'
-		r := flash.pt(m, c[0], c[1], [1.0])!
+		r := flash.pt(thermo.by_roots(m), c[0], c[1], [1.0])!
 		assert r.phases[0].label == want
 	}
 }
@@ -493,7 +493,7 @@ fn test_no_water_below_251_k() {
 	// right U and V.
 	fl := water_fluid()
 	p := 5.62341325190349e8
-	r := flash.pt(m, 273.16, p, [1.0])!
+	r := flash.pt(thermo.by_roots(m), 273.16, p, [1.0])!
 	h, _, _, _ := mean(fl, r)
 	back := flash.ph(fl, p, h, [1.0])!
 	assert math.abs(back.t / 273.16 - 1.0) < 1e-10, 'PH back: ${back.t} K'

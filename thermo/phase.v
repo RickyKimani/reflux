@@ -3,9 +3,21 @@ module thermo
 import numeric
 
 // PhaseLabel is what a phase is called, for unit operations and for people.
+// A flash's answer has at most one vapour, and of two liquids the denser is
+// liquid2 (M6's D9).
 pub enum PhaseLabel {
 	liquid
 	vapor
+	liquid2
+}
+
+// name is the label as reports write it: vapour, liquid or liquid2.
+pub fn (l PhaseLabel) name() string {
+	return match l {
+		.vapor { 'vapour' }
+		.liquid { 'liquid' }
+		.liquid2 { 'liquid2' }
+	}
 }
 
 // pip returns the phase identification parameter of Venkatarathnam and

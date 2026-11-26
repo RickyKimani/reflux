@@ -78,7 +78,7 @@ fn test_the_helmholtz_derivatives_match_differences() {
 	// its Hessian against central differences of the gradient, a little off
 	// the TV solution.
 	fl, _, v, x := split_near()!
-	s := volume_flash(fl.model, 250.0, v, [0.4, 0.6], VolumeParams{})!
+	s := volume_flash(fl.helmholtz()!, 250.0, v, [0.4, 0.6], VolumeParams{})!
 	mut g := []f64{len: 3}
 	mut h := []f64{len: 9}
 	s.helmholtz_eval(x, mut g, mut h)!
@@ -105,7 +105,7 @@ fn test_the_uv_jacobian_matches_differences() {
 	e := EnergyFlash{
 		fl:  fl
 		u:   -15000.0
-		tvs: volume_flash(fl.model, 250.0, v, [0.4, 0.6], VolumeParams{})!
+		tvs: volume_flash(fl.helmholtz()!, 250.0, v, [0.4, 0.6], VolumeParams{})!
 	}
 	mut xt := x.clone()
 	xt << math.log(255.0)
@@ -121,11 +121,11 @@ fn test_the_one_phase_uv_jacobian_matches_differences() {
 	// why a planted mistake there survived every other test.
 	fl := tv_fluid()!
 	r := pt(fl.model, 350.0, 10e5, [0.4, 0.6])!
+	eos := fl.helmholtz()!
 	e := EnergyFlash{
 		fl:  fl
 		u:   -15000.0
-		tvs: volume_flash(fl.model, 350.0, r.phases[0].state.molar_volume(), [0.4, 0.6],
-			VolumeParams{})!
+		tvs: volume_flash(eos, 350.0, r.phases[0].state.molar_volume(), [0.4, 0.6], VolumeParams{})!
 	}
 	differences(fn [e] (x []f64, mut f []f64, mut jac []f64) ! {
 		SingleU{e}.eval(x, mut f, mut jac)!

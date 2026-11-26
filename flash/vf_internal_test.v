@@ -31,7 +31,7 @@ fn test_the_jacobian_matches_differences() {
 		for beta in [0.0, 0.3, 1.0] {
 			value := if given == .t { 250.0 } else { 30e5 }
 			s := Saturation{
-				m:       m
+				m:       thermo.by_roots(m)
 				given:   given
 				value:   value
 				beta:    beta
@@ -70,10 +70,10 @@ fn test_phases_the_wrong_way_round_are_refused() {
 	// the phase of fraction β is the denser: it must refuse, not relabel.
 	m := methane_butane()!
 	z := [0.4, 0.6]
-	r := bubble_p(m, 250.0, z)!
+	r := bubble_p(thermo.by_roots(m), 250.0, z)!
 	vap, liq := r.phases[0].state, r.phases[1].state
 	s := Saturation{
-		m:       m
+		m:       thermo.by_roots(m)
 		given:   .t
 		value:   250.0
 		beta:    0.0
@@ -99,7 +99,7 @@ fn test_a_metastable_root_is_refused() {
 	stable := thermo.solve_tp(m, 300.0, 2e5, w, .stable)!
 	assert liq.v < vap.v && stable.v == vap.v, 'the liquid root should be metastable here'
 	s := Saturation{
-		m:       m
+		m:       thermo.by_roots(m)
 		given:   .t
 		value:   300.0
 		beta:    0.0
@@ -131,7 +131,7 @@ fn test_a_collapse_onto_the_feed_is_refused() {
 	// say the iteration collapsed rather than call it a bubble point.
 	m := methane_butane()!
 	s := Saturation{
-		m:       m
+		m:       thermo.by_roots(m)
 		given:   .t
 		value:   250.0
 		beta:    0.0
