@@ -169,6 +169,18 @@ water/              water and steam (M5a)
   coefficients.v    IAPWS-95's Tables 1 and 2, from its release
   properties.v      IAPWS-95's Table 3 on IAPWS's reference, and the constants
                     between it and reflux's (D6)
+  if97/             IAPWS-IF97 with its region-3 supplements, per kg (water.if97)
+    basic.v         the basic equations of regions 1, 2 (and the metastable
+                    vapour), 3 and 5
+    if97.v          constants, the state, region 4 and the B23 and B2bc
+                    boundaries
+    backward.v      T(p, h) and T(p, s) of regions 1 and 2, and SR3-03's T and v
+                    of (p, h) and (p, s) in region 3
+    region3_v.v     SR5-05's v(p, T) in region 3's 26 subregions
+    functions.v     the steam-table functions from (p, T), (p, h), (p, s), (T, x)
+                    and (p, x), each finished on its basic equation
+    coefficients.v, coefficients_sr3.v, coefficients_sr5.v
+                    the releases' tables, by tools/extract_if97.py
 flash/
   stability.v       Michelsen's tangent-plane stability test, for any Model
   pt.v              the PT flash: stability, then the two-phase split
@@ -354,7 +366,10 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (DWSIM 9's spec, optimiser and PFR on M8's problems),
                     gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM),
                     gen_m5_iapws95.py (IAPWS-95's φʳ by mpmath, and water's
-                    states and saturation by the iapws package and CoolProp)
+                    states and saturation by the iapws package and CoolProp),
+                    extract_if97.py (IF97's coefficients from its releases'
+                    PDFs) and gen_m5_if97.py (the iapws package's IF97
+                    coefficients and states)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

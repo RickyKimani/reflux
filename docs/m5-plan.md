@@ -21,8 +21,10 @@ Status: **approved** on 2026-11-24, as drafted, every decision as written,
 on branch `m5a-water` from `main` at v0.4.0 (`18eb317`). Step 0 is done: its
 spikes ran for the draft, and D7 took its final form from them before
 approval. The four bundles below, and bundle B's skipped full check, were
-allowed on 2026-11-25. Bundle A, steps 1 and 2, is done, and amends D7
-and D8, for the owner's approval; bundle B is next. M5a's
+allowed on 2026-11-25. Bundle A, steps 1 and 2, is done (`181e456`), and
+amends D7 and D8, approved on 2026-11-26. Bundle B, steps 3 to 5, is done,
+and amends criterion 6, for the owner's approval; bundle C is next, when
+the owner says. M5a's
 version is set at its release, as the next one on `main` then: M6 finished
 with v0.5.0 on its branch, and the owner has fixes on another (D17).
 
@@ -364,6 +366,13 @@ All checked by tests in CI, as before.
    differences in v, h, s, cp, w and ps are recorded, numbers that can't
    grow, and each lies within IF97's stated uncertainty there (the release's
    Figs. 3 to 6), the critical region reported apart.
+
+   **Amended in step 5,** for the owner's approval: the pseudo-critical
+   ridge just above Fig. 3's critical triangle, 30 to 40 MPa between its
+   isochores (0.0019 and 0.0069 m³/kg), is reported apart with the critical
+   region: there IF97's cp is up to 0.99% from IAPWS-95's, where Fig. 4
+   states 0.5%, and that largest difference is recorded, a number that
+   can't grow. Everywhere else every difference is within the figures.
 7. **Water's transport.** Viscosity, thermal conductivity (each with its
    critical enhancement, and its industrial form on IF97) and surface
    tension reproduce every verification table of R12-08, R15-11 and R1-76
@@ -396,8 +405,8 @@ All checked by tests in CI, as before.
 | D4 | The gas constant | IAPWS-95's own, R₉₅ = 8.314371357587 J/(mol·K), as the release requires, with reflux's R everywhere else. The difference is carried in F, by the n(R₉₅/R − 1) ln δ of D3, and in the ideal-gas Cp, by R − R₉₅ (D5). Then the total Helmholtz energy is IAPWS-95's but for a term linear in T, so every property at (T, ρ) is the release's and h, s, u differ from it by constants. The cost, measured: water's φ tends to ρ^(R₉₅/R − 1) at zero density, not to 1: ln φ is 1.9e-4 at 1 Pa and 7e-5 at 1 bar. Only water's own phases compare it, since the model is pure water.<br><br>The alternative, reflux's R in φʳ, moves every p, h, s and w of IAPWS-95's by the factor R/R₉₅ = 1.0000110, and the tables then match only after that factor. | The release is explicit, and its tables are the exit's proof. The ln φ cost cancels between water's own phases, the only ones a pure model compares, and is a known number for anything that ever compares it with another fluid's. |
 | D5 | The ideal part | A new `CpForm` variant, `PlanckEinstein`: Cp = a + Σ cᵢ (θᵢ/T)² e^(θᵢ/T)/(e^(θᵢ/T) − 1)², with its two integrals in closed form, written to stay finite where θ/T is large. IAPWS-95's ideal part is a = R + R₉₅·n₃°, cᵢ = R₉₅·nᵢ°, θᵢ = γᵢ°·Tc (R − R₉₅ in a, by D4). The fluid's ΔH°f and S° are water's record's, so its H and S are on reflux's reference like every other fluid's. | IAPWS-95's Cp is that form exactly, and GERG-2008 and Span–Wagner's equations use it too, so it's not water's alone. A fluid's reference stays reflux's, so that M5a's water and M9's reactions can meet later. |
 | D6 | Reference states | **reflux's** (formation from the elements, 298.15 K, 1 bar) in the flowsheet, the fluid and reports, as everywhere. **IAPWS's** (u = s = 0 for the triple point's liquid) in the steam-table functions and `reflux water`, which say so. The two differ by a constant h₀ and s₀ per mole, computed by IAPWS-95 at the triple point's liquid and given in design.md. IF97's reference is IAPWS's too, set in the same way: its h for the triple point's liquid is 0.611783 J/kg, IAPWS-95's 0.611782. | A flowsheet's energy balances need one reference for every fluid. A steam table's reader expects IAPWS's numbers. |
-| D7 | Volume roots | `thermo`'s generic solvers stay, walking each physical branch from its own end. What IAPWS-95 needs besides comes in two kinds, neither of which moves a cubic's bits (step 2 shows it with a trace of M3's sweep and of every flash kind, and the golden reports, as M6's step 4 did):<br>- **Through an optional interface** that a model implements if it knows its branches (its name for step 2), which only IAPWS-95 does, so a cubic's paths don't change at all:<br>  - **the vapour solver's start,** below Tc, is no denser than the saturated vapour by Wagner and Pruß's auxiliary equation (IAPWS SR1-86), so the walk begins on the vapour's branch, never inside the dome;<br>  - **the split between the branches:** below Tc the spinodal's vapour side lies below ρc and its liquid side above, so a vapour iterate denser than ρc, or a liquid iterate lighter than it, has left its branch, and the solver returns none, as it does at a spinodal.<br>- **Generic, but never reached by a cubic:**<br>  - **IAPWS-95's `min_volume`** is at δ = 5 (1610 kg/m³), and a liquid walk that never reaches p above vmin returns none, not vmin, so a pressure above P(T, vmin), 4.9 GPa or more, is refused. A cubic's P → ∞ at its covolume, so its walk always reaches p.<br>  - **`saturation_pressure`'s start** bisects in ln P between a pressure with no liquid root and one with no vapour root, once it has both, rather than stepping by 1.1 and 0.9 past a window it can't hit. A cubic path that converges today without alternating is the same path.<br><br>Choosing the stable root among all roots by Gibbs energy is refused as a design: for IAPWS-95 it's wrong at 910 of step 0's 2,508 states. So is a guard that assumes the liquid's P(V) convex: step 0 tried it, and it refused real liquid roots at 251 to 260 K.<br><br>**Amended in step 2,** for the owner's approval:<br>- **`min_volume` is at δ = 4** (1288 kg/m³), not 5: P there is 1.16 GPa or more from 251 K, still above the release's 1 GPa, and four such volumes are 1/ρc, which `thermo.phase_label`'s rule takes for a critical volume.<br>- **The vapour start's bound is gone,** and SR1-86's ρ'' with it: the split alone refuses every spurious root the grids found. Between the vapour's spinodal and ρc, P rises only where it's hugely negative (−1e27 to −5e8 Pa up to 600 K) or, at 625 to 640 K, at 10 to 20 MPa, whose ideal-gas start lies far below that stretch on the vapour's own branch. Planted, its removal survived every test, which is how it showed.<br>- **`Branches` has another limit, `no_state`:** below 251.165 K, the melting curve's lowest point, IAPWS-95 has no state. Its liquid there is an extrapolation whose H falls as T rises (at 562 MPa, H at 215.7 K is above H at 273.16 K), which the PH flash's search followed down; and a vapour there, endorsed by the release only below the sublimation curve, gave a UV flash a phantom answer at 233.8 K and 522 Pa. The sublimation curve (R14-08) isn't in M5a.<br>- **A model with `Branches` is labelled by its split,** below Tc: liquid below it, vapour above. Π calls liquid water vapour near its density maximum, −130 at 280 K and 1 bar, −7 at 300 K.<br>- **The flash's searches step back into the range:** where the single-phase PH bracket's step, or the UV bracket's, fails at a T where the model has no state (`no_state`), it halves back towards the last T with one (`flash.at_or_closer`). Any other failure is the search's, as before, so a cubic's failing search fails as it did, as fast.<br><br>None reaches a cubic: a trace of 83,563 lines, every cubic answer's bits over 3,000 of the sweep's mixtures and 160 pure compounds (PT, stability, roots, vapour-fraction, PH, PS, TV and UV), is the same byte for byte before and after (`spike/water/trace`). | Step 0's evidence (above): the branches are what make the answer right, and each change acts only where the old path left its branch or ran past its range. Keeping IAPWS-95's knowledge of its own branches behind an optional interface, as M8's `Warm` is optional, leaves `Model` as it is and every cubic's path untouched. |
-| D8 | The critical point | The non-analytic terms are evaluated with Table 5's (1/(δ − 1))·∂Δ/∂δ written out as its finite sum, so δ = 1 needs no special case. At (Tc, ρc) itself, where Δ = 0, F and its first derivatives take their limits (the Δ^b terms' are 0) and so does ∂²F/∂V²; ∂²F/∂T² is −∞ there, so cv and cp are +∞ and w is 0, the formulation's own values. Nothing is NaN. Step 1 tests each limit against mpmath along several paths.<br><br>**Amended in step 1,** for the owner's approval: at (Tc, ρc) `thermo`'s `Fluid.props` gives w as NaN, its formula w² = −(V²/m)(Cp/Cv)(∂P/∂V) taking Cp/Cv as ∞/∞; Table 3's `props95` gives 0 to rounding (7.9e-5 m/s). The formula is the cubics' too, and rewriting it, as −(V²/m)[(∂P/∂V) − T(∂P/∂T)²/Cv], would move every cubic's w by its last bits, so it stays, and the NaN is recorded and tested. | It's what IAPWS-95 says at its critical point. CoolProp's nudge, δ = 1 + 10ε, gives a finite number that the formulation doesn't. |
+| D7 | Volume roots | `thermo`'s generic solvers stay, walking each physical branch from its own end. What IAPWS-95 needs besides comes in two kinds, neither of which moves a cubic's bits (step 2 shows it with a trace of M3's sweep and of every flash kind, and the golden reports, as M6's step 4 did):<br>- **Through an optional interface** that a model implements if it knows its branches (its name for step 2), which only IAPWS-95 does, so a cubic's paths don't change at all:<br>  - **the vapour solver's start,** below Tc, is no denser than the saturated vapour by Wagner and Pruß's auxiliary equation (IAPWS SR1-86), so the walk begins on the vapour's branch, never inside the dome;<br>  - **the split between the branches:** below Tc the spinodal's vapour side lies below ρc and its liquid side above, so a vapour iterate denser than ρc, or a liquid iterate lighter than it, has left its branch, and the solver returns none, as it does at a spinodal.<br>- **Generic, but never reached by a cubic:**<br>  - **IAPWS-95's `min_volume`** is at δ = 5 (1610 kg/m³), and a liquid walk that never reaches p above vmin returns none, not vmin, so a pressure above P(T, vmin), 4.9 GPa or more, is refused. A cubic's P → ∞ at its covolume, so its walk always reaches p.<br>  - **`saturation_pressure`'s start** bisects in ln P between a pressure with no liquid root and one with no vapour root, once it has both, rather than stepping by 1.1 and 0.9 past a window it can't hit. A cubic path that converges today without alternating is the same path.<br><br>Choosing the stable root among all roots by Gibbs energy is refused as a design: for IAPWS-95 it's wrong at 910 of step 0's 2,508 states. So is a guard that assumes the liquid's P(V) convex: step 0 tried it, and it refused real liquid roots at 251 to 260 K.<br><br>**Amended in step 2,** approved on 2026-11-26:<br>- **`min_volume` is at δ = 4** (1288 kg/m³), not 5: P there is 1.16 GPa or more from 251 K, still above the release's 1 GPa, and four such volumes are 1/ρc, which `thermo.phase_label`'s rule takes for a critical volume.<br>- **The vapour start's bound is gone,** and SR1-86's ρ'' with it: the split alone refuses every spurious root the grids found. Between the vapour's spinodal and ρc, P rises only where it's hugely negative (−1e27 to −5e8 Pa up to 600 K) or, at 625 to 640 K, at 10 to 20 MPa, whose ideal-gas start lies far below that stretch on the vapour's own branch. Planted, its removal survived every test, which is how it showed.<br>- **`Branches` has another limit, `no_state`:** below 251.165 K, the melting curve's lowest point, IAPWS-95 has no state. Its liquid there is an extrapolation whose H falls as T rises (at 562 MPa, H at 215.7 K is above H at 273.16 K), which the PH flash's search followed down; and a vapour there, endorsed by the release only below the sublimation curve, gave a UV flash a phantom answer at 233.8 K and 522 Pa. The sublimation curve (R14-08) isn't in M5a.<br>- **A model with `Branches` is labelled by its split,** below Tc: liquid below it, vapour above. Π calls liquid water vapour near its density maximum, −130 at 280 K and 1 bar, −7 at 300 K.<br>- **The flash's searches step back into the range:** where the single-phase PH bracket's step, or the UV bracket's, fails at a T where the model has no state (`no_state`), it halves back towards the last T with one (`flash.at_or_closer`). Any other failure is the search's, as before, so a cubic's failing search fails as it did, as fast.<br><br>None reaches a cubic: a trace of 83,563 lines, every cubic answer's bits over 3,000 of the sweep's mixtures and 160 pure compounds (PT, stability, roots, vapour-fraction, PH, PS, TV and UV), is the same byte for byte before and after (`spike/water/trace`). | Step 0's evidence (above): the branches are what make the answer right, and each change acts only where the old path left its branch or ran past its range. Keeping IAPWS-95's knowledge of its own branches behind an optional interface, as M8's `Warm` is optional, leaves `Model` as it is and every cubic's path untouched. |
+| D8 | The critical point | The non-analytic terms are evaluated with Table 5's (1/(δ − 1))·∂Δ/∂δ written out as its finite sum, so δ = 1 needs no special case. At (Tc, ρc) itself, where Δ = 0, F and its first derivatives take their limits (the Δ^b terms' are 0) and so does ∂²F/∂V²; ∂²F/∂T² is −∞ there, so cv and cp are +∞ and w is 0, the formulation's own values. Nothing is NaN. Step 1 tests each limit against mpmath along several paths.<br><br>**Amended in step 1,** approved on 2026-11-26: at (Tc, ρc) `thermo`'s `Fluid.props` gives w as NaN, its formula w² = −(V²/m)(Cp/Cv)(∂P/∂V) taking Cp/Cv as ∞/∞; Table 3's `props95` gives 0 to rounding (7.9e-5 m/s). The formula is the cubics' too, and rewriting it, as −(V²/m)[(∂P/∂V) − T(∂P/∂T)²/Cv], would move every cubic's w by its last bits, so it stays, and the NaN is recorded and tested. | It's what IAPWS-95 says at its critical point. CoolProp's nudge, δ = 1 + 10ε, gives a finite number that the formulation doesn't. |
 | D9 | IF97 | All of R7-97: regions 1 to 5, the metastable vapour, region 4's ps(T) and Ts(p), B23, and the backward T(p, h) and T(p, s) of regions 1 and 2 with B2bc; SR5-05's v(p, T) and SR3-03's T and v of (p, h) and (p, s) in region 3.<br>- **Per kg,** in SI (J/kg, J/(kg·K), m³/kg), as the release is, with its own R; molar values, where needed, by IAPWS's 18.015268 g/mol.<br>- **The steam-table functions** take (T, p), (p, h), (p, s), (T, x) or (p, x), choose the region by the release's Fig. 1, and refuse a state outside its range with the range.<br>- **A backward equation's answer is finished** by Newton on the basic equation (one or two steps), so that the functions' answers are consistent to rounding; each backward equation alone is also there, as published, which its table checks.<br>- **Inside the dome,** (p, h) and (p, s) give Ts and the quality from region 4 and the saturated phases' values. | The backward equations are 10 to 25 mK from their basic equations by design. reflux returns an answer only once it's shown to be right, and one Newton step costs little next to the backward equation. |
 | D10 | IF97's coefficients | Transcribed from the releases' tables, with each release cited where they're kept, never from another implementation's source. A test holds them to the `iapws` package's (a fixture), and the verification tables hold the equations. | IAPWS allows its releases' use with attribution; the `iapws` package is GPL-3.0. M6 did the same with IAPWS's Henry's constants. |
 | D11 | Water's transport | R12-08's viscosity and R15-11's thermal conductivity, each with its critical enhancement on IAPWS-95, and R1-76's surface tension; for IF97, each one's industrial form (μ₂ = 1 and IF97's density; R15-11's industrial λ). Functions of (T, ρ) and of a state, in `water`, reported by `reflux water` and the V API. A stream's transport in the flowsheet's report waits for M5b, which brings mixtures, so the report changes once. Outside a correlation's validity (R12-08's Eq. (9)) a value is refused, unless the release endorses the extrapolation there (the dilute gas to 2500 K, for one). | IAPWS's own correlations, each with its tables, for the fluid M5a has. |
@@ -516,7 +525,7 @@ rerun is.
 - **The critical point:** φʳ, its first derivatives, φʳ_δδ and φʳ_δτ finite,
   φʳ_ττ −∞, every δ = 1 at τ ≠ 1 finite; P is Pc to 1e-13, Cv and Cp +∞.
 
-**D8 is amended** (above): `Fluid.props`' w is NaN at (Tc, ρc), Cp/Cv being
+**D8 is amended** (above), approved on 2026-11-26: `Fluid.props`' w is NaN at (Tc, ρc), Cp/Cv being
 ∞/∞ in the cubics' formula, which stays.
 
 **Found:** pdftotext's text of Table 7 has its columns out of line; the
@@ -598,7 +607,7 @@ checked from scratch:
   own Psat failures at 0.9999 Tc are unchanged too: their branches have no
   split.
 
-**D7 is amended** (above): `min_volume` at δ = 4, the vapour start's bound
+**D7 is amended** (above), approved on 2026-11-26: `min_volume` at δ = 4, the vapour start's bound
 taken out, `no_state` below 251.165 K, labels by the split, and the
 searches' step back where the model has no state.
 
@@ -646,12 +655,58 @@ between the vapour's spinodal and ρc, P rises only at −1e27 to −5e8 Pa (to
 below that stretch, on the vapour's own branch. The split had made it
 redundant.
 
-### 3. IF97's basic equations
+### 3. IF97's basic equations — done
 - D9, D10: regions 1 to 5, the metastable vapour, region 4 and B23; the
   region from (T, p).
 - Tables 5, 15, 18, 33, 35, 36 and 42, and B23's point.
 
-### 4. IF97's backward equations and steam-table functions
+**What was built** ([design.md](design.md), "IAPWS-IF97"):
+- **[water/if97/](../water/if97):** a submodule, `water.if97`, as D2 allowed:
+  1,555 coefficients in three files read better apart from IAPWS-95's.
+  [basic.v](../water/if97/basic.v) has the basic equations of regions 1, 2
+  (and the metastable vapour), 3 and 5 as published, with no range check;
+  [if97.v](../water/if97/if97.v) R7-97's constants, `State` (per kg, with x
+  NaN for a single phase), `If97Error` (`out_of_range`, `no_answer`),
+  region 4's ps(T) and Ts(p), B23 and B2bc.
+- **[tools/extract_if97.py](../tools/extract_if97.py):** D10's
+  transcription. Every coefficient table of R7-97, SR3-03 and SR5-05 is read
+  from the releases' PDFs, span by span with each span's size and baseline,
+  so that a superscript exponent is told from its line, and the
+  supplements' digits, set in the Symbol font at private-use code points
+  (U+F031 for 1), are mapped back. Each table must hold exactly its
+  release's number of terms, or nothing is written. The PDFs' plain text
+  (pdftotext) loses the exponents, and the supplements' digits entirely.
+  The tool's first readings were wrong twice, both caught: Table 30's
+  dashes for n₁'s missing I and J taken for n₁'s sign (Table 33 failed),
+  and Table 22's I, printed "–" and "7" 6 pt apart, taken for a positive I
+  and a sign (the coefficients' test). Region 4's, B23's and every other
+  table's first readings were right.
+
+**Tests** ([verification_test.v](../water/if97/verification_test.v),
+[coefficients_test.v](../water/if97/coefficients_test.v),
+[iapws_test.v](../water/if97/iapws_test.v)):
+- **R7-97's Tables 5, 15, 18, 33, 35, 36 and 42,** and B23's point, every
+  value within half a unit of its last printed figure.
+- **The coefficients** are the `iapws` package's (`tools/gen_m5_if97.py`),
+  each number and exponent of the 1,555, but two kinds: B23's n₅, which the
+  package has with an 8 dropped (13.9188397787 for the release's
+  13.918839778870), and the metastable vapour's 15, which it doesn't have:
+  Table 18 holds those.
+- **The basic equations against the package's** at 831 (p, T) states over
+  the range: regions 1, 2 and 5 within 7.5e-13, 3.1e-15 and 1.1e-15, region
+  3 within 2.6e-12 (both by Newton on p(ρ, T) = p).
+
+**Planted mistakes:** 14, in a scratch copy, one at a time: 13 caught (region
+1's γ_π sign, its τ shift, its cv's second term; ln π left out of γ° in s,
+w's π²γ_π² missing a π; the metastable vapour with Table 10's n₁°, n₂°;
+region 5's τ shifted; region 3's n₁ in φ_δδ, its w's sign; psat's fourth
+power, Tsat's root, T23's n₃, h2bc's units), two of them only once the tests
+held a NaN to fail, and 1 explained: a digit of the metastable vapour's n₁
+in its 13th figure, below Table 18's nine, which the package can't check
+(it has no metastable equation). That coefficient came by the same reading
+as the 1,555 the package confirms.
+
+### 4. IF97's backward equations and steam-table functions — done
 - D9: T(p, h) and T(p, s) in regions 1 and 2 with B2bc; SR3-03 and SR5-05 in
   region 3; each finished on its basic equation; (T, p), (p, h), (p, s),
   (T, x) and (p, x), the dome included.
@@ -659,9 +714,158 @@ redundant.
   (criterion 4); consistency (criterion 5), against the `iapws` package
   over grids (`tools/gen_m5_if97.py`).
 
-### 5. IF97 against IAPWS-95
+**What was built** ([design.md](design.md), "IAPWS-IF97"):
+- **[backward.v](../water/if97/backward.v):** the backward equations as
+  published: T₁(p, h), T₁(p, s), T₂(p, h) and T₂(p, s) in their
+  subregions, SR3-03's h3ab, T₃ and v₃ of (p, h) and (p, s), p3sat(h) and
+  p3sat(s).
+- **[region3_v.v](../water/if97/region3_v.v):** SR5-05's subregion
+  boundaries, the choice of subregion by its Tables 2 and 10 (with a side,
+  liquid or vapour, where they meet the saturation line), and v(p, T) in
+  its 26 subregions.
+- **[functions.v](../water/if97/functions.v):** `state_pt`, `state_ph`,
+  `state_ps`, `state_tx` and `state_px`, and `psat` and `tsat` with their
+  range. The region by R7-97's Fig. 1; each backward answer finished by
+  Newton on its basic equation, in T (regions 1, 2 and 5, bracketed) or in
+  (ρ, T) (region 3); region 3 at (p, T) by Newton on p(ρ, T) from SR5-05's
+  v, bracketed on its side of ρc; the dome from region 4 and the saturated
+  phases, region 3's to 1 µK below Tc. A value within rounding of the
+  range's edge is in it.
+
+**Tests:**
+- **Criterion 4** ([verification_test.v](../water/if97/verification_test.v)):
+  R7-97's Tables 7, 9, 24 and 29 and B2bc's point; SR3-03's h3ab point and
+  Tables 5, 8, 12, 15, 18 and 20; SR5-05's Tables 3, 5, 11 and 13, each of
+  Table 5's and 13's 52 points also put in its own subregion by Tables 2
+  and 10. Every value within half a unit of its last printed figure but
+  Table 13's last row (found, below).
+- **The functions** ([functions_test.v](../water/if97/functions_test.v)):
+  2,841 states from (p, T) back from (p, h) and (p, s), each in its region,
+  T within 3.6e-15 (regions 1, 2 and 5) and 4.4e-14 (region 3), v within
+  3.9e-14 and 7.6e-14; the dome from 611.3 Pa to 22.05 MPa, x back within
+  4.2e-15; the saturated phases to 1 µK below Tc, each region-3 density's p
+  within 1e-9 of Eq. (30)'s; the critical point; rho3's refusal 1 kPa past
+  each spinodal at 647 K; a 3k vapour below Tc; a value a hair outside the
+  range's edge; the gap at 1073.15 K, where region 5's h is up to 90 J/kg
+  above region 2's; and 19 states outside the range, each refused as such.
+- **Against the package** ([iapws_test.v](../water/if97/iapws_test.v)):
+  states from (p, h) and (p, s) within its iteration (SciPy's), 2.2e-12 in
+  regions 1, 2 and 5 and 6.7e-11 in region 3; saturated states from (T, x)
+  and (p, x) (below); the backward equations as published within 4.6e-15,
+  and v(p, T) within 2.3e-12 on a fine grid near the critical point, where
+  subregion 3v's terms cancel; region 4 and the boundaries within 7.6e-15.
+- **Criterion 5's consistency** ([consistency_test.v](../water/if97/consistency_test.v)):
+  R7-97's Tables 43 and 44 reproduced, each maximum and RMS: Table 44's to
+  their printed digits; Table 43's within half a unit but four maxima
+  (found, below), over 10,001 points evenly in p along each boundary.
+
+**Found:**
+- **SR5-05's Table 13 prints v3z(22.064 MPa, 647.15 K) as 3.701940010e-3,**
+  0.53 units of its last figure from its own equation: Eq. (4) with Table
+  A2.6's coefficients is 3.7019400094668e-3 (mpmath, 50 digits). Its terms
+  are 2.8e4 times their sum and e = 4, so rounding allows 2.5e-11; reflux
+  is 1.7e-12 from the exact value, which that row is held to.
+- **R7-97's Table 44 at 623.15 K** prints Δps between Maxwell's criterion
+  on regions 1 and 2 and on region 3 as 0.0041%. Ours is 0.0046%, made of
+  −0.00433% and +0.00028% against Eq. (30), each consistent with the
+  table's own columns, which ours reproduce to their digits: a slip in that
+  column, it seems. Recorded.
+- **Table 43:** along B23 the release's points are evenly in p (in T, the
+  RMS values are up to 13% off). Four maxima miss by more than half a unit:
+  1/3's cp and w (0.19446% and 0.29840%, 0.00054 and 0.0006 under) and
+  B23's cp, 0.35171% (0.0013 under, at 689 K), and w, 0.40463% (0.0016
+  over, at its end, 100 MPa and 863.15 K). Recorded; the gaps are 0.4% of
+  the values.
+- **Region 3's saturated liquid within about 6 mK of Tc:** Newton from
+  SR5-05's v alone jumped across the isotherm's loop, whose ends are within
+  a pascal of Eq. (30)'s p (0.5 Pa at 647.095 K). Each phase's search keeps
+  to its side of ρc, as IAPWS-95's do (D7), bracketed. Within about 10 µK of
+  Tc the vapour's spinodal on Eq. (28) is up to 8e-4 Pa below Eq. (30)'s p,
+  the two equations' inconsistency there, and the vapour's density is the
+  spinodal's, its p within 4e-11.
+- **The `iapws` package:**
+  - B23's n₅ has an 8 dropped (above);
+  - its two-phase mixtures above 623.15 K use SR5-05's backward densities
+    unfinished, so at 22 MPa and x = 0.35 its v is 1% off the mixture of its
+    own saturated phases, which agree with reflux's within 1e-10;
+  - its saturated phases from (T, x) above 623.15 K come from Maxwell's
+    criterion on Eq. (28), 5.0e-6 from Eq. (30)'s p (Table 44 allows
+    0.0026%);
+  - its fsolve fails on 8 and 9 of region 3's 33 grid states from (p, h)
+    and (p, s);
+  - its region-3 states from (p, T) carry p as their density gives it back,
+    up to 1.0000000000007e8 Pa at 100 MPa;
+  - under NumPy 2.5.5 its region-3 (p, h) raises a TypeError: the fixture
+    pins NumPy 2.2.6.
+
+  To report upstream.
+- **A NaN passed the first tests:** `|got − want| > bound` is false for a
+  NaN. Every bound is now written `!(… <= bound)`, or asserted as `<=`
+  (two of step 3's planted mistakes found it).
+
+**Planted mistakes:** 21, in a scratch copy, one at a time: 19 caught (2a
+and 2b split at 5 MPa in (p, h); 2b and 2c at 6.1 kJ/(kg·K) in (p, s); 2a's
+quarter exponents as whole ones; h3ab's n₄; 3a and 3b split 100 kJ/kg high;
+p3sat(s)'s shift; Table 2's 23.5 MPa at 24; 3m's d; 3n by Eq. (4); no room
+at the bracket's ends; no critical point in rho3; 3k not a vapour's; a
+closed bracket's residual allowed to 1e-3; the saturated liquid as a
+mixture; no edge to the range; region 5 kept above 1073.15 K; finish3's
+∂h/∂T, a sign; a digit each of T₃b(p, s)'s and v₃k's coefficients), four of
+them only after a test was added for each (the critical point from (p, T), a
+3k vapour below Tc, a value a hair outside the edge, the gap at 1073.15 K),
+and 2 explained:
+- Table 10's liquid split moved from 21.93161551 MPa to 21.90096265 MPa
+  (its two footnote pressures): those are where T3uv and T3wx meet the
+  saturation line, so between them a liquid at T ≤ Ts is below T3uv either
+  way, and the split decides nothing the T3uv test doesn't. Kept as the
+  release writes it.
+- Newton "settled" at a step of 4e-9 of x, not 4 ulps: its next error is
+  about the square of its step, so any stop below about 1e-8 gives the same
+  answers.
+
+### 5. IF97 against IAPWS-95 — done, with criterion 6 amended
 - Criterion 6: the grid, each region's differences recorded against IF97's
   uncertainties, the critical region apart.
+
+**What was built:** [water/if97_95_test.v](../water/if97_95_test.v), IF97
+against IAPWS-95 at 4,712 (p, T) states, 26 pressures from 1 kPa to 100 MPa
+every 5 K to 1073 K and every 50 K to 2273 K, IAPWS-95's state by
+`thermo.solve_tp` and Table 3, both on IAPWS's reference. R7-97's Figs. 3 to
+5 are encoded as read (v, cp and w by region of the p-T plane), and Fig. 6
+as its band; the release calls their lines approximate, so a point is held
+to the largest value within 20 K and a factor of 1.5 in p. The critical
+region is reported apart: Fig. 3's triangle, bordered by the isochores
+0.0019 and 0.0069 m³/kg and the 30 MPa isobar (the release's definition),
+where v is held as 0.2% in p and cp to 3% outside the small circle Fig. 4
+draws at the critical point; and around it, 590 to 700 K from 10 to 30
+MPa near ρc, where Figs. 4 and 5 give more than 3% and 2%.
+
+**Tests:** every difference of v, cp and w at the 4,133 states outside the
+critical region and its ridge is within the figures, and ps from 273.16 K to
+647 K within Fig. 6's band, its largest 0.0176%. Each region's largest
+differences, numbers that can't grow:
+
+| | states | v (%) | h (kJ/kg) | s (J/(kg·K)) | cp (%) | w (%) |
+|---|---|---|---|---|---|---|
+| Region 1 | 1,500 | 0.00313 | 0.239 | 0.431 | 0.123 | 0.239 |
+| Region 2 | 2,359 | 0.0374 | 0.411 | 0.413 | 0.485 | 0.325 |
+| Region 3 | 206 | 0.115 | 0.982 | 1.480 | 0.987 | 0.485 |
+| Region 5, to 1273 K | 92 | 0.0112 | 0.264 | 0.164 | 0.0965 | 0.0331 |
+| Above 1273 K | 460 | 0.00655 | 0.323 | 0.211 | 0.0651 | 0.0393 |
+| The critical region | 95 | 1.36 | 6.61 | 10.14 | 15.7 | 1.57 |
+
+In the triangle (50 states), v as p is within 0.2%, and cp within 3% but
+for two states inside the circle (5.0% and 15.7% at 22.5 and 23 MPa,
+650 K), where Fig. 4 gives none.
+
+**Found:** **IF97's cp exceeds its stated uncertainty on the
+pseudo-critical ridge** just above the triangle: between its isochores at
+30 to 40 MPa and 675 to 715 K (18 states), cp differs from IAPWS-95's by up
+to 0.99% (35 MPa, 695 K), where Fig. 4 states 0.5%. Both equations are
+held to their releases there (Tables 33 and 7). So criterion 6 can't be met
+as written on the ridge, and is amended (above), for the owner's approval:
+the ridge is reported apart with the critical region, its cp difference
+recorded (0.99%, can't grow).
 
 ### 6. Water's transport
 - D11: R12-08, R15-11 and R1-76, on IAPWS-95 and in their industrial forms

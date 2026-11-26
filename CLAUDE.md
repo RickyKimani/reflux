@@ -64,8 +64,9 @@ Keep this section current: update it whenever a step is committed.
     it runs `water`'s tests, fmt and vet instead.
   - The version is set at the release, as the next on `main` then: M6
     finished with v0.5.0 on its branch, and the owner has fixes on another.
-  - **Bundle A (steps 1 and 2) is done** and committed, its full tcc check
-    passed (108 test files), and amends D7 and D8 for the owner's approval:
+  - **Bundle A (steps 1 and 2) is done,** committed at `181e456`, its full
+    tcc check passed (108 test files), and amends D7 and D8, approved on
+    2026-11-26:
     - Step 1: `thermo.PlanckEinstein`; the `water` module, IAPWS-95 as a
       `Model` (`water.iapws95()`, coefficients transcribed from the release),
       its ideal part, `water.fluid`, Table 3 (`props95`) and D6's constants
@@ -85,7 +86,33 @@ Keep this section current: update it whenever a step is committed.
       before and after (`spike/water/trace`).
     - Found: the `iapws` package's densities are wrong at 640–647 K below a
       few hundred Pa; a water flash costs about 0.06 s under tcc (step 10).
-  - Bundle B is next: IF97 (steps 3 to 5).
+  - **Bundle B (steps 3 to 5, IF97) is done** and committed, and amends
+    criterion 6 for the owner's approval. `water`'s tests, fmt and vet ran,
+    not the full check (its exception, above).
+    - Step 3: `water.if97`, a submodule (D2 allowed it): the basic equations
+      of regions 1, 2 (and the metastable vapour), 3 and 5, region 4, B23
+      and B2bc, per kg on IAPWS's reference. Its 1,555 coefficients are
+      read from the three releases' PDFs by `tools/extract_if97.py` (their
+      plain text loses exponents and the supplements' digits); each equals
+      the `iapws` package's (`tools/gen_m5_if97.py`) but B23's n₅, which the
+      package has with an 8 dropped.
+    - Step 4: the backward equations as published (R7-97's, SR3-03's,
+      SR5-05's 26 subregions) and the steam-table functions from (p, T),
+      (p, h), (p, s), (T, x), (p, x), each answer finished on its basic
+      equation (T back to 3.6e-15, region 3's 4.4e-14); region 3's
+      saturated phases to 1 µK below Tc, each bracketed on its side of ρc.
+      Every verification table to its digits but SR5-05's Table 13's last
+      row, printed 0.53 units off its own equation; Tables 43 and 44
+      reproduced, maxima and RMS, but for a slip at 623.15 K in Table 44
+      (0.0046%, printed 0.0041%) and four maxima of Table 43 (0.4% of them).
+    - Step 5: IF97 against IAPWS-95 at 4,712 states, each difference within
+      R7-97's Figs. 3 to 6 but on the pseudo-critical ridge above the
+      critical triangle (30–40 MPa), where cp differs by up to 0.99% against
+      the figure's 0.5%: criterion 6 amended to report it apart.
+    - Found besides: the `iapws` package's region-3 mixtures are SR5-05's
+      unfinished densities (1% off at 22 MPa), and a NaN passed the first
+      tests' `> bound` checks (now `!(… <= bound)`).
+  - Bundle C (steps 6 to 8) is next, when the owner says.
 - **M8 (specifications, sensitivity studies and optimisation) is done,**
   merged in PR #7 (`44fb1c7`), with v0.4.0 dated on `main` and to be tagged.
   Its plan, `docs/m8-plan.md`, was
@@ -629,6 +656,14 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     `tools/gen_m8_bench.py` (DWSIM and V, about twenty minutes)
     `testdata/m8_bench.json`, step 14's timings, which can't reproduce byte
     for byte. Then `v run tools/benchmarks.vsh` writes `docs/benchmarks.md`.
+  - `tools/gen_m5_iapws95.py [coefficients derivatives states saturation]`
+    (iapws, CoolProp, mpmath) writes `testdata/m5_iapws95.json`, and
+    `tools/gen_m5_if97.py [coefficients states]` (iapws, with NumPy 2.2.6:
+    under 2.5.5 its region-3 (p, h) raises) `testdata/m5_if97.json`.
+  - `tools/extract_if97.py R7-97.pdf SR3-03.pdf SR5-05.pdf` (PyMuPDF
+    1.24.14) writes `water/if97/coefficients*.v` from IAPWS's release PDFs,
+    which stay out of the repository; then `v fmt -w` them. Run it only to
+    check or redo the transcription: the files are its output, as checked.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
@@ -751,7 +786,8 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `main` gives `flowsheet.load` its makers.
 `water` (M5a) is water and steam: IAPWS-95 as a `thermo.Model`, over
 `thermo` and `numeric`; its tests use `flash`, and `flash`'s step-back test
-uses it.
+uses it. Its submodule `water.if97` (IF97 as steam-table functions) uses
+only `math`; `water`'s tests use it to compare the two.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
 and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
 uses it for `reflux study` and `reflux optimize`. `fit` (M8) fits a file's
@@ -790,6 +826,12 @@ over the rest, built into a shared library for the Python package in
   match); its ideal part as a `PlanckEinstein` Cp; `props95`, the release's
   Table 3 on IAPWS's reference, and `reference_offsets`, the constants
   between it and reflux's (D6). Below 251.165 K it has no state.
+- **`water.if97`** (M5a) is IAPWS-IF97 with SR3-03 and SR5-05, per kg on
+  IAPWS's reference: each basic and backward equation as published, and
+  `state_pt`, `state_ph`, `state_ps`, `state_tx`, `state_px`, which choose
+  the region, refuse what's outside the range (`If97Error`), and finish
+  each backward answer by Newton on its basic equation (D9). Region 3's
+  densities keep to their side of ρc below pc, as IAPWS-95's do.
 - **`flash` works for any `thermo.Model`** (D2).
   - `stability` is Michelsen's tangent-plane test. Its trials are Wilson's
     vapour- and liquid-like ones plus a nearly pure phase of each component.
@@ -955,6 +997,8 @@ over the rest, built into a shared library for the Python package in
     scripts report it as NO BUILD.
   - A timeout must kill the whole process tree: killing `v` leaves the test
     program it started holding the pipes, and the script waits forever.
+- **A NaN passes `x > bound`:** write a bound as `assert x <= bound`, or
+  `if !(x <= bound)`. `math.max` carries a NaN through.
 - **Keep sensitive states exact.** Where a test state is sensitive to an
   ulp, store the exact double: build it from integers, for instance
   `(915 + k) * 1e4`.

@@ -504,6 +504,108 @@ its gas is endorsed there only below the sublimation curve, which M5a
 doesn't have; a UV flash found a vapour at 233.8 K and 522 Pa with the U and
 V of a two-phase state at 273.16 K.
 
+## IAPWS-IF97
+
+`water.if97` ([water/if97/](../water/if97), M5a's steps 3 and 4) is the
+industrial formulation (IAPWS R7-97(2012); Wagner et al., 2000) with its
+two region-3 supplements, SR3-03(2014) and SR5-05(2016), as steam-table
+functions (D9). Everything is per kg in SI, with IF97's own R = 461.526
+J/(kg·K), on IAPWS's reference: u = s = 0 for the triple point's liquid, so
+that its h there is 0.611783 J/kg. Its 1,555 coefficients are its releases'
+tables, read from their PDFs by [tools/extract_if97.py](../tools/extract_if97.py)
+into `coefficients.v`, `coefficients_sr3.v` and `coefficients_sr5.v` (D10).
+
+**The basic equations** ([basic.v](../water/if97/basic.v)), each as
+published, with no range check:
+
+| Region | Equation | Reduced by |
+|---|---|---|
+| 1, the liquid | γ = g/RT = Σ nᵢ(7.1 − π)^Iᵢ(τ − 1.222)^Jᵢ, 34 terms | p* = 16.53 MPa, T* = 1386 K |
+| 2, the vapour | γ = ln π + Σ nᵢ°τ^Jᵢ° + Σ nᵢπ^Iᵢ(τ − 0.5)^Jᵢ, 9 + 43 terms | 1 MPa, 540 K |
+| 2, metastable vapour | as 2, with n₁°, n₂° of Table 10's footnote and 13 residual terms | 1 MPa, 540 K |
+| 3, near-critical | φ = f/RT = n₁ ln δ + Σ nᵢδ^Iᵢτ^Jᵢ, 1 + 39 terms | ρc = 322 kg/m³, Tc |
+| 5, high temperature | γ = ln π + Σ nᵢ°τ^Jᵢ° + Σ nᵢπ^Iᵢτ^Jᵢ, 6 + 6 terms | 1 MPa, 1000 K |
+
+τ = T*/T and π = p/p* (δ = ρ/ρ*). Properties by the releases' Tables 3, 12,
+31 and 39. Regions 2 and 5 use the split forms, v = (RT/p)(1 + πγʳ_π) and
+the like, which keep low pressure's digits. Each power is an integer's, by
+repeated squaring (SR5-05's c = ½ and d = ¼ as powers of √ and ⁴√).
+
+**Region 4 and the boundaries** ([if97.v](../water/if97/if97.v)): ps(T) and
+Ts(p) by Eqs. (30) and (31), exact inverses in closed form; B23,
+p = n₁ + n₂T + n₃T² (MPa, K) and its inverse; B2bc in (p, h), the same form.
+
+**The backward equations** ([backward.v](../water/if97/backward.v)), as
+published, each within its release's tolerance of the basic equation:
+
+| Equation | Form | Reduced by |
+|---|---|---|
+| T₁(p, h), T₁(p, s) | θ = Σ nᵢπ^Iᵢ(η + 1)^Jᵢ, Σ nᵢπ^Iᵢ(σ + 2)^Jᵢ | h* = 2500 kJ/kg, s* = 1 kJ/(kg·K) |
+| T₂(p, h): 2a, 2b, 2c | Σ nᵢπ^Iᵢ(η − 2.1)^Jᵢ, Σ nᵢ(π − 2)^Iᵢ(η − 2.6)^Jᵢ, Σ nᵢ(π + 25)^Iᵢ(η − 1.8)^Jᵢ | h* = 2000 kJ/kg; 2a to 4 MPa, 2b/2c by B2bc |
+| T₂(p, s): 2a, 2b, 2c | Σ nᵢπ^Iᵢ(σ − 2)^Jᵢ (Iᵢ quarters), Σ nᵢπ^Iᵢ(10 − σ)^Jᵢ, Σ nᵢπ^Iᵢ(2 − σ)^Jᵢ | s* = 2, 0.7853, 2.9251; 2b/2c at 5.85 kJ/(kg·K) |
+| h3ab(p) | η = n₁ + n₂π + n₃π² + n₄π³ | 1 MPa, 1 kJ/kg |
+| T₃(p, h): 3a, 3b | Σ nᵢ(π + 0.240)^Iᵢ(η − 0.615)^Jᵢ, Σ nᵢ(π + 0.298)^Iᵢ(η − 0.720)^Jᵢ | p* = 100 MPa; 760 K, 2300 kJ/kg; 860 K, 2800 kJ/kg |
+| v₃(p, h): 3a, 3b | Σ nᵢ(π + 0.128)^Iᵢ(η − 0.727)^Jᵢ, Σ nᵢ(π + 0.0661)^Iᵢ(η − 0.720)^Jᵢ | 0.0028 m³/kg, 2100 kJ/kg; 0.0088, 2800 |
+| T₃(p, s): 3a, 3b | Σ nᵢ(π + 0.240)^Iᵢ(σ − 0.703)^Jᵢ, Σ nᵢ(π + 0.760)^Iᵢ(σ − 0.818)^Jᵢ | 760 K, 4.4; 860 K, 5.3 kJ/(kg·K); split at s_c |
+| v₃(p, s): 3a, 3b | Σ nᵢ(π + 0.187)^Iᵢ(σ − 0.755)^Jᵢ, Σ nᵢ(π + 0.298)^Iᵢ(σ − 0.816)^Jᵢ | 0.0028, 4.4; 0.0088, 5.3 |
+| p3sat(h), p3sat(s) | π = Σ nᵢ(η − 1.02)^Iᵢ(η − 0.608)^Jᵢ, Σ nᵢ(σ − 1.03)^Iᵢ(σ − 0.699)^Jᵢ | 22 MPa; 2600 kJ/kg, 5.2 kJ/(kg·K) |
+
+with s_c = 4.41202148223476 kJ/(kg·K), and SR5-05's v(p, T)
+([region3_v.v](../water/if97/region3_v.v)): v/v* = [Σ nᵢ((π − a)^c)^Iᵢ((θ −
+b)^d)^Jᵢ]^e in 25 subregions and v/v* = exp Σ nᵢ(π − a)^Iᵢ(θ − b)^Jᵢ in 3n,
+each subregion's v*, p*, T*, a, b, c, d and e from Tables 4 and 12, the
+subregion by Tables 2 and 10 from the boundaries T = Σ nᵢπ^Iᵢ (Eq. 1),
+T = Σ nᵢ(ln π)^Iᵢ (Eq. 2: T3ab, T3op, T3wx) and T3ef = 3.727888004(π −
+22.064) + 647.096 K. Where Tables 2 and 10 meet the saturation line at
+T = Ts(p), a side (liquid or vapour) chooses.
+
+**The steam-table functions** ([functions.v](../water/if97/functions.v))
+take (p, T), (p, h), (p, s), (T, x) and (p, x):
+- The range: 273.15 K to 1073.15 K up to 100 MPa, and to 2273.15 K up to
+  50 MPa; (T, x) and (p, x) from 273.15 K to Tc. Anything outside is
+  refused saying so. In (p, h) and (p, s) a value within its rounding of the
+  range's edge (1e-12 of RT, or of R) is in it.
+- The region from (p, T) by R7-97's Fig. 1: region 1 to 623.15 K at or above
+  ps, region 3 between 623.15 K and B23, region 5 above 1073.15 K, region 2
+  the rest. From (p, h) or (p, s), by comparing the value with the regions'
+  on their boundaries at p: region 1's at 273.15 K and 623.15 K (or at Ts),
+  the saturated phases', region 2's at Ts or T23(p) and at 1073.15 K, and
+  region 5's at 2273.15 K.
+- Each backward equation's answer is finished on its basic equation (D9):
+  Newton in T at fixed p for regions 1, 2 and 5 (dh/dT = cp, ds/dT = cp/T),
+  bisecting where a step would leave the region's T-bracket, which has 1e-9
+  of room at its ends; Newton in (ρ, T) on p and h (or s) for region 3,
+  from SR3-03's T and v, with Table 31's derivatives. Region 5 has no
+  backward equation: its Newton starts where the value lies between its
+  ends, linearly, and may reach 1 K below 1073.15 K, since region 5's h
+  there is within Table 43's 0.1 kJ/kg of region 2's.
+- Newton stops at rounding: a step below 4 ulps, or below 1e-10 of x and no
+  longer halving (where the residual's own rounding sets the step). A
+  bisection never counts.
+- Region 3 at (p, T) is SR5-05's v(p, T) finished by Newton on p(ρ, T) = p,
+  bracketed. Below pc the isotherm has a loop whose spinodals straddle ρc
+  (as IAPWS-95's do, D7): a liquid keeps to ρ > ρc and a vapour to ρ < ρc,
+  and a step into the loop, where p falls as ρ rises, moves the bracket
+  past it. The answer's p(ρ, T) must be within 1e-9 of p. A state found by
+  Newton at p carries p as asked.
+- The dome: a mixture of the saturated phases at region 4's (p, T), its x
+  from h or s. Up to 623.15 K the phases are regions 1 and 2 at (ps, T);
+  above, region 3's two densities at Eq. (30)'s p, found as above on either
+  side of ρc, to 1 µK below Tc; at Tc both are the critical point, which
+  Eq. (28) reproduces exactly. Within about 10 µK of Tc the vapour's
+  spinodal on Eq. (28) is up to 8e-4 Pa below Eq. (30)'s p (the two
+  equations' inconsistency there, Table 44), and its density is the
+  spinodal's.
+- A mixture's cp, cv and w are NaN; a saturated phase (x of 0 or 1) keeps
+  its own.
+
+**Where the equations meet** (R7-97's Tables 43 and 44): the basic
+equations differ along their boundaries by up to 0.02% in v, 0.13 kJ/kg in
+h, 0.4% in cp and w (B23); Maxwell's criterion on regions 1 and 2 gives ps
+within 0.0069% and Ts within 0.0006% of Eqs. (30) and (31), and on region 3
+ps within 0.0026%. The steam-table functions don't hide these: each answer
+is its region's equation's.
+
 ## Rachford–Rice
 
 `numeric.rachford_rice` ([numeric/rachford_rice.v](../numeric/rachford_rice.v))

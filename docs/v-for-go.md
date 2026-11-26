@@ -176,6 +176,13 @@ fn check_tpn() {}     // private
   it. So `flowsheet.version()` ([flowsheet/report.v](../flowsheet/report.v))
   keeps no second copy of the number. Go would take it from `-ldflags -X` or
   `debug.ReadBuildInfo`.
+- **A module in a subfolder** is named by its folders from `v.mod`'s,
+  joined by dots, as a Go import path ends in the package's directory:
+  `water/if97/` holds files that start `module if97`, imported as
+  `import water.if97` and called as `if97.state_pt(…)`. The parent module's
+  tests can import it ([water/if97_95_test.v](../water/if97_95_test.v)), as
+  long as it imports nothing of the parent's, and `v test water` runs both
+  folders' tests.
 - Struct fields have visibility sections instead of per-field capitals:
 
 ```v
@@ -1404,7 +1411,8 @@ Where it differs from Go's `encoding/json`:
 
 To read JSON with no struct, decode into `json2.Any`, then use `.as_map()`,
 `.as_array()`, `.f64()`, `.str()` and `x is json2.Null`. In V 0.5.2 `.arr()` is
-deprecated, which `-W` makes an error. [flowsheet/report_test.v](../flowsheet/report_test.v)
+deprecated, which `-W` makes an error, and so is `json2.raw_decode(text)`:
+write `json2.decode[json2.Any](text)` ([water/if97/iapws_test.v](../water/if97/iapws_test.v)). [flowsheet/report_test.v](../flowsheet/report_test.v)
 checks the report that way, so that a key on the wrong field can't hide
 behind the struct that wrote it and read it back.
 
@@ -1519,6 +1527,13 @@ for name, call in bad {
 	assert false, '${name} was accepted'
 }
 ```
+
+Nor can a result be an argument: `fn kind_of(r !State) Failure` is refused,
+"result type arguments are not supported". The other way to check many
+calls' refusals is a small function per call that handles its own
+`or {}` and returns what's checked, as
+[water/if97/functions_test.v](../water/if97/functions_test.v)'s `pt_fails`
+does: `_ := state_pt(p, t) or { return kind(err) }`.
 
 **Interface methods and function types can take `mut` parameters**, so a
 callback can fill buffers the caller owns, with no allocation and no
