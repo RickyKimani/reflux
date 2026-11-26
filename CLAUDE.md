@@ -45,8 +45,9 @@ Keep this section current: update it whenever a step is committed.
       in the loops (300 K, 42 MPa gave 322 kg/m³), the liquid walk returned
       an artificial vmin as a root, and near Tc each solver could return the
       other branch's root. D7: an optional interface (IAPWS-95's alone)
-      bounding the vapour start by SR1-86's ρ'' and splitting the branches at
-      ρc below Tc, a liquid walk that must reach p, and a bracketed start for
+      splitting the branches at ρc below Tc (a vapour-start bound by SR1-86's
+      ρ'' too, which step 2 found redundant and took out), a liquid walk that
+      must reach p, and a bracketed start for
       `saturation_pressure` (which failed from 646 K, and now converges to
       0.1 mK below Tc). A convexity guard, tried first, refused real liquid
       roots at 251–260 K.
@@ -57,7 +58,34 @@ Keep this section current: update it whenever a step is committed.
     - DWSIM 9.0.5's CoolProp package is IAPWS-95 to 1e-9 kJ/kg; its Steam
       Tables (IF97) returns h = s = −1 silently in region 3, has no region 5,
       and its region-3 PH flash lands 1080 K off.
-  - Step 1 is next: `thermo.PlanckEinstein` and `water.iapws95()`.
+  - The steps go in four bundles (the plan, below its step graph), allowed
+    on 2026-11-25: A, steps 1–2; B, 3–5; C, 6–8; D, 9–12. A full tcc check
+    ends A, C and D; B touches only `water`, which nothing imports yet, so
+    it runs `water`'s tests, fmt and vet instead.
+  - The version is set at the release, as the next on `main` then: M6
+    finished with v0.5.0 on its branch, and the owner has fixes on another.
+  - **Bundle A (steps 1 and 2) is done** and committed, its full tcc check
+    passed (108 test files), and amends D7 and D8 for the owner's approval:
+    - Step 1: `thermo.PlanckEinstein`; the `water` module, IAPWS-95 as a
+      `Model` (`water.iapws95()`, coefficients transcribed from the release),
+      its ideal part, `water.fluid`, Table 3 (`props95`) and D6's constants
+      (`reference_offsets`). Tables 6 and 7 to their printed digits, by Table
+      3 and through `thermo`; φʳ within 18.3 ε·scale of mpmath at 291 points.
+      D8 amended: `Fluid.props`' w is NaN at (Tc, ρc) (Cp/Cv is ∞/∞ in the
+      cubics' formula, which stays).
+    - Step 2: `thermo.Branches` (`split`, `no_state`), the
+      liquid walk that must reach p, the bracketed Psat start, labels by the
+      split, and `flash.at_or_closer`, a search's step back from a T where
+      the model has no state (never for a cubic). Table 8 through `tvf`; Psat to 0.1 mK below Tc; every flash back
+      from 925 states. D7 amended: `min_volume` at δ = 4; no state below
+      251.165 K (the liquid's H falls with T there, and a vapour gave UV a
+      phantom); Π labelled liquid water vapour near its density maximum.
+    - Every cubic answer keeps its bits: an 83,563-line trace of the
+      sweep's mixtures and pure compounds through every flash, gcc `-prod`,
+      before and after (`spike/water/trace`).
+    - Found: the `iapws` package's densities are wrong at 640–647 K below a
+      few hundred Pa; a water flash costs about 0.06 s under tcc (step 10).
+  - Bundle B is next: IF97 (steps 3 to 5).
 - **M8 (specifications, sensitivity studies and optimisation) is done,**
   merged in PR #7 (`44fb1c7`), with v0.4.0 dated on `main` and to be tagged.
   Its plan, `docs/m8-plan.md`, was
@@ -488,7 +516,9 @@ Keep this section current: update it whenever a step is committed.
 - **Plan a milestone before coding it.** Research, then write
   `docs/mN-plan.md` with exit criteria, decisions (D1, D2, …) and steps. It
   needs the owner's approval before any code.
-- **One step at a time.** The owner says "Commit step N and start step N+1".
+- **Steps in bundles.** Related steps are built together by default, each
+  with its own write-up in the plan, and stop where a decision is the
+  owner's. The owner says when to commit and what to start next.
   - Commit only when asked, and push only when asked.
   - Open the PR into `main` only after the milestone's docs and exit review,
     and only when asked.
@@ -502,7 +532,14 @@ Keep this section current: update it whenever a step is committed.
   - updating `docs/design.md` (every formula the code uses), the README
     layout block, `testdata/README.md` (one row per fixture) and
     `docs/v-for-go.md` (V lessons);
-  - running the tcc check, and the gcc check in the background.
+  - at the end of a bundle, before its commit and only if V source
+    changed, one full tcc check. No local gcc check: CI runs both
+    compilers, the `-prod` build and the Python tests on Ubuntu and Windows
+    on every push, so its run is read after the push. Locally, gcc runs
+    only what tcc can't show: `tools/python.vsh test` when the C API or
+    what it calls changed, and a test that tcc and gcc may differ on.
+    Inside a bundle, and for a fix between bundles, run the touched tests
+    and their dependents, and the planted mistakes.
 - **Changing an approved decision** happens in the plan's table, marked
   "Amended in step N", and is flagged to the owner.
 
@@ -712,6 +749,9 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
+`water` (M5a) is water and steam: IAPWS-95 as a `thermo.Model`, over
+`thermo` and `numeric`; its tests use `flash`, and `flash`'s step-back test
+uses it.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
 and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
 uses it for `reflux study` and `reflux optimize`. `fit` (M8) fits a file's
@@ -739,6 +779,17 @@ over the rest, built into a shared library for the Python package in
     volume function, boxed once, moved to each composition in place, with
     `solve_tp`'s bits. One per thread; the reactors' `Source` uses it.
   - `Fluid` adds the ideal-gas part, for total properties.
+  - A model may say what it knows of its isotherms' two branches through
+    the optional `Branches` (M5a's D7): a split volume between them, and
+    an isotherm with no state. The volume solvers keep to
+    them, and `phase_label` labels by the split. IAPWS-95 needs it (its
+    dome has spurious roots 1e19 RT below the real phase's); a cubic
+    doesn't have it, and its paths are unchanged.
+- **`water`** (M5a) holds IAPWS-95: `iapws95()`, the `Model`, F = n·ψ with
+  ψ = (R₉₅/R)φʳ + (R₉₅/R − 1) ln δ (D4: its own gas constant, so its tables
+  match); its ideal part as a `PlanckEinstein` Cp; `props95`, the release's
+  Table 3 on IAPWS's reference, and `reference_offsets`, the constants
+  between it and reflux's (D6). Below 251.165 K it has no state.
 - **`flash` works for any `thermo.Model`** (D2).
   - `stability` is Michelsen's tangent-plane test. Its trials are Wilson's
     vapour- and liquid-like ones plus a nearly pure phase of each component.

@@ -413,6 +413,19 @@ pub struct IdealGas {
 ig := thermo.IdealGas{ cp: form }        // dhf is none
 dhf := ig.dhf or { 0.0 }                 // a value either way
 ```
+- **Option parameters.** A parameter can be `?f64` too: it takes a plain
+  `f64` or `none`, and passes straight into an Option field, where Go would
+  take a `*float64`. [water/iapws95.v](../water/iapws95.v)'s
+  `fluid(dhf ?f64, s0 ?f64)` (M5a) is called `fluid(-241814.0, 188.724)`
+  where the data has water's formation values, and could be `fluid(none,
+  none)` where it hasn't. Probed under tcc and gcc.
+- **An Option of an interface works as a field**, `m ?thermo.Model`, set
+  from a plain value and read with `m := s.m or { … }`, where Go would use
+  a nil interface. `flash.StepBack` (M5a) holds the model a search may ask
+  whether it has a state at a T, and its zero value has none. Built and run
+  under tcc and gcc ([flash/step_back_internal_test.v](../flash/step_back_internal_test.v)).
+  M6's cast, `?thermo.Model(fl.model)`, passed `v -check` and failed in C:
+  a field set by assignment is the form that builds.
 - **Typed errors** (Go's `errors.As`): make a struct that embeds `Error`
   and implements `msg()`, then test it with `is`:
 

@@ -158,10 +158,17 @@ thermo/
   work.v            a cubic's solve_tp for many states, allocating nothing (M8)
   alpha.v           per-component α (Soave, PRSV, Twu, Mathias–Copeman)
   translated.v      Péneloux volume shift, as a wrapper around any Model
-  ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
+  ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee, Planck–Einstein)
+                    and formation data
   fluid.v           Model + ideal gas → total H, S, G, Cp, Cv, speed of sound, μ_JT
   saturation.v      pure-component Psat, for any Model
   phase.v           phase identification parameter and liquid/vapour labels
+water/              water and steam (M5a)
+  iapws95.v         IAPWS-95 as a thermo.Model, its branches (D7), its ideal
+                    part as a Planck–Einstein Cp, and its fluid
+  coefficients.v    IAPWS-95's Tables 1 and 2, from its release
+  properties.v      IAPWS-95's Table 3 on IAPWS's reference, and the constants
+                    between it and reflux's (D6)
 flash/
   stability.v       Michelsen's tangent-plane stability test, for any Model
   pt.v              the PT flash: stability, then the two-phase split
@@ -345,7 +352,9 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (series reactions' optima by mpmath), gen_m8_fits.py
                     (data to fit, and SciPy's fits of them), gen_m8_dwsim.py
                     (DWSIM 9's spec, optimiser and PFR on M8's problems),
-                    gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM)
+                    gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM),
+                    gen_m5_iapws95.py (IAPWS-95's φʳ by mpmath, and water's
+                    states and saturation by the iapws package and CoolProp)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in
@@ -366,7 +375,9 @@ spike/study/        warm starts by hand, threads' bits and a solve's
 spike/eq16/         what K(T) costs, and equation 16 by a fixed rule (M8 step 1)
 spike/warm/         what a warm start must carry (M8 step 5)
 spike/water/        IAPWS-95 under thermo's volume solvers and Psat, its
-                    critical point, and DWSIM 9's water packages (M5a step 0)
+                    critical point, and DWSIM 9's water packages (M5a step 0);
+                    trace/, every cubic answer's bits, before and after D7
+                    (M5a step 2)
 .v-version          the V commit CI builds
 ```
 

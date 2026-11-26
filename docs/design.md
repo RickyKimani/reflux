@@ -107,10 +107,18 @@ correct then.
 |---|---|---|---|
 | `Polynomial` | Σ cₖTᵖᵏ | Σ cₖTᵖᵏ⁺¹/(pₖ+1); ln T when pₖ = −1 | Σ cₖTᵖᵏ/pₖ; ln T when pₖ = 0 |
 | `AlyLee` (DIPPR 107) | A + B(x/sinh x)² + D(y/cosh y)², x = C/T, y = E/T | AT + BC·coth x − DE·tanh y | A ln T + B(x coth x − ln sinh x) − D(y tanh y − ln cosh y) |
+| `PlanckEinstein` (M5a) | a + Σ cᵢE(uᵢ), uᵢ = θᵢ/T, E(u) = u²eᵘ/(eᵘ − 1)² | aT + Σ cᵢθᵢ/(e^uᵢ − 1) | a ln T + Σ cᵢ[uᵢ/(e^uᵢ − 1) − ln(1 − e^(−uᵢ))] |
 
 sinh and cosh overflow above about 710, which C/T reaches at low T. The
 Aly–Lee terms are therefore written in terms of e^(−x), and ln cosh x uses
 log1p(2 sinh²(x/2)) for small x, where cosh x is too close to 1.
+
+The Planck–Einstein terms are the multiparameter equations' ideal parts
+(IAPWS-95's five, GERG-2008's). Aly–Lee's sinh term is one of them:
+(x/sinh x)² = E(2x), so it's c = B, θ = 2C, and the tests hold the two to
+each other. E is written u²e^(−u)/(1 − e^(−u))², and the integrals with
+expm1 and log1p, so that a large u underflows to 0 and a small one keeps
+its digits.
 
 **Totals** for a state (T, P, V, n), with xᵢ = nᵢ/n and m = Σ nᵢMᵢ:
 
@@ -142,6 +150,43 @@ Steps are limited so that neither iteration can jump over the van der Waals
 loop onto the other branch. Each returns `none` (a V Option) when its branch
 doesn't reach the requested pressure. For cubics the tests check both
 against the polynomial roots from `Cubic.z_roots`, over a grid of T and P.
+
+**A model that knows its branches** (M5a's D7) says so through the
+optional interface `Branches`, as a unit can be `Warm`. Its `branches(T,
+n)` gives a `split`, a volume between the two branches, and `no_state`, an
+isotherm outside the model's range; `fix` reads them once per (T, n). Then:
+
+- the vapour iteration returns `none` once an iterate is denser than
+  n/split;
+- the liquid iteration returns `none` once an iterate is larger than split;
+- with `no_state`, both return `none`;
+- `phase_label` labels a single phase by its branch, below the split
+  liquid and above it vapour ("Phase identification").
+
+IAPWS-95 needs them. Inside its dome its isotherms have spurious loops whose
+roots are mechanically stable with Gibbs energies up to 1e19 RT below the
+real phase's (910 of 2,508 states in M5a's step-0 grid), so the root of
+least Gibbs energy over all roots would be a phantom; the branches decide.
+Its ideal-gas start at 300 K and 42 MPa lies inside the dome, where Newton
+found such a root just above ρc. And near Tc its metastable windows are
+narrower than one Newton step (0.07% of P at 646 K). A split at ρc catches
+both: the spinodal's vapour side lies below ρc and its liquid side above.
+Between the vapour's spinodal and ρc, P rises only where it's hugely
+negative (to 600 K) or at pressures the ideal-gas start doesn't reach (625
+to 640 K), so the vapour iteration needs no start of its own (M5a step 2).
+A cubic has no `Branches`, so its paths don't change.
+
+**A liquid iteration that never reaches p.** A cubic's P → ∞ at its
+covolume, so halving towards it always finds P > p. A model whose P stays
+finite at `min_volume`, IAPWS-95's, may not: then there's no liquid root,
+rather than one converged onto vmin by the clamped steps.
+
+**Saturation** (`saturation_pressure`, successive substitution P ← P·φᴸ/φⱽ
+from Edmister's start): a pressure with no liquid root is too low, and one
+with no vapour root too high. It steps by 1.1 and 0.9 until both roots
+exist, and once it has seen both a too-low and a too-high pressure it tries
+their geometric mean instead (M5a's D7), which finds a window of
+metastability however narrow: IAPWS-95's at 647.0959 K, 0.1 mK below Tc.
 
 **Near a critical point** the iterations stop on the residual instead. At
 (Tc, Pc), P(V) − p has a triple root: dP/dV and d²P/dV² vanish there too.
@@ -196,6 +241,12 @@ density on any cubic: no liquid is that dilute. Of M3's 1,327 fixture roots,
 17 supercritical ones, 1.3 to 2.5 times their Tc with Π from 1.004 to 1.17,
 are vapour where `thermo` calls them liquid; every other label is
 `thermo`'s.
+
+**A model with `Branches`** is labelled by them where it has a split (M5a's
+D7, as amended in step 2): below the split liquid, above it vapour. Π fails
+water near its density maximum, where (∂P/∂T)_V passes through zero: it's
+−130 for liquid water at 280 K and 1 bar, −7 at 300 K, 4.6 at 350 K. Above
+Tc there's no split, and the covolumes and Π decide as for any model.
 
 ∂P/∂V and ∂P/∂T are analytic. The second derivatives are third derivatives
 of F, which the `Model` contract doesn't have, so they're central
@@ -371,6 +422,87 @@ What follows, and is tested:
   c);
 - the packing limit moves to B − C, which is why `translate` rejects any
   cᵢ ≥ bᵢ.
+
+## IAPWS-95
+
+`water.iapws95()` ([water/iapws95.v](../water/iapws95.v), M5a) is the IAPWS
+Formulation 1995 for water (IAPWS R6-95(2018); Wagner and Pruß, 2002) as a
+`Model`, one component. Its coefficients are its release's Tables 1 and 2,
+transcribed in [water/coefficients.v](../water/coefficients.v).
+
+**The release's form:** f/RT = φ°(τ, δ) + φʳ(τ, δ), τ = Tc/T, δ = ρ/ρc,
+Tc = 647.096 K, ρc = 322 kg/m³, R = 0.46151805 kJ/(kg·K). With M =
+18.015268 g/mol (IAPWS G5-01), ρc = 17,873.7 mol/m³ and R₉₅ = 8.314371
+J/(mol·K), which the release requires: its coefficients were fitted with
+it. reflux's R is 1.1e-5 larger.
+
+**As a Model** (D3, D4), with k = R₉₅/R:
+
+    F(T, V, n) = n·ψ,   ψ = k·φʳ(τ, δ) + (k − 1)·ln δ,   δ = n/(Vρc)
+
+The second term makes P = RT(n/V − F_V) = ρR₉₅T(1 + δφʳ_δ), the
+release's. With ψ's derivatives (ψ_δ = kφʳ_δ + (k − 1)/δ, ψ_δδ = kφʳ_δδ −
+(k − 1)/δ², and k times φʳ's for the rest):
+
+| | |
+|---|---|
+| F_V | −(nδ/V)·ψ_δ |
+| F_VV | (n/V²)(2δψ_δ + δ²ψ_δδ) |
+| F_T | −(nτ/T)·ψ_τ |
+| F_TT | (n/T²)(τ²ψ_ττ + 2τψ_τ) |
+| F_TV | (nδτ/(VT))·ψ_δτ |
+| F_n | ψ + δψ_δ |
+| F_Vn | −(δ/V)(2ψ_δ + δψ_δδ) |
+| F_Tn | −(τ/T)(ψ_τ + δψ_δτ) |
+| F_nn | (δ/n)(2ψ_δ + δψ_δδ) |
+
+**The ideal part** (D5) is a `PlanckEinstein` Cp: a = R + R₉₅·n₃°,
+cᵢ = R₉₅·nᵢ°, θᵢ = γᵢ°·Tc, from Eq. (5)'s φ° = ln δ + n₁° + n₂°τ + n₃° ln τ +
+Σ nᵢ° ln(1 − e^(−γᵢ°τ)), whose Cp/R₉₅ is 1 + n₃° + Σ nᵢ°E(γᵢ°τ). The R − R₉₅
+in a makes the ideal gas's Cv IAPWS-95's. With it and F's ln δ term, the
+total Helmholtz energy is the release's but for a term linear in T, so every
+property at (T, ρ) is the release's, and h, u and s differ from its by
+constants (D6):
+
+    h_reflux − h_IAPWS = Δh₀,   s_reflux − s_IAPWS = Δs₀
+
+`water.reference_offsets` takes them at Table 6's state, by `props95`, the
+release's Table 3 on its own reference (u = s = 0 for the triple point's
+liquid). With water's ΔH°f = −241.814 kJ/mol and S° = 188.724 J/(mol·K),
+they're −287,716.6 J/mol and 63.1939 J/(mol·K), the same over Table 7's
+states to 3e-14. The cost of D4: ln φ tends to (k − 1) ln δ, not 0, at zero
+density, 7e-5 at 1 bar; it cancels between water's own phases.
+
+**φʳ's derivatives** are Table 5's, in closed form, with two changes for
+their digits:
+
+- the exponential terms' φ_δδ has its factor d − 1 − cδᶜ as it stands;
+  written (d − cδᶜ) − 1 it cancels at low density;
+- the non-analytic terms' ∂²Δ/∂δ² divides ∂Δ/∂δ by δ − 1, 0/0 at δ = 1.
+  With d₂ = (δ − 1)² and q = d₂^(1/(2β) − 1), ∂Δ/∂δ = (δ − 1)·g with
+  g = Aθ(2/β)q + 2Ba·d₂^(a−1), and
+
+      ∂²Δ/∂δ² = g + 4Ba(a − 1)d₂^(a−1) + 2(A/β)²·d₂q² + Aθ(4/β)(1/(2β) − 1)·q
+
+  every power positive: finite, and 0 at δ = 1 (D8).
+
+At (Tc, ρc) itself Δ = 0. The non-analytic terms and their first
+derivatives take their limits, 0, as do their parts of φʳ_δδ and φʳ_δτ;
+φʳ_ττ diverges as Δ^(b−1), so it's −∞ by the sign of the term of smaller b
+(n₅₅ < 0, b = 0.85): Cv and Cp are infinite there, IAPWS-95's own limit.
+Table 3's w is 0 there to rounding; `Fluid.props`' is NaN, its Cp/Cv being
+∞/∞ (D8, as amended in step 1), since its formula is the cubics'.
+
+**Its branches** (D7, "Finding the volume" above): `min_volume` is at δ = 4,
+where P is 1.16 GPa or more at every T from 251 K and four such volumes are
+1/ρc, the volume `phase_label` takes for a critical one; below Tc the split
+is n/ρc. Below 251.165 K, the melting
+curve's lowest point, it has no state (`no_state`): the release's range
+starts at the melting curve, its liquid's extrapolation below it has an H
+that falls as T rises (at 562 MPa, H at 215.7 K is above H at 273.16 K), and
+its gas is endorsed there only below the sublimation curve, which M5a
+doesn't have; a UV flash found a vapour at 233.8 K and 522 Pa with the U and
+V of a two-phase state at 273.16 K.
 
 ## Rachford–Rice
 
@@ -729,6 +861,18 @@ The flash finds Tsat with pvf, then answers this way for an H_spec
 between the saturated liquid's and vapour's, within etol of either end.
 Outside that range the answer is a single phase on its own side of Tsat,
 found by Brent on that root alone.
+
+**A search that steps past the model's range** (M5a step 2). The single
+phase's bracket steps T by 1.5 at a time, and the UV flash's bracket ln T by
+ln 1.5. Where a step fails at a T where the model says it has no state
+(`Branches.no_state`: IAPWS-95 below 251.165 K), `at_or_closer` halves it
+back towards the last T that had one, up to 30 times: the answer lies
+between. From liquid at 273.16 K and 1 kPa, the search went from Tsat,
+280 K, to 186.7 K, with no state there, nor halfway back at 233.4 K; at
+256.7 K there is. Any other failure is the search's, as before: a cubic has
+no `Branches`, so it fails where, and as fast as, it always did. (Stepping
+back on every failure, as first written, ran up to 30 more TV flashes in
+each of the cubic trace's 709 failing UV flashes, M4's cold liquids.)
 
 ## TV and UV flashes
 

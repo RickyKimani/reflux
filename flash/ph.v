@@ -421,8 +421,12 @@ fn (s StateFlash) single(root thermo.Root, t0 f64) !FlashResult {
 		if found {
 			break
 		}
-		b = if fa < 0.0 { b * 1.5 } else { b / 1.5 }
-		fb := f.at(b)!
+		// Where the model has no state at the step's T, closer (tv.v).
+		nb, fb := at_or_closer(f, b, if fa < 0.0 { b * 1.5 } else { b / 1.5 }, StepBack{
+			m: m
+			z: s.z
+		})!
+		b = nb
 		found = fb == 0.0 || (fb > 0.0) != (fa > 0.0)
 	}
 	if !found {
