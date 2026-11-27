@@ -1242,7 +1242,11 @@ kink, T = Tsat, with the vapour fraction the energy balance gives:
 The flash finds Tsat with pvf, then answers this way for an H_spec
 between the saturated liquid's and vapour's, within etol of either end.
 Outside that range the answer is a single phase on its own side of Tsat,
-found by Brent on that root alone.
+found by Brent on that root alone. Above 1.01 Pc there is no Tsat, past
+every model's critical point, so pvf isn't asked (M5a step 10): it can only
+fail there, and for IAPWS-95's water at 30 MPa it took 8 ms to, 30 times
+the rest of the flash. The answer is the single phase its failure led to,
+bit for bit.
 
 **A search that steps past the model's range** (M5a step 2). The single
 phase's bracket steps T by 1.5 at a time, and the UV flash's bracket ln T by

@@ -191,7 +191,17 @@ tolerance.
 ### M5 — Water, steam and transport properties
 **Split in two** by M5a's plan ([m5-plan.md](m5-plan.md), D1, approved on
 2026-11-24), so that water can come now, from `main`, while M6 continues on
-its branch. M5a is in progress.
+its branch.
+
+**M5a is done,** on its branch `m5a-water`, for the release 0.6.0 once it
+merges (its D17). Its plan, with its decisions and the criterion-by-
+criterion exit review, is in [m5-plan.md](m5-plan.md). Two of its criteria
+are amended for the owner's approval: IF97's cp on the pseudo-critical
+ridge above the critical triangle, reported apart (criterion 6), and
+`reflux water`'s six pairs (criterion 9). It found DWSIM 9's Steam Tables
+package failing silently in IF97's regions 3 and 5 and in its PH flash
+above 25 MPa, and the `iapws` package's (P, s) landing off the saturation
+line inside the dome.
 
 **M5a — water and steam:**
 - IAPWS-95 as a `Model`: it's a Helmholtz equation, so it fits the contract

@@ -6,6 +6,7 @@ import components
 import flowsheet { FlowsheetError, Loaded }
 import math
 import os
+import water.if97
 import json2
 
 const db = components.load_default() or { panic(err) }
@@ -149,4 +150,76 @@ fn test_iapws95_in_a_file_is_refused_at_its_line() {
 		'')
 	refused(with('names = ["water"]', 'names = ["watr"]').replace('water = 1', 'watr = 1'),
 		names, 'components.names', 'no compound watr', 'Water (7732-18-5)')
+}
+
+// DWSIM 9's same cycle (testdata/m5_dwsim.json, tools/gen_m5_dwsim.py), by
+// state and per kg, its CoolProp package against reflux's solution and its
+// Steam Tables package against IF97 worked through the same unit models
+// (the pump's v₁ΔP/η, the turbine's η times its isentropic drop). DWSIM's
+// water is 18.01528 g/mol, ChemSep's, so its 50 mol/s are 0.900764 kg/s,
+// 6.7e-7 above reflux's by IAPWS's molar mass: each power is compared per
+// kg of each one's own flow.
+//
+// Measured, and why:
+// - CoolProp: the pump within 2.2e-12 kJ/kg, the turbine 3.2e-11, the
+//   condenser 1.0e-10, the exhaust's T 1.8e-12 K and x 5.6e-16; the boiler
+//   3.7e-7 kJ/kg low, because DWSIM's PH flash at the pump's outlet stops
+//   8.9e-8 K high and the stream carries h at that T (cp·8.9e-8 K), which
+//   the boiler then has less to add; the condenser's outlet 2.8e-8 K low.
+// - Steam Tables: the pump exact; the boiler 1.2e-6 kJ/kg high, its pump
+//   outlet's flash 3.0e-7 K low; the turbine and condenser 8.3e-8 kJ/kg,
+//   its exhaust's x 3.5e-11 high (times h_vap, 2392 kJ/kg); the condenser's
+//   outlet 1.9e-5 K high, its flash's tolerance there.
+fn test_the_rankine_cycle_against_dwsim() {
+	l := load(rankine_text())!
+	sol := l.solve()!
+	flow := 50.0 * 0.018015268 // kg/s
+	text := os.read_file(os.join_path(@VMODROOT, 'testdata', 'm5_dwsim.json'))!
+	d := (json2.decode[json2.Any](text)!).as_map()
+	for pkg in ['coolprop', 'steam_tables'] {
+		rk := object(object(d, pkg), 'rankine')
+		units := object(rk, 'units')
+		streams := object(rk, 'streams')
+		mf := number(object(streams, 'condensate'), 'mass_flow')
+		assert mf == 0.900764 // DWSIM's own 50 mol/s
+		mut want := map[string]f64{}
+		mut tf, mut tx, mut xx := 0.0, 0.0, 0.0
+		if pkg == 'coolprop' {
+			for unit in ['pump', 'boiler', 'turbine', 'condenser'] {
+				want[unit] = math.abs(power(sol, unit)) / flow * 1e-3
+			}
+			f := sol.streams['feedwater'] or { panic('no feedwater') }
+			e := sol.streams['exhaust'] or { panic('no exhaust') }
+			tf, tx, xx = f.t, e.t, e.beta
+		} else {
+			// IF97 through the same models, per kg on IAPWS's reference.
+			s1 := if97.state_pt(1e4, 318.15)!
+			w := s1.v * (8e6 - 1e4) / 0.75
+			s3 := if97.state_pt(8e6, 773.15)!
+			s4s := if97.state_ps(1e4, s3.s)!
+			h4 := s3.h - 0.85 * (s3.h - s4s.h)
+			want['pump'] = w * 1e-3
+			want['boiler'] = (s3.h - s1.h - w) * 1e-3
+			want['turbine'] = (s3.h - h4) * 1e-3
+			want['condenser'] = (h4 - s1.h) * 1e-3
+			e := if97.state_ph(1e4, h4)!
+			tf, tx, xx = if97.state_ph(8e6, s1.h + w)!.t, e.t, e.x
+		}
+		// kJ/kg, by unit; then K, K, x and K for the streams
+		bounds := if pkg == 'coolprop' {
+			[1e-10, 1e-6, 1e-9, 1e-9, 1e-6, 1e-10, 1e-12, 1e-6]
+		} else {
+			[1e-10, 5e-6, 1e-6, 1e-6, 2e-6, 1e-10, 1e-9, 1e-4]
+		}
+		for k, unit in ['pump', 'boiler', 'turbine', 'condenser'] {
+			got := number(units, unit) / mf // DeltaQ, kW, per kg/s
+			assert math.abs(got - want[unit]) <= bounds[k], '${pkg} ${unit}: ${got} kJ/kg against ${want[unit]}'
+		}
+		feed, ex := object(streams, 'feedwater'), object(streams, 'exhaust')
+		ret := object(streams, 'return')
+		assert math.abs(number(feed, 'T') - tf) <= bounds[4], '${pkg} feedwater: ${number(feed, 'T')} K'
+		assert math.abs(number(ex, 'T') - tx) <= bounds[5], '${pkg} exhaust: ${number(ex, 'T')} K'
+		assert math.abs(number(ex, 'beta') - xx) <= bounds[6], '${pkg} exhaust: x ${number(ex, 'beta')}'
+		assert math.abs(number(ret, 'T') - 318.15) <= bounds[7], '${pkg} return: ${number(ret, 'T')} K'
+	}
 }

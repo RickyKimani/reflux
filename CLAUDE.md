@@ -141,6 +141,29 @@ Keep this section current: update it whenever a step is committed.
       saturation line (0.15 K, 0.94 kJ/kg at 10 kPa), and its (P, x) stops
       1.5e-8 K high, so the hand calculation takes wet states by the lever
       rule at its own Newton's Tsat.
+    - CI failed on bundle C's commit on Windows' gcc alone: `main`'s
+      `fn finite` clashed with MinGW's math.h. Renamed `json_number`
+      (`3b8f290`); CI passed, all four jobs (run 45984142988).
+  - **Bundle D (steps 9 to 12) is built, not committed:** M5a is finished
+    but for the owner's two approvals (criteria 6 and 9), CI on the push and
+    the release, its exit review at the end of its plan.
+    - Step 9: `tools/gen_m5_dwsim.py`, `testdata/m5_dwsim.json`: DWSIM's
+      CoolProp package is IAPWS-95 to 7.5e-7 kJ/kg, its PH flash 0.24–4%
+      off at four near-critical states; its Steam Tables package is IF97
+      where it answers, h = −1 in region 3 at 650 K, region 5 wrong, its PH
+      flash above 25 MPa returning 1729/2000/1525 K whatever h (Brent on its
+      own broken h, from its source); the Rankine cycle per kg to 3.7e-7.
+    - Step 10: `tools/bench_m5.v`, `tools/gen_m5_bench.py`,
+      `benchmarks/m5.v`: reflux 470–1400× DWSIM, 1.4–3× CoolProp from
+      Python. Found and fixed: a pure PH/PS flash asked pvf above Pc, 8 ms
+      to fail for water at 30 MPa; skipped above 1.01 Pc, the same bits
+      (1,680 pure flashes before and after), PH 2.8 ms to 251 µs.
+    - Step 11: 0.6.0's CHANGELOG entry written, undated; the release gate
+      refuses for the tree, the branch and the date alone.
+    - Step 12: docs, the roadmap (M5a done), and the exit review, which
+      added criterion 2's Maxwell relations and ln φ = Gʳ/RT on IAPWS-95.
+    - Planted mistakes: 6, all caught, 1 after a test was added. The full
+      tcc check passed (138 test files).
 - **M6 (activity models and liquid–liquid equilibrium) is done,** merged
   in PR #8 (`28724c1`) and released as v0.5.0, with its exit review at the
   end of its plan. Its plan, `docs/m6-plan.md`, was approved on 2026-11-18: exit
@@ -926,6 +949,12 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     `testdata/m5_transport.json`, the package's IAPWS-95 and IF97
     transport at (T, P) states and σ; `tools/gen_m5_rankine.py` (iapws)
     `testdata/m5_rankine.json`, the Rankine cycle by hand.
+  - `tools/gen_m5_dwsim.py` (DWSIM, about a minute) writes
+    `testdata/m5_dwsim.json`, DWSIM's two water packages by state and the
+    Rankine cycle on each; `tools/gen_m5_bench.py` (DWSIM, CoolProp 8.0.0,
+    iapws and V) `testdata/m5_bench.json`, step 10's timings, which can't
+    reproduce byte for byte. Then `v run tools/benchmarks.vsh` writes
+    `docs/benchmarks.md`.
   - `tools/extract_if97.py R7-97.pdf SR3-03.pdf SR5-05.pdf` (PyMuPDF
     1.24.14) writes `water/if97/coefficients*.v` from IAPWS's release PDFs,
     which stay out of the repository; then `v fmt -w` them. Run it only to

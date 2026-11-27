@@ -175,6 +175,19 @@ M6 step 13, D18, exit criterion 12: methanol and water at 1 atm, as γ–φ flui
 
 reflux's γ–φ PT flash takes 0.52 of its Peng–Robinson flash's time on the same states: the liquid is xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ and the Poynting term, with no volume roots to find, as D18 expected. DWSIM's activity packages run 16 times slower than its own Peng–Robinson. thermo's answers are reflux's to 1.7e-07 in β and 7.8e-09 K; DWSIM's γ–φ answers differ by up to 0.0023 in β and 0.048 K, its Poynting term's sign and its vapour pressures' extra figures (M6 step 12).
 
+## Water and steam
+
+M5a step 10, exit criterion 10: water at 300 K and 3 MPa (a liquid), 500 K and 1 MPa (a vapour) and 700 K and 30 MPa (dense, above Tc and pc), by IAPWS-95 and IF97, in each program. `tools/gen_m5_bench.py` writes `testdata/m5_bench.json` on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-27, with DWSIM 9.0.5.0's CoolProp and Steam Tables (IAPWS-IF97) packages, CoolProp 8.0.0's AbstractState (HEOS and IF97) from Python, the iapws package 1.5.4, and reflux built with gcc. reflux's IAPWS-95 calls are its PT and PH flashes, phase stability and all; its IF97 calls `water.if97.state_pt` and `state_ph`. A PH call goes back from the h each program's own PT call gave. Each time is the median of its rounds, per call; reflux ran before the others and again after, and the faster is shown.
+
+| | reflux | CoolProp | iapws | DWSIM | DWSIM over reflux |
+|---|---|---|---|---|---|
+| IAPWS-95, PT flash | 17.5 µs | 36.0 µs | 20.7 ms | 24.2 ms | 1400 |
+| IAPWS-95, PH flash | 251 µs | 342 µs | 16.9 ms | 236 ms | 940 |
+| IF97, (p, T) | 0.700 µs | 2.23 µs | 657 µs | 329 µs | 470 |
+| IF97, (p, h) | 5.47 µs | 8.90 µs | 2.88 ms | 3.05 ms | 560 |
+
+Every program's h agrees with reflux's to 1.9e-10 kJ/kg by IAPWS-95 and 1.2e-12 by IF97. Back from h, DWSIM's CoolProp package lands within 5.7e-09 K and its Steam Tables within 0.0001 K, its PH flash's tolerance; CoolProp's IF97 backend within 0.018 K, its backward equations' T unfinished (R7-97 allows 25 mK in region 1), where reflux finishes each on its basic equation (D9). DWSIM's PH flash on its CoolProp package goes through its own single-compound flash, not CoolProp's.
+
 ## From Python
 
 M10a step 7, exit criterion 10: what a call from Python costs over V's own loop doing the same work. Methane, ethane and n-butane, 30/30/40, at 20 bar, from 220 to 400 K (one point at 300 K), with Peng–Robinson and the database's kᵢⱼ. `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, timing V and Python alternately, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-05, with Python 3.13.17 and NumPy 2.5.4.

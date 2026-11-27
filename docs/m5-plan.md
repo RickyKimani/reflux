@@ -1068,22 +1068,221 @@ test files passing. The water report's helper was `finite`, and module
 Renamed `json_number`; `main` and `main_test.v` then built and passed
 under gcc here ([v-for-go.md](v-for-go.md), §11).
 
-### 9. DWSIM references
+### 9. DWSIM references — done
 - D14: `tools/gen_m5_dwsim.py`, DWSIM's two packages by state and the
   Rankine cycle in DWSIM, into `testdata/m5_dwsim.json`; every difference
   explained.
 
-### 10. Speed
+**What was built:** [tools/gen_m5_dwsim.py](../tools/gen_m5_dwsim.py)
+drives DWSIM 9.0.5's "CoolProp" and "Steam Tables (IAPWS-IF97)" packages at
+their defaults (about a minute, byte for byte on the same day): a PT flash
+at 98 (T, P) states over IF97's regions 1, 2, 3 and 5 and the compressed
+liquid to 100 MPa, each with a PH flash back; PH flashes at qualities 0.1,
+0.5 and 0.9 at 0.1 and 1 MPa; bubble temperatures at five pressures; and
+`rankine.toml`'s cycle as a DWSIM flowsheet on each package, every unit
+checked calculated and without an error message.
+
+**Tests** ([water/dwsim_test.v](../water/dwsim_test.v),
+[flowsheet/water_test.v](../flowsheet/water_test.v)), each difference within
+DWSIM's own iteration or a failure shown by its own numbers, every failure
+listed (a list that can't grow):
+- **The CoolProp package is IAPWS-95:** h within 1e-6 kJ/kg of reflux's
+  (7.5e-7 measured, 3.0e-10 of h, at 800 K and 100 MPa) and s within 2e-9
+  kJ/(kg·K), five states above 1e-8 kJ/kg, all gas or supercritical fluid at
+  10 to 100 MPa, where DWSIM's copy of CoolProp stops its density solve
+  (CoolProp 8.0.0's own densities agree with reflux's to 3.3e-12).
+- **Its PH flash** lands within 1e-4 K but at four states, near the critical
+  point (647 K and 22 MPa, 648 K and 22.1 MPa, 660 K and 25 MPa) and dense
+  above it (800 K and 100 MPa), where it returns with no error a T 0.23 to
+  1.5 K off, whose h is 5.9 to 90 kJ/kg (0.24% to 4.0%) from the h it was
+  given: DWSIM's single-compound flash, which the package uses, not
+  CoolProp's own.
+- **The Steam Tables package is IF97 where it answers:** within 2.1e-11
+  kJ/kg in regions 1 and 2 and in region 3 at 640 K (25 and 50 MPa), 648 K
+  and 700 K. Its silent failures: h = s = −1 at 650 K from 25 to 100 MPa
+  (region 3, a sentinel returned as a value); region 3 at 640 K and 100 MPa,
+  539 kJ/kg low; region 5, 5.75 kJ/kg low at 1500 K and 0.5 MPa, 3875 at
+  30 MPa and −46,354 kJ/kg at 2000 K. Its PH flash back is within 1e-3 K but
+  at every state of 25 MPa and above up to 650 K, and in region 5: it runs
+  Brent on H − h(T) between 273.15 K and 2000 K on its own h
+  (SteamTables.vb, `DW_CalcEquilibrium`), which is −1 in region 3 and
+  wrong in region 5, so the bracket doesn't hold one root, and it returns
+  1729.42 K (25 to 30 MPa), 2000 K (50 MPa) or about 1525 K (100 MPa)
+  whatever h it's given.
+- **The dome:** CoolProp's Ts within 2.0e-12 K, its saturated h within
+  1.3e-10 kJ/kg, its bubble T within 6.5e-11 K; Steam Tables' Ts exactly
+  IF97's, its h within 9.1e-13 kJ/kg; each PH flash's x within 1.1e-16.
+- **The Rankine cycle (criterion 8),** per kg of each one's own flow
+  (DWSIM's water is 18.01528 g/mol, 6.7e-7 above IAPWS's): on CoolProp,
+  against reflux's solution, the pump within 2.2e-12 kJ/kg, the turbine
+  3.2e-11, the condenser 1.0e-10, the exhaust's T 1.8e-12 K and x 5.6e-16;
+  the boiler 3.7e-7 kJ/kg low, DWSIM's PH flash at the pump's outlet
+  stopping 8.9e-8 K high and the stream carrying h at that T. On Steam
+  Tables, against IF97 through the same unit models: the pump exact, the
+  boiler 1.2e-6 kJ/kg (its pump outlet 3.0e-7 K low), the turbine and
+  condenser 8.3e-8 (its exhaust's x 3.5e-11 high), its condenser's outlet
+  1.9e-5 K high.
+
+**Found** (to report to DWSIM): the Steam Tables package's silent failures
+in regions 3 and 5 and its PH flash above 25 MPa, with their mechanism in
+its source; the CoolProp package's PH flash near the critical point. The
+source was read for the Steam Tables flash (DWSIM's repository, archived
+on 2026-08-11); the single-compound flash's wasn't reached.
+
+### 10. Speed — done
 - Criterion 10, into `docs/benchmarks.md`.
 
-### 11. Release
+**What was built:** [tools/bench_m5.v](../tools/bench_m5.v) (reflux, gcc
+`-prod`), [tools/gen_m5_bench.py](../tools/gen_m5_bench.py) (one session:
+reflux before and after DWSIM's two packages, CoolProp's AbstractState HEOS
+and IF97 from Python, and the `iapws` package), `testdata/m5_bench.json`,
+[benchmarks/m5.v](../benchmarks/m5.v) and its section of
+[docs/benchmarks.md](benchmarks.md), "Water and steam". Water at 300 K and
+3 MPa, 500 K and 1 MPa, and 700 K and 30 MPa; a PT call, and a PH call back
+from each program's own h.
+
+| | reflux | CoolProp | iapws | DWSIM |
+|---|---|---|---|---|
+| IAPWS-95, PT flash | 17.5 µs | 36.0 µs | 20.7 ms | 24.2 ms |
+| IAPWS-95, PH flash | 251 µs | 342 µs | 16.9 ms | 236 ms |
+| IF97, (p, T) | 0.70 µs | 2.23 µs | 657 µs | 329 µs |
+| IF97, (p, h) | 5.47 µs | 8.90 µs | 2.88 ms | 3.05 ms |
+
+reflux is 470 to 1400 times faster than DWSIM's packages, 1.4 to 3 times
+CoolProp's AbstractState from Python (its call's own cost included), and
+67 to 1186 times the `iapws` package. Every program's h agrees with
+reflux's to 1.9e-10 kJ/kg; back from h, IF97's T by CoolProp's backend is
+up to 18 mK off, its backward equations unfinished (R7-97 allows 25 mK in
+region 1), where reflux finishes each on its basic equation (D9).
+
+**Found and fixed:** the first timing gave IAPWS-95's PH flash 2.8 ms, of
+which 8 ms at 30 MPa: a pure component's PH and PS flash asked pvf for a
+saturation temperature at every pressure, though its comment said below
+the critical pressure, and above it pvf can only fail, slowly. Above
+1.01 Pc it isn't asked now ([flash/ph.v](../flash/ph.v), `pure`): 1,680
+pure PH and PS flashes of 40 compounds by PR and of water by IAPWS-95,
+0.5 Pc to 3 Pc, give the same bits before and after, in 2.3 s against 5.5;
+the PH flash is 251 µs.
+
+**Tests** ([benchmarks/m5_test.v](../benchmarks/m5_test.v)): reflux's
+answers solved again under the test's build, h to 1e-9 kJ/kg and T to
+1e-8 K, the same bits before and after; the others' answers within their
+iterations; reflux faster than DWSIM at every case; the committed report
+showing the fixture.
+
+**Planted mistakes** (bundle D's V code, steps 9 to 12 being fixtures,
+tests and docs besides): 6, all caught, one only after a test was added for
+it: the pure flash's skip from 0.9 Pc and from 0.5 Pc (water's dome and
+PH tests); in the report, reflux's slower run shown, an agreement as its
+last point's, DWSIM over reflux inverted; and h's agreement taken over
+DWSIM alone, which survived (DWSIM's is the furthest in the fixture) until
+a test put CoolProp's further.
+
+### 11. Release — done, but the tag
 - The CHANGELOG entry, the versions and the release gate, as for v0.4.0
   (D17).
 
-### 12. Docs and exit review
+`main` is at `e63ebc3`, its last tag v0.5.0, so the release is 0.6.0
+(D17 as amended), which v.mod, the Python package and every golden report
+already carry from the gas constant's fix. The CHANGELOG's 0.6.0 entry is
+written: M5a's summary, what it adds, the pure flash's change, Python's
+`kij=None`, the golden reports by name (`rankine.json` new); it stays
+undated until the tag on `main` after the merge. `v run tools/release.vsh`
+refuses for the tree, the branch and the date alone.
+
+### 12. Docs and exit review — done
 - README, roadmap, design notes (every formula the code uses), the file
   format, testdata/README.md, the V notes, and a criterion-by-criterion
   review.
+
+The roadmap marks M5a done; design.md has "Water's transport", "`reflux
+water`" and the pure flash's skip; testdata/README.md has `m5_dwsim.json`
+and `m5_bench.json`. The review found criterion 2's Maxwell relations and
+Σnᵢ ln φᵢ = Gʳ/RT untested on IAPWS-95 (only Euler's theorem was), so
+[water/derivatives_test.v](../water/derivatives_test.v) now holds them at 35
+states, 280 K to 2000 K and 1 kPa to 300 MPa: ln φ within 1.7e-12 of its
+terms, (∂S/∂V)_T = (∂P/∂T)_V and (∂U/∂V)_T = T(∂P/∂T)_V − P within their
+differences' rounding (the worst at 0.22 of its bound), a liquid's step kept
+below a tenth of P over its bulk modulus.
+
+**The bundle's full tcc check** passed: 138 test files, then the build and
+its smoke runs.
+
+## Exit review
+
+Criterion by criterion, with where each is shown:
+
+1. **IAPWS-95 is the release: met.** Tables 6 and 7 to their printed digits
+   by Table 3 and through the Model (step 1); Table 8 through the flash's
+   own saturation, h and s on IAPWS's reference by D6's constant (step 2);
+   Table 7's low-pressure liquid p to its conditioning.
+2. **The model is right everywhere: met, as D8 amended,** with one figure
+   short. φʳ and its derivatives within 18.3 ε of their terms' magnitudes at
+   291 points against mpmath from 130 K to 5000 K, inside the dome, and on
+   six rays into the critical point down to 1e-10, not the 1e-11 the
+   criterion names (step 1). Euler's theorem (step 1), Σnᵢ ln φᵢ = Gʳ/RT
+   and two Maxwell relations (step 12). At (Tc, ρc) what's finite has its
+   limit, φʳ_ττ, Cv and Cp are +∞ or −∞, and w is NaN, Cp/Cv being ∞/∞ (D8
+   as amended, approved on 2026-11-26).
+3. **Water through the flash: met.** Every flash back from 925 states,
+   273.16 K to 2273.15 K and 1 Pa to 1 GPa, each answer checked against
+   the scan's branches, CoolProp and the `iapws` package, no failure, its
+   iterations recorded (20,094 over the whole sweep); Psat and the
+   saturated phases to 0.1 mK below Tc; no state below 251.165 K (D7). Every
+   cubic answer keeps its bits: the trace of 83,563 lines (step 2), of
+   85,448 behind M6's seam after the merge, and step 10's 1,680 pure PH and
+   PS flashes.
+4. **IF97 is the release: met.** Every verification table of R7-97, SR3-03
+   and SR5-05 to its printed digits but SR5-05's Table 13's last row,
+   printed 0.53 units off its own equation and held to the exact value
+   (step 4).
+5. **IF97's functions are consistent: met.** Each backward answer finished
+   on its basic equation, T back to 3.6e-15 (region 3, 4.4e-14); Tables 43
+   and 44 reproduced, maxima and RMS, but for four maxima of Table 43
+   within half a unit and a slip in Table 44 (step 4); the `iapws`
+   package's functions matched over grids.
+6. **IF97 against IAPWS-95: met as amended in step 5,** for the owner's
+   approval: every difference within R7-97's Figs. 3 to 6 at 4,133 states,
+   the critical region and the pseudo-critical ridge (cp to 0.99% against
+   Fig. 4's 0.5%) reported apart, the largest of each recorded.
+7. **Water's transport: met.** Every table of R12-08, R15-11 and R1-76 to
+   its printed digits, IAPWS-95's and IF97's forms (step 6).
+8. **A Rankine cycle: met.** It solves, every balance closed, a golden
+   flowsheet; its hand calculation from the `iapws` package's states to
+   1.8e-10 kJ/kg (step 7); DWSIM 9's cycle on its CoolProp package by state
+   to 3.7e-7 kJ/kg, every difference explained (step 9).
+9. **`reflux water`: met as amended in step 7,** for the owner's approval:
+   six pairs, the other nine refused with why, each refusal's exit status
+   M8's D17's.
+10. **Speed: met.** Timed against DWSIM's two packages, CoolProp and the
+    `iapws` package; reflux 470 to 1400 times faster than DWSIM's (step 10).
+11. **Python: met.** `Database.fluid("IAPWS-95", ["water"])`, every
+    vectorised call bit for bit against the V API (step 8).
+12. **CI and docs: met but CI on this bundle and the release.** CI passed on
+    bundle C's fix (`3b8f290`, run 45984142988, all four jobs); bundle D's
+    push is still to be read. The docs are updated. The release, 0.6.0, is
+    prepared (step 11) and is made on `main` after the merge, when the owner
+    asks.
+
+**Planted mistakes over the milestone:** bundle A 36 (33 caught, 3
+explained), bundle B 35 (32 caught, 3 explained), bundle C 36 (all caught,
+4 after tests were added), bundle D 6 (all caught, 1 after a test was
+added).
+
+**Carried forward:**
+- **M5b,** from `main` after the merge: the transport of mixtures, and IF97
+  behind the flash on M6's seam (D1).
+- **`reflux water`'s other pairs:** two of h, s and ρ need an inverse in two
+  dimensions (IF97 has SR4-04's backward equations in (h, s)).
+- **Reports upstream:** to DWSIM, its Steam Tables package's failures in
+  regions 3 and 5 and its PH flash above 25 MPa, and its CoolProp package's
+  PH flash near the critical point; to the `iapws` package, its (P, s) inside
+  the dome, its loose (P, x), its unfinished region-3 mixtures, its
+  densities at 640 to 647 K below a few hundred Pa, and B23's n₅; to V, a
+  `main` function's C name clashing with the C library, and the rest of the
+  V notes' findings.
+- **The ice curves** live in `reflux water` alone; a flowsheet's water has
+  no melting check (its model has no state below 251.165 K).
 
 ## With M6
 

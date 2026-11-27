@@ -470,6 +470,14 @@ fn (s StateFlash) eval(v []f64, mut f []f64, mut jac []f64) ! {
 // balance, and one outside is a single phase on its own side of Tsat.
 fn (s StateFlash) pure() !FlashResult {
 	m := s.fl.model
+	// Above the critical pressure pvf can only fail, and spends its
+	// iterations finding so: 8 ms for IAPWS-95's water at 30 MPa, 30 times
+	// the rest of the flash (M5a step 10). So 1% above the component's Pc,
+	// past every model's critical point, it isn't asked; the answer is the
+	// one its failure led to.
+	if s.p > 1.01 * m.components()[0].pc {
+		return s.single(.stable, s.ideal_t())!
+	}
 	if sat := pvf(m, s.p, 0.5, s.z, tol: s.params.tol) {
 		vap, liq := sat.phases[0].state, sat.phases[1].state
 		xv, xl := s.of(vap), s.of(liq)

@@ -377,7 +377,8 @@ sweep/              the flash robustness sweep: seeded database mixtures,
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
                     flowsheet, on the owner's reforming PFR, on M8's study,
-                    optimisation and spec, and on M6's γ–φ flashes
+                    optimisation and spec, on M6's γ–φ flashes, and M5a's
+                    water against DWSIM, CoolProp and the iapws package
                     (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
@@ -441,8 +442,11 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     extract_if97.py (IF97's coefficients from its releases'
                     PDFs), gen_m5_if97.py (the iapws package's IF97
                     coefficients and states), gen_m5_transport.py (its
-                    transport properties) and gen_m5_rankine.py (the Rankine
-                    cycle by hand from its states)
+                    transport properties), gen_m5_rankine.py (the Rankine
+                    cycle by hand from its states), gen_m5_dwsim.py (DWSIM
+                    9's two water packages by state and its Rankine cycle),
+                    gen_m5_bench.py and bench_m5.v (M5a's speed against
+                    DWSIM, CoolProp and the iapws package)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

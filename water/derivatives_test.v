@@ -8,6 +8,7 @@ module water
 import json2
 import math
 import os
+import thermo
 
 struct Residual95 {
 	nr1      []f64
@@ -202,4 +203,63 @@ fn richardson(f fn (f64) []f64, x f64, h f64) []f64 {
 	c := f(x + 0.5 * h)
 	d := f(x - 0.5 * h)
 	return []f64{len: a.len, init: (4.0 * (c[index] - d[index]) / h - (a[index] - b[index]) / (2.0 * h)) / 3.0}
+}
+
+// M1's identities on IAPWS-95 (criterion 2), through `thermo`'s generic
+// properties: Σnᵢ ln φᵢ = Gʳ/RT, here ln φ of one mole at (T, P) against
+// F + Z − 1 − ln Z; and Maxwell's (∂S/∂V)_T = (∂P/∂T)_V with the
+// thermodynamic equation of state (∂U/∂V)_T = T(∂P/∂T)_V − P, S and U from
+// Fluid.props by central differences in V (Richardson from h and h/2),
+// (∂P/∂T)_V from pressure_derivs, at 35 states from 280 K to 2000 K and
+// 1 kPa to 300 MPa.
+//
+// Measured: ln φ within 1.7e-12 of its terms. The differences carry
+// rounding of about ε(|U| + T|S|) over the step, which a liquid's must keep
+// small (below), so each is held to 1e-8 plus 100 times that, of
+// T(∂P/∂T)_V and P together; the worst came to 0.22 of its bound.
+fn test_m1_identities() {
+	fl := fluid(none, none)!
+	m := iapws95()
+	mut worst_ln_phi, mut worst_ratio := 0.0, 0.0
+	mut n := 0
+	for t in [280.0, 450.0, 600.0, 640.0, 700.0, 1000.0, 2000.0] {
+		for p in [1e3, 1e5, 1e7, 5e7, 3e8] {
+			st := thermo.solve_tp(m, t, p, [1.0], .stable)!
+			r := m.residual(t, st.v, [1.0])
+			g := r.f + st.z - 1.0 - math.log(st.z)
+			d := math.abs(st.ln_phi[0] - g) / (math.abs(r.f) + math.abs(st.z - 1.0) + math.abs(math.log(st.z)))
+			assert d <= 1e-11, 'ln φ at ${t} K, ${p} Pa: ${st.ln_phi[0]} against ${g}'
+			worst_ln_phi = math.max(worst_ln_phi, d)
+			pd := thermo.pressure_derivs(m, t, st.v, [1.0])
+			// A step that keeps P above 0: a liquid's P moves by its bulk
+			// modulus K_T = −V(∂P/∂V)_T times the step's fraction of V, and
+			// S on the (T, P) basis takes ln P.
+			frac := math.min(1e-4, 0.1 * pd.p / (-st.v * pd.dp_dv))
+			mut ds := []f64{}
+			mut du := []f64{}
+			mut mag := 0.0
+			for k in [1.0, 0.5] {
+				h := frac * k * st.v
+				a := fl.props(state_at_density(m, t, 1.0 / (st.v + h)))
+				b := fl.props(state_at_density(m, t, 1.0 / (st.v - h)))
+				ds << (a.s - b.s) / (2.0 * h)
+				du << (a.u - b.u) / (2.0 * h)
+				mag = math.abs(a.u) + t * math.abs(a.s)
+			}
+			s_v := (4.0 * ds[1] - ds[0]) / 3.0
+			u_v := (4.0 * du[1] - du[0]) / 3.0
+			// Scaled by T(∂P/∂T)_V and P together: (∂P/∂T)_V is 0 at
+			// liquid water's density maximum, near 277 K.
+			scale := math.abs(t * pd.dp_dt) + math.abs(pd.p)
+			bound := 1e-8 + 100.0 * f64_eps * mag / (frac * st.v * scale)
+			for e in [t * math.abs(s_v - pd.dp_dt) / scale,
+				math.abs(u_v - (t * pd.dp_dt - pd.p)) / scale] {
+				assert e <= bound, '${t} K, ${p} Pa: off by ${e}, bound ${bound}'
+				worst_ratio = math.max(worst_ratio, e / bound)
+			}
+			n++
+		}
+	}
+	assert n == 35
+	println('M1 identities: ln φ ${worst_ln_phi:.2e}; Maxwell at ${worst_ratio:.2f} of the bound')
 }
