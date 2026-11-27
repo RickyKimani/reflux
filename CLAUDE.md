@@ -25,8 +25,9 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M5a (water and steam) is done** on branch `m5a-water`, for its PR into
-  `main` and the release 0.6.0 when the owner asks; branched from
+- **M5a (water and steam) is done,** merged in PR #10 (`4bf65d5`) and
+  released as v0.6.0, with its exit review at the end of its plan; built on
+  branch `m5a-water`, from
   `main` at v0.4.0. `main` (M6, v0.5.0, and the gas constant's fix that
   begins 0.6.0) was merged into it before bundle C, at the owner's word on
   2026-11-26, to meet M6's seam and format 4 before steps 7 and 8. Its plan,
@@ -148,8 +149,11 @@ Keep this section current: update it whenever a step is committed.
   - **Bundle D (steps 9 to 12) is done,** committed at `499d032`, CI
     passed on it, all four jobs (run 46032587308): M5a is finished, its
     exit review at the end of its plan. The owner approved criteria 6 and 9
-    as amended on 2026-11-27, and asked for its PR into `main`; the release
-    0.6.0 follows the merge, when the owner asks.
+    as amended on 2026-11-27. CI passed on the PR's tip, `7a0f3bb`, and it
+    merged into `main` as `4bf65d5`.
+  - Carried forward (in its review): M5b from `main` (mixtures' transport,
+    IF97 behind the flash); `reflux water`'s other pairs (two of h, s and
+    ρ); reports to DWSIM, the `iapws` package and V.
     - Step 9: `tools/gen_m5_dwsim.py`, `testdata/m5_dwsim.json`: DWSIM's
       CoolProp package is IAPWS-95 to 7.5e-7 kJ/kg, its PH flash 0.24–4%
       off at four near-critical states; its Steam Tables package is IF97
@@ -529,9 +533,9 @@ Keep this section current: update it whenever a step is committed.
     unit failures.
 - **Released:** v0.1.0 (M0 to M4), tagged on 2026-11-03 at `45d4ce6`,
   v0.2.0 (M10a), tagged on 2026-11-08, v0.3.0 (M9), tagged on 2026-11-15,
-  v0.4.0 (M8), tagged on 2026-11-18 at `18eb317`, and v0.5.0 (M6), tagged
-  on 2026-11-25 at `862cd2c`, all on `main`: source releases, annotated
-  tags, pushed. The
+  v0.4.0 (M8), tagged on 2026-11-18 at `18eb317`, v0.5.0 (M6), tagged
+  on 2026-11-25 at `862cd2c`, and v0.6.0 (M5a), tagged on 2026-11-27, all
+  on `main`: source releases, annotated tags, pushed. The
   next release starts with a new CHANGELOG entry and its version in `v.mod`
   and the package, and a changed golden report goes in that entry by name.
 - **`test_memory.py` was flaky on Ubuntu,** and M8's step 0 fixed it, now

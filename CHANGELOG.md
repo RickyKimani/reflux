@@ -37,7 +37,7 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
-## [0.6.0]
+## [0.6.0] — 2026-11-27
 
 Water and steam: the roadmap's M5a. reflux now has water by IAPWS-95, the
 scientific formulation, through every flash, in a flowsheet and from Python,
