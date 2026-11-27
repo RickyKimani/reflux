@@ -115,7 +115,32 @@ Keep this section current: update it whenever a step is committed.
     - Found besides: the `iapws` package's region-3 mixtures are SR5-05's
       unfinished densities (1% off at 22 MPa), and a NaN passed the first
       tests' `> bound` checks (now `!(… <= bound)`).
-  - Bundle C (steps 6 to 8) is next, when the owner says.
+  - **Bundle C (steps 6 to 8) is done and committed,** and amends
+    criterion 9 for the owner's approval (criterion 6's from bundle B is
+    still waiting too). `tools/python.vsh test` passed (88). The full tcc
+    check ran 136 test files: 135 passed, and `capi/capi_test.v`'s header
+    test, which didn't know `REFLUX_IAPWS95`, passed alone once it did;
+    fmt, vet, the build and the smoke runs then passed by hand. Planted
+    mistakes: 36, all caught, 4 after tests were added for them.
+    - Step 6: `water/transport.v`, R12-08's μ and R15-11's λ with their
+      critical enhancements on IAPWS-95, their industrial forms on IF97
+      (IF97's state gained (∂ρ/∂p)_T), R1-76's σ; every verification table
+      to its digits; the `iapws` package's 791 and 775 states to 6e-14 and
+      2.9e-11 (`tools/gen_m5_transport.py`). D11's ranges as read: from
+      250 K, to 1273.15 K, above it a dilute gas (ρ ≤ 0.01ρc).
+    - Step 7: format 4's `equation = "IAPWS-95"` (`Database.iapws95`), its
+      refusals at their lines; `testdata/flowsheets/rankine.toml`, a new
+      golden (`rankine.json`, named in 0.6.0's entry), within 1.8e-10 kJ/kg
+      of its hand calculation (`tools/gen_m5_rankine.py`); `reflux water`
+      (`water_command.v`), six pairs (criterion 9 amended: the other nine
+      refused with why), ice by R14-08's melting curves, the water report.
+    - Step 8: `REFLUX_IAPWS95` (4), `reflux_psat` on a pure fluid's own
+      model, `Database.fluid("IAPWS-95", ["water"])` (kij None by default),
+      the reference program's water, bit for bit.
+    - Found: the `iapws` package's (P, s) in the dome lands off the
+      saturation line (0.15 K, 0.94 kJ/kg at 10 kPa), and its (P, x) stops
+      1.5e-8 K high, so the hand calculation takes wet states by the lever
+      rule at its own Newton's Tsat.
 - **M6 (activity models and liquid–liquid equilibrium) is done,** merged
   in PR #8 (`28724c1`) and released as v0.5.0, with its exit review at the
   end of its plan. Its plan, `docs/m6-plan.md`, was approved on 2026-11-18: exit
@@ -798,6 +823,7 @@ v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (do
 v run . study testdata/flowsheets/methanol_study.toml              # a study: its points, and why an output has no value
 v run . optimize testdata/flowsheets/series.toml best              # an optimisation: its optimum, multipliers and iterates
 v run . fit testdata/m8_fit/ethylene.toml                          # a fit: each constant with its interval, written back
+v run . water T=450degC P=40bar [--if97] [--json out.json]         # a steam table: water at a state, by IAPWS-95 or IF97
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
@@ -896,6 +922,10 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     (iapws, CoolProp, mpmath) writes `testdata/m5_iapws95.json`, and
     `tools/gen_m5_if97.py [coefficients states]` (iapws, with NumPy 2.2.6:
     under 2.5.5 its region-3 (p, h) raises) `testdata/m5_if97.json`.
+  - `tools/gen_m5_transport.py` (iapws, NumPy 2.2.6) writes
+    `testdata/m5_transport.json`, the package's IAPWS-95 and IF97
+    transport at (T, P) states and σ; `tools/gen_m5_rankine.py` (iapws)
+    `testdata/m5_rankine.json`, the Rankine cycle by hand.
   - `tools/extract_if97.py R7-97.pdf SR3-03.pdf SR5-05.pdf` (PyMuPDF
     1.24.14) writes `water/if97/coefficients*.v` from IAPWS's release PDFs,
     which stay out of the repository; then `v fmt -w` them. Run it only to
@@ -1037,10 +1067,12 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
-`water` (M5a) is water and steam: IAPWS-95 as a `thermo.Model`, over
-`thermo` and `numeric`; its tests use `flash`, and `flash`'s step-back test
-uses it. Its submodule `water.if97` (IF97 as steam-table functions) uses
-only `math`; `water`'s tests use it to compare the two.
+`water` (M5a) is water and steam: IAPWS-95 as a `thermo.Model` and water's
+transport, over `thermo`, `numeric` and its submodule `water.if97` (IF97 as
+steam-table functions, which uses only `math`); its tests use `flash`, and
+`flash`'s step-back test uses it, so `water` itself can't import `flash`.
+`components` builds IAPWS-95's fluid through it (`Database.iapws95`), and
+`main`'s `reflux water` uses it, `water.if97` and `flash`.
 `activity` (M6), liquid activity models, uses `numeric` and `expr`; `components`
 reads ChemSep's banks and UNIFAC tables into it and builds its models.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies

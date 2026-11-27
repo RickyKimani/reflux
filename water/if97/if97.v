@@ -25,8 +25,8 @@ pub const t13 = 623.15 // regions 1 and 3 meet on this isotherm
 pub const t23_max = 863.15 // B23 reaches 100 MPa here
 
 // A state: the region, T and p, and the properties per kg. In region 4, the
-// two-phase mixture, x is the vapour's mass fraction and cp, cv and w are
-// NaN unless x is 0 or 1, a saturated phase; elsewhere x is NaN.
+// two-phase mixture, x is the vapour's mass fraction and cp, cv, w and
+// drhodp are NaN unless x is 0 or 1, a saturated phase; elsewhere x is NaN.
 pub struct State {
 pub:
 	region int
@@ -39,6 +39,7 @@ pub:
 	cp     f64 // J/(kg·K)
 	cv     f64 // J/(kg·K)
 	w      f64 // m/s
+	drhodp f64 // (∂ρ/∂p)_T, kg/(m³·Pa): R15-11's industrial λ needs it
 	x      f64 = math.nan()
 }
 

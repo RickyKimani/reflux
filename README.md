@@ -13,6 +13,14 @@ v run . solve testdata/flowsheets/decanter.toml   # water, 1-butanol and methano
 ```
 
 ```bash
+v run . solve testdata/flowsheets/rankine.toml   # a Rankine cycle on IAPWS-95 water: pump, boiler, turbine, condenser
+```
+
+```bash
+v run . water T=450degC P=40bar   # a steam table: water's properties at a state, by IAPWS-95 (or --if97)
+```
+
+```bash
 v run . kinetics check testdata/kinetics/xu_froment.toml   # a file's reactions: every check (docs/flowsheet-format.md)
 ```
 
@@ -111,8 +119,10 @@ These goals come from what went wrong with DWSIM:
 v.mod               module manifest (Go's go.mod), with reflux's version
 CHANGELOG.md        every release, what a version promises, how to make one
 main.v              the command line: reflux solve, study, optimize, fit,
-                    kinetics, demo, version, help
+                    kinetics, water, demo, version, help
 kinetics_command.v  reflux kinetics check and explain
+water_command.v     reflux water (M5a): a state from two of T, P, h, s, x and
+                    rho, by IAPWS-95 or IF97, and the ice that bounds it
 study_command.v     reflux study and reflux optimize (M8)
 fit_command.v       reflux fit (M8)
 cpus_*.c.v          the processors, for a study's workers by default (M8)
@@ -201,6 +211,9 @@ water/              water and steam (M5a)
   coefficients.v    IAPWS-95's Tables 1 and 2, from its release
   properties.v      IAPWS-95's Table 3 on IAPWS's reference, and the constants
                     between it and reflux's (D6)
+  transport.v       water's viscosity (R12-08), thermal conductivity (R15-11)
+                    and surface tension (R1-76), and their industrial forms
+                    on IF97
   if97/             IAPWS-IF97 with its region-3 supplements, per kg (water.if97)
     basic.v         the basic equations of regions 1, 2 (and the metastable
                     vapour), 3 and 5
@@ -426,8 +439,10 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     gen_m5_iapws95.py (IAPWS-95's φʳ by mpmath, and water's
                     states and saturation by the iapws package and CoolProp),
                     extract_if97.py (IF97's coefficients from its releases'
-                    PDFs) and gen_m5_if97.py (the iapws package's IF97
-                    coefficients and states)
+                    PDFs), gen_m5_if97.py (the iapws package's IF97
+                    coefficients and states), gen_m5_transport.py (its
+                    transport properties) and gen_m5_rankine.py (the Rankine
+                    cycle by hand from its states)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in

@@ -18,7 +18,7 @@ fn close(got f64, want f64, scale f64, at string) {
 
 fn test_every_golden_flowsheet_solves_to_its_results() {
 	files := os.ls(golden_dir)!.filter(it.ends_with('.json'))
-	assert files.len == 6, '${files}'
+	assert files.len == 7, '${files}'
 	for f in files {
 		want := json2.decode[Report](os.read_file(os.join_path(golden_dir, f))!)!
 		assert want.file == 'testdata/flowsheets/${f.all_before('.json')}.toml'

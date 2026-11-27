@@ -3,7 +3,8 @@
 A flowsheet is a [TOML](https://toml.io) file, format 1, 2, 3 or 4: format 2
 (M9) adds reactions and reactors, format 3 (M8) adds specs, studies,
 optimisations and fits, and format 4 (M6) adds γ–φ fluids, whose liquid is
-an activity model, and the decanter. A file of reactions alone may be format
+an activity model, and the decanter, and (M5a) water by IAPWS-95. A file of
+reactions alone may be format
 2 or 3. Each reads every earlier format's sections as that format does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
@@ -103,6 +104,17 @@ An equation of state:
 | `kij` | `true` by default: binary interaction parameters from ChemSep's bank. |
 | `alpha` | `"equation"` by default, or `"mathias_copeman"`, for PR only. |
 | `kij_overrides` | A list of pairs set by hand: `[{ a = "methane", b = "ethane", k = 0.01 }]`. |
+
+Or in format 4 water alone by IAPWS-95 (M5a's D12), `equation =
+"IAPWS-95"`, with `[components] names` water by any of its names or its CAS
+number, and no other key: it has neither α nor kᵢⱼ, so `alpha`, `kij` and
+`kij_overrides` are refused, and so are water with another compound (which
+needs a mixture model reflux hasn't yet) and any other compound. Its H and S
+are on reflux's reference, as every fluid's are, so its units balance with
+the rest; `reflux water` gives its states on IAPWS's
+([design.md](design.md#reflux-water)).
+[testdata/flowsheets/rankine.toml](../testdata/flowsheets/rankine.toml) is a
+Rankine cycle on it.
 
 Or in format 4 a γ–φ fluid (M6's D12), whose liquid's fugacity is
 xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ times the Poynting correction, and whose vapour is the ideal

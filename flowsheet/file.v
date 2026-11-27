@@ -424,8 +424,13 @@ fn read_model(mut s Section, db components.Database, names []string, names_line 
 		}
 	}
 	equation := s.text('equation')!
+	if equation == 'IAPWS-95' {
+		return read_iapws95(mut s, db, names, names_line, format)
+	}
 	kind := equations[equation] or {
-		return s.fail('equation', 'no equation ${equation}', quantity.closest(equation, equations.keys()))
+		mut known := equations.keys()
+		known << 'IAPWS-95'
+		return s.fail('equation', 'no equation ${equation}', quantity.closest(equation, known))
 	}
 	mut opts := components.FluidOptions{
 		kij:   if s.has('kij') { s.boolean('kij')! } else { true }
@@ -467,6 +472,38 @@ fn read_model(mut s Section, db components.Database, names []string, names_line 
 	return Modelled{
 		fluid:  setup.fluid
 		report: cubic_report(equation, setup, names)
+	}
+}
+
+// read_iapws95 builds water's fluid by IAPWS-95 (M5a's D12): format 4's,
+// for water alone, with none of a cubic's keys.
+fn read_iapws95(mut s Section, db components.Database, names []string, names_line int, format int) !Modelled {
+	if format < 4 {
+		return s.fail('equation', 'IAPWS-95 needs format 4 (M5a), and this file is format ${format}',
+			[])
+	}
+	for key in ['alpha', 'kij', 'kij_overrides'] {
+		if s.has(key) {
+			return s.fail(key, "${key} is a cubic's, and IAPWS-95 has none", [])
+		}
+	}
+	s.finish()!
+	if names.len != 1 {
+		return file_error(names_line, 'components.names', "IAPWS-95 is water's alone; water with other compounds needs a mixture model, which reflux doesn't have yet",
+			[])
+	}
+	setup := db.iapws95(names[0]) or {
+		if err is components.LookupError {
+			return file_error(names_line, 'components.names', 'no compound ${err.query}', err.suggestions)
+		}
+		return file_error(names_line, 'components.names', err.msg(), [])
+	}
+	return Modelled{
+		fluid:  setup.fluid
+		report: ModelReport{
+			equation: 'IAPWS-95'
+			notes:    ["IAPWS R6-95(2018), with its own gas constant; H and S on reflux's reference"]
+		}
 	}
 }
 

@@ -388,6 +388,16 @@ All checked by tests in CI, as before.
    x and ρ, by IAPWS-95 or IF97, as a table and as JSON; each refusal (a pair
    that doesn't fix a state, a state outside the formulation's range) says
    why, with the exit statuses of M8's D17.
+
+   **Amended in step 7,** for the owner's approval: from the six pairs that
+   each fix one state, T and P, T and ρ, T and x, P and x, P and h, and P
+   and s (IF97 each but T and ρ, which its regions in (p, T) don't give).
+   The other nine are refused as a wrong command, each saying why: T and h
+   fix no state; T and s, P and ρ, and h, s or ρ with x can each fix two
+   (liquid water's density maximum, and extrema along the saturation line);
+   and two of h, s and ρ need an inverse in two dimensions reflux doesn't
+   have yet. A state above the melting pressure of ice (R14-08) is refused
+   as outside both formulations' range.
 10. **Speed.** An IAPWS-95 PT and PH flash, and IF97's functions, timed with
     gcc `-prod` against DWSIM's two packages, CoolProp and the `iapws`
     package, and recorded. reflux must be faster than DWSIM's own packages.
@@ -868,19 +878,187 @@ as written on the ridge, and is amended (above), for the owner's approval:
 the ridge is reported apart with the critical region, its cp difference
 recorded (0.99%, can't grow).
 
-### 6. Water's transport
+### 6. Water's transport — done
 - D11: R12-08, R15-11 and R1-76, on IAPWS-95 and in their industrial forms
   on IF97; their tables (criterion 7), and the `iapws` package's values over
   a grid.
 
-### 7. The file, `reflux water` and a Rankine cycle
+**What was built** ([design.md](design.md), "Water's transport"):
+[water/transport.v](../water/transport.v), `viscosity(T, ρ)` and
+`thermal_conductivity(T, ρ)` with their critical enhancements on IAPWS-95
+(ζ from φʳ), `viscosity_parts` and `conductivity_parts` with every term,
+`viscosity_industrial(T, ρ)` (μ₂ = 1) and `conductivity_industrial(state)`
+on an IF97 state (R15-11's Section 3: Eq. 25's ζ(T_R), the clamps of its
+footnote 2, λ₂ = 0 in region 5), and `surface_tension(T)`; each refuses
+outside its range with a `TransportError` saying why. IF97's state gained
+(∂ρ/∂p)_T, which the industrial λ needs, in each region's closed form.
+
+**D11's ranges, as read** (for the owner, no decision changed): R12-08's
+Eq. (9) and R15-11's Eq. (14) run from the melting curve to 1173.15 K, and
+both endorse extrapolation over IAPWS-95's range, to 1273.15 K, and from
+250 K for the vapour and subcooled liquid; above 1273.15 K, the dilute gas
+alone (μ to 2500 K, λ to about 1500 K), read as ρ ≤ 0.01ρc, where μ̄₁ and
+λ̄₁ are within about 1% of 1. σ runs from 248.15 K, R1-76's endorsed
+extrapolation, to Tc. The melting curve is `reflux water`'s to check (step
+7). At ρ = 0 IAPWS-95's derivatives diverge, so ξ and λ₂ are set to 0 there,
+as R15-11's Table 4 notes.
+
+**Tests** ([water/transport_test.v](../water/transport_test.v)):
+- **Criterion 7:** R12-08's Tables 4 and 5 (μ with μ₂ = 1; near the
+  critical point ξ, μ₂ and μ with IAPWS-95's ζ), R15-11's Tables 4 and 5 (λ,
+  and λ₁ and λ₂) and 7 to 9 (the industrial λ on IF97 in regions 1, 2 and
+  3, every quantity on the way: λ₀, λ₁, λ₂, ρ, (∂ρ/∂p)_T at T and T_R, ξ,
+  cp, cv, Z(y) and μ), and R1-76's Table 1 (σ every 5 °C), every value
+  within half a unit of its last printed figure.
+- **The ranges:** each edge, each side.
+- **Against the `iapws` package** (`tools/gen_m5_transport.py`,
+  `testdata/m5_transport.json`): IAPWS-95's μ and λ at its 791 states'
+  densities within 1e-13 and 2e-13 (1.0e-14 and 6.0e-14 measured, near Tc
+  too); IF97's industrial forms at reflux's IF97 states, 775 of them,
+  within 2e-12 and 1e-10 (4.9e-13, and 2.9e-11 in region 5); σ within 2e-15.
+- **The industrial λ near the critical point,** at the package's own
+  densities in region 3 (539 states, 647 K to 650 K from 21.8 MPa to 22.6
+  MPa, and the critical isochore 1 mK to 0.3 K above Tc): μ within 1e-14
+  (6.7e-16 measured), λ within 4e-11 + 4e-14·ζ (4.2e-12 on the grid; 1.3e-9
+  at 1 mK above Tc, where (∂p/∂ρ)_T cancels to about 1/ζ of its terms,
+  ζ = 1.2e5), among them 19 states by Table 6's edges with ξ > 0 and 5 with
+  ζ above 1e3; and in region 5, λ₂ = 0 at a state where ξ would not be
+  (1075 K, 10 kPa), the package keeping 2.9e-11 of λ there (footnote 3).
+
+**Planted mistakes:** 16, in a scratch copy, one at a time, all caught, 3
+only after the near-critical and region-5 tests above were added for them:
+μ₀'s H₂ with two digits swapped; μ₁'s i and j swapped; ζ's ∂p/∂ρ missing a
+2; Δχ̄'s T_R/T inverted; μ₂'s two forms split at ξ = 0.3 nm; x_μ 0.069;
+λ₂'s R rounded to 461.5; Z(y)'s cut at 1.2e-3; Λ rounded to 177.85; a
+dense gas allowed above 1273.15 K; σ's μ 1.25; σ from 273.15 K; a digit
+of L₃₂; and, caught only by the new tests, Table 6's second ρ̄ edge moved
+by 0.01, λ₂ kept in region 5, and ζ clamped at 1e3 (no state of the first
+grid came within 0.1 K of Tc on the critical isochore, where ζ passes 1e3).
+
+### 7. The file, `reflux water` and a Rankine cycle — done, with criterion 9 amended
 - D12, D13: `[model] equation = "IAPWS-95"`, its refusals at their lines;
   `reflux water`; a Rankine cycle as a golden flowsheet (criterion 8), its
   hand calculation from the `iapws` package's states as a fixture.
 
-### 8. Python
+**What was built:**
+- **The file** ([flowsheet/file.v](../flowsheet/file.v), D12): format 4's
+  `equation = "IAPWS-95"`, water by any of its names or its CAS number,
+  through `Database.iapws95` ([components/fluid.v](../components/fluid.v)),
+  which builds `water.fluid` on the record's ΔH°f and S° (D6) and a setup
+  that says it has neither kᵢⱼ nor α. Refused at their lines: format 3 and
+  before, `alpha`, `kij`, `kij_overrides`, another compound, water with
+  another, a misspelled equation (suggesting IAPWS-95). Report format 4's
+  `model` names it.
+- **A Rankine cycle** ([testdata/flowsheets/rankine.toml](../testdata/flowsheets/rankine.toml)):
+  50 mol/s of condensate at 318.15 K and 10 kPa, pumped to 8 MPa (η 0.75),
+  boiled to 773.15 K, expanded to 10 kPa (η 0.85) and condensed back, on
+  M4's units. It solves in 0.24 s under tcc, every balance closed: pump
+  9.6914 kW, boiler 2882.7 kW, turbine −971.81 kW, condenser −1920.6 kW,
+  the exhaust's x 0.88995; the golden flowsheets gain `rankine.json`.
+- **Its hand calculation** ([tools/gen_m5_rankine.py](../tools/gen_m5_rankine.py),
+  `testdata/m5_rankine.json`): per kg on IAPWS's reference with reflux's
+  unit models (the pump's v₁ΔP/η, the turbine's η times its isentropic
+  drop), each one-phase state the `iapws` package's IAPWS95 at its pair,
+  each wet one the lever rule on its saturated phases at its P; efficiency
+  0.33375.
+- **`reflux water`** ([water_command.v](../water_command.v), D13; design.md,
+  "`reflux water`"): two SPECs with units, T and P with offsets, h, s and ρ
+  per kg or per mole; IAPWS-95 by the flash (PT, PH, PS, the vapour-fraction
+  flashes) and Table 3 at each phase's (T, ρ), IF97 by its functions; one
+  phase per kg and per mole, or a wet state's two phases and mixture; μ, λ
+  and σ; the phase's name and IF97's region; `--json` (the water report,
+  format 1, [report-format.md](report-format.md)). Refused with why: the
+  pairs criterion 9 now leaves out (exit 2), IAPWS-95 outside 251.165 K to
+  1273.15 K and 1000 MPa, ice above its melting pressure (R14-08's ice III,
+  V and VI), no saturation at or above Tc, a density above 4ρc, IF97's own
+  range (exit 1). Below 273.16 K a state ice Ih makes metastable stands
+  with a note.
+
+**Tests:**
+- **The file** ([flowsheet/water_test.v](../flowsheet/water_test.v)):
+  every refusal at its line and key, a suggestion where there is one.
+- **Criterion 8** (the same file): the cycle against its hand calculation,
+  every power within 1e-7 kJ/kg (1.8e-10 measured: two flashes' energy
+  balances at 1e-10·RT each allow 3.6e-8), the feedwater's T within 1e-8 K
+  (3.8e-12), the exhaust's T within 1e-9 K (1.1e-12) and x within 2e-11
+  (2.3e-15), the efficiency within 1e-10; the condenser's outlet back at
+  the feed's h; the golden test, now seven reports.
+- **Criterion 9** ([main_test.v](../main_test.v)): the table and the JSON,
+  a wet IF97 state's region, phases, x and σ; all 1,566 of the package's
+  single-phase states from their T and P by both formulations, ρ, μ and λ
+  within 1e-11 to 1e-10 (IAPWS-95's 1.9e-12, 1.3e-12 and 7.0e-12 at worst,
+  at 647 K and 22 MPa, where the package's density solve is loosest); every
+  pair back to its state, T within 3e-11·T by IAPWS-95's (P, h) and
+  (P, s) (4.3e-9 K measured, the flashes' 1e-10·RT) and 5.5e-12 K by
+  IF97's, P by (T, ρ) within ρ's rounding through the bulk modulus, a wet
+  state's T within 1e-9 K and x within 1e-10 (6.4e-11 K, 3.9e-12); SPECs in
+  any unit; 17 wrong commands and 10 states with no answer, each with its
+  status and reason; the ice curves against R14-08's Table 3 to their
+  printed digits; seven-figure rounding.
+
+**Found:**
+- **The `iapws` package's (P, s) inside the dome lands off the saturation
+  line:** at 10 kPa and the turbine's s, 6.7266 kJ/(kg·K), its T is 0.15 K
+  above Tsat and its h 0.94 kJ/kg high, x 0.81061 against the lever rule's
+  0.81036; at s = 4 and 7.5 it lands at 322 K. Its (P, h) there is right.
+  So the hand calculation takes every wet state by the lever rule, which
+  reflux's PS flash matches to 2.4e-11 in x. To report upstream.
+- **Its (P, x) stops 1.5e-8 K above Tsat** at 10 kPa (its P at that T
+  7.6e-10 high); CoolProp's Tsat is within 1.4e-10 K of reflux's. The
+  generator solves the package's Psat(T) = P by Newton itself.
+- **The test of SPECs found a molar density divided by M** where it's
+  multiplied (mol/m³ to kg/m³), in the new code before it was committed.
+
+**Planted mistakes:** 16, all caught, one only after a test was added: the
+file's IAPWS-95 in format 3, with two compounds, and for any compound (the
+last also from the C API); and in `reflux water` a phase's label swapped,
+the mixture's v, a molar SPEC divided, T and h's refusal left out, the
+1273.15 K and 1000 MPa limits at twice, ice at twice its melting pressure,
+ice V's and the sublimation curve's constants, (P, h) on IAPWS's reference
+rather than reflux's, the seven-figure rounding's carry at 1e7, IF97's μ
+with R12-08's enhancement, and the JSON's molar density, which survived
+until the test held `per_mole`'s ρ and v. The first run restored a file
+from the tree while it was being edited, so every `reflux water` mistake
+was run again on a fresh copy.
+
+### 8. Python — done
 - D16: `REFLUX_IAPWS95`, the package's equation, and the reference program's
   points for the bit-for-bit tests (criterion 11).
+
+**What was built:** `REFLUX_IAPWS95` (4) in
+[capi/reflux.h](../capi/reflux.h), its fluid built by
+`Database.iapws95` and refused for an α, kᵢⱼ or overrides, more than one
+compound, or one that isn't water ([capi/database.v](../capi/database.v));
+`reflux_psat` takes a pure fluid's own model, so IAPWS-95's vapour pressure
+is its own; the ABI version unchanged (D16). The package's
+`Database.fluid("IAPWS-95", ["water"])`, its `kij` now `None` by default
+(True for a cubic, none for IAPWS-95), and docs/python.md's example of it.
+[tools/capi_reference.v](../tools/capi_reference.v) adds water by IAPWS-95
+to its fluids, so every vectorised call is held bit for bit on it,
+200 K's and 150 K's refusals included.
+
+**Tests:** in V ([capi/database_test.v](../capi/database_test.v),
+[capi/props_test.v](../capi/props_test.v)), each refusal, the fluid by
+three names against the V API's setup, and its Psat against
+`thermo.saturation_pressure`, at Tc and below 251.165 K none. From Python,
+`tools/python.vsh test`: 88 passed, among them criterion 11's
+(`test_reference.py`, every props, Psat, stability and flash point of the
+IAPWS-95 fluid bit for bit), R6-95's Table 7 liquid at 300 K, and the
+header's codes.
+
+**Planted mistakes:** 4 in the C API, all caught: IAPWS-95 with
+Mathias–Copeman's α, for any compound, `reflux_psat` for a cubic only, and
+`REFLUX_IAPWS95` unknown. None in the Python package: each would need the
+library built again under gcc, and its two changed lines (the code's name,
+and kij's default) are each one that test_database.py's water test and
+refusals fail without.
+
+**The bundle's full tcc check:** 136 test files, 135 passed; the header
+test in [capi/capi_test.v](../capi/capi_test.v) failed, holding the
+header's codes to the module's and not yet knowing `REFLUX_IAPWS95`, and
+passed alone once it did. The check stops at a failed test, so its fmt,
+vet, build and smoke runs (the demo, the reference flowsheet, a missing
+file, the kinetics, and `reflux water`) were run by hand after, and passed.
 
 ### 9. DWSIM references
 - D14: `tools/gen_m5_dwsim.py`, DWSIM's two packages by state and the

@@ -590,6 +590,14 @@ if _ := qp(p) {
   The γ–φ tests run each pure liquid with the ideal gas and with PR as
   `for vapour in [?thermo.CubicKind(none), ?thermo.CubicKind(.pr)]`
   ([components/gamma_phi_test.v](../components/gamma_phi_test.v), M6 step 5).
+- **A `match` can't yield a Result for one `or {}` after it.** In Go a
+  switch's arms assign `v, err` and one `if err != nil` follows. In V,
+  `y := match k { 1 { f(1) } else { f(-1) } } or { 0 }` is refused: each
+  arm's `f` needs its own `or {}` or `!`, and the `or` after the match has
+  nothing to handle ("expression of type `!int` is not an Option or a
+  Result"). Put the dispatch in a function that returns `!T`, each arm
+  `return f(…)!`, and handle that call once (probed in V 0.5.2;
+  `state97` in [water_command.v](../water_command.v)).
 
 ---
 
@@ -1581,6 +1589,14 @@ deprecated, which `-W` makes an error, and so is `json2.raw_decode(text)`:
 write `json2.decode[json2.Any](text)` ([water/if97/iapws_test.v](../water/if97/iapws_test.v)). [flowsheet/report_test.v](../flowsheet/report_test.v)
 checks the report that way, so that a key on the wrong field can't hide
 behind the struct that wrote it and read it back.
+
+**Indexing a map of `json2.Any` needs `or {}` or `!`.** Go's `m["b"]` is the
+zero value for a missing key; V's is too for a map of plain values, but a
+sum type's has no zero value, so `m['b']` alone is refused ("`or {}` block
+required when indexing a map with sum type value"), and `m['b'] == none`
+with it. Test a key with `'b' !in m`, and read one with `m['a']!` or
+`m['a'] or { json2.Any(0) }` (probed in V 0.5.2;
+[main_test.v](../main_test.v), the water report).
 
 **Reflection happens at compile time.** Go's `reflect` inspects values at
 run time, through `interface{}`, and a mistake is a run-time panic. V's

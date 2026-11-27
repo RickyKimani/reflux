@@ -248,6 +248,7 @@ fn mixture(liq State, vap State, p f64, x f64) State {
 		cp:     nan
 		cv:     nan
 		w:      nan
+		drhodp: nan
 		x:      x
 	}
 }

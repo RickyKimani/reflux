@@ -59,6 +59,14 @@ const fluids = [
 		overrides: [['methane', 'nitrogen']]
 		ks:        [0.03]
 	},
+	// Water by IAPWS-95 (M5a's D16): no α, no kᵢⱼ. 200 K and 150 K are below
+	// its model's states, so its refusals come through too.
+	FluidCase{
+		equation: 'IAPWS-95'
+		names:    ['water']
+		alpha:    'equation'
+		kij:      false
+	},
 ]
 
 const equations = {
@@ -160,10 +168,17 @@ fn props_point(f thermo.Fluid, root thermo.Root, t f64, p f64, z []f64) string {
 	return '{"root": "${root}", "t": ${bits(t)}, "p": ${bits(p)}, "z": ${bits_list(z)}, "status": ${status}, "values": ${bits_list(values)}, "ln_phi": ${bits_list(ln_phi)}, "phase": ${phase}}'
 }
 
-fn psat_point(m thermo.Cubic, j int, t f64) string {
-	pure := thermo.new_cubic(m.kind, [m.comps[j]], alphas: [m.alphas[j]]) or { panic(err) }
+fn psat_point(m thermo.Model, j int, t f64) string {
+	// A cubic's compound alone, with its α; a pure fluid's own model.
+	pure := if m is thermo.Cubic {
+		thermo.Model(thermo.new_cubic(m.kind, [m.comps[j]], alphas: [m.alphas[j]]) or {
+			panic(err)
+		})
+	} else {
+		m
+	}
 	mut status, mut p := ok, math.nan()
-	if t >= m.comps[j].tc {
+	if t >= m.components()[j].tc {
 		status = supercritical
 	} else {
 		p = thermo.saturation_pressure(pure, t) or {
@@ -272,13 +287,17 @@ fn fluid_json(db components.Database, fc FluidCase) !string {
 	} else {
 		components.AlphaChoice.equation
 	}
-	s := db.setup(equations[fc.equation] or { thermo.CubicKind.pr }, cas,
-		alpha:     alpha
-		kij:       fc.kij
-		overrides: overrides
-	)!
+	s := if fc.equation == 'IAPWS-95' {
+		db.iapws95(fc.names[0])!
+	} else {
+		db.setup(equations[fc.equation] or { thermo.CubicKind.pr }, cas,
+			alpha:     alpha
+			kij:       fc.kij
+			overrides: overrides
+		)!
+	}
 	f := s.fluid
-	m := f.helmholtz()! as thermo.Cubic
+	m := f.helmholtz()!
 	nc := cas.len
 	mut props := []string{}
 	mut stab := []string{}

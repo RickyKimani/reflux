@@ -1,6 +1,7 @@
 module components
 
 import thermo
+import water
 
 // AlphaChoice picks each component's α function.
 pub enum AlphaChoice {
@@ -21,14 +22,16 @@ pub:
 
 // Setup is a fluid built from the database, with a record of how: the
 // equation, the records used, the kᵢⱼ matrix and where each value came from,
-// and how each α was chosen.
+// and how each α was chosen. equation is its name as a file writes it; kind
+// is a cubic's, and means nothing for IAPWS-95.
 pub struct Setup {
 pub:
-	kind    thermo.CubicKind
-	fluid   thermo.Fluid
-	records []Record
-	kij     KijMatrix
-	alphas  []string // per component, e.g. 'Mathias–Copeman, mc-PR.lib line 99'
+	equation string
+	kind     thermo.CubicKind
+	fluid    thermo.Fluid
+	records  []Record
+	kij      KijMatrix
+	alphas   []string // per component, e.g. 'Mathias–Copeman, mc-PR.lib line 99'
 }
 
 // fluid builds a thermo.Fluid for a cubic equation of state from compounds
@@ -100,11 +103,12 @@ pub fn (db Database) setup(kind thermo.CubicKind, names []string, opts FluidOpti
 	}
 	eos := thermo.new_cubic(kind, comps, kij: kij.k, alphas: alphas)!
 	return Setup{
-		kind:    kind
-		fluid:   thermo.new_fluid(eos, ideal)!
-		records: records
-		kij:     kij
-		alphas:  how
+		equation: equation_name(kind)
+		kind:     kind
+		fluid:    thermo.new_fluid(eos, ideal)!
+		records:  records
+		kij:      kij
+		alphas:   how
 	}
 }
 
@@ -115,7 +119,7 @@ pub fn (db Database) setup(kind thermo.CubicKind, names []string, opts FluidOpti
 // where it came from. Floats are V's shortest
 // round-trip form, so they read back exactly.
 pub fn (s Setup) to_toml() !string {
-	mut out := ['equation = ${quote(equation_name(s.kind))!}', 'kij_bank = ${quote(s.kij.bank)!}']
+	mut out := ['equation = ${quote(s.equation)!}', 'kij_bank = ${quote(s.kij.bank)!}']
 	comps := s.fluid.model.components()
 	for i, r in s.records {
 		c := comps[i]
@@ -154,6 +158,29 @@ pub fn (s Setup) to_toml() !string {
 	return out.join('
 ') + '
 '
+}
+
+// iapws95 builds water's fluid by IAPWS-95 (M5a's D2, D12, D16), from the
+// one compound named, which must be water, by any of its names or its CAS
+// number: water.iapws95() with its own ideal-gas Cp, and water's record's
+// ΔH°f and S° for reflux's reference. It has no kᵢⱼ and no α.
+pub fn (db Database) iapws95(name string) !Setup {
+	r := db.find(name)!
+	if r.ids.cas != water_cas {
+		return error("IAPWS-95 is water's alone, not ${r.name} (${r.ids.cas})")
+	}
+	ig := r.ideal_gas()!
+	return Setup{
+		equation: 'IAPWS-95'
+		fluid:    water.fluid(ig.dhf, ig.s0)!
+		records:  [r]
+		kij:      KijMatrix{
+			bank: 'none: IAPWS-95 is for water alone'
+			cas:  [r.ids.cas]
+			k:    [0.0]
+		}
+		alphas:   ['none: IAPWS-95 has no α']
+	}
 }
 
 // equation_name is an equation's name as a flowsheet file writes it.

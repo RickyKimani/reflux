@@ -46,6 +46,7 @@
 #define REFLUX_RK 1
 #define REFLUX_SRK 2
 #define REFLUX_PR 3
+#define REFLUX_IAPWS95 4 /* water alone, by IAPWS-95 (M5a): no alpha, no kij */
 
 /* α functions. */
 #define REFLUX_ALPHA_EQUATION 0        /* the equation's own: Soave's, for SRK and PR */
@@ -136,15 +137,18 @@ int32_t reflux_compound(int64_t db, char *query, char *buf, int32_t len, int32_t
 /* ---- Fluids ---- */
 
 /* reflux_fluid_new builds a fluid of the nc compounds named, for an equation
-   of state (REFLUX_VDW, REFLUX_RK, REFLUX_SRK or REFLUX_PR), and writes its
-   handle to *fluid.
+   of state (REFLUX_VDW, REFLUX_RK, REFLUX_SRK, REFLUX_PR or REFLUX_IAPWS95),
+   and writes its handle to *fluid.
    - alpha is REFLUX_ALPHA_EQUATION or REFLUX_ALPHA_MATHIAS_COPEMAN (PR only);
      a compound mc-PR.lib lacks keeps the equation's own.
    - kij is 1 for ChemSep's kij for the equation (PR and SRK have a bank),
      taking a pair's first listing, or 0 for none.
    - n_overrides pairs set by hand follow: the compounds pair_a[k] and
      pair_b[k], both in the fluid and named any way the database knows, get
-     the kij pair_k[k]. */
+     the kij pair_k[k].
+   REFLUX_IAPWS95 is water alone (nc 1, by any of its names), with alpha
+   REFLUX_ALPHA_EQUATION, kij 0 and no overrides; its H and S are on the
+   formation basis, as a cubic's (M5a's D6). Every call below takes it. */
 int32_t reflux_fluid_new(int64_t db, int32_t equation, char **names, int32_t nc, int32_t alpha,
                          int32_t kij, char **pair_a, char **pair_b, double *pair_k,
                          int32_t n_overrides, int64_t *fluid, char *err, int32_t err_len);

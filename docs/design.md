@@ -655,6 +655,131 @@ within 0.0069% and Ts within 0.0006% of Eqs. (30) and (31), and on region 3
 ps within 0.0026%. The steam-table functions don't hide these: each answer
 is its region's equation's.
 
+## Water's transport
+
+[water/transport.v](../water/transport.v) (M5a's step 6, D11) holds IAPWS's
+correlations for water's viscosity (R12-08), thermal conductivity (R15-11)
+and surface tension (R1-76(2014)), each a function of (T, ρ) with ρ in
+kg/m³, or of T alone for σ. Reduced: T̄ = T/T*, ρ̄ = ρ/ρ*, p̄ = p/p*, with
+T* = 647.096 K, ρ* = 322 kg/m³, p* = 22.064 MPa, μ* = 1 µPa·s and
+λ* = 1 mW/(m·K).
+
+**The viscosity**, μ̄ = μ̄₀(T̄)·μ̄₁(T̄, ρ̄)·μ̄₂(T̄, ρ̄):
+
+    μ̄₀ = 100√T̄ / Σᵢ₌₀³ Hᵢ/T̄ⁱ
+    μ̄₁ = exp[ρ̄ Σᵢ Σⱼ Hᵢⱼ (1/T̄ − 1)ⁱ (ρ̄ − 1)ʲ]          (Table 2's 21 terms)
+    μ̄₂ = exp(x_μ Y)
+
+with Y by Eq. (15) where ξ ≤ 0.3817016416 nm,
+
+    Y = (1/5) q_Cξ (q_Dξ)⁵ [1 − q_Cξ + (q_Cξ)² − (765/504)(q_Dξ)²],
+
+and by Eq. (16) beyond,
+
+    Y = (1/12) sin 3ψ − sin 2ψ/(4q_Cξ) + (1 − (5/4)(q_Cξ)²) sin ψ/(q_Cξ)²
+        − [(1 − (3/2)(q_Cξ)²)ψ − |(q_Cξ)² − 1|^(3/2) L(w)]/(q_Cξ)³,
+    ψ = arccos (1 + (q_Dξ)²)^(−1/2),  w = |(q_Cξ − 1)/(q_Cξ + 1)|^(1/2) tan(ψ/2),
+    L(w) = ln((1 + w)/(1 − w)) if q_Cξ > 1, else 2 arctan |w|.
+
+The correlation length is ξ = ξ₀(Δχ̄/Γ₀)^(ν/γ), with Δχ̄ = ρ̄[ζ(T̄, ρ̄) −
+ζ(T̄_R, ρ̄)·T̄_R/T̄] and ζ = (∂ρ̄/∂p̄)_T̄, which IAPWS-95 gives as
+p*/(ρ*·(∂p/∂ρ)_T), (∂p/∂ρ)_T = RT(1 + 2δφʳ_δ + δ²φʳ_δδ) (R = 461.51805
+J/(kg·K)). Where Δχ̄ < 0, and at ρ = 0, ξ = 0. The constants: x_μ = 0.068,
+q_C⁻¹ = 1.9 nm, q_D⁻¹ = 1.1 nm, ν = 0.630, γ = 1.239, ξ₀ = 0.13 nm,
+Γ₀ = 0.06, T̄_R = 1.5.
+
+**The thermal conductivity**, λ̄ = λ̄₀(T̄)·λ̄₁(T̄, ρ̄) + λ̄₂(T̄, ρ̄):
+
+    λ̄₀ = √T̄ / Σₖ₌₀⁴ Lₖ/T̄ᵏ
+    λ̄₁ = exp[ρ̄ Σᵢ₌₀⁴ (1/T̄ − 1)ⁱ Σⱼ₌₀⁵ Lᵢⱼ (ρ̄ − 1)ʲ]
+    λ̄₂ = Λ ρ̄ (cp/R) T̄/μ̄ · Z(y),   y = q̄_D ξ,
+    Z(y) = 2/(πy) {[(1 − κ⁻¹) arctan y + κ⁻¹y] − [1 − exp(−1/(y⁻¹ + y²/(3ρ̄²)))]},
+
+with Λ = 177.8514, q̄_D⁻¹ = 0.40 nm, κ = cp/cv, μ̄ the whole viscosity
+above, ξ as for μ, and Z = 0 for y < 1.2e-7 (where its terms cancel). At
+ρ = 0 IAPWS-95's derivatives diverge and λ̄₂ = 0 (Table 4's note).
+
+**The industrial forms**, on an IF97 state: μ̄₂ = 1, on IF97's ρ; and λ by
+R15-11's Section 3, the same λ̄₀λ̄₁ + λ̄₂ with IF97's ρ, cp, cv and ζ =
+(p*/ρ*)(∂ρ/∂p)_T, ζ(T̄_R, ρ̄) by Eq. (25), 1/Σᵢ₌₀⁵ Aᵢⱼρ̄ⁱ with column j
+by ρ̄ against Table 6's edges (0.310559006, 0.776397516, 1.242236025,
+1.863354037), the industrial μ̄ in λ̄₂, ζ and cp taken as 10¹³ where IF97
+gives them negative or larger (footnote 2), and λ̄₂ = 0 in region 5
+(footnote 3). IF97's state carries (∂ρ/∂p)_T for it: −RTγ_ππ/(p*²v²) in
+region 1, −RT(γʳ_ππ − 1/π²)/(p*²v²) in regions 2 and 5 (γ° giving the
+−1/π²), 1/(RT(2δφ_δ + δ²φ_δδ)) in region 3, and NaN for a mixture.
+
+**The surface tension**, σ = B τ^μ (1 + bτ), τ = 1 − T/Tc, B = 235.8 mN/m,
+b = −0.625, μ = 1.256, from 248.15 K (−25 °C, the release's endorsed
+extrapolation into the supercooled liquid) to Tc.
+
+**The ranges** (D11, as read in step 6): R12-08's Eq. (9) and R15-11's Eq.
+(14) run from the melting curve to 1173.15 K at pressures to 1000 MPa, and
+both endorse extrapolation to IAPWS-95's range, to 1273.15 K, and from
+250 K for the vapour and subcooled liquid. Above 1273.15 K they endorse
+only the dilute gas, the viscosity's to 2500 K and the conductivity's to
+about 1500 K; a gas is read as dilute to ρ = 0.01ρc, where μ̄₁ and λ̄₁ are
+within about 1% of 1. Anything else is a `TransportError` saying why.
+Neither function knows the melting curve, which `reflux water` checks.
+
+## `reflux water`
+
+[water_command.v](../water_command.v) (M5a's step 7, D13) is a steam table
+on the command line. Two SPECs, each NAME=VALUE with the value's unit read
+by `quantity` (T and P with offsets and gauges; h, s and ρ per kg or per
+mole, by IAPWS's molar mass 18.015268 g/mol), fix a state:
+
+| Pair | IAPWS-95 | IF97 |
+|---|---|---|
+| T, P | the PT flash | `state_pt` |
+| T, ρ | Table 3 at (T, ρ); below Tc, the lever rule between the saturated phases' densities where ρ'' < ρ < ρ' | refused: regions 1, 2 and 5 are in (p, T) |
+| T, x | the saturated phases by the T-vapour-fraction flash, and the lever rule | `state_tx` |
+| P, x | the same by the P-vapour-fraction flash | `state_px` |
+| P, h; P, s | the PH and PS flashes on `water.fluid`, h and s moved to reflux's reference by D6's constants | `state_ph`, `state_ps` |
+
+Each IAPWS-95 phase's properties are then Table 3's at its own (T, ρ)
+(`props95`), per kg on IAPWS's reference, and its μ and λ the full
+correlations; each IF97 phase's are its state's, and its μ and λ the
+industrial forms. A wet state's whole is the lever rule in v, h, s and u
+with x the vapour's mass fraction; it has no cp, cv, w, μ or λ. A saturated
+state (x given, or wet) has σ(T).
+
+The other nine pairs are refused as a wrong command (exit 2), with why: T
+and h fix no state (an isotherm's h hardly moves with P); T and s, P and ρ,
+and h, s or ρ with x can each fix two states (liquid water's density
+maximum near 4 °C makes s(P) at fixed T, and ρ(T) at fixed P, rise and
+fall; along the saturation line h'' has a maximum, 2803 kJ/kg near 235 °C,
+and s and v at a fixed x rise and fall too); and reflux doesn't yet solve
+for T and P from two of h, s and ρ.
+
+A phase's name: supercritical at or above both Tc and pc, vapour above Tc
+below pc, and below Tc liquid or vapour by its side of ρc (IAPWS-95's
+branches, D7).
+
+**The range.** IAPWS-95 holds from 251.165 K (its model's states, D7) to
+1273.15 K and 1000 MPa (R6-95); IF97's functions refuse outside theirs.
+Either way, a state above the melting pressure of the ice that bounds the
+liquid at its T is refused (exit 1), by R14-08:
+
+    ice III, 251.165 K to 256.164 K:  p/208.566 MPa = 1 − 0.299948(1 − θ⁶⁰),    θ = T/251.165 K
+    ice V,   256.164 K to 273.31 K:   p/350.100 MPa = 1 − 1.18721(1 − θ⁸),      θ = T/256.164 K
+    ice VI,  273.31 K to 355 K:       p/632.400 MPa = 1 − 1.07476(1 − θ^4.6),   θ = T/273.31 K
+
+(ice VII, above 355 K, melts beyond 2216 MPa, outside both ranges). Below
+273.16 K, a state between ice Ih's sublimation and melting pressures stands
+with a note that it's metastable (a supercooled liquid, or a vapour over
+ice), as does every saturated state there:
+
+    melting,     p/pₜ = 1 + Σᵢ aᵢ(1 − θ^bᵢ),  a = (1.19539337e6, 8.08183159e4, 3.33826860e3),  b = (3, 25.75, 103.75)
+    sublimation, ln(p/pₜ) = θ⁻¹ Σᵢ aᵢθ^bᵢ,   a = (−21.2144006, 27.3203819, −6.10598130),  b = (0.00333333333, 1.20666667, 1.70333333)
+
+with θ = T/273.16 K and pₜ = 611.657 Pa.
+
+The table rounds each number to seven figures with `math.round`, never
+printf; the JSON (the water report, [report-format.md](report-format.md))
+gives every number in SI, per kg and per mole, and leaves out a property a
+state hasn't.
+
 ## Rachford–Rice
 
 `numeric.rachford_rice` ([numeric/rachford_rice.v](../numeric/rachford_rice.v))

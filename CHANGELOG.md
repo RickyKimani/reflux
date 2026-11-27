@@ -39,7 +39,30 @@ From 0.2.0 on:
 
 ## [0.6.0]
 
-Begun after 0.5.0 with one fix; the next milestone adds to it.
+Begun after 0.5.0 with one fix; M5a, water and steam, adds to it (its
+step 11 finishes this entry).
+
+### Added
+
+- **Water by IAPWS-95** (`water`): IAPWS R6-95(2018) as a `thermo.Model`,
+  with its own gas constant so that its tables match, through every flash,
+  in a flowsheet file (format 4's `[model] equation = "IAPWS-95"`, water
+  alone) and from the C API and Python (`REFLUX_IAPWS95`,
+  `Database.fluid("IAPWS-95", ["water"])`). Its model has no state below
+  251.165 K.
+- **IAPWS-IF97** (`water.if97`), with its region-3 supplements SR3-03 and
+  SR5-05, as steam-table functions from (p, T), (p, h), (p, s), (T, x) and
+  (p, x), each backward answer finished on its basic equation.
+- **Water's transport** (`water`): R12-08's viscosity and R15-11's thermal
+  conductivity with their critical enhancements on IAPWS-95, their
+  industrial forms on IF97, and R1-76's surface tension.
+- **`reflux water`**: a steam table on the command line, a state from two of
+  T, P, h, s, x and ρ with units, by IAPWS-95 or IF97 (`--if97`), per kg and
+  per mole on IAPWS's reference, as a table and as JSON (the water report,
+  format 1).
+- **A golden flowsheet**, `rankine.json`: a Rankine cycle on IAPWS-95
+  (`testdata/flowsheets/rankine.toml`), held against a hand calculation from
+  the `iapws` package's states to 1.8e-10 kJ/kg.
 
 ### Fixed
 

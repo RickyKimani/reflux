@@ -246,18 +246,21 @@ fn check_points(n i64, arrays []voidptr, names []string) !Points {
 	return Points{n}
 }
 
-// pure_model is a cubic's j'th compound alone, with its own α: what its
-// vapour pressure is computed from.
-fn pure_model(m thermo.Model, j int) !thermo.Cubic {
+// pure_model is a cubic's j'th compound alone, with its own α, or a pure
+// fluid's own model (IAPWS-95's): what its vapour pressure is computed from.
+fn pure_model(m thermo.Model, j int) !thermo.Model {
 	if m is thermo.Cubic {
 		return thermo.new_cubic(m.kind, [m.comps[j]], alphas: [m.alphas[j]])!
 	}
-	return error('vapour pressure is for cubic equations of state')
+	if m.components().len == 1 {
+		return m
+	}
+	return error('vapour pressure is for a pure fluid or a cubic equation of state')
 }
 
 // saturation is one point of reflux_psat.
-fn saturation(pure thermo.Cubic, t f64) !f64 {
-	c := pure.comps[0]
+fn saturation(pure thermo.Model, t f64) !f64 {
+	c := pure.components()[0]
 	check_t(t)!
 	if t >= c.tc {
 		return point_error(point_supercritical, '${c.name}: T = ${t} K is at or above its Tc, ${c.tc} K, so it has no vapour pressure')

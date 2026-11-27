@@ -77,7 +77,7 @@ def test_properties_are_the_v_apis(ref, db):
                     assert same([getattr(r, n)[i] for n in _native.PROPS], p["values"]), at
                     assert same(r.ln_phi[i], p["ln_phi"]) and r.phase[i] == p["phase"], at
                     checked += 1
-    assert checked == 4 * 3 * 20
+    assert checked == len(ref["fluids"]) * 3 * 20
 
 
 def test_vapour_pressures_are_the_v_apis(ref, db):
@@ -90,7 +90,7 @@ def test_vapour_pressures_are_the_v_apis(ref, db):
                 for i, p in enumerate(pts):
                     assert r.status[i] == p["status"] and same([r.p[i]], [p["p"]])
                     checked += 1
-    assert checked == 4 * 11
+    assert checked == 4 * sum(len(c["names"]) for c in ref["fluids"])
 
 
 def test_stability_is_the_v_apis(ref, db):

@@ -250,8 +250,29 @@ fn test_a_fluids_mistakes_are_refused() {
 	}
 	for m in [
 		Mistake{FluidArgs{
+			equation: 5
+		}, 'no equation 5: REFLUX_VDW (0), REFLUX_RK (1), REFLUX_SRK (2), REFLUX_PR (3) or REFLUX_IAPWS95 (4)'},
+		// IAPWS-95 is water's alone, with neither α nor kᵢⱼ.
+		Mistake{FluidArgs{
 			equation: 4
-		}, 'no equation 4: REFLUX_VDW (0), REFLUX_RK (1), REFLUX_SRK (2) or REFLUX_PR (3)'},
+			names:    ['water']
+			kij:      0
+			alpha:    1
+		}, 'IAPWS-95 has no α: alpha is REFLUX_ALPHA_EQUATION (0), not 1'},
+		Mistake{FluidArgs{
+			equation: 4
+			names:    ['water']
+		}, "IAPWS-95 is water's alone, with no kij: kij is 0 and n_overrides 0, not 1 and 0"},
+		Mistake{FluidArgs{
+			equation: 4
+			names:    ['water', 'methane']
+			kij:      0
+		}, "IAPWS-95 is water's alone: nc is 1, not 2"},
+		Mistake{FluidArgs{
+			equation: 4
+			names:    ['methane']
+			kij:      0
+		}, "IAPWS-95 is water's alone: `methane` is Methane (74-82-8)"},
 		Mistake{FluidArgs{
 			alpha: 2
 		}, 'no alpha 2: REFLUX_ALPHA_EQUATION (0) or REFLUX_ALPHA_MATHIAS_COPEMAN (1)'},
@@ -317,6 +338,25 @@ fn test_a_fluids_mistakes_are_refused() {
 		unsafe { &&char(names.data) }, unsafe { &f64(k.data) }, 1, &id, &char(reason.data), 1024) == bad_argument
 	assert c_string(reason) == 'pair_a is NULL'
 	assert id == 0
+}
+
+// REFLUX_IAPWS95 (M5a's D16) is the V API's IAPWS-95 water, by any of its
+// names, and its setup says so.
+fn test_an_iapws95_fluid_is_the_v_apis() {
+	code, db, _ := open_db('')
+	assert code == ok
+	defer {
+		remove(db) or {}
+	}
+	want := components.load_default()!.iapws95('water')!
+	for name in ['water', '7732-18-5', 'WATER'] {
+		c, fl, why := new_fluid(db, equation: 4, names: [name], kij: 0)
+		assert c == ok, why
+		got := setup_of(fl)!
+		assert got.equation == 'IAPWS-95' && setup_text(fl)! == want.to_toml()!
+		assert got.fluid.model.components() == want.fluid.model.components()
+		remove(fl)!
+	}
 }
 
 fn test_a_handle_is_of_its_kind() {

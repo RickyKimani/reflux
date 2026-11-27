@@ -78,21 +78,24 @@ class Database:
         index = tomllib.loads(_native.text_out(_native.lib.reflux_database_index, self.handle))
         return [{"cas": cas, **entry} for cas, entry in index.get("compounds", {}).items()]
 
-    def fluid(self, equation, names, *, alpha="equation", kij=True, overrides=None):
-        """A fluid of the named compounds for a cubic equation of state.
+    def fluid(self, equation, names, *, alpha="equation", kij=None, overrides=None):
+        """A fluid of the named compounds for an equation of state.
 
-        equation: "PR", "SRK", "RK" or "vdW", in any case.
+        equation: "PR", "SRK", "RK" or "vdW", in any case, a cubic; or
+            "IAPWS-95", water alone by IAPWS's formulation.
         names: the compounds, each by CAS number, name, alias or InChIKey.
         alpha: "equation", the equation's own α (Soave's for SRK and PR), or
             "mathias_copeman", ChemSep's constants, for PR. A compound mc-PR.lib
             lacks keeps the equation's own, and Fluid.setup says so.
         kij: True takes ChemSep's kᵢⱼ for PR or SRK (a pair's first listing),
-            False none.
+            False none; by default True for a cubic, and IAPWS-95 has none.
         overrides: kᵢⱼ set by hand, {("methane", "n-butane"): 0.02, ...}.
         """
         code = _native.EQUATIONS.get(str(equation).upper())
         if code is None:
-            raise ValueError(f"no equation {equation!r}: PR, SRK, RK or vdW")
+            raise ValueError(f"no equation {equation!r}: PR, SRK, RK, vdW or IAPWS-95")
+        if kij is None:
+            kij = code != _native.EQUATIONS["IAPWS-95"]
         if alpha not in _native.ALPHAS:
             raise ValueError(f"no alpha {alpha!r}: {' or '.join(map(repr, _native.ALPHAS))}")
         if isinstance(names, str):

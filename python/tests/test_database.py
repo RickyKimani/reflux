@@ -107,8 +107,29 @@ def test_a_fluid_is_its_data(db):
     assert db.fluid("SRK", ["methane", "n-butane"]).setup["kij_bank"] == "srk.ipd"
 
 
+def test_water_by_iapws95(db):
+    # M5a's D16: water alone, its constants from its component file, no kᵢⱼ;
+    # every vectorised call takes it. At 300 K and 0.0992418352 MPa it's
+    # R6-95's Table 7 liquid, 996.556 kg/m³ by IAPWS's molar mass, and it
+    # boils at one atmosphere at 373.124 K, so Psat there is 101325 Pa within
+    # dP/dT's 3.6 kPa/K over the last digit's 0.5 mK.
+    fl = db.fluid("iapws-95", ["7732-18-5"])
+    assert fl.equation == "IAPWS-95" and fl.names == ["Water"] and fl.nc == 1
+    assert not fl.kij.any() and "pairs" not in fl.setup
+    r = fl.props([300.0], 0.0992418352e6)
+    assert r.phase[0] == reflux.Phase.LIQUID and abs(0.018015268 / r.v[0] - 996.556) < 1e-6
+    sat = fl.psat([373.124, 700.0], "water")
+    assert abs(sat.p[0] - 101325.0) < 2.0 and sat.status[1] == reflux.Status.SUPERCRITICAL
+    f = fl.flash_ph([0.0992418352e6], r.h[0] + 5e3)  # 5 kJ/mol warms the liquid by about 66 K
+    assert f.status[0] == reflux.Status.OK and 300.0 < f.t[0] < 373.2
+
+
 @pytest.mark.parametrize("args, kwargs, error, message", [
-    (("PRX", ["methane"]), {}, ValueError, "no equation 'PRX': PR, SRK, RK or vdW"),
+    (("PRX", ["methane"]), {}, ValueError, "no equation 'PRX': PR, SRK, RK, vdW or IAPWS-95"),
+    (("IAPWS-95", ["water"]), {"kij": True}, reflux.BadArgument, "IAPWS-95 is water's alone, with no kij"),
+    (("IAPWS-95", ["water"]), {"alpha": "mathias_copeman"}, reflux.BadArgument, "IAPWS-95 has no α"),
+    (("IAPWS-95", ["water", "methane"]), {}, reflux.BadArgument, "nc is 1, not 2"),
+    (("IAPWS-95", ["methane"]), {}, reflux.BadArgument, r"`methane` is Methane \(74-82-8\)"),
     (("PR", ["methane"]), {"alpha": "soave"}, ValueError, "no alpha 'soave'"),
     (("PR", "methane"), {}, TypeError, "names should be a list"),
     (("SRK", ["methane"]), {"alpha": "mathias_copeman"}, reflux.BadArgument,
