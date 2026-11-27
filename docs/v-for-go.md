@@ -1313,6 +1313,17 @@ When the C side needs the preprocessor (`#if defined(GC_THREADS)`), write a
 small C header and call it, as [gc_threads.h](../capi/gc_threads.h) does.
 V code can't see C macros.
 
+**Module `main`'s functions keep their C names.** A function in any other
+module becomes `module__name` in the C V writes, but one in `main` stays
+`name`, so it can collide with the C library V includes. `fn finite(x f64)
+?f64` in `main` compiled under tcc and Ubuntu's gcc, and failed under
+Windows' gcc (MinGW-w64), whose `math.h` declares `int finite(double)`:
+"conflicting types for 'finite'". Go has no such shared namespace. In
+`main`, don't name a function as the C library may declare one, and build
+`main` with gcc before trusting tcc's word; `reflux water`'s helper is
+`json_number` ([water_command.v](../water_command.v), CI on M5a's bundle
+C).
+
 **C (or Python) calling V.** `@[export: 'name']` gives a function a fixed C
 symbol, and `v -shared` builds a `.dll` or `.so`:
 

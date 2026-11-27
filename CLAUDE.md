@@ -1356,6 +1356,9 @@ or a test:
   catches it), never a count of work. Count the work itself.
 - **A panic can't be caught.** There's no `recover`, so what a library might
   panic on must be kept from it: `toml.parse_text` on a `\u` escape, for one.
+- **Module `main`'s functions keep their C names,** unprefixed: one named
+  like a C library function (`finite`, in MinGW's `math.h`) builds under
+  tcc and fails under Windows' gcc. Build `main` with gcc when you add one.
 - **Module names:** not like a vlib module's. `benchmark` broke external
   tests, because V's test runner imports vlib's.
 - **Leftovers:** V can leave `.*.v3cc.*/` build folders next to a binary.

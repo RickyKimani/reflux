@@ -913,7 +913,10 @@ struct PhaseJson {
 	lambda ?f64
 }
 
-fn finite(x f64) ?f64 {
+// json_number is x, or none where it isn't finite, which the report leaves
+// out. (Not `finite`: module main's functions keep their C names, and
+// mingw's math.h declares an int finite(double), so gcc on Windows refuses.)
+fn json_number(x f64) ?f64 {
 	return if math.is_finite(x) { x } else { none }
 }
 
@@ -922,16 +925,16 @@ fn finite(x f64) ?f64 {
 fn per_json(ph WaterPhase, mm f64) PhaseJson {
 	molar := mm != 1.0
 	return PhaseJson{
-		rho:    finite(ph.rho / mm)
-		v:      finite(ph.v * mm)
-		h:      finite(ph.h * mm)
-		s:      finite(ph.s * mm)
-		u:      finite(ph.u * mm)
-		cv:     finite(ph.cv * mm)
-		cp:     finite(ph.cp * mm)
-		w:      if molar { none } else { finite(ph.w) }
-		mu:     if molar { none } else { finite(ph.mu) }
-		lambda: if molar { none } else { finite(ph.lambda) }
+		rho:    json_number(ph.rho / mm)
+		v:      json_number(ph.v * mm)
+		h:      json_number(ph.h * mm)
+		s:      json_number(ph.s * mm)
+		u:      json_number(ph.u * mm)
+		cv:     json_number(ph.cv * mm)
+		cp:     json_number(ph.cp * mm)
+		w:      if molar { none } else { json_number(ph.w) }
+		mu:     if molar { none } else { json_number(ph.mu) }
+		lambda: if molar { none } else { json_number(ph.lambda) }
 	}
 }
 
@@ -957,13 +960,13 @@ fn (st WaterState) json() string {
 		t:           st.t
 		p:           st.p
 		phase:       st.phase
-		x:           finite(st.x)
+		x:           json_number(st.x)
 		region:      if st.region > 0 { st.region } else { none }
 		per_kg:      per_json(st.whole, 1.0)
 		per_mole:    per_json(st.whole, water.molar_mass)
 		liquid:      liquid
 		vapour:      vapour
-		sigma:       finite(st.sigma)
+		sigma:       json_number(st.sigma)
 		notes:       st.notes
 	}
 	return json2.encode(r, prettify: true, indent_string: '  ') + '\n'

@@ -1060,6 +1060,14 @@ passed alone once it did. The check stops at a failed test, so its fmt,
 vet, build and smoke runs (the demo, the reference flowsheet, a missing
 file, the kinetics, and `reflux water`) were run by hand after, and passed.
 
+**CI on the bundle's commit** (`ee4f72d`, run 45961790898): three jobs
+passed, and Windows' gcc failed to compile `main_test.v`, its 135 other
+test files passing. The water report's helper was `finite`, and module
+`main`'s functions keep their C names, so it clashed with MinGW's
+`int finite(double)` in `math.h`; tcc and Ubuntu's gcc don't declare it.
+Renamed `json_number`; `main` and `main_test.v` then built and passed
+under gcc here ([v-for-go.md](v-for-go.md), §11).
+
 ### 9. DWSIM references
 - D14: `tools/gen_m5_dwsim.py`, DWSIM's two packages by state and the
   Rankine cycle in DWSIM, into `testdata/m5_dwsim.json`; every difference
