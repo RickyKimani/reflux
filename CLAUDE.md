@@ -25,7 +25,8 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
-- **M5a (water and steam) is in progress** on branch `m5a-water`, from
+- **M5a (water and steam) is done** on branch `m5a-water`, for its PR into
+  `main` and the release 0.6.0 when the owner asks; branched from
   `main` at v0.4.0. `main` (M6, v0.5.0, and the gas constant's fix that
   begins 0.6.0) was merged into it before bundle C, at the owner's word on
   2026-11-26, to meet M6's seam and format 4 before steps 7 and 8. Its plan,
@@ -90,7 +91,7 @@ Keep this section current: update it whenever a step is committed.
     - Found: the `iapws` package's densities are wrong at 640–647 K below a
       few hundred Pa; a water flash costs about 0.06 s under tcc (step 10).
   - **Bundle B (steps 3 to 5, IF97) is done** and committed, and amends
-    criterion 6 for the owner's approval. `water`'s tests, fmt and vet ran,
+    criterion 6, approved on 2026-11-27. `water`'s tests, fmt and vet ran,
     not the full check (its exception, above).
     - Step 3: `water.if97`, a submodule (D2 allowed it): the basic equations
       of regions 1, 2 (and the metastable vapour), 3 and 5, region 4, B23
@@ -116,8 +117,8 @@ Keep this section current: update it whenever a step is committed.
       unfinished densities (1% off at 22 MPa), and a NaN passed the first
       tests' `> bound` checks (now `!(… <= bound)`).
   - **Bundle C (steps 6 to 8) is done and committed,** and amends
-    criterion 9 for the owner's approval (criterion 6's from bundle B is
-    still waiting too). `tools/python.vsh test` passed (88). The full tcc
+    criterion 9, approved on 2026-11-27. `tools/python.vsh test` passed
+    (88). The full tcc
     check ran 136 test files: 135 passed, and `capi/capi_test.v`'s header
     test, which didn't know `REFLUX_IAPWS95`, passed alone once it did;
     fmt, vet, the build and the smoke runs then passed by hand. Planted
@@ -144,9 +145,11 @@ Keep this section current: update it whenever a step is committed.
     - CI failed on bundle C's commit on Windows' gcc alone: `main`'s
       `fn finite` clashed with MinGW's math.h. Renamed `json_number`
       (`3b8f290`); CI passed, all four jobs (run 45984142988).
-  - **Bundle D (steps 9 to 12) is built, not committed:** M5a is finished
-    but for the owner's two approvals (criteria 6 and 9), CI on the push and
-    the release, its exit review at the end of its plan.
+  - **Bundle D (steps 9 to 12) is done,** committed at `499d032`, CI
+    passed on it, all four jobs (run 46032587308): M5a is finished, its
+    exit review at the end of its plan. The owner approved criteria 6 and 9
+    as amended on 2026-11-27, and asked for its PR into `main`; the release
+    0.6.0 follows the merge, when the owner asks.
     - Step 9: `tools/gen_m5_dwsim.py`, `testdata/m5_dwsim.json`: DWSIM's
       CoolProp package is IAPWS-95 to 7.5e-7 kJ/kg, its PH flash 0.24–4%
       off at four near-critical states; its Steam Tables package is IF97

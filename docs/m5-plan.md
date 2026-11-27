@@ -22,10 +22,12 @@ on branch `m5a-water` from `main` at v0.4.0 (`18eb317`). Step 0 is done: its
 spikes ran for the draft, and D7 took its final form from them before
 approval. The four bundles below, and bundle B's skipped full check, were
 allowed on 2026-11-25. Bundle A, steps 1 and 2, is done (`181e456`), and
-amends D7 and D8, approved on 2026-11-26. Bundle B, steps 3 to 5, is done,
-and amends criterion 6, for the owner's approval. `main` (M6 and the gas
-constant's fix) was merged in after it ("With M6", below); bundle C is next,
-when the owner says. M5a's
+amends D7 and D8, approved on 2026-11-26. Bundle B, steps 3 to 5, is done
+(`cbe74f4`), and amends criterion 6. `main` (M6 and the gas constant's fix)
+was merged in after it ("With M6", below). Bundle C, steps 6 to 8, is done
+(`ee4f72d`, its Windows gcc fix `3b8f290`), and amends criterion 9. Bundle
+D, steps 9 to 12, is done (`499d032`), with the exit review at the end.
+Both amendments, criteria 6 and 9, were approved on 2026-11-27. M5a's
 version is set at its release, as the next one on `main` then (D17): 0.6.0,
 whose CHANGELOG entry the gas constant's fix began.
 
@@ -368,7 +370,7 @@ All checked by tests in CI, as before.
    grow, and each lies within IF97's stated uncertainty there (the release's
    Figs. 3 to 6), the critical region reported apart.
 
-   **Amended in step 5,** for the owner's approval: the pseudo-critical
+   **Amended in step 5,** approved on 2026-11-27: the pseudo-critical
    ridge just above Fig. 3's critical triangle, 30 to 40 MPa between its
    isochores (0.0019 and 0.0069 m³/kg), is reported apart with the critical
    region: there IF97's cp is up to 0.99% from IAPWS-95's, where Fig. 4
@@ -389,7 +391,7 @@ All checked by tests in CI, as before.
    that doesn't fix a state, a state outside the formulation's range) says
    why, with the exit statuses of M8's D17.
 
-   **Amended in step 7,** for the owner's approval: from the six pairs that
+   **Amended in step 7,** approved on 2026-11-27: from the six pairs that
    each fix one state, T and P, T and ρ, T and x, P and x, P and h, and P
    and s (IF97 each but T and ρ, which its regions in (p, T) don't give).
    The other nine are refused as a wrong command, each saying why: T and h
@@ -874,7 +876,7 @@ pseudo-critical ridge** just above the triangle: between its isochores at
 30 to 40 MPa and 675 to 715 K (18 states), cp differs from IAPWS-95's by up
 to 0.99% (35 MPa, 695 K), where Fig. 4 states 0.5%. Both equations are
 held to their releases there (Tables 33 and 7). So criterion 6 can't be met
-as written on the ridge, and is amended (above), for the owner's approval:
+as written on the ridge, and is amended (above), approved on 2026-11-27:
 the ridge is reported apart with the critical region, its cp difference
 recorded (0.99%, can't grow).
 
@@ -1241,8 +1243,8 @@ Criterion by criterion, with where each is shown:
    and 44 reproduced, maxima and RMS, but for four maxima of Table 43
    within half a unit and a slip in Table 44 (step 4); the `iapws`
    package's functions matched over grids.
-6. **IF97 against IAPWS-95: met as amended in step 5,** for the owner's
-   approval: every difference within R7-97's Figs. 3 to 6 at 4,133 states,
+6. **IF97 against IAPWS-95: met as amended in step 5,** approved on
+   2026-11-27: every difference within R7-97's Figs. 3 to 6 at 4,133 states,
    the critical region and the pseudo-critical ridge (cp to 0.99% against
    Fig. 4's 0.5%) reported apart, the largest of each recorded.
 7. **Water's transport: met.** Every table of R12-08, R15-11 and R1-76 to
@@ -1251,18 +1253,18 @@ Criterion by criterion, with where each is shown:
    flowsheet; its hand calculation from the `iapws` package's states to
    1.8e-10 kJ/kg (step 7); DWSIM 9's cycle on its CoolProp package by state
    to 3.7e-7 kJ/kg, every difference explained (step 9).
-9. **`reflux water`: met as amended in step 7,** for the owner's approval:
+9. **`reflux water`: met as amended in step 7,** approved on 2026-11-27:
    six pairs, the other nine refused with why, each refusal's exit status
    M8's D17's.
 10. **Speed: met.** Timed against DWSIM's two packages, CoolProp and the
     `iapws` package; reflux 470 to 1400 times faster than DWSIM's (step 10).
 11. **Python: met.** `Database.fluid("IAPWS-95", ["water"])`, every
     vectorised call bit for bit against the V API (step 8).
-12. **CI and docs: met but CI on this bundle and the release.** CI passed on
-    bundle C's fix (`3b8f290`, run 45984142988, all four jobs); bundle D's
-    push is still to be read. The docs are updated. The release, 0.6.0, is
-    prepared (step 11) and is made on `main` after the merge, when the owner
-    asks.
+12. **CI and docs: met but the release.** CI passed on bundle C's fix
+    (`3b8f290`, run 45984142988) and on bundle D (`499d032`, run
+    46032587308), all four jobs each. The docs are updated. The release,
+    0.6.0, is prepared (step 11) and is made on `main` after the merge, when
+    the owner asks.
 
 **Planted mistakes over the milestone:** bundle A 36 (33 caught, 3
 explained), bundle B 35 (32 caught, 3 explained), bundle C 36 (all caught,

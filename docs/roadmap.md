@@ -196,7 +196,7 @@ its branch.
 **M5a is done,** on its branch `m5a-water`, for the release 0.6.0 once it
 merges (its D17). Its plan, with its decisions and the criterion-by-
 criterion exit review, is in [m5-plan.md](m5-plan.md). Two of its criteria
-are amended for the owner's approval: IF97's cp on the pseudo-critical
+are amended, approved on 2026-11-27: IF97's cp on the pseudo-critical
 ridge above the critical triangle, reported apart (criterion 6), and
 `reflux water`'s six pairs (criterion 9). It found DWSIM 9's Steam Tables
 package failing silently in IF97's regions 3 and 5 and in its PH flash
