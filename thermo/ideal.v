@@ -6,7 +6,7 @@ import tdep
 // Ideal-gas heat capacity forms. Each one gives Cp(T) and the two integrals
 // that H and S need, ∫Cp dT and ∫Cp/T dT. Everything is per mole, in
 // J/(mol·K) and J/mol.
-pub type CpForm = AlyLee | Correlated | Polynomial
+pub type CpForm = AlyLee | Correlated | PlanckEinstein | Polynomial
 
 // PowerTerm is c·T^p.
 pub struct PowerTerm {
@@ -69,6 +69,65 @@ pub:
 	scale f64 = 1.0
 }
 
+// EinsteinTerm is one Planck–Einstein term of a PlanckEinstein Cp: c in
+// J/(mol·K), θ in K.
+pub struct EinsteinTerm {
+pub:
+	c     f64
+	theta f64
+}
+
+// PlanckEinstein is a constant plus Planck–Einstein terms, each the heat
+// capacity of one harmonic vibration of characteristic temperature θ:
+//
+//     Cp = a + Σ cᵢ·E(θᵢ/T),   E(u) = u²·eᵘ/(eᵘ − 1)²
+//
+// a in J/(mol·K). It's the form of the multiparameter reference equations'
+// ideal parts: IAPWS-95's five terms (M5a's D5), and GERG-2008's and Span
+// and Wagner's. Aly–Lee's sinh term is one such term: (x/sinh x)² = E(2x),
+// so B·[(C/T)/sinh(C/T)]² is c = B, θ = 2C.
+//
+// Both integrals are closed forms. With u = θ/T,
+//
+//     ∫E dT   = θ/(eᵘ − 1)
+//     ∫E/T dT = u/(eᵘ − 1) − ln(1 − e⁻ᵘ)
+//
+// written with expm1 and log1p, so that they keep their digits where u is
+// small (a hot gas) and stay finite where it's large (u = 2·10⁴ at 1 K for
+// IAPWS-95's largest θ, where eᵘ overflows a float).
+pub struct PlanckEinstein {
+pub:
+	a     f64
+	terms []EinsteinTerm
+}
+
+// einstein is E(u) = u²eᵘ/(eᵘ − 1)², written as u²e⁻ᵘ/(1 − e⁻ᵘ)², which
+// underflows to 0 instead of overflowing where u is large.
+fn einstein(u f64) f64 {
+	e := math.exp(-u)
+	d := -math.expm1(-u) // 1 − e⁻ᵘ, with its digits where u is small
+	return u * u * e / (d * d)
+}
+
+// h_anti is an antiderivative of Cp: a·T + Σ cᵢθᵢ/(e^(θᵢ/T) − 1).
+fn (f PlanckEinstein) h_anti(t f64) f64 {
+	mut s := f.a * t
+	for term in f.terms {
+		s += term.c * term.theta / math.expm1(term.theta / t)
+	}
+	return s
+}
+
+// s_anti is an antiderivative of Cp/T: a·ln T + Σ cᵢ[u/(eᵘ − 1) − ln(1 − e⁻ᵘ)].
+fn (f PlanckEinstein) s_anti(t f64) f64 {
+	mut s := f.a * math.log(t)
+	for term in f.terms {
+		u := term.theta / t
+		s += term.c * (u / math.expm1(u) - math.log1p(-math.exp(-u)))
+	}
+	return s
+}
+
 // cp returns the ideal-gas heat capacity at T, J/(mol·K).
 pub fn (f CpForm) cp(t f64) f64 {
 	return match f {
@@ -85,6 +144,13 @@ pub fn (f CpForm) cp(t f64) f64 {
 		Correlated {
 			f.scale * f.c.eval(t)
 		}
+		PlanckEinstein {
+			mut s := f.a
+			for term in f.terms {
+				s += term.c * einstein(term.theta / t)
+			}
+			s
+		}
 	}
 }
 
@@ -94,6 +160,7 @@ pub fn (f CpForm) int_cp(t1 f64, t2 f64) f64 {
 		Polynomial { f.h_anti(t2) - f.h_anti(t1) }
 		AlyLee { f.correlation().integral(t1, t2) or { math.nan() } }
 		Correlated { f.scale * (f.c.integral(t1, t2) or { math.nan() }) }
+		PlanckEinstein { f.h_anti(t2) - f.h_anti(t1) }
 	}
 }
 
@@ -103,6 +170,7 @@ pub fn (f CpForm) int_cp_over_t(t1 f64, t2 f64) f64 {
 		Polynomial { f.s_anti(t2) - f.s_anti(t1) }
 		AlyLee { f.correlation().integral_over_t(t1, t2) or { math.nan() } }
 		Correlated { f.scale * (f.c.integral_over_t(t1, t2) or { math.nan() }) }
+		PlanckEinstein { f.s_anti(t2) - f.s_anti(t1) }
 	}
 }
 

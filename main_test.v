@@ -5,6 +5,7 @@ module main
 // tools/check.vsh runs the built program on the reference flowsheet too.
 import flowsheet
 import json2
+import math
 import os
 
 const reference = os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'reference.toml')
@@ -444,4 +445,277 @@ fn test_kinetics_failures() {
 	assert e2.starts_with('reflux kinetics: no kinetics command chek (did you mean check?)')
 	c3, out3, _ := quiet(['kinetics', 'help'])
 	assert c3 == 0 && out3.starts_with('usage:\n  reflux kinetics check FILE')
+}
+
+// `reflux water` (M5a, D13, criterion 9): a state from two SPECs, by
+// IAPWS-95 or IF97, as a table and as JSON, and each refusal with why.
+
+fn spec(arg string) Spec {
+	return read_spec(arg) or { panic(err) }
+}
+
+fn spec_of(g Given, value f64) Spec {
+	return Spec{
+		given: g
+		value: value
+	}
+}
+
+fn water_at(a Spec, b Spec, use_if97 bool) WaterState {
+	return steam(a, b, use_if97) or { panic('${a.given}, ${b.given}: ${err.msg()}') }
+}
+
+fn fixture_rows(key string) [][]f64 {
+	text := os.read_file(os.join_path(@VMODROOT, 'testdata', 'm5_transport.json')) or { panic(err) }
+	m := (json2.decode[json2.Any](text) or { panic(err) }).as_map()
+	rows := m[key] or { panic('no ${key}') }
+	return rows.as_array().map(it.as_array().map(it.f64()))
+}
+
+fn rel(a f64, b f64) f64 {
+	return math.abs(a - b) / math.abs(b)
+}
+
+fn test_water_prints_a_state_and_writes_its_report() {
+	path := scratch('water.json')
+	code, out, err := quiet(['water', 'T=450degC', 'P = 40 bar', '--json', path])
+	assert code == 0 && err == '', err
+	st := water_at(spec('T=450degC'), spec('P = 40 bar'), false)
+	assert out == st.table() + '\n'
+	text := os.read_file(path)!
+	assert text == st.json()
+	j := json2.decode[json2.Any](text)!.as_map()
+	assert j['formulation']!.str() == 'IAPWS-95' && j['phase']!.str() == 'vapour'
+	assert j['T']!.f64() == 723.15 && j['P']!.f64() == 4e6 && 'x' !in j
+	per_kg := j['per_kg']!.as_map()
+	per_mole := j['per_mole']!.as_map()
+	assert per_kg['h']!.f64() == st.whole.h && per_kg['mu']!.f64() == st.whole.mu
+	assert per_mole['h']!.f64() == st.whole.h * 0.018015268 && 'mu' !in per_mole
+	// Per mole: a density divided by the molar mass, everything else times it.
+	assert per_mole['rho']!.f64() == st.whole.rho / 0.018015268
+	assert per_mole['v']!.f64() == st.whole.v * 0.018015268
+	given := j['given']!.as_array()
+	assert given.len == 2 && given[1].as_map()['text']!.str() == '40 bar'
+	// A wet state has both phases and the mixture, its x and σ; IF97 its
+	// region, 4.
+	wet := scratch('wet.json')
+	code2, out2, err2 := quiet(['water', 'P=10kPa', 'x=0.9', '--if97', '--json=${wet}'])
+	assert code2 == 0 && err2 == '', err2
+	assert out2.contains('liquid and vapour, x = 0.9') && out2.contains('region 4')
+	w := json2.decode[json2.Any](os.read_file(wet)!)!.as_map()
+	assert w['x']!.f64() == 0.9 && w['region']!.int() == 4 && w['sigma']!.f64() > 0.0
+	assert w['liquid']!.as_map()['cp']!.f64() > 0.0 && 'cp' !in w['per_kg']!.as_map()
+	// Every key is one docs/report-format.md lists for the water report.
+	doc := os.read_file(os.join_path(@VMODROOT, 'docs', 'report-format.md'))!.all_after('## The water report').all_before('\n## ')
+	mut keys := []string{}
+	for line in doc.split_into_lines().filter(it.starts_with('| `')) {
+		for i, part in line.all_after('| ').all_before(' |').split('`') {
+			if i % 2 == 1 {
+				keys << part
+			}
+		}
+	}
+	for m in [j, w, w['per_kg']!.as_map(), w['per_mole']!.as_map(), w['liquid']!.as_map()] {
+		for k in m.keys() {
+			assert k in keys, 'the water report has ${k}, which report-format.md lacks'
+		}
+	}
+	// help
+	code3, out3, _ := quiet(['water', 'help'])
+	assert code3 == 0 && out3.contains('T=450degC')
+}
+
+// Every single-phase state of the iapws package's grid (tools/
+// gen_m5_transport.py), from its T and P: the density, viscosity and
+// thermal conductivity, by IAPWS-95 and IF97. The package's T and P are
+// exact, so this holds the PT flash's root and IF97's region choice.
+//
+// Measured: IAPWS-95's ρ within 1.9e-12, μ 1.3e-12 and λ 7.0e-12, the
+// worst at 647 K and 22 MPa, where the package's density solve is loosest
+// (ρ is 1/κ-sensitive there); IF97's ρ within 5.4e-13, μ 4.9e-13 and λ
+// 2.9e-11 (region 5, as water/transport_test.v finds on the package's own
+// ρ).
+fn test_water_against_the_iapws_package() {
+	for key, bounds in {
+		'iapws95': [1e-11, 1e-11, 5e-11]
+		'if97':    [5e-12, 5e-12, 1e-10]
+	} {
+		mut n := 0
+		for r in fixture_rows(key) {
+			st := water_at(spec_of(.t, r[0]), spec_of(.p, r[1] * 1e6), key == 'if97')
+			for k, d in [rel(st.whole.rho, r[2]), rel(st.whole.mu, r[3]), rel(st.whole.lambda, r[4])] {
+				assert d <= bounds[k], '${key} at ${r[0]} K and ${r[1]} MPa: ${['rho', 'mu', 'lambda'][k]} off by ${d}'
+			}
+			n++
+		}
+		assert n == if key == 'iapws95' { 791 } else { 775 }
+	}
+}
+
+// Each pair that fixes a state gives back the state it came from: from a
+// grid's (T, P), its (P, h), (P, s) and (T, ρ); from a wet state's (T, x),
+// its (P, x), (P, h), (P, s) and (T, ρ). IF97 the same, but (T, ρ).
+//
+// Measured: T back within 4.3e-9 K by IAPWS-95's (P, h) and (P, s), whose
+// flashes stop at 1e-10·RT of their balances, T·R/cp·1e-10 in T, under
+// 2.5e-11·T for steam's cp of at least 4R; IF97's within 5.5e-12 K, its
+// backward equations finished by Newton. P by (T, ρ) within 3.9% of a
+// bound of ρ's rounding through the bulk modulus; a wet state's T within
+// 6.4e-11 K and x within 3.9e-12, the balance's 1e-10·RT over h_vap.
+fn test_water_pairs_give_back_their_state() {
+	mut worst_t := [0.0, 0.0]
+	mut worst_p := 0.0
+	mut worst_wet := [0.0, 0.0]
+	for use_if97 in [false, true] {
+		for t in [300.0, 450.0, 640.0, 700.0, 1000.0] {
+			for p in [1e4, 1e6, 3e7] {
+				st := water_at(spec_of(.t, t), spec_of(.p, p), use_if97)
+				ph := water_at(spec_of(.p, p), spec_of(.h, st.whole.h), use_if97)
+				ps := water_at(spec_of(.p, p), spec_of(.s, st.whole.s), use_if97)
+				for back in [ph, ps] {
+					worst_t[int(use_if97)] = math.max(worst_t[int(use_if97)], math.abs(back.t - t))
+					assert math.abs(back.t - t) <= 3e-11 * t, '${t} K, ${p} Pa: back at ${back.t} K'
+					assert back.phase == st.phase
+				}
+				if !use_if97 {
+					// A liquid's P moves by its bulk modulus, under 3 GPa
+					// here, times ρ's rounding.
+					tr := water_at(spec_of(.t, t), spec_of(.rho, st.whole.rho), false)
+					worst_p = math.max(worst_p, math.abs(tr.p - p) / (1e-12 * p + 3e9 * 1e-13))
+					assert math.abs(tr.p - p) <= 1e-12 * p + 3e9 * 1e-13, '${t} K, ${p} Pa: back at ${tr.p} Pa'
+					assert tr.phase == st.phase
+				}
+			}
+		}
+		for t in [300.0, 450.0, 640.0] {
+			for x in [0.0, 0.3, 1.0] {
+				st := water_at(spec_of(.t, t), spec_of(.x, x), use_if97)
+				assert st.x == x && st.sigma > 0.0
+				assert st.phase == match x {
+					0.0 { 'saturated liquid' }
+					1.0 { 'saturated vapour' }
+					else { 'liquid and vapour' }
+				}
+				px := water_at(spec_of(.p, st.p), spec_of(.x, x), use_if97)
+				worst_t[int(use_if97)] = math.max(worst_t[int(use_if97)], math.abs(px.t - t))
+				assert math.abs(px.t - t) <= 1e-9, '${t} K, x = ${x}: (P, x) at ${px.t} K'
+				if x == 0.3 {
+					mut backs := [
+						water_at(spec_of(.p, st.p), spec_of(.h, st.whole.h), use_if97),
+						water_at(spec_of(.p, st.p), spec_of(.s, st.whole.s), use_if97),
+					]
+					if !use_if97 {
+						backs << water_at(spec_of(.t, t), spec_of(.rho, st.whole.rho), false)
+					}
+					for back in backs {
+						worst_wet[0] = math.max(worst_wet[0], math.abs(back.t - t))
+						worst_wet[1] = math.max(worst_wet[1], math.abs(back.x - x))
+						assert math.abs(back.t - t) <= 1e-9 && math.abs(back.x - x) <= 1e-10, '${t} K: back at ${back.t} K, x = ${back.x}'
+						l, v := back.liquid or { panic('no liquid') }, back.vapour or { panic('no vapour') }
+						assert l.rho > v.rho && math.is_nan(back.whole.cp)
+					}
+				}
+			}
+		}
+	}
+	println('T back: IAPWS-95 ${worst_t[0]:.2e} K, IF97 ${worst_t[1]:.2e} K; P by (T, rho) ${worst_p:.2e} of its bound; wet T ${worst_wet[0]:.2e} K, x ${worst_wet[1]:.2e}')
+}
+
+// A SPEC's units: offsets, gauge pressures, molar values and percentages
+// read as the file's numbers do.
+fn test_water_reads_specs_in_any_unit() {
+	assert spec('T=450degC').value == 723.15
+	assert spec('T = 450 degC').value == 723.15
+	assert spec('P=40bar').value == 4e6
+	assert spec('p=1atm').value == 101325.0
+	assert spec('x=50%').value == 0.5
+	assert rel(spec('rho=1g/cm3').value, 1000.0) <= 1e-15
+	assert math.abs(spec('h=54.0412kJ/mol').value - 54.0412e3 / 0.018015268) <= 1e-9
+	assert math.abs(spec('s=6.5kJ/(kg*K)').value - 6500.0) <= 1e-12
+	assert math.abs(spec('s=117.1J/(mol*K)').value - 117.1 / 0.018015268) <= 1e-9
+	assert spec('rho=2e5mol/m3').value == 2e5 * 0.018015268
+	assert spec('h=3e3kJ/kg').value == 3e6
+}
+
+// Each refusal says why: a wrong SPEC or pair is a wrong command (2), a
+// state water or the formulation lacks is 1.
+fn test_water_refusals() {
+	for args, want in {
+		'T=300K':                     'it needs two SPECs'
+		'T=300K P=1bar h=1kJ/kg':     'it needs two SPECs, not 3'
+		'T=300K T=310K':              'T is given twice'
+		'T=300 P=1bar':               'it needs a unit'
+		'T=300K P=1kg':               'P=1kg'
+		'T=300K q=1':                 'no property q'
+		'T=300K x=2':                 'x is from 0 to 1'
+		'P=1bar h=3000kJ/K':          'not of kJ/kg or kJ/mol'
+		'T=300K rho=-1kg/m3':         'a density is above zero'
+		'T=300K P=1bar --json':       '--json needs a file name'
+		'T=300K P=1bar --jsn x':      'no option --jsn'
+		'T=300K h=100kJ/kg':          'T and h fix no state'
+		'T=275K s=0.1kJ/(kg*K)':      'T and s can fix two states'
+		'P=1bar rho=1000kg/m3':       'P and rho can fix two states'
+		'h=2000kJ/kg x=0.5':          'h and x can fix two states'
+		'h=2000kJ/kg s=6kJ/(kg*K)':   "doesn't solve for T and P from h and s"
+		'T=500K rho=800kg/m3 --if97': 'IF97 has no state from T and rho'
+	} {
+		code, out, err := quiet(['water', ...args.split(' ')])
+		assert code == 2 && out == '', args
+		assert err.contains(want), '${args}: ${err}'
+	}
+	for args, want in {
+		'T=240K P=1bar':         'no state below 251.165 K'
+		'T=1300K P=1bar':        'IAPWS-95 holds to 1273.15 K (R6-95): not 1300 K'
+		'T=500K P=1100MPa':      'IAPWS-95 holds to 1000 MPa (R6-95): not 1100 MPa'
+		'P=1100MPa h=1000kJ/kg': 'IAPWS-95 holds to 1000 MPa'
+		'T=650K x=0.5':          'no saturated states at or above its critical point'
+		'P=23MPa x=0.5':         'no saturated states at or above its critical point'
+		'T=260K P=500MPa':       'ice V at 260 K and 500 MPa'
+		'T=300K P=1000MPa':      'ice VI'
+		'T=500K rho=1300kg/m3':  'denser than 4 ρc'
+		'T=2300K P=1bar --if97': 'no state by IF97'
+		'T=270K P=1bar --if97':  'no state by IF97'
+	} {
+		code, out, err := quiet(['water', ...args.split(' ')])
+		assert code == 1 && out == '', args
+		assert err.contains(want), '${args}: ${err}'
+	}
+	// Ice Ih makes a liquid below 273.16 K and its melting pressure
+	// metastable: the state stands, with a note.
+	cold := water_at(spec('T=265K'), spec('P=1bar'), false)
+	assert cold.phase == 'liquid' && cold.notes.any(it.contains('ice Ih is the stable phase'))
+	assert water_at(spec('T=265K'), spec('P=200MPa'), false).notes.len == 0
+	// A vapour below its sublimation pressure is stable.
+	assert water_at(spec('T=265K'), spec('P=100Pa'), false).notes.len == 0
+}
+
+// R14-08's melting and sublimation pressures against its Table 3, to the
+// printed digits.
+fn test_ice_curves_against_r14_08() {
+	assert math.abs(ih_melting_pressure(260.0) - 138.268e6) <= 500.0
+	for t, want in {
+		254.0: [268.685e6, 500.0]
+		265.0: [479.640e6, 500.0]
+		320.0: [1356.76e6, 5000.0]
+	} {
+		top, _ := melting_top(t) or { panic('none at ${t}') }
+		assert math.abs(top - want[0]) <= want[1], '${t} K: ${top}'
+	}
+	assert math.abs(sublimation_pressure(230.0) - 8.94735) <= 0.000005
+}
+
+fn test_water_numbers_are_shown_to_seven_figures() {
+	for x, want in {
+		723.15:          '723.15'
+		4e6:             '4000000'
+		1.23456789e7:    '1.234568e7'
+		0.00012345678:   '0.0001234568'
+		1.5e-5:          '1.5e-5'
+		-0.5:            '-0.5'
+		9999999.6:       '1e7'
+		0.99999996:      '1'
+		318.95632892394: '318.9563'
+	} {
+		assert shown(x) == want, '${x}: ${shown(x)}'
+	}
 }

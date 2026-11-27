@@ -37,6 +37,36 @@ pub interface Model {
 	residual2(t f64, v f64, n []f64) Residual2
 }
 
+// Branches is what a model may know of its own isotherms' two branches, the
+// vapour's from ρ → 0 and the liquid's from high density, which the volume
+// solvers then keep to (M5a's D7). It's optional, as M8's flowsheet.Warm
+// is: a model without it, a cubic, takes the solvers' paths unchanged.
+//
+// IAPWS-95 needs it. Inside its dome its isotherms have spurious loops whose
+// roots are mechanically stable with Gibbs energies up to 1e19 RT below the
+// real phase's, and near Tc its metastable windows are narrow enough for
+// Newton to step across them onto the other branch.
+pub interface Branches {
+	// branches gives the limits at T and n.
+	branches(t f64, n []f64) BranchLimits
+}
+
+// BranchLimits are a model's limits on its branches at one T and n.
+pub struct BranchLimits {
+pub:
+	// split is a volume between the branches, where the isotherm has two:
+	// every vapour root lies above it, and every liquid root below. Below
+	// Tc a pure fluid's spinodal has its vapour side below ρc and its liquid
+	// side above, so V = n/ρc is one.
+	split ?f64 // m³
+	// no_state says the model has no state at this T, liquid or vapour: an
+	// isotherm outside its range. IAPWS-95's starts at the melting curve,
+	// 251.165 K at its lowest; below it its liquid branch is an extrapolation
+	// whose enthalpy falls as T rises, and its vapour is endorsed only below
+	// the sublimation curve, which reflux doesn't have.
+	no_state bool
+}
+
 // VolumeDerivs is the part of the residual the volume solver needs. Since
 // F is in mol, F_V is in mol/m³ and F_VV in mol/m⁶.
 pub struct VolumeDerivs {
@@ -153,20 +183,36 @@ fn state_at(fx Fixed, p f64, v f64, n []f64) State {
 }
 
 // Fixed is a model at a fixed T and n, which is what the volume solvers
-// iterate on: its volume function, n's total and the smallest volume.
+// iterate on: its volume function, n's total and the smallest volume, and
+// its Branches limits, 0 where it has none.
 struct Fixed {
-	f    VolumeFunction
-	t    f64
-	ntot f64
-	vmin f64
+	f        VolumeFunction
+	t        f64
+	ntot     f64
+	vmin     f64
+	split    f64 // BranchLimits.split, or 0
+	no_state bool
 }
 
 fn fix(m Model, t f64, n []f64) Fixed {
+	f := m.volume_function(t, n)
+	vmin := m.min_volume(n)
+	if m is Branches {
+		b := m.branches(t, n)
+		return Fixed{
+			f:        f
+			t:        t
+			ntot:     numeric.sum(n)
+			vmin:     vmin
+			split:    b.split or { 0.0 }
+			no_state: b.no_state
+		}
+	}
 	return Fixed{
-		f:    m.volume_function(t, n)
+		f:    f
 		t:    t
 		ntot: numeric.sum(n)
-		vmin: m.min_volume(n)
+		vmin: vmin
 	}
 }
 
@@ -206,16 +252,34 @@ const f64_epsilon = 2.220446049250313e-16
 // above the minimum volume, where P is huge, and walks right. P(V) is convex
 // on the liquid branch, so Newton approaches the root from the left without
 // overshooting.
+//
+// A model whose P is finite at its minimum volume (IAPWS-95's, M5a's D7)
+// may not reach p there at all: then there's no liquid root, rather than
+// one at vmin, where the clamped steps would otherwise converge. And with a
+// Branches split, an iterate past it has left the liquid's branch: there's
+// no root on it either. A cubic reaches neither: its P → ∞ at its covolume,
+// and it has no split.
 fn liquid_volume(fx Fixed, p f64) ?f64 {
+	if fx.no_state {
+		return none
+	}
 	vmin := fx.vmin
 	mut v := 1.05 * vmin
+	mut reached := false
 	for _ in 0 .. 60 {
 		if p_dpdv(fx, v).p > p {
+			reached = true
 			break
 		}
 		v = vmin + 0.5 * (v - vmin)
 	}
+	if !reached {
+		return none // the liquid's branch doesn't reach p above vmin
+	}
 	for _ in 0 .. volume_max_iter {
+		if fx.split > 0.0 && v > fx.split {
+			return none // past the split: off the liquid's branch
+		}
 		s := p_dpdv(fx, v)
 		if s.dpdv >= 0.0 {
 			return none // past the liquid spinodal: the liquid branch never reaches p
@@ -227,6 +291,9 @@ fn liquid_volume(fx Fixed, p f64) ?f64 {
 		dv = math.clamp(dv, -0.5 * (v - vmin), 0.5 * (v - vmin))
 		v += dv
 		if math.abs(dv) <= volume_rtol * v {
+			if fx.split > 0.0 && v > fx.split {
+				return none
+			}
 			return v
 		}
 	}
@@ -238,11 +305,22 @@ fn liquid_volume(fx Fixed, p f64) ?f64 {
 // approaches the root from the dilute side without overshooting. At high
 // pressure the ideal-gas density can exceed the packing limit n/B, so the
 // start is capped at half of it.
+//
+// With a Branches split (M5a's D7), an iterate past it has left the
+// vapour's branch, and there's no root on it: IAPWS-95's ideal-gas density
+// at 42 MPa and 300 K lies inside its dome, where a spurious root sits just
+// above ρc. A cubic has no split.
 fn vapor_volume(fx Fixed, p f64) ?f64 {
+	if fx.no_state {
+		return none
+	}
 	ntot := fx.ntot
 	rho_max := ntot / fx.vmin
 	mut rho := math.min(p / (r_gas * fx.t), 0.5 * rho_max)
 	for _ in 0 .. volume_max_iter {
+		if fx.split > 0.0 && rho > ntot / fx.split {
+			return none // past the split: off the vapour's branch
+		}
 		v := ntot / rho
 		s := p_dpdv(fx, v)
 		dp_drho := -s.dpdv * v * v / ntot
@@ -258,6 +336,9 @@ fn vapor_volume(fx Fixed, p f64) ?f64 {
 		if math.abs(drho) <= volume_rtol * rho {
 			if rho_max - rho <= 1e-9 * rho_max {
 				return none // crept up to the packing limit: not a root
+			}
+			if fx.split > 0.0 && rho > ntot / fx.split {
+				return none
 			}
 			return ntot / rho
 		}

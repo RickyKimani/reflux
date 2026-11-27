@@ -341,6 +341,21 @@ print(water["name"], water["ids"]["cas"], water["constants"]["tc"])
 Water 7732-18-5 647.14
 ```
 
+Water alone can be IAPWS-95 (M5a), with neither α nor kᵢⱼ; every call
+above takes it. Its saturated liquid and vapour at 500 K, in Pa and kg/m³
+by IAPWS's molar mass:
+
+```python
+w = db.fluid("IAPWS-95", ["water"])
+sat = w.flash_tvf(500.0, 0.0)
+print(w.equation, round(sat.p.item()), round(0.018015268 / sat.liquid.v.item(), 3),
+      round(0.018015268 / sat.vapor.v.item(), 4))
+```
+
+```text
+IAPWS-95 2639196 831.313 13.1989
+```
+
 ## Closing
 
 A fluid or database holds a handle into the library. It's freed when the

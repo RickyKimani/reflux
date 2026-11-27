@@ -64,6 +64,7 @@ fn test_the_header_and_the_code_agree() {
 	for code, kind in equations {
 		want['REFLUX_' + components.equation_name(kind).to_upper()] = code
 	}
+	want['REFLUX_IAPWS95'] = iapws95
 	for code, a in alphas {
 		want['REFLUX_ALPHA_' + a.str().to_upper()] = code
 	}

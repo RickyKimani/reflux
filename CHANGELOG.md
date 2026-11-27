@@ -39,7 +39,66 @@ From 0.2.0 on:
 
 ## [0.6.0]
 
-Begun after 0.5.0 with one fix; the next milestone adds to it.
+Water and steam: the roadmap's M5a. reflux now has water by IAPWS-95, the
+scientific formulation, through every flash, in a flowsheet and from Python,
+and by IAPWS-IF97 with its region-3 supplements as steam-table functions;
+water's viscosity, thermal conductivity and surface tension by IAPWS's
+releases; and a steam table on the command line, `reflux water`. Every
+verification table IAPWS publishes for what it implements is reproduced to
+its printed digits, and DWSIM 9's two water packages are held to it state
+by state, every difference explained (its Steam Tables package fails
+silently in IF97's region 3 and 5, and above 25 MPa in its PH flash). It
+begins with a fix to reflux's gas constant. Like 0.5.0, it's a source
+release (`v -prod -cc gcc -o reflux .`).
+
+### Added
+
+- **Water by IAPWS-95** (`water`): IAPWS R6-95(2018) as a `thermo.Model`,
+  with its own gas constant so that its tables match, through every flash,
+  in a flowsheet file (format 4's `[model] equation = "IAPWS-95"`, water
+  alone) and from the C API and Python (`REFLUX_IAPWS95`,
+  `Database.fluid("IAPWS-95", ["water"])`). Its model has no state below
+  251.165 K.
+- **IAPWS-IF97** (`water.if97`), with its region-3 supplements SR3-03 and
+  SR5-05, as steam-table functions from (p, T), (p, h), (p, s), (T, x) and
+  (p, x), each backward answer finished on its basic equation.
+- **Water's transport** (`water`): R12-08's viscosity and R15-11's thermal
+  conductivity with their critical enhancements on IAPWS-95, their
+  industrial forms on IF97, and R1-76's surface tension.
+- **`reflux water`**: a steam table on the command line, a state from two of
+  T, P, h, s, x and ρ with units, by IAPWS-95 or IF97 (`--if97`), per kg and
+  per mole on IAPWS's reference, as a table and as JSON (the water report,
+  format 1).
+- **A golden flowsheet**, `rankine.json`: a Rankine cycle on IAPWS-95
+  (`testdata/flowsheets/rankine.toml`), held against a hand calculation from
+  the `iapws` package's states to 1.8e-10 kJ/kg, and against DWSIM 9's same
+  cycle on its CoolProp package to 3.7e-7 kJ/kg, its PH flash's tolerance.
+- **Speed** (docs/benchmarks.md): an IAPWS-95 PT flash takes 17.5 µs and a
+  PH flash 251 µs, IF97's (p, T) 0.7 µs and (p, h) 5.5 µs, with gcc
+  `-prod`; 470 to 1400 times faster than DWSIM 9's water packages, and
+  1.4 to 3 times CoolProp's AbstractState from Python.
+- **IF97's states carry (∂ρ/∂p)_T** (`water.if97.State.drhodp`), which
+  R15-11's industrial thermal conductivity needs.
+
+### Changed
+
+- **A pure component's PH and PS flash above 1.01 Pc** no longer looks for
+  a saturation temperature, which can't exist there and took the
+  vapour-fraction flash 8 ms to fail for IAPWS-95's water at 30 MPa. Every
+  answer is the same, bit for bit (1,680 pure PH and PS flashes of 40
+  compounds by PR and water by IAPWS-95, from 0.5 Pc to 3 Pc); the flash
+  is 30 times faster there.
+- **`Database.fluid` in Python** takes `kij=None` by default: ChemSep's
+  kᵢⱼ for a cubic, as before, and none for IAPWS-95, which refuses one.
+
+- **The golden flowsheets' reports** were written again, all eight
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json`, `saturated_loop.json`, `decanter.json`, and
+  `reactors/reformer.json` and `reactors/methanol.json`), for the gas
+  constant above and for this version. Each number moved by at most 3.2e-11
+  of itself, beyond the balances' own rounding; no label, warning, pass or
+  step count changed. The reformer's PFR takes its 472 steps at volumes up
+  to 7.9e-8 of themselves away, and its outlet moves by 2e-11.
 
 ### Fixed
 
@@ -63,17 +122,6 @@ Begun after 0.5.0 with one fix; the next milestone adds to it.
   1-butanol a step from their heteroazeotrope's T did so once the gas
   constant above moved them there. The phase that bounds the step now goes
   to 0 exactly; no golden result and no outcome of the flash sweep moves.
-
-### Changed
-
-- **The golden flowsheets' reports** were written again, all eight
-  (`reference.json`, `every_unit.json`, `no_recycle.json`,
-  `interlocking.json`, `saturated_loop.json`, `decanter.json`, and
-  `reactors/reformer.json` and `reactors/methanol.json`), for the gas
-  constant above and for this version. Each number moved by at most 3.2e-11
-  of itself, beyond the balances' own rounding; no label, warning, pass or
-  step count changed. The reformer's PFR takes its 472 steps at volumes up
-  to 7.9e-8 of themselves away, and its outlet moves by 2e-11.
 
 ## [0.5.0] — 2026-11-25
 

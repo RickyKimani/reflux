@@ -1,0 +1,375 @@
+{
+  "format": 4,
+  "reflux": "0.6.0",
+  "file": "testdata/flowsheets/rankine.toml",
+  "status": "solved",
+  "error": null,
+  "components": [
+    {
+      "name": "water",
+      "compound": "water",
+      "molar_mass": 0.018015268
+    }
+  ],
+  "model": {
+    "equation": "IAPWS-95",
+    "liquid": "",
+    "vapour": "",
+    "poynting": false,
+    "solutes": [],
+    "pairs": [],
+    "notes": [
+      "IAPWS R6-95(2018), with its own gas constant; H and S on reflux's reference"
+    ],
+    "warnings": []
+  },
+  "streams": [
+    {
+      "name": "condensate",
+      "from": null,
+      "to": "pump",
+      "T": 318.15,
+      "P": 10000,
+      "vapour_fraction": 0,
+      "molar_flow": 50,
+      "mass_flow": 0.9007634,
+      "volume_flow": 0.0009097030829354409,
+      "H": -284321.8880437423,
+      "S": 74.69874812588378,
+      "V": 0.000018194061658708818,
+      "molar_flows": [
+        50
+      ],
+      "mass_flows": [
+        0.9007634
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "liquid",
+          "fraction": 1,
+          "mole_fractions": [
+            1
+          ],
+          "H": -284321.8880437423,
+          "S": 74.69874812588378,
+          "V": 0.000018194061658708818
+        }
+      ]
+    },
+    {
+      "name": "feedwater",
+      "from": "pump",
+      "to": "boiler",
+      "T": 319.06007437174713,
+      "P": 8000000,
+      "vapour_fraction": 0,
+      "molar_flow": 50,
+      "mass_flow": 0.9007634,
+      "volume_flow": 0.0009068839214664185,
+      "H": -284128.0606402049,
+      "S": 74.85154973492934,
+      "V": 0.00001813767842932837,
+      "molar_flows": [
+        50
+      ],
+      "mass_flows": [
+        0.9007634
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "liquid",
+          "fraction": 1,
+          "mole_fractions": [
+            1
+          ],
+          "H": -284128.0606402049,
+          "S": 74.85154973492934,
+          "V": 0.00001813767842932837
+        }
+      ]
+    },
+    {
+      "name": "steam",
+      "from": "boiler",
+      "to": "turbine",
+      "T": 773.15,
+      "P": 8000000,
+      "vapour_fraction": 1,
+      "molar_flow": 50,
+      "mass_flow": 0.9007634,
+      "volume_flow": 0.03762233069855913,
+      "H": -226473.8443425704,
+      "S": 184.37519895883068,
+      "V": 0.0007524466139711825,
+      "molar_flows": [
+        50
+      ],
+      "mass_flows": [
+        0.9007634
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 1,
+          "mole_fractions": [
+            1
+          ],
+          "H": -226473.8443425704,
+          "S": 184.37519895883068,
+          "V": 0.0007524466139711825
+        }
+      ]
+    },
+    {
+      "name": "exhaust",
+      "from": "turbine",
+      "to": "condenser",
+      "T": 318.95632892393604,
+      "P": 10000,
+      "vapour_fraction": 0.8899518357151378,
+      "molar_flow": 50,
+      "mass_flow": 0.9007634,
+      "volume_flow": 11.760204993163235,
+      "H": -245910.0484349286,
+      "S": 195.12876632277428,
+      "V": 0.2352040998632647,
+      "molar_flows": [
+        50
+      ],
+      "mass_flows": [
+        0.9007634
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "vapour",
+          "fraction": 0.8899518357151378,
+          "mole_fractions": [
+            1
+          ],
+          "H": -241167.6910640839,
+          "S": 209.99712584661262,
+          "V": 0.264286321477223
+        },
+        {
+          "phase": "liquid",
+          "fraction": 0.1100481642848622,
+          "mole_fractions": [
+            1
+          ],
+          "H": -284261.1620153032,
+          "S": 74.88937897542229,
+          "V": 0.000018200305494234102
+        }
+      ]
+    },
+    {
+      "name": "return",
+      "from": "condenser",
+      "to": null,
+      "T": 318.15,
+      "P": 10000,
+      "vapour_fraction": 0,
+      "molar_flow": 50,
+      "mass_flow": 0.9007634,
+      "volume_flow": 0.0009097030829354409,
+      "H": -284321.8880437423,
+      "S": 74.69874812588378,
+      "V": 0.000018194061658708818,
+      "molar_flows": [
+        50
+      ],
+      "mass_flows": [
+        0.9007634
+      ],
+      "mole_fractions": [
+        1
+      ],
+      "mass_fractions": [
+        1
+      ],
+      "phases": [
+        {
+          "phase": "liquid",
+          "fraction": 1,
+          "mole_fractions": [
+            1
+          ],
+          "H": -284321.8880437423,
+          "S": 74.69874812588378,
+          "V": 0.000018194061658708818
+        }
+      ]
+    }
+  ],
+  "units": [
+    {
+      "name": "pump",
+      "type": "pump",
+      "inlets": [
+        "condensate"
+      ],
+      "outlets": [
+        "feedwater"
+      ],
+      "energy": [
+        {
+          "name": "work",
+          "rate": 9691.37017687026
+        }
+      ],
+      "balance": {
+        "component": 0,
+        "energy": 0
+      },
+      "profile": null,
+      "warnings": []
+    },
+    {
+      "name": "boiler",
+      "type": "heater",
+      "inlets": [
+        "feedwater"
+      ],
+      "outlets": [
+        "steam"
+      ],
+      "energy": [
+        {
+          "name": "duty",
+          "rate": 2882710.8148817234
+        }
+      ],
+      "balance": {
+        "component": 0,
+        "energy": 0
+      },
+      "profile": null,
+      "warnings": []
+    },
+    {
+      "name": "turbine",
+      "type": "expander",
+      "inlets": [
+        "steam"
+      ],
+      "outlets": [
+        "exhaust"
+      ],
+      "energy": [
+        {
+          "name": "work",
+          "rate": -971810.2046179106
+        }
+      ],
+      "balance": {
+        "component": 0,
+        "energy": 0
+      },
+      "profile": null,
+      "warnings": []
+    },
+    {
+      "name": "condenser",
+      "type": "heater",
+      "inlets": [
+        "exhaust"
+      ],
+      "outlets": [
+        "return"
+      ],
+      "energy": [
+        {
+          "name": "duty",
+          "rate": -1920591.9804406832
+        }
+      ],
+      "balance": {
+        "component": 0,
+        "energy": 0
+      },
+      "profile": null,
+      "warnings": []
+    }
+  ],
+  "solver": {
+    "method": "wegstein",
+    "tol": 1e-9,
+    "max_iterations": 100
+  },
+  "blocks": [
+    {
+      "units": [
+        "pump"
+      ],
+      "tears": [],
+      "cycles": 0,
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
+    },
+    {
+      "units": [
+        "boiler"
+      ],
+      "tears": [],
+      "cycles": 0,
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
+    },
+    {
+      "units": [
+        "turbine"
+      ],
+      "tears": [],
+      "cycles": 0,
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
+    },
+    {
+      "units": [
+        "condenser"
+      ],
+      "tears": [],
+      "cycles": 0,
+      "residuals": [],
+      "specs": [],
+      "spec_residuals": []
+    }
+  ],
+  "notes": [],
+  "balance": {
+    "component": 0,
+    "energy": 0
+  },
+  "worst_unit": {
+    "component": 0,
+    "energy": 0
+  },
+  "specs": []
+}

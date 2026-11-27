@@ -6,6 +6,7 @@
 //     reflux fit reactions.toml [NAME] [--json fit.json] [--csv residuals.csv]
 //     reflux kinetics check FILE [T P NAME=y ...]
 //     reflux kinetics explain FILE T P NAME=y ...
+//     reflux water SPEC SPEC [--if97] [--json OUT]
 //     reflux demo [T P]
 //
 // From the source, `v run . solve testdata/flowsheets/reference.toml`.
@@ -40,6 +41,9 @@ const usage = 'usage:
   reflux kinetics explain FILE T P NAME=y ...
       Check the reactions in a file, or explain its rates at a state:
       reflux kinetics help says more.
+  reflux water SPEC SPEC [--if97] [--json OUT]
+      The properties of water at a state, as T=450degC P=40bar, by IAPWS-95 or
+      IF97: reflux water help says more.
   reflux demo [T P]
       The thermodynamics and the flash, on compounds from the database:
       n-butane at T in K and P in bar, by default 350 K and 9.4573 bar.
@@ -105,6 +109,9 @@ fn run(args []string, mut c Console) int {
 		'kinetics' {
 			return kinetics_command(args[1..], mut c)
 		}
+		'water' {
+			return water_command(args[1..], mut c)
+		}
 		'version', '--version' {
 			c.say('reflux ${flowsheet.version()}')
 			return 0
@@ -118,8 +125,8 @@ fn run(args []string, mut c Console) int {
 			return 2
 		}
 		else {
-			hint := did_you_mean(command, ['solve', 'study', 'optimize', 'fit', 'kinetics', 'demo',
-				'version', 'help'])
+			hint := did_you_mean(command, ['solve', 'study', 'optimize', 'fit', 'kinetics', 'water',
+				'demo', 'version', 'help'])
 			c.complain('reflux: no command ${command}${hint}\n\n${usage}')
 			return 2
 		}

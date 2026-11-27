@@ -176,6 +176,13 @@ fn check_tpn() {}     // private
   it. So `flowsheet.version()` ([flowsheet/report.v](../flowsheet/report.v))
   keeps no second copy of the number. Go would take it from `-ldflags -X` or
   `debug.ReadBuildInfo`.
+- **A module in a subfolder** is named by its folders from `v.mod`'s,
+  joined by dots, as a Go import path ends in the package's directory:
+  `water/if97/` holds files that start `module if97`, imported as
+  `import water.if97` and called as `if97.state_pt(…)`. The parent module's
+  tests can import it ([water/if97_95_test.v](../water/if97_95_test.v)), as
+  long as it imports nothing of the parent's, and `v test water` runs both
+  folders' tests.
 - Struct fields have visibility sections instead of per-field capitals:
 
 ```v
@@ -440,6 +447,19 @@ pub struct IdealGas {
 ig := thermo.IdealGas{ cp: form }        // dhf is none
 dhf := ig.dhf or { 0.0 }                 // a value either way
 ```
+- **Option parameters.** A parameter can be `?f64` too: it takes a plain
+  `f64` or `none`, and passes straight into an Option field, where Go would
+  take a `*float64`. [water/iapws95.v](../water/iapws95.v)'s
+  `fluid(dhf ?f64, s0 ?f64)` (M5a) is called `fluid(-241814.0, 188.724)`
+  where the data has water's formation values, and could be `fluid(none,
+  none)` where it hasn't. Probed under tcc and gcc.
+- **An Option of an interface works as a field**, `m ?thermo.Model`, set
+  from a plain value and read with `m := s.m or { … }`, where Go would use
+  a nil interface. `flash.StepBack` (M5a) holds the model a search may ask
+  whether it has a state at a T, and its zero value has none. Built and run
+  under tcc and gcc ([flash/step_back_internal_test.v](../flash/step_back_internal_test.v)).
+  M6's cast, `?thermo.Model(fl.model)`, passed `v -check` and failed in C:
+  a field set by assignment is the form that builds.
 - **Typed errors** (Go's `errors.As`): make a struct that embeds `Error`
   and implements `msg()`, then test it with `is`:
 
@@ -570,6 +590,14 @@ if _ := qp(p) {
   The γ–φ tests run each pure liquid with the ideal gas and with PR as
   `for vapour in [?thermo.CubicKind(none), ?thermo.CubicKind(.pr)]`
   ([components/gamma_phi_test.v](../components/gamma_phi_test.v), M6 step 5).
+- **A `match` can't yield a Result for one `or {}` after it.** In Go a
+  switch's arms assign `v, err` and one `if err != nil` follows. In V,
+  `y := match k { 1 { f(1) } else { f(-1) } } or { 0 }` is refused: each
+  arm's `f` needs its own `or {}` or `!`, and the `or` after the match has
+  nothing to handle ("expression of type `!int` is not an Option or a
+  Result"). Put the dispatch in a function that returns `!T`, each arm
+  `return f(…)!`, and handle that call once (probed in V 0.5.2;
+  `state97` in [water_command.v](../water_command.v)).
 
 ---
 
@@ -1285,6 +1313,17 @@ When the C side needs the preprocessor (`#if defined(GC_THREADS)`), write a
 small C header and call it, as [gc_threads.h](../capi/gc_threads.h) does.
 V code can't see C macros.
 
+**Module `main`'s functions keep their C names.** A function in any other
+module becomes `module__name` in the C V writes, but one in `main` stays
+`name`, so it can collide with the C library V includes. `fn finite(x f64)
+?f64` in `main` compiled under tcc and Ubuntu's gcc, and failed under
+Windows' gcc (MinGW-w64), whose `math.h` declares `int finite(double)`:
+"conflicting types for 'finite'". Go has no such shared namespace. In
+`main`, don't name a function as the C library may declare one, and build
+`main` with gcc before trusting tcc's word; `reflux water`'s helper is
+`json_number` ([water_command.v](../water_command.v), CI on M5a's bundle
+C).
+
 **C (or Python) calling V.** `@[export: 'name']` gives a function a fixed C
 symbol, and `v -shared` builds a `.dll` or `.so`:
 
@@ -1557,9 +1596,18 @@ Where it differs from Go's `encoding/json`:
 
 To read JSON with no struct, decode into `json2.Any`, then use `.as_map()`,
 `.as_array()`, `.f64()`, `.str()` and `x is json2.Null`. In V 0.5.2 `.arr()` is
-deprecated, which `-W` makes an error. [flowsheet/report_test.v](../flowsheet/report_test.v)
+deprecated, which `-W` makes an error, and so is `json2.raw_decode(text)`:
+write `json2.decode[json2.Any](text)` ([water/if97/iapws_test.v](../water/if97/iapws_test.v)). [flowsheet/report_test.v](../flowsheet/report_test.v)
 checks the report that way, so that a key on the wrong field can't hide
 behind the struct that wrote it and read it back.
+
+**Indexing a map of `json2.Any` needs `or {}` or `!`.** Go's `m["b"]` is the
+zero value for a missing key; V's is too for a map of plain values, but a
+sum type's has no zero value, so `m['b']` alone is refused ("`or {}` block
+required when indexing a map with sum type value"), and `m['b'] == none`
+with it. Test a key with `'b' !in m`, and read one with `m['a']!` or
+`m['a'] or { json2.Any(0) }` (probed in V 0.5.2;
+[main_test.v](../main_test.v), the water report).
 
 **Reflection happens at compile time.** Go's `reflect` inspects values at
 run time, through `interface{}`, and a mistake is a run-time panic. V's
@@ -1672,6 +1720,13 @@ for name, call in bad {
 	assert false, '${name} was accepted'
 }
 ```
+
+Nor can a result be an argument: `fn kind_of(r !State) Failure` is refused,
+"result type arguments are not supported". The other way to check many
+calls' refusals is a small function per call that handles its own
+`or {}` and returns what's checked, as
+[water/if97/functions_test.v](../water/if97/functions_test.v)'s `pt_fails`
+does: `_ := state_pt(p, t) or { return kind(err) }`.
 
 **Interface methods and function types can take `mut` parameters**, so a
 callback can fill buffers the caller owns, with no allocation and no

@@ -248,8 +248,11 @@ fn new_setup(db i64, equation i32, names &&char, nc i32, alpha i32, kij i32, pai
 		return bad('fluid is NULL')
 	}
 	d := database_of(db)!
+	if equation == iapws95 {
+		return new_iapws95(d, names, nc, alpha, kij, n_overrides)
+	}
 	kind := equations[equation] or {
-		return bad('no equation ${equation}: REFLUX_VDW (0), REFLUX_RK (1), REFLUX_SRK (2) or REFLUX_PR (3)')
+		return bad('no equation ${equation}: REFLUX_VDW (0), REFLUX_RK (1), REFLUX_SRK (2), REFLUX_PR (3) or REFLUX_IAPWS95 (4)')
 	}
 	a := alphas[alpha] or {
 		return bad('no alpha ${alpha}: REFLUX_ALPHA_EQUATION (0) or REFLUX_ALPHA_MATHIAS_COPEMAN (1)')
@@ -303,6 +306,30 @@ fn new_setup(db i64, equation i32, names &&char, nc i32, alpha i32, kij i32, pai
 		}
 	}
 	return d.setup(kind, cas, alpha: a, kij: kij == 1, overrides: overrides)!
+}
+
+// REFLUX_IAPWS95: water alone by IAPWS-95 (M5a's D16).
+const iapws95 = i32(4)
+const water_cas = '7732-18-5'
+
+// new_iapws95 checks an IAPWS-95 fluid's arguments, which are water's alone,
+// with neither α nor kᵢⱼ, and builds it.
+fn new_iapws95(d components.Database, names &&char, nc i32, alpha i32, kij i32, n_overrides i32) !components.Setup {
+	if alpha != 0 {
+		return bad('IAPWS-95 has no α: alpha is REFLUX_ALPHA_EQUATION (0), not ${alpha}')
+	}
+	if kij != 0 || n_overrides != 0 {
+		return bad("IAPWS-95 is water's alone, with no kij: kij is 0 and n_overrides 0, not ${kij} and ${n_overrides}")
+	}
+	if nc != 1 {
+		return bad("IAPWS-95 is water's alone: nc is 1, not ${nc}")
+	}
+	q := texts_in(names, nc, 'names')![0]
+	rec := d.find(q)!
+	if rec.ids.cas != water_cas {
+		return bad("IAPWS-95 is water's alone: `${q}` is ${rec.name} (${rec.ids.cas})")
+	}
+	return d.iapws95(q)!
 }
 
 // in_fluid finds an override's compound, which must be one of the fluid's.

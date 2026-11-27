@@ -18,8 +18,8 @@ def _frozen(values):
 
 
 class Fluid:
-    """A cubic equation of state over compounds from a Database: make one with
-    Database.fluid. Its compounds' constants and kᵢⱼ are read-only arrays, in
+    """An equation of state over compounds from a Database, a cubic or
+    IAPWS-95's water: make one with Database.fluid. Its compounds' constants and kᵢⱼ are read-only arrays, in
     SI, and setup says how it was built.
 
     Close it with close(), or use it in a `with` block; otherwise it's freed

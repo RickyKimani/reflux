@@ -439,6 +439,48 @@ and `weighted`. `reflux fit` prints each parameter in the file's unit with
 its standard error and interval, their correlations, and the fitted
 constants as the file writes them.
 
+## The water report
+
+`reflux water T=450degC P=40bar --json water.json` writes one state of water
+(M5a's D13): a format of its own, format 1, which changes only with a new
+number. Every number is SI, per kg on IAPWS's reference (u = s = 0 for the
+liquid at the triple point), and per mole by IAPWS's molar mass,
+18.015268 g/mol. A property a state hasn't (a mixture's cp, a viscosity
+outside its correlation's range) is left out.
+
+| Key | |
+|---|---|
+| `format` | 1. |
+| `reflux` | The version of reflux that wrote it. |
+| `formulation` | `"IAPWS-95"` or `"IAPWS-IF97"`. |
+| `reference` | The reference of h, s and u, as a sentence. |
+| `given` | The two SPECs, as typed: `name` (`T`, `P`, `h`, `s`, `x` or `rho`), `text` (the value as typed) and `value` (in SI, per kg). |
+| `T`, `P` | K, Pa. |
+| `phase` | `"liquid"`, `"vapour"`, `"supercritical"`, `"saturated liquid"`, `"saturated vapour"`, or `"liquid and vapour"` for a wet state. |
+| `x` | The vapour's mass fraction, at a saturated or wet state; else left out. |
+| `region` | IF97's region (4 for a saturated or wet state); left out by IAPWS-95. |
+| `per_kg` | The state's properties per kg, as below; a wet state's are the mixture's. |
+| `per_mole` | The same per mole: `rho` (mol/m³), `v` (m³/mol), `h`, `s`, `u`, `cv`, `cp`; no `w`, `mu` or `lambda`. |
+| `liquid`, `vapour` | A wet state's saturated phases, each as `per_kg`; else left out. |
+| `sigma` | The surface tension at T, N/m, at a saturated or wet state; else left out. |
+| `notes` | What the state should be read with: a metastable state below the triple point, a transport property's range. |
+
+#### `per_kg`, `liquid`, `vapour`
+
+| Key | |
+|---|---|
+| `rho` | kg/m³. |
+| `v` | m³/kg. |
+| `h`, `u` | J/kg. |
+| `s`, `cv`, `cp` | J/(kg·K). |
+| `w` | The speed of sound, m/s. |
+| `mu` | The viscosity, Pa·s (R12-08; on IF97 its industrial form). |
+| `lambda` | The thermal conductivity, W/(m·K) (R15-11; on IF97 its industrial form). |
+
+`reflux water` prints the same, rounded to seven figures: one phase per kg
+and per mole, or a wet state's liquid, vapour and mixture per kg and the
+mixture per mole, then σ and any notes.
+
 ## Exit status
 
 | Status | |
@@ -459,3 +501,9 @@ written; and 2 for a wrong command.
 `reflux fit` exits 0 with a fit; 1 when its file didn't load or has no
 fits, when the fit failed, or when a report couldn't be written; and 2 for a
 wrong command, `--workers` included.
+
+`reflux water` exits 0 with a state; 1 when water has no state there, or
+the formulation none (outside its range, above the melting pressure of
+ice, no saturation above the critical point), or a report couldn't be
+written; and 2 for a wrong command, a pair of SPECs that doesn't fix one
+state included.

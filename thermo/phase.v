@@ -59,9 +59,20 @@ const vapour_volume = 4.0
 // send it out of its liquid port. In a two-phase split the flash labels by
 // density instead, the less dense phase being the vapour (D6), since Π can
 // call both phases liquid-like.
+//
+// A model with Branches labels by them where it has two (M5a's D7, as
+// amended in step 2): the liquid's branch below its split, the vapour's
+// above. IAPWS-95 needs it: water's density maximum, where (∂P/∂T)_V passes
+// through zero, puts Π below 1 for its liquid far from it, −7 at 300 K and
+// 1 bar. A cubic has no Branches, so its labels don't change.
 pub fn phase_label(m Model, st State) PhaseLabel {
 	if st.v > vapour_volume * m.min_volume(st.n) {
 		return .vapor
+	}
+	if m is Branches {
+		if split := m.branches(st.t, st.n).split {
+			return if st.v < split { .liquid } else { .vapor }
+		}
 	}
 	return if pip(m, st.t, st.v, st.n) > 1.0 { .liquid } else { .vapor }
 }

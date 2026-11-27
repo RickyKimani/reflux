@@ -291,3 +291,20 @@ fn test_vapour_pressure_is_each_compounds_own() {
 	assert reflux_psat(fl, 0, 0, unsafe { nil }, unsafe { nil }, unsafe { nil }, &char(buf.data),
 		1024) == ok
 }
+
+// IAPWS-95's vapour pressure is its own model's (M5a's D16): water has no
+// state below 251.165 K, and none at or above Tc.
+fn test_vapour_pressure_by_iapws95() {
+	db := components.load_default()!
+	s := db.iapws95('water')!
+	fl := add(FluidItem{s})
+	defer {
+		remove(fl) or {}
+	}
+	m := s.fluid.helmholtz()!
+	code, out, status, why := psat_of(fl, 0, [300.0, 500.0, 240.0, 647.096])
+	assert code == ok && status == [point_ok, point_ok, point_no_convergence, point_supercritical], why
+	assert out[0] == thermo.saturation_pressure(m, 300.0)!
+	assert out[1] == thermo.saturation_pressure(m, 500.0)!
+	assert math.is_nan(out[2]) && math.is_nan(out[3])
+}

@@ -22,7 +22,7 @@ DATA_ERROR = -4
 TOO_SMALL = -5
 
 # Equations of state and α functions, as reflux.h numbers them.
-EQUATIONS = {"VDW": 0, "RK": 1, "SRK": 2, "PR": 3}
+EQUATIONS = {"VDW": 0, "RK": 1, "SRK": 2, "PR": 3, "IAPWS-95": 4}
 ALPHAS = {"equation": 0, "mathias_copeman": 1}
 
 # Volume roots, for reflux_props.

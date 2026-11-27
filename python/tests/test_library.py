@@ -50,7 +50,8 @@ def test_the_codes_are_the_headers():
     for name in ("OK", "BAD_ARGUMENT", "BAD_HANDLE", "NOT_FOUND", "DATA_ERROR", "TOO_SMALL"):
         want[name] = getattr(_native, name)
     for name, code in _native.EQUATIONS.items():
-        want[name] = code
+        # The package's "IAPWS-95", as a file names it, is REFLUX_IAPWS95.
+        want[name.replace("-", "")] = code
     for name, code in _native.ALPHAS.items():
         want[f"ALPHA_{name.upper()}"] = code
     for status in reflux.Status:

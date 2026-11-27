@@ -161,7 +161,7 @@ fn (s VolumeFlash) mixture() !FlashResult {
 	}
 	f := VolumeGap{s}
 	// V(P) falls as P rises, so the residual does too.
-	lo, hi, mut steps := bracket_down(f, math.log(start), math.ln2, '${s.what()}')!
+	lo, hi, mut steps := bracket_down(f, math.log(start), math.ln2, '${s.what()}', StepBack{})!
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3, max_iter: s.params.max_steps)!
 	steps += coarse.evaluations
 	mut r := s.flash_at(coarse.x)!
@@ -206,8 +206,10 @@ fn (g VolumeGap) at(lnp f64) !f64 {
 }
 
 // bracket_down steps x from x0 by dx until f, which falls as x rises,
-// changes sign, and returns the bracket and the evaluations.
-fn bracket_down(f numeric.FallibleFunction, x0 f64, dx f64, what string) !(f64, f64, int) {
+// changes sign, and returns the bracket and the evaluations. back says
+// whether, and for which model, a step that lands outside the model's range
+// steps back (at_or_closer).
+fn bracket_down(f numeric.FallibleFunction, x0 f64, dx f64, what string, back StepBack) !(f64, f64, int) {
 	mut x := x0
 	f0 := f.at(x)!
 	if f0 == 0.0 {
@@ -216,14 +218,72 @@ fn bracket_down(f numeric.FallibleFunction, x0 f64, dx f64, what string) !(f64, 
 	// f too high: raise x.
 	up := f0 > 0.0
 	for k in 0 .. 80 {
-		next := if up { x + dx } else { x - dx }
-		fn_ := f.at(next)!
+		next, fn_ := at_or_closer(f, x, if up { x + dx } else { x - dx }, back)!
 		if fn_ == 0.0 || (fn_ > 0.0) != (f0 > 0.0) {
 			return if up { x, next, k + 2 } else { next, x, k + 2 }
 		}
 		x = next
 	}
 	return fail(.no_convergence, '${what}: no change of sign in 80 steps')
+}
+
+// StepBack is what at_or_closer needs to know whether a search's step has
+// left a model's range: the model and the feed, and whether the search's
+// variable is T (ln_t: its logarithm). Its zero value never steps back.
+struct StepBack {
+	m    ?thermo.Model
+	z    []f64
+	ln_t bool
+}
+
+// outside says whether the model has no state at the T a search's x is:
+// only a model with thermo.Branches can say so (no_state).
+fn (s StepBack) outside(x f64) bool {
+	m := s.m or { return false }
+	if m is thermo.Branches {
+		t := if s.ln_t { math.exp(x) } else { x }
+		return m.branches(t, s.z).no_state
+	}
+	return false
+}
+
+// step_back is a fluid's StepBack: its equation of state's, if its phases
+// have one behind them (thermo.Fluid.helmholtz; M6's γ–φ liquid has none,
+// and so no Branches), and the zero value's otherwise.
+fn step_back(fl thermo.Fluid, z []f64, ln_t bool) StepBack {
+	m := fl.helmholtz() or {
+		return StepBack{
+			z:    z
+			ln_t: ln_t
+		}
+	}
+	return StepBack{
+		m:    m
+		z:    z
+		ln_t: ln_t
+	}
+}
+
+// at_or_closer is f at next, a search's step from x, the last point that
+// had a value. Where f has none there because the model has no state at
+// that T (IAPWS-95 below 251.165 K, M5a step 2), it halves the step back
+// towards x, up to 30 times, and returns the point it took with its value:
+// the answer lies between. Any other failure is f's, returned as it was, so
+// a model without thermo.Branches, a cubic, fails where and as it always
+// did, as fast.
+fn at_or_closer(f numeric.FallibleFunction, x f64, next f64, back StepBack) !(f64, f64) {
+	mut b := next
+	for _ in 0 .. 30 {
+		v := f.at(b) or {
+			if !back.outside(b) {
+				return err
+			}
+			b = 0.5 * (x + b)
+			continue
+		}
+		return b, v
+	}
+	return b, f.at(b)!
 }
 
 // Helmholtz is a split's A/RT at (T, V) as a numeric.Objective.
@@ -485,7 +545,7 @@ fn (e EnergyFlash) solve() !FlashResult {
 	} else {
 		t0 = 300.0
 	}
-	lo, hi, bsteps := bracket_down(neg, math.log(t0), math.log(1.5), e.what())!
+	lo, hi, bsteps := bracket_down(neg, math.log(t0), math.log(1.5), e.what(), step_back(e.fl, e.tvs.z, true))!
 	steps += bsteps
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3, max_iter: e.tvs.params.max_steps)!
 	steps += coarse.evaluations

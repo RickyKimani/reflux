@@ -25,6 +25,148 @@ Keep this section current: update it whenever a step is committed.
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
   Each milestone's plan, `docs/mN-plan.md`, ends with its exit review, and
   each finished step there has its write-up: the record of what it did.
+- **M5a (water and steam) is done** on branch `m5a-water`, for its PR into
+  `main` and the release 0.6.0 when the owner asks; branched from
+  `main` at v0.4.0. `main` (M6, v0.5.0, and the gas constant's fix that
+  begins 0.6.0) was merged into it before bundle C, at the owner's word on
+  2026-11-26, to meet M6's seam and format 4 before steps 7 and 8. Its plan,
+  `docs/m5-plan.md`, was approved on 2026-11-24 as drafted: exit criteria
+  1–12, decisions D1–D18 and steps 0–12, ending in the release `main` has
+  begun, 0.6.0 (D17). Its "With M6" section has the merge, what broke and
+  how it was put right.
+  - D1 splits the roadmap's M5: M5a is IAPWS-95 as a `thermo.Model`, IF97
+    with its region-3 supplements as steam-table functions, water's
+    transport by IAPWS, `equation = "IAPWS-95"` in the file, `reflux water`
+    and IAPWS-95 in the C API; M5b is mixtures' transport and IF97 behind
+    the flash on M6's seam. CoolProp isn't linked, only a fixture source.
+  - **Step 0 is done** (`spike/water/`, Python, porting `thermo`'s solvers
+    line for line):
+    - IAPWS-95's isotherms inside the dome have spurious roots with Gibbs
+      energies up to 1e19 RT too low (910 of 2,508 grid states), so the
+      stable root is only ever chosen between the two physical branches'.
+      The generic solvers mostly do that, but the vapour start p/RT landed
+      in the loops (300 K, 42 MPa gave 322 kg/m³), the liquid walk returned
+      an artificial vmin as a root, and near Tc each solver could return the
+      other branch's root. D7: an optional interface (IAPWS-95's alone)
+      splitting the branches at ρc below Tc (a vapour-start bound by SR1-86's
+      ρ'' too, which step 2 found redundant and took out), a liquid walk that
+      must reach p, and a bracketed start for
+      `saturation_pressure` (which failed from 646 K, and now converges to
+      0.1 mK below Tc). A convexity guard, tried first, refused real liquid
+      roots at 251–260 K.
+    - IAPWS-95's R (8.314371357587) is carried in F (D4), so its tables
+      match exactly; water's ln φ is then about 1e-4, not 0, at low P.
+    - Table 5's 0/0 at δ = 1 is removable; only (Tc, ρc) is singular
+      (φʳ_ττ → −∞, D8). The `iapws` package is GPL-3.0: fixtures only (D10).
+    - DWSIM 9.0.5's CoolProp package is IAPWS-95 to 1e-9 kJ/kg; its Steam
+      Tables (IF97) returns h = s = −1 silently in region 3, has no region 5,
+      and its region-3 PH flash lands 1080 K off.
+  - The steps go in four bundles (the plan, below its step graph), allowed
+    on 2026-11-25: A, steps 1–2; B, 3–5; C, 6–8; D, 9–12. A full tcc check
+    ends A, C and D; B touches only `water`, which nothing imports yet, so
+    it runs `water`'s tests, fmt and vet instead.
+  - The version is set at the release, as the next on `main` then (D17):
+    0.6.0, whose CHANGELOG entry the gas constant's fix began, and M5a adds
+    to it.
+  - **Bundle A (steps 1 and 2) is done,** committed at `181e456`, its full
+    tcc check passed (108 test files), and amends D7 and D8, approved on
+    2026-11-26:
+    - Step 1: `thermo.PlanckEinstein`; the `water` module, IAPWS-95 as a
+      `Model` (`water.iapws95()`, coefficients transcribed from the release),
+      its ideal part, `water.fluid`, Table 3 (`props95`) and D6's constants
+      (`reference_offsets`). Tables 6 and 7 to their printed digits, by Table
+      3 and through `thermo`; φʳ within 18.3 ε·scale of mpmath at 291 points.
+      D8 amended: `Fluid.props`' w is NaN at (Tc, ρc) (Cp/Cv is ∞/∞ in the
+      cubics' formula, which stays).
+    - Step 2: `thermo.Branches` (`split`, `no_state`), the
+      liquid walk that must reach p, the bracketed Psat start, labels by the
+      split, and `flash.at_or_closer`, a search's step back from a T where
+      the model has no state (never for a cubic). Table 8 through `tvf`; Psat to 0.1 mK below Tc; every flash back
+      from 925 states. D7 amended: `min_volume` at δ = 4; no state below
+      251.165 K (the liquid's H falls with T there, and a vapour gave UV a
+      phantom); Π labelled liquid water vapour near its density maximum.
+    - Every cubic answer keeps its bits: an 83,563-line trace of the
+      sweep's mixtures and pure compounds through every flash, gcc `-prod`,
+      before and after (`spike/water/trace`).
+    - Found: the `iapws` package's densities are wrong at 640–647 K below a
+      few hundred Pa; a water flash costs about 0.06 s under tcc (step 10).
+  - **Bundle B (steps 3 to 5, IF97) is done** and committed, and amends
+    criterion 6, approved on 2026-11-27. `water`'s tests, fmt and vet ran,
+    not the full check (its exception, above).
+    - Step 3: `water.if97`, a submodule (D2 allowed it): the basic equations
+      of regions 1, 2 (and the metastable vapour), 3 and 5, region 4, B23
+      and B2bc, per kg on IAPWS's reference. Its 1,555 coefficients are
+      read from the three releases' PDFs by `tools/extract_if97.py` (their
+      plain text loses exponents and the supplements' digits); each equals
+      the `iapws` package's (`tools/gen_m5_if97.py`) but B23's n₅, which the
+      package has with an 8 dropped.
+    - Step 4: the backward equations as published (R7-97's, SR3-03's,
+      SR5-05's 26 subregions) and the steam-table functions from (p, T),
+      (p, h), (p, s), (T, x), (p, x), each answer finished on its basic
+      equation (T back to 3.6e-15, region 3's 4.4e-14); region 3's
+      saturated phases to 1 µK below Tc, each bracketed on its side of ρc.
+      Every verification table to its digits but SR5-05's Table 13's last
+      row, printed 0.53 units off its own equation; Tables 43 and 44
+      reproduced, maxima and RMS, but for a slip at 623.15 K in Table 44
+      (0.0046%, printed 0.0041%) and four maxima of Table 43 (0.4% of them).
+    - Step 5: IF97 against IAPWS-95 at 4,712 states, each difference within
+      R7-97's Figs. 3 to 6 but on the pseudo-critical ridge above the
+      critical triangle (30–40 MPa), where cp differs by up to 0.99% against
+      the figure's 0.5%: criterion 6 amended to report it apart.
+    - Found besides: the `iapws` package's region-3 mixtures are SR5-05's
+      unfinished densities (1% off at 22 MPa), and a NaN passed the first
+      tests' `> bound` checks (now `!(… <= bound)`).
+  - **Bundle C (steps 6 to 8) is done and committed,** and amends
+    criterion 9, approved on 2026-11-27. `tools/python.vsh test` passed
+    (88). The full tcc
+    check ran 136 test files: 135 passed, and `capi/capi_test.v`'s header
+    test, which didn't know `REFLUX_IAPWS95`, passed alone once it did;
+    fmt, vet, the build and the smoke runs then passed by hand. Planted
+    mistakes: 36, all caught, 4 after tests were added for them.
+    - Step 6: `water/transport.v`, R12-08's μ and R15-11's λ with their
+      critical enhancements on IAPWS-95, their industrial forms on IF97
+      (IF97's state gained (∂ρ/∂p)_T), R1-76's σ; every verification table
+      to its digits; the `iapws` package's 791 and 775 states to 6e-14 and
+      2.9e-11 (`tools/gen_m5_transport.py`). D11's ranges as read: from
+      250 K, to 1273.15 K, above it a dilute gas (ρ ≤ 0.01ρc).
+    - Step 7: format 4's `equation = "IAPWS-95"` (`Database.iapws95`), its
+      refusals at their lines; `testdata/flowsheets/rankine.toml`, a new
+      golden (`rankine.json`, named in 0.6.0's entry), within 1.8e-10 kJ/kg
+      of its hand calculation (`tools/gen_m5_rankine.py`); `reflux water`
+      (`water_command.v`), six pairs (criterion 9 amended: the other nine
+      refused with why), ice by R14-08's melting curves, the water report.
+    - Step 8: `REFLUX_IAPWS95` (4), `reflux_psat` on a pure fluid's own
+      model, `Database.fluid("IAPWS-95", ["water"])` (kij None by default),
+      the reference program's water, bit for bit.
+    - Found: the `iapws` package's (P, s) in the dome lands off the
+      saturation line (0.15 K, 0.94 kJ/kg at 10 kPa), and its (P, x) stops
+      1.5e-8 K high, so the hand calculation takes wet states by the lever
+      rule at its own Newton's Tsat.
+    - CI failed on bundle C's commit on Windows' gcc alone: `main`'s
+      `fn finite` clashed with MinGW's math.h. Renamed `json_number`
+      (`3b8f290`); CI passed, all four jobs (run 45984142988).
+  - **Bundle D (steps 9 to 12) is done,** committed at `499d032`, CI
+    passed on it, all four jobs (run 46032587308): M5a is finished, its
+    exit review at the end of its plan. The owner approved criteria 6 and 9
+    as amended on 2026-11-27, and asked for its PR into `main`; the release
+    0.6.0 follows the merge, when the owner asks.
+    - Step 9: `tools/gen_m5_dwsim.py`, `testdata/m5_dwsim.json`: DWSIM's
+      CoolProp package is IAPWS-95 to 7.5e-7 kJ/kg, its PH flash 0.24–4%
+      off at four near-critical states; its Steam Tables package is IF97
+      where it answers, h = −1 in region 3 at 650 K, region 5 wrong, its PH
+      flash above 25 MPa returning 1729/2000/1525 K whatever h (Brent on its
+      own broken h, from its source); the Rankine cycle per kg to 3.7e-7.
+    - Step 10: `tools/bench_m5.v`, `tools/gen_m5_bench.py`,
+      `benchmarks/m5.v`: reflux 470–1400× DWSIM, 1.4–3× CoolProp from
+      Python. Found and fixed: a pure PH/PS flash asked pvf above Pc, 8 ms
+      to fail for water at 30 MPa; skipped above 1.01 Pc, the same bits
+      (1,680 pure flashes before and after), PH 2.8 ms to 251 µs.
+    - Step 11: 0.6.0's CHANGELOG entry written, undated; the release gate
+      refuses for the tree, the branch and the date alone.
+    - Step 12: docs, the roadmap (M5a done), and the exit review, which
+      added criterion 2's Maxwell relations and ln φ = Gʳ/RT on IAPWS-95.
+    - Planted mistakes: 6, all caught, 1 after a test was added. The full
+      tcc check passed (138 test files).
 - **M6 (activity models and liquid–liquid equilibrium) is done,** merged
   in PR #8 (`28724c1`) and released as v0.5.0, with its exit review at the
   end of its plan. Its plan, `docs/m6-plan.md`, was approved on 2026-11-18: exit
@@ -707,6 +849,7 @@ v run . solve testdata/flowsheets/reference.toml --json out.json   # the CLI (do
 v run . study testdata/flowsheets/methanol_study.toml              # a study: its points, and why an output has no value
 v run . optimize testdata/flowsheets/series.toml best              # an optimisation: its optimum, multipliers and iterates
 v run . fit testdata/m8_fit/ethylene.toml                          # a fit: each constant with its interval, written back
+v run . water T=450degC P=40bar [--if97] [--json out.json]         # a steam table: water at a state, by IAPWS-95 or IF97
 v run . demo                     # the demo; `v run . demo 300 2.5` sets T (K) and P (bar)
 v run tools/release.vsh          # the release gate: why this commit can't be tagged, or the tag commands
 v run tools/python.vsh test      # the C API's library (gcc), then the Python tests (uv, pytest)
@@ -801,6 +944,24 @@ REFLUX_FUZZ_SEED=3 REFLUX_FUZZ_CALLS=20000 v -cc gcc -prod test capi/fuzz_test.v
     `tools/gen_m8_bench.py` (DWSIM and V, about twenty minutes)
     `testdata/m8_bench.json`, step 14's timings, which can't reproduce byte
     for byte. Then `v run tools/benchmarks.vsh` writes `docs/benchmarks.md`.
+  - `tools/gen_m5_iapws95.py [coefficients derivatives states saturation]`
+    (iapws, CoolProp, mpmath) writes `testdata/m5_iapws95.json`, and
+    `tools/gen_m5_if97.py [coefficients states]` (iapws, with NumPy 2.2.6:
+    under 2.5.5 its region-3 (p, h) raises) `testdata/m5_if97.json`.
+  - `tools/gen_m5_transport.py` (iapws, NumPy 2.2.6) writes
+    `testdata/m5_transport.json`, the package's IAPWS-95 and IF97
+    transport at (T, P) states and σ; `tools/gen_m5_rankine.py` (iapws)
+    `testdata/m5_rankine.json`, the Rankine cycle by hand.
+  - `tools/gen_m5_dwsim.py` (DWSIM, about a minute) writes
+    `testdata/m5_dwsim.json`, DWSIM's two water packages by state and the
+    Rankine cycle on each; `tools/gen_m5_bench.py` (DWSIM, CoolProp 8.0.0,
+    iapws and V) `testdata/m5_bench.json`, step 10's timings, which can't
+    reproduce byte for byte. Then `v run tools/benchmarks.vsh` writes
+    `docs/benchmarks.md`.
+  - `tools/extract_if97.py R7-97.pdf SR3-03.pdf SR5-05.pdf` (PyMuPDF
+    1.24.14) writes `water/if97/coefficients*.v` from IAPWS's release PDFs,
+    which stay out of the repository; then `v fmt -w` them. Run it only to
+    check or redo the transcription: the files are its output, as checked.
   - `gen_m3_fixtures.py` takes the names of the fixtures to write (`thermo`,
     `stability`, `pip`, `rachford_rice`); with none, it writes them all.
   - A generator must reproduce its committed output byte for byte on the
@@ -938,6 +1099,12 @@ it, uses `kinetics`, `flash`, `thermo` and `numeric`, and its tests
 `reactors` (M9), the reactors as flowsheet units, uses `flowsheet`,
 `equilibrium`, `kinetics`, `components` (for the viscosity) and the rest;
 `main` gives `flowsheet.load` its makers.
+`water` (M5a) is water and steam: IAPWS-95 as a `thermo.Model` and water's
+transport, over `thermo`, `numeric` and its submodule `water.if97` (IF97 as
+steam-table functions, which uses only `math`); its tests use `flash`, and
+`flash`'s step-back test uses it, so `water` itself can't import `flash`.
+`components` builds IAPWS-95's fluid through it (`Database.iapws95`), and
+`main`'s `reflux water` uses it, `water.if97` and `flash`.
 `activity` (M6), liquid activity models, uses `numeric` and `expr`; `components`
 reads ChemSep's banks and UNIFAC tables into it and builds its models.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
@@ -969,6 +1136,23 @@ over the rest, built into a shared library for the Python package in
   - `Fluid` adds the ideal-gas part, for total properties. Its `model` is
     a `PhaseModel` (M6's D3): never downcast it with `as`, which compiles
     and returns zeros. Ask `helmholtz()` for the `Model`, then test that.
+  - A model may say what it knows of its isotherms' two branches through
+    the optional `Branches` (M5a's D7): a split volume between them, and
+    an isotherm with no state. The volume solvers keep to
+    them, and `phase_label` labels by the split. IAPWS-95 needs it (its
+    dome has spurious roots 1e19 RT below the real phase's); a cubic
+    doesn't have it, and its paths are unchanged.
+- **`water`** (M5a) holds IAPWS-95: `iapws95()`, the `Model`, F = n·ψ with
+  ψ = (R₉₅/R)φʳ + (R₉₅/R − 1) ln δ (D4: its own gas constant, so its tables
+  match); its ideal part as a `PlanckEinstein` Cp; `props95`, the release's
+  Table 3 on IAPWS's reference, and `reference_offsets`, the constants
+  between it and reflux's (D6). Below 251.165 K it has no state.
+- **`water.if97`** (M5a) is IAPWS-IF97 with SR3-03 and SR5-05, per kg on
+  IAPWS's reference: each basic and backward equation as published, and
+  `state_pt`, `state_ph`, `state_ps`, `state_tx`, `state_px`, which choose
+  the region, refuse what's outside the range (`If97Error`), and finish
+  each backward answer by Newton on its basic equation (D9). Region 3's
+  densities keep to their side of ρc below pc, as IAPWS-95's do.
 - **`flash` works for any `thermo.PhaseModel`** (M6's D3): a phase at
   (T, P, n) with ln φ, their derivatives, a label and residual properties.
   `thermo.by_roots(model)` is any `Model` as one, and `tv` alone takes a
@@ -1155,6 +1339,8 @@ over the rest, built into a shared library for the Python package in
     scripts report it as NO BUILD.
   - A timeout must kill the whole process tree: killing `v` leaves the test
     program it started holding the pipes, and the script waits forever.
+- **A NaN passes `x > bound`:** write a bound as `assert x <= bound`, or
+  `if !(x <= bound)`. `math.max` carries a NaN through.
 - **Keep sensitive states exact.** Where a test state is sensitive to an
   ulp, store the exact double: build it from integers, for instance
   `(915 + k) * 1e4`.
@@ -1202,6 +1388,9 @@ or a test:
   catches it), never a count of work. Count the work itself.
 - **A panic can't be caught.** There's no `recover`, so what a library might
   panic on must be kept from it: `toml.parse_text` on a `\u` escape, for one.
+- **Module `main`'s functions keep their C names,** unprefixed: one named
+  like a C library function (`finite`, in MinGW's `math.h`) builds under
+  tcc and fails under Windows' gcc. Build `main` with gcc when you add one.
 - **Module names:** not like a vlib module's. `benchmark` broke external
   tests, because V's test runner imports vlib's.
 - **Leftovers:** V can leave `.*.v3cc.*/` build folders next to a binary.

@@ -13,6 +13,14 @@ v run . solve testdata/flowsheets/decanter.toml   # water, 1-butanol and methano
 ```
 
 ```bash
+v run . solve testdata/flowsheets/rankine.toml   # a Rankine cycle on IAPWS-95 water: pump, boiler, turbine, condenser
+```
+
+```bash
+v run . water T=450degC P=40bar   # a steam table: water's properties at a state, by IAPWS-95 (or --if97)
+```
+
+```bash
 v run . kinetics check testdata/kinetics/xu_froment.toml   # a file's reactions: every check (docs/flowsheet-format.md)
 ```
 
@@ -58,7 +66,8 @@ v run tools/python.vsh build   # the C API's library, for reflux from Python: do
   [docs/m9-plan.md](docs/m9-plan.md), equations, kinetics and reactors,
   [docs/m8-plan.md](docs/m8-plan.md), specifications, studies, optimisation
   and fitting, and [docs/m6-plan.md](docs/m6-plan.md), activity models and
-  liquid–liquid equilibrium.
+  liquid–liquid equilibrium. [docs/m5-plan.md](docs/m5-plan.md) is M5a's,
+  water and steam, in progress.
 - [docs/python.md](docs/python.md) is reflux from Python: NumPy arrays in
   and out, many states in a call. Every example on it runs in CI.
 - [docs/flash-robustness.md](docs/flash-robustness.md) is the flash on
@@ -110,8 +119,10 @@ These goals come from what went wrong with DWSIM:
 v.mod               module manifest (Go's go.mod), with reflux's version
 CHANGELOG.md        every release, what a version promises, how to make one
 main.v              the command line: reflux solve, study, optimize, fit,
-                    kinetics, demo, version, help
+                    kinetics, water, demo, version, help
 kinetics_command.v  reflux kinetics check and explain
+water_command.v     reflux water (M5a): a state from two of T, P, h, s, x and
+                    rho, by IAPWS-95 or IF97, and the ice that bounds it
 study_command.v     reflux study and reflux optimize (M8)
 fit_command.v       reflux fit (M8)
 cpus_*.c.v          the processors, for a study's workers by default (M8)
@@ -183,7 +194,8 @@ thermo/
   work.v            a cubic's solve_tp for many states, allocating nothing (M8)
   alpha.v           per-component α (Soave, PRSV, Twu, Mathias–Copeman)
   translated.v      Péneloux volume shift, as a wrapper around any Model
-  ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee) and formation data
+  ideal.v           ideal-gas Cp forms (polynomial, Aly–Lee, Planck–Einstein)
+                    and formation data
   phases.v          the flash's seam (M6): a phase at (T, P, n), and any Model
                     behind it by its volume roots; a workspace for one flash
   gamma_phi.v       the γ–φ fluid (M6): a liquid by its activity coefficients,
@@ -193,6 +205,27 @@ thermo/
                     sound, μ_JT
   saturation.v      pure-component Psat, for any Model
   phase.v           phase identification parameter and liquid/vapour labels
+water/              water and steam (M5a)
+  iapws95.v         IAPWS-95 as a thermo.Model, its branches (D7), its ideal
+                    part as a Planck–Einstein Cp, and its fluid
+  coefficients.v    IAPWS-95's Tables 1 and 2, from its release
+  properties.v      IAPWS-95's Table 3 on IAPWS's reference, and the constants
+                    between it and reflux's (D6)
+  transport.v       water's viscosity (R12-08), thermal conductivity (R15-11)
+                    and surface tension (R1-76), and their industrial forms
+                    on IF97
+  if97/             IAPWS-IF97 with its region-3 supplements, per kg (water.if97)
+    basic.v         the basic equations of regions 1, 2 (and the metastable
+                    vapour), 3 and 5
+    if97.v          constants, the state, region 4 and the B23 and B2bc
+                    boundaries
+    backward.v      T(p, h) and T(p, s) of regions 1 and 2, and SR3-03's T and v
+                    of (p, h) and (p, s) in region 3
+    region3_v.v     SR5-05's v(p, T) in region 3's 26 subregions
+    functions.v     the steam-table functions from (p, T), (p, h), (p, s), (T, x)
+                    and (p, x), each finished on its basic equation
+    coefficients.v, coefficients_sr3.v, coefficients_sr5.v
+                    the releases' tables, by tools/extract_if97.py
 flash/
   stability.v       Michelsen's tangent-plane stability test, for any phase
                     model
@@ -344,7 +377,8 @@ sweep/              the flash robustness sweep: seeded database mixtures,
 benchmarks/         the benchmark harness: reflux, thermo and DWSIM timed on
                     the same flashes, and reflux and DWSIM on the reference
                     flowsheet, on the owner's reforming PFR, on M8's study,
-                    optimisation and spec, and on M6's γ–φ flashes
+                    optimisation and spec, on M6's γ–φ flashes, and M5a's
+                    water against DWSIM, CoolProp and the iapws package
                     (docs/benchmarks.md)
 release/            what must hold before a version is tagged, for
                     tools/release.vsh
@@ -396,13 +430,23 @@ tools/              check.vsh (the CI checks), gen_m*_fixtures.py (references),
                     (series reactions' optima by mpmath), gen_m8_fits.py
                     (data to fit, and SciPy's fits of them), gen_m8_dwsim.py
                     (DWSIM 9's spec, optimiser and PFR on M8's problems),
-                    gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM)
+                    gen_m8_bench.py and bench_m8.v (M8's speed against DWSIM),
                     gen_m6_activity.py (the activity models by thermo and
                     mpmath on ChemSep's banks, and thermo's UNIFAC tables),
                     gen_m6_published.py (ThermoML's data sets), gen_m6_fits.py
                     (SciPy's NRTL and UNIQUAC fits), gen_m6_dwsim.py (DWSIM 9's
                     activity packages by state), gen_m6_bench.py and
-                    bench_m6.v (M6's speed against DWSIM and thermo)
+                    bench_m6.v (M6's speed against DWSIM and thermo),
+                    gen_m5_iapws95.py (IAPWS-95's φʳ by mpmath, and water's
+                    states and saturation by the iapws package and CoolProp),
+                    extract_if97.py (IF97's coefficients from its releases'
+                    PDFs), gen_m5_if97.py (the iapws package's IF97
+                    coefficients and states), gen_m5_transport.py (its
+                    transport properties), gen_m5_rankine.py (the Rankine
+                    cycle by hand from its states), gen_m5_dwsim.py (DWSIM
+                    9's two water packages by state and its Rankine cycle),
+                    gen_m5_bench.py and bench_m5.v (M5a's speed against
+                    DWSIM, CoolProp and the iapws package)
 testdata/           reference fixtures from thermo, CoolProp, chemicals, mpmath,
                     RDKit and DWSIM 9, with provenance, and flowsheets/ (TOML files,
                     and the golden flowsheets' results, those with reactors in
@@ -428,6 +472,10 @@ spike/seam/         the PT flash behind a phase-model interface: its bits
                     and its time against flash's (M6 step 0)
 spike/thermoml/     what the ThermoML archive holds for M6's binaries
                     (M6 step 0)
+spike/water/        IAPWS-95 under thermo's volume solvers and Psat, its
+                    critical point, and DWSIM 9's water packages (M5a step 0);
+                    trace/, every cubic answer's bits, before and after D7
+                    (M5a step 2)
 .v-version          the V commit CI builds
 ```
 
