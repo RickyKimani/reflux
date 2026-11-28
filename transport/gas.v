@@ -72,24 +72,24 @@ fn lucas_z2_low(tr f64, pr f64) f64 {
 	return 0.600 + 0.760 * math.pow(pr, alpha) + (6.990 * math.pow(pr, beta) - 0.6) * (1.0 - tr)
 }
 
-// lucas_factor is μ/μ° = Y·Fp·Fq, Lucas's high-pressure factor for a gas
-// of compounds cs at mole fractions y (summing to 1), T and P, by Lucas's
-// mixture rules: Tcm and Mm by mole fractions, Pcm = R·Tcm·ΣyZc/ΣyVc, Fp°m
-// and Fq°m the mole-fraction means of each compound's at its own Tr, Fq°m
-// times A = 1 − 0.01(M_H/M_L)^0.87 where the heaviest compound is more than
-// nine times the lightest and 0.05 < y_H < 0.7.
-//
-//     Fp = [1 + (Fp° − 1)Y⁻³]/Fp°,  Fq = [1 + (Fq° − 1)(Y⁻¹ − 0.007(ln Y)⁴)]/Fq°
-//
-// Y is taken against its own value at zero pressure (D5): above Tr = 1
-// that's Lucas's own, Z₂/Z₁; below it Z₂(P)/Z₂(0), since Lucas's Z₂ there
-// tends to 0.6·Tr, not Z₁, and the published factor isn't 1 at zero
-// pressure. So the factor is exactly 1 at P = 0. Below Tr = 1 the form
-// holds for a vapour below its saturation pressure, so a gas above its
-// pseudo-critical pressure there is refused; so is one past Lucas's range,
-// Tr to 40 and Pr to 100.
-pub fn lucas_factor(cs []Pure, y []f64, t f64, p f64) !f64 {
-	mut tcm, mut zs, mut vs := 0.0, 0.0, 0.0
+// LucasMixture is a gas's constants by Lucas's mixture rules (Poling et
+// al., Eqs. 9-5.18 to 9-5.23): Tcm (K) and Mm (kg/mol) by mole fractions,
+// Pcm = R·Tcm·ΣyZc/ΣyVc (Pa), and Fp°m and Fq°m the mole-fraction means of
+// each compound's at its own Tr, Fq°m times A.
+pub struct LucasMixture {
+pub:
+	tc  f64
+	pc  f64
+	mw  f64
+	fp0 f64
+	fq0 f64
+}
+
+// lucas_mixture is the constants of compounds cs at mole fractions y and
+// T by Lucas's mixture rules; A = 1 − 0.01(M_H/M_L)^0.87 where the heaviest
+// compound is more than nine times the lightest and 0.05 < y_H < 0.7, else 1.
+pub fn lucas_mixture(cs []Pure, y []f64, t f64) !LucasMixture {
+	mut tcm, mut zs, mut vs, mut mm := 0.0, 0.0, 0.0, 0.0
 	mut fp0, mut fq0 := 0.0, 0.0
 	mut heavy, mut light := -1, -1
 	for i, c in cs {
@@ -99,6 +99,7 @@ pub fn lucas_factor(cs []Pure, y []f64, t f64, p f64) !f64 {
 		tcm += y[i] * c.tc
 		zs += y[i] * c.zc
 		vs += y[i] * c.vc
+		mm += y[i] * c.mw
 		tri := t / c.tc
 		fp0 += y[i] * lucas_fp0(c, tri)!
 		fq0 += y[i] * lucas_fq0(c, tri)
@@ -116,7 +117,46 @@ pub fn lucas_factor(cs []Pure, y []f64, t f64, p f64) !f64 {
 	if ratio > 9 && y[heavy] > 0.05 && y[heavy] < 0.7 {
 		fq0 *= 1.0 - 0.01 * math.pow(ratio, 0.87)
 	}
-	pcm := r_gas * tcm * zs / vs
+	return LucasMixture{
+		tc:  tcm
+		pc:  r_gas * tcm * zs / vs
+		mw:  mm
+		fp0: fp0
+		fq0: fq0
+	}
+}
+
+// dilute is the mixture's low-pressure viscosity by Lucas's own method,
+// Pa·s, η°m = Z₁(Trm)/ξm (Poling et al., Eq. 9-4.16 on the mixture's
+// constants). Transport takes η° from the correlations by Wilke's rule
+// (D4); this is for the test of the mixture rules against the book's
+// Example 9-7.
+pub fn (m LucasMixture) dilute(t f64) f64 {
+	mw := m.mw * 1e3
+	pc := m.pc * 1e-5
+	xi := 0.176 * math.pow(m.tc / (mw * mw * mw * pc * pc * pc * pc), 1.0 / 6.0)
+	return lucas_z1(t / m.tc, m.fp0, m.fq0) / xi * 1e-7
+}
+
+// lucas_factor is μ/μ° = Y·Fp·Fq, Lucas's high-pressure factor for a gas
+// of compounds cs at mole fractions y (summing to 1), T and P, by Lucas's
+// mixture rules: Tcm and Mm by mole fractions, Pcm = R·Tcm·ΣyZc/ΣyVc, Fp°m
+// and Fq°m the mole-fraction means of each compound's at its own Tr, Fq°m
+// times A = 1 − 0.01(M_H/M_L)^0.87 where the heaviest compound is more than
+// nine times the lightest and 0.05 < y_H < 0.7.
+//
+//     Fp = [1 + (Fp° − 1)Y⁻³]/Fp°,  Fq = [1 + (Fq° − 1)(Y⁻¹ − 0.007(ln Y)⁴)]/Fq°
+//
+// Y is taken against its own value at zero pressure (D5): above Tr = 1
+// that's Lucas's own, Z₂/Z₁; below it Z₂(P)/Z₂(0), since Lucas's Z₂ there
+// tends to 0.6·Tr, not Z₁, and the published factor isn't 1 at zero
+// pressure. So the factor is exactly 1 at P = 0. Below Tr = 1 the form
+// holds for a vapour below its saturation pressure, so a gas above its
+// pseudo-critical pressure there is refused; so is one past Lucas's range,
+// Tr to 40 and Pr to 100.
+pub fn lucas_factor(cs []Pure, y []f64, t f64, p f64) !f64 {
+	m := lucas_mixture(cs, y, t)!
+	tcm, pcm, fp0, fq0 := m.tc, m.pc, m.fp0, m.fq0
 	tr := t / tcm
 	pr := p / pcm
 	mut yy := 0.0

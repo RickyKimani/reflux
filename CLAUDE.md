@@ -20,8 +20,8 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
-- **M5b (transport of mixtures, IF97 behind the flash) is done,** not
-  committed past the plan, its exit review at the end of its plan, on
+- **M5b (transport of mixtures, IF97 behind the flash) is done,** merged
+  in PR #11 (`9b9d2e0`), its exit review at the end of its plan, built on
   branch `claude/dazzling-lehmann-3ad069` from `main` at v0.6.0
   (`a1d1b91`), in the worktree `.claude/worktrees/dazzling-lehmann-3ad069`.
   Its plan, `docs/m5b-plan.md`, was approved on 2026-11-27 as drafted:
@@ -96,11 +96,18 @@ Keep this section current: update it whenever a step is committed.
     owner). Planted mistakes 10, all caught (one only once step 10's
     differences were held two-sided). The full tcc check passed (148
     test files).
+  - Committed at `7b8f117` (all four bundles), PR #11, CI passed (all
+    eight checks), merged into `main` as `9b9d2e0`; 0.7.0's date and tag
+    wait. After it, from the owner's copy of Poling et al. (5th ed.,
+    kept out of the repository): criterion 3's worked examples and the
+    mixing rules' (`transport/poling_test.v`, nine examples, each to its
+    printed figures, every gap the book's rounding or slips, shown);
+    `transport.lucas_mixture` out of `lucas_factor`, the same bits; the
+    book's Eq. 9-6.7 has 6.990, so Cantera's 0.6990 is the slip; the 5th
+    edition has neither Li's rule nor Winterfeld–Scriven–Davis. Planted
+    mistakes 14, all caught. Not committed.
   - Found, for the owner: 622 usable liquid viscosities (not 637); 49
-    compounds with no dipole moment, so no gas viscosity with one;
-    Cantera's 0.6990 against polykin's and reflux's 6.990 in Lucas's Z₂
-    below Tr = 1, for the owner's Poling; criterion 3's worked examples
-    need that book too.
+    compounds with no dipole moment, so no gas viscosity with one.
 - **M0 to M4, M10a, M9 and M8 are done** and merged into `main` (PRs #1 to
   #7).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.

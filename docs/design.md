@@ -948,7 +948,14 @@ the 11,058 points of every transport correlation is `chemicals`' within
 Lucas's factor within 4.4e-16, Lucas's own η° (its Fp° and Fq°) `chemicals`'
 within 4.4e-16, Stiel and Thodos' residual within 1.3e-15; Lucas's liquid
 factor and Missenard's the same bits as `chemicals`'; whole phases within
-1.4e-14 of the pieces put together; Wilke's M9 bits.
+1.4e-14 of the pieces put together; Wilke's M9 bits. And every worked
+example Poling et al.'s 5th edition prints for these methods (Lucas's
+dense gas, mixture rules and compressed liquid, Wilke, Mason–Saxena,
+Stiel–Thodos on Yorizane's rules, Missenard, Grunberg–Nissan) to its
+printed figures, each gap the book's own rounding or slip, shown in
+[transport/poling_test.v](../transport/poling_test.v). Lucas's mixture
+rules are `lucas_mixture`, which `lucas_factor` takes, and Lucas's Z₂
+below Tr = 1 has the book's 6.990 (Eq. 9-6.7), not Cantera's 0.6990.
 
 ## `reflux water`
 

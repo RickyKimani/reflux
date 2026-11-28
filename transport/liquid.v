@@ -30,7 +30,7 @@ pub fn lucas_liquid(t f64, p f64, tc f64, pc f64, omega f64, psat f64) f64 {
 }
 
 // Missenard's Q, by Tr (0.5 to 0.8) and Pr (1 to 200), as chemicals' table
-// has it (from Poling et al., §10-10).
+// has it, Poling et al.'s Table 10-7 (§10-11) entry for entry.
 const missenard_tr = [0.5, 0.6, 0.7, 0.8]!
 const missenard_pr = [1.0, 5.0, 10.0, 50.0, 100.0, 200.0]!
 const missenard_q = [
