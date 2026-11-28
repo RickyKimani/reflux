@@ -236,9 +236,11 @@ flash with nothing more would give a saturation that isn't IF97's, and a
 PT flash choosing the phase of lower G would disagree with region 4
 within millikelvins of the line.
 
-**The published methods** (as Poling, Prausnitz and O'Connell's *The
-Properties of Gases and Liquids*, 5th ed., 2001, collects them, chapters 9,
-10 and 12; the owner's copy confirms each formula in its step):
+**The published methods** (Poling, Prausnitz and O'Connell's *The
+Properties of Gases and Liquids*, 5th ed., 2001, chapters 9 and 10, collect
+all but Li's and Winterfeld, Scriven and Davis', which the 5th edition
+hasn't; the owner's copy confirms each formula it has, and its worked
+examples are tests: "The book's worked examples", at the end):
 - Wilke (1950) for a gas's viscosity, Wassiljewa's form with Mason and
   Saxena's (1958) Aᵢⱼ for its conductivity, which with ε = 1 are Wilke's
   Φᵢⱼ of the viscosities, so one `WilkeAt` serves both.
@@ -516,9 +518,9 @@ Fp° and Fq°), `yorizane` and `stiel_thodos`. `reactors` keeps its
 - **The refusals,** each with why: below Tr = 1 above Pcm; Tr past 40, Pr
   past 100; a missing dipole moment; Zc of 0.292 or more for a polar
   compound; ρr past 2.8.
-- **Not yet:** each source's worked example. They're in Poling et al.,
-  which this session doesn't have; criterion 3 waits for the owner's copy
-  to type them from.
+- **Each source's worked example** came after the exit review, from the
+  owner's copy of Poling et al. ("The book's worked examples", at the
+  end).
 
 **Found:**
 - **The reforming gas's 0.05 of CO₂ is exactly on Lucas's A bound**
@@ -526,9 +528,8 @@ Fp° and Fq°), `yorizane` and `stiel_thodos`. `reactors` keeps its
   decimal 0.05 and took it in, moving the factor by 3e-4. Bounds are
   compared as doubles, as reflux does, now in the generator too.
 - **Cantera has 0.6990 where polykin and reflux have 6.990** in Lucas's Z₂
-  below Tr = 1 (polykin after Reid, Prausnitz and Poling, 4th ed.): for the
-  owner's Poling to settle. The data sets of step 0 are above Tr = 1, so
-  they don't.
+  below Tr = 1 (polykin after Reid, Prausnitz and Poling, 4th ed.). The
+  5th edition's Eq. 9-6.7 settles it: 6.990, so Cantera's is the slip.
 - **49 compounds have no dipole moment,** some polar (glycols, a ketone,
   alcohols): Lucas's Fp° can't be had, and D3 rules out taking it as 0, so
   a gas holding one has no viscosity, saying why.
@@ -1160,15 +1161,15 @@ bundle B, approved on 2026-11-28; no other decision moved.
    Grunberg–Nissan's within 5.6e-16 of `chemicals` and mpmath; one
    compound alone its own value to the bit; Wilke's M9's bits, the PFR's
    and the reactor goldens' with it.
-3. **The pressure corrections are right: met but for the worked
-   examples** (steps 2 and 3). Lucas's gas factor within 4.4e-16 of
-   mpmath and exactly 1 at zero pressure at every state; Stiel and Thodos'
-   residual within 1.3e-15 of `chemicals`, 0 at zero density; Lucas's
-   liquid factor and Missenard's `chemicals`' bits, 1 at Pˢᵃᵗ and at zero
-   pressure. Each source's worked example waits for the owner's Poling et
-   al. (5th ed.), which this work didn't have; with it the owner settles
-   Lucas's Z₂ coefficient below Tr = 1 (6.990 here and in polykin, 0.6990
-   in Cantera), which no data set of step 9 reaches.
+3. **The pressure corrections are right: met** (steps 2 and 3, and the
+   book's worked examples after the review). Lucas's gas factor within
+   4.4e-16 of mpmath and exactly 1 at zero pressure at every state;
+   Stiel and Thodos' residual within 1.3e-15 of `chemicals`, 0 at zero
+   density; Lucas's liquid factor and Missenard's `chemicals`' bits, 1 at
+   Pˢᵃᵗ and at zero pressure; and each one's worked example in Poling et
+   al. (5th ed.) to its printed figures, every gap the book's own rounding
+   or slips, shown (Examples 9-10, 10-3, 9-15, 10-13). Lucas's Z₂
+   coefficient below Tr = 1 is the book's 6.990.
 4. **Every phase has its transport, or why not: met** (steps 4, 6 and 7).
    272 seeded phases of M3's sweep, M6's γ–φ and three-phase states and
    water's grid, each a value or a reason (271, 272 and 126 values of μ, λ
@@ -1226,8 +1227,6 @@ held two-sided, to 0.1% of themselves: a one-sided bound is blind to a
 change toward DWSIM's own method.
 
 **For the owner:**
-- **Criterion 3's worked examples, and Lucas's Z₂ coefficient,** from the
-  owner's Poling.
 - **A liquid's viscosity by mass fractions** beats D6's logarithmic rule
   by mole fractions on four of step 9's sets at 1 atm with no pair
   parameter (by 10 to 40 points on alcohol + alkane, glycol + water and
@@ -1252,3 +1251,47 @@ change toward DWSIM's own method.
   fitting Gᵢⱼ to viscosity data, and the rest of "Not in M5b".
 - The release: CI on the push, the PR into `main` when the owner asks,
   then 0.7.0's date and its tag.
+
+## The book's worked examples
+
+After the exit review, from the owner's copy of Poling, Prausnitz and
+O'Connell's *The Properties of Gases and Liquids* (5th ed., 2001; kept out
+of the repository): criterion 3's worked examples, and those of the
+mixing rules reflux takes that the book prints, in
+[transport/poling_test.v](../transport/poling_test.v), each on the book's
+inputs as printed and held to its printed figures. Where reflux's number
+is further off than that, the book's own arithmetic is shown to account
+for it, and the test holds reflux to the book at the book's rounded
+inputs too.
+
+| Example | Method | Book | reflux | Why they differ |
+|---|---|---|---|---|
+| 9-10, NH₃ at 420 K and 300 bar | Lucas's dense gas (D5) | 602 µP, Y·Fp = 4.775 × 0.860 | 602.6 µP; 4.1070 at the book's Tr and Pr | the book works its coefficients at Tr = 1.036 and Pr = 2.643, rounded (1.03576, 2.6425); its ξ is printed as 4.95e-3 and 4.96e-3 |
+| 9-7, NH₃ + H₂ at 306.2 K | Lucas's mixture rules | Tcm 285.2 K, Pcm 89.6 bar, Fp°m 1.107, Fq°m 1.051, 116.1 µP | 285.25, 89.65, 1.1077, 1.0512, 116.27 µP | its Fp°m is truncated (its own sum is 1.10764), and its η is Z₁ rounded to 0.750 (0.7510) |
+| 9-5, CH₄ + n-C₄H₁₀ at 293 K | Wilke (D4) | φ 2.268 and 0.416, 92.26 µP | 2.2681, 0.41625, 92.245 µP | its η is on its rounded φ₂₁ (92.257 on 2.268 and 0.416) |
+| 10-5, benzene + Ar at 373.8 K | Mason–Saxena (D4) | A 0.459 and 2.630, 1.84e-2 W/(m·K) | 0.45907, 2.62993, 1.8386e-2 | none |
+| 10-3, N₂O at 378 K and 138 bar | Stiel–Thodos (D5) | 1.81e-2 W/(m·K) | 1.8094e-2 | none |
+| 10-6, CH₄ + CO₂ at 370.8 K and 174.8 bar | Yorizane's rules + Stiel–Thodos (D5) | Vcm 97.9, Tcm 215.4 K, Pcm 52.4 bar, 1.51e-2 W/(m·K) | 97.48, 215.48, 52.55, 1.49e-2; 1.515e-2 on the book's inputs as it took them | Vcm is 97.5 by its own sum and every later step; Pcm is 52.5 by its own numbers; its residual takes Zcm = 0.285, not its 0.286, and Γ rounded to 176 (175.71) |
+| 9-15, methylcyclohexane at 300 K and 500 bar | Lucas's compressed liquid (D6) | 1.57, 1.07 cP | 1.5722, 1.0691 | none |
+| 10-13, toluene at 304 K and 6330 bar | Missenard (D7) | Q = 0.0205, 0.219 W/(m·K) | Q = 0.0207, 0.2197 | the book reads Q from its Table 10-7 by eye; between its rows it's 0.0207. reflux's table is the book's Table 10-7 entry for entry |
+| 9-21, acetic acid + acetone at 323 K | Grunberg–Nissan with a G in T (D6) | G = 0.258, 0.588 cP | 0.25818, 0.58824 | none; Isdale's G(T) written as a file's G |
+
+**Changed:** `transport.lucas_mixture` and `LucasMixture` (Lucas's mixture
+rules, out of `lucas_factor`, the same arithmetic: the gas test's 4.4e-16
+of mpmath and exactly 1 at zero pressure hold), with `dilute`, the
+mixture's low-pressure viscosity by Lucas's own method, for Example 9-7;
+the citation of Missenard's table (§10-11, Table 10-7).
+
+**Found:** Cantera's 0.6990 is the slip (the 5th edition's Eq. 9-6.7 has
+6.990, as reflux and polykin do); the 5th edition has neither Li's rule nor
+Winterfeld, Scriven and Davis', so criterion 2 holds those to `chemicals`
+and mpmath alone, as it did; Example 10-6 has three slips of its own.
+
+**Planted mistakes:** 14, in a scratch copy, against the examples' test
+(and the gas test for two the examples can't reach): all caught. Lucas's
+A exponent (Example 9-7's mass ratio, 8.4, is under 9, so A = 1 there) and
+Fp°'s 30.55 (which moves Fp° by less than the last printed figure of
+1.164) only by the gas test's mpmath; Pcm's ΣyZc, Mm, ξm's exponent,
+Vcᵢⱼ's 8, Zcm's 0.291, Γ's exponent, Stiel and Thodos' 1.14e-2, Lucas's
+liquid D, a Missenard entry, Grunberg–Nissan's ½, Wilke's ¼ power and
+Mason–Saxena's denominator by the examples.
