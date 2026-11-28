@@ -69,10 +69,10 @@ fn test_a_decanter_sends_each_phase_out_of_its_port() {
 		// One phase present, the others kept at no moles, as a drum's are.
 		assert s.result.phases.filter(it.fraction > 0.0).map(it.label) == [r.phases[k].label]
 	}
-	// The report is format 4, with three phases in the hot stream and the
-	// model's every pair from ChemSep's bank.
+	// The report (format 4's model, now format 5) has three phases in the hot
+	// stream and the model's every pair from ChemSep's bank.
 	rep := l.report(sol)
-	assert rep.format == 4
+	assert rep.format == 5
 	streams := rep.streams.filter(it.name == 'hot')
 	assert streams[0].phases.map(it.phase) == ['vapour', 'liquid', 'liquid2']
 	m := rep.model or { panic('no model') }

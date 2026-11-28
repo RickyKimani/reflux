@@ -142,6 +142,14 @@ fn finish_t(region int, p f64, t0 f64, lo f64, hi f64, target f64, by_s bool) !S
 		}
 		next := t - f / slope
 		if !(next >= a && next <= b) {
+			// A step out of a bracket already closed to rounding: h's own
+			// rounding, about 6e-9 J/kg in region 1 at 273 K and 25 MPa, is
+			// more than the step left, so Newton jitters across it, and
+			// halving a closed bracket never settles (M5b bundle B found it:
+			// h 1.3e-9 J/kg below h(273.16 K) at 25 MPa had no T).
+			if b - a <= 4.0 * eps * t {
+				return at_t(region, p, t)
+			}
 			// a bisection: never taken for rounding's stall
 			t = 0.5 * (a + b)
 			prev = math.inf(1)
@@ -249,6 +257,7 @@ fn mixture(liq State, vap State, p f64, x f64) State {
 		cv:     nan
 		w:      nan
 		drhodp: nan
+		dvdt:   nan
 		x:      x
 	}
 }
@@ -349,7 +358,10 @@ fn edge(st State, by_s bool) f64 {
 // region 2's can lie below region 5's.
 fn vapour(p f64, g f64, lo f64, by_s bool) !State {
 	top := region2(p, t5)
-	if g <= of(top, by_s) {
+	// Above 50 MPa there's no region 5: a g within the edge's rounding above
+	// region 2's top (by_p lets it in) is region 2's at 1073.15 K, not region
+	// 5's, which took it to 1072.9 K at 100 MPa (M5b bundle B found it).
+	if g <= of(top, by_s) || p > p5_max {
 		t0 := if by_s { t2_ps(p, g) } else { t2_ph(p, g) }
 		return finish_t(2, p, t0, lo, t5, g, by_s)
 	}

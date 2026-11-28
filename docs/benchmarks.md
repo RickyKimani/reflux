@@ -188,6 +188,32 @@ M5a step 10, exit criterion 10: water at 300 K and 3 MPa (a liquid), 500 K and 1
 
 Every program's h agrees with reflux's to 1.9e-10 kJ/kg by IAPWS-95 and 1.2e-12 by IF97. Back from h, DWSIM's CoolProp package lands within 5.7e-09 K and its Steam Tables within 0.0001 K, its PH flash's tolerance; CoolProp's IF97 backend within 0.018 K, its backward equations' T unfinished (R7-97 allows 25 mK in region 1), where reflux finishes each on its basic equation (D9). DWSIM's PH flash on its CoolProp package goes through its own single-compound flash, not CoolProp's.
 
+## Transport and IF97
+
+M5b step 11, exit criterion 10. `tools/gen_m5b_bench.py` writes `testdata/m5b_bench.json` on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-28, with DWSIM 9.0.5.0, thermo 0.6.1 from Python, and reflux built with gcc. Each time is the median of its rounds; reflux ran before the others and again after, and the faster is shown.
+
+A phase's transport: reflux's `transport.Mixture.phase`, every property of the phase in one call (a liquid's viscosity, conductivity and surface tension, a vapour's viscosity and conductivity), on Peng–Robinson's phase; DWSIM's Peng–Robinson package's own functions for the same (`AUX_LIQVISCm`, `AUX_CONDTL` and `AUX_SURFTM`, or `AUX_VAPVISCm` and `AUX_CONDTG`) on a stream it calculated, through pythonnet; thermo's mixture properties at their default methods, on its own pure data, each property's `mixture_property`. Their values differ by method, as M5b step 10 found.
+
+| Phase | reflux | thermo | DWSIM | DWSIM over reflux |
+|---|---|---|---|---|
+| benzene-toluene liquid | 4.20 µs | 44.9 µs | 94.2 µs | 22 |
+| reforming gas | 8.70 µs | 154 µs | 29.2 µs | 3.4 |
+| methane-propane dense gas | 2.80 µs | 59.1 µs | 38.2 µs | 14 |
+
+Water at M5a's three states (300 K and 3 MPa, 500 K and 1 MPa, 700 K and 30 MPa), per call: IF97 behind reflux's flash (`flash.pt` and `flash.ph` on its phase model, M5b's D12), IAPWS-95 behind it, IF97's own functions (`water.if97.state_pt` and `state_ph`), and DWSIM's Steam Tables (IAPWS-IF97) package's flashes. A PH call goes back from the h of each one's own PT call.
+
+| | IF97 flash | IAPWS-95 flash | IF97 functions | DWSIM Steam Tables |
+|---|---|---|---|---|
+| PT | 1.27 µs | 10.1 µs | 0.500 µs | 268 µs |
+| PH | 25.9 µs | 172 µs | 3.80 µs | 1.90 ms |
+
+What each phase's transport costs a report (D11: worked out for the report, after the solve, so a solve costs nothing more): `Loaded.report` of a solved flowsheet, with each phase's transport and without it.
+
+| Flowsheet | phases | with transport | without | added per phase |
+|---|---|---|---|---|
+| `reference.toml` | 21 | 265 µs | 142 µs | 5.84 µs |
+| `rankine_if97.toml` | 6 | 36.4 µs | 20.0 µs | 2.74 µs |
+
 ## From Python
 
 M10a step 7, exit criterion 10: what a call from Python costs over V's own loop doing the same work. Methane, ethane and n-butane, 30/30/40, at 20 bar, from 220 to 400 K (one point at 300 K), with Peng–Robinson and the database's kᵢⱼ. `tools/gen_m10a_bench.py` writes `testdata/m10a_bench.json`, timing V and Python alternately, on AMD Ryzen 5 PRO 3500U w/ Radeon Vega Mobile Gfx, Windows-11-10.0.26300-SP0, on 2026-11-05, with Python 3.13.17 and NumPy 2.5.4.

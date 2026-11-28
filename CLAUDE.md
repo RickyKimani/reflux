@@ -20,6 +20,87 @@ before they're written. He works on Windows with nushell. His Go package
 
 Keep this section current: update it whenever a step is committed.
 
+- **M5b (transport of mixtures, IF97 behind the flash) is done,** not
+  committed past the plan, its exit review at the end of its plan, on
+  branch `claude/dazzling-lehmann-3ad069` from `main` at v0.6.0
+  (`a1d1b91`), in the worktree `.claude/worktrees/dazzling-lehmann-3ad069`.
+  Its plan, `docs/m5b-plan.md`, was approved on 2026-11-27 as drafted:
+  criteria 1–12, decisions D1–D22, steps 0–13 in four bundles, A (1–4,
+  transport), B (5–6, IF97 behind the flash), C (7–8, file format 5,
+  report format 5, Python), D (9–13, data, DWSIM, speed, release, review).
+  The plan and step 0's spikes are committed at `5c49cfd`.
+  - Step 0 (`spike/transport/`): DWSIM 9.0.5's mixture transport
+    reproduced from its own code to 2e-16 (a mole-mean liquid viscosity,
+    Jossi–Stiel–Thodos at every density, its second liquid given the
+    first's μ and λ); the candidates against ThermoML's measured mixtures,
+    which chose each method (Lucas's factor 2.3–2.8% on dense hydrocarbon
+    gases against JST's 8–12%); ChemSep's water within 2% of IAPWS's; IF97's
+    regions 1 and 2 up to 5.4e-5 RT apart on region 4's line, hence D13.
+  - **Bundle A (steps 1–4) is done, not committed:** the `transport`
+    module (each compound's values, Wilke's rule moved from `reactors` with
+    its bits, Mason–Saxena, Lucas's factor, Stiel–Thodos, Grunberg–Nissan,
+    Li with Missenard, Winterfeld–Scriven–Davis, a phase's transport by
+    D9), `components/transport.v`, `water.Transport95`, data-quality.md's
+    transport section, `tools/gen_m5b_transport.py` and
+    `testdata/m5b_transport.json`. Every transport correlation `chemicals`'
+    within 2.8e-16 of its terms; each method within 1.3e-15 of `chemicals`
+    or mpmath; 272 seeded phases with values or reasons. Planted mistakes:
+    41, 38 caught, 1 after a test was added, 2 explained. The full tcc
+    check passed (142 test files).
+  - **Bundle B (steps 5–6, IF97 behind the flash) is done, not
+    committed:** `water.If97Phases` (a `thermo.PhaseModel`: the region map,
+    each side's equation across the line, residuals against region 2's
+    ideal gas as a `thermo.Polynomial` Cp, `TransportIf97`),
+    `thermo.Saturates` and `thermo.NoState`, the flash's `own_line` for a
+    pure model's own saturation line, its step back for a phase model,
+    `Database.if97`. The phases are IF97's states (h 1.2e-10 J/mol); region
+    4 to the bit; PH and PS within 3e-11·T of IF97's own but on region
+    boundaries. D14 and criterion 7 amended, approved on 2026-11-28: no new Cp form;
+    on B13 and at 1073.15 K one h has two T (up to 58.7 mK). Found and
+    fixed in IF97 (M5a's): a closed bracket's endless halving, region 5
+    reached above 50 MPa, a search's probe past the range's edge. M5a's
+    trace, with IAPWS-95 water added, 86,408 lines the same bytes before
+    and after; planted mistakes 31, all caught, 2 after a test was added.
+    The full tcc check passed (143 test files).
+  - **Bundle C (steps 7–8, the file, the reports, Python) is done, not
+    committed:** file format 5 (`equation = "IF97"`, `[[transport.pairs]]`
+    with Grunberg–Nissan G as expressions), report format 5 (each phase's
+    μ, λ and σ or null with `transport_notes`, `model.transport`),
+    `Loaded.transport`, `testdata/flowsheets/rankine_if97.toml` and its
+    golden; `reflux_transport` (a status per value, `REFLUX_POINT_NO_VALUE`,
+    ABI still 1), `Fluid.transport`. The nine goldens, transport taken out,
+    are their format-4 selves value for value; the IF97 cycle is IF97's by
+    hand (4.9e-7 J/kg at worst) and DWSIM's Steam Tables' by state. Found:
+    json2 knows a type by its short name, and a smart-cast spread into an
+    interface variable copies garbage (both in v-for-go). Planted mistakes
+    39: 38 caught, 1 after a test was added, 1 explained.
+    `tools/python.vsh test` passed (94). The full tcc check ran 145 test
+    files: 144 passed, and `reactors/flowsheet_test.v` (the report still at
+    format 4) passed alone once fixed; fmt, vet, build and smoke by hand.
+  - **Bundle D (steps 9–13) is done, not committed:**
+    `tools/gen_m5b_published.py`, `testdata/m5b_published.json` (27 ThermoML
+    sets, 1,662 points, two new nonaqueous liquids; M5b's deviations in
+    `transport/published_test.v`, 89 numbers that can't grow, each
+    alternative's beside them); `tools/gen_m5b_dwsim.py`,
+    `testdata/m5b_dwsim.json` (DWSIM's PR and NRTL packages at ten states,
+    every number its formulas' to 4.7e-16, its data the files', every
+    difference the methods', 35 held signed in `transport/dwsim_test.v`);
+    `tools/bench_m5b.v`, `tools/gen_m5b_bench.py`, `testdata/m5b_bench.json`,
+    `benchmarks/m5b.v` (a phase's transport 3.4–22× DWSIM's own functions);
+    v.mod and the package at 0.7.0, its CHANGELOG entry undated, the ten
+    goldens written again (only the version moved); docs and the exit
+    review. Found: DWSIM's σ order-dependent with a compound above its Tc,
+    that compound's μ taken with its Henry's constant in water, its
+    CoolProp package's water CoolProp's (not ChemSep's, as step 0 read),
+    and the mass-fraction basis beating D6's on four liquid sets (for the
+    owner). Planted mistakes 10, all caught (one only once step 10's
+    differences were held two-sided). The full tcc check passed (148
+    test files).
+  - Found, for the owner: 622 usable liquid viscosities (not 637); 49
+    compounds with no dipole moment, so no gas viscosity with one;
+    Cantera's 0.6990 against polykin's and reflux's 6.990 in Lucas's Z₂
+    below Tr = 1, for the owner's Poling; criterion 3's worked examples
+    need that book too.
 - **M0 to M4, M10a, M9 and M8 are done** and merged into `main` (PRs #1 to
   #7).
   `docs/roadmap.md` has every milestone (M0–M14) and its exit criteria.
@@ -1111,6 +1192,14 @@ steam-table functions, which uses only `math`); its tests use `flash`, and
 `main`'s `reflux water` uses it, `water.if97` and `flash`.
 `activity` (M6), liquid activity models, uses `numeric` and `expr`; `components`
 reads ChemSep's banks and UNIFAC tables into it and builds its models.
+`transport` (M5b), a phase's viscosity, thermal conductivity and surface
+tension, uses `tdep`, `thermo` and `quantity`, and knows nothing of
+component files: `components` builds its compounds (`transport_pure`,
+`mixture`, `Setup.transport`, `wilke`), `water` gives water's own through
+its `Model` (`water.Transport95`, `water.TransportIf97`), `reactors`' PFR
+takes its `Wilke` for Ergun's drop, `flowsheet` keeps a file's model for
+its report (`Loaded.transport`, report format 5) and `capi` serves it as
+`reflux_transport`. Its tests are external, so they import `components`.
 `components` uses `chem` for a compound's formula. `study` (M8) runs a file's studies
 and optimisations over `flowsheet`, the latter on `numeric.sqp`, and `main`
 uses it for `reflux study` and `reflux optimize`. `fit` (M8) fits a file's
@@ -1157,6 +1246,13 @@ over the rest, built into a shared library for the Python package in
   the region, refuse what's outside the range (`If97Error`), and finish
   each backward answer by Newton on its basic equation (D9). Region 3's
   densities keep to their side of ρc below pc, as IAPWS-95's do.
+- **`water.If97Phases`** (M5b) is IF97 as a `thermo.PhaseModel`: the
+  region map's state, each side's equation across the line, residuals
+  against region 2's ideal gas (a `thermo.Polynomial` Cp), so a stream's H
+  and S are IF97's plus constants. Its saturation line is region 4's,
+  through the optional `thermo.Saturates`, which the flash's paths for one
+  compound take (`Path.own_line`); its range through `thermo.NoState`, for
+  the searches' step back. It has no F(T, V): TV and UV refuse it.
 - **`flash` works for any `thermo.PhaseModel`** (M6's D3): a phase at
   (T, P, n) with ln φ, their derivatives, a label and residual properties.
   `thermo.by_roots(model)` is any `Model` as one, and `tv` alone takes a
@@ -1407,12 +1503,16 @@ or a test:
 - **`json2`** leaves a `none` field out unless it has `@[json_null]`, and
   writes a map's keys sorted, so anything ordered goes in an array. In
   0.5.2 `Any.arr()` is deprecated, an error under `-W`: use `as_array()`.
+  It knows a type by its short name: a struct named like another module's
+  type that it decodes breaks the decode (M5b's `transport.MethodUsed`).
 - **A `!` in a test function that doesn't return a Result** can turn a typed
   error into a `V panic` with no FAIL line, so a panic in a test's output
   isn't always a panic in the code.
 - **Inside `or {}`, `err` is the error,** even where a parameter is called
   `err`: name a C buffer parameter `buf`. And `T{...err, …}` on a smart-cast
-  `err` copies nothing: cast with `as` first, or name the fields.
+  `err` copies nothing: cast with `as` first, or name the fields. A
+  smart-cast interface value spread straight into an interface variable
+  (`m = T{...x, …}`) copies garbage: into a local first, or name them.
 - **A fixed array of structs inside another struct's zero value** skips the
   element type's field defaults. Named struct fields keep theirs.
 - **`v fmt -w` rewrites a file that doesn't parse,** and can drop lines.

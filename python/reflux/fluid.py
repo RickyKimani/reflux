@@ -159,6 +159,20 @@ class Fluid:
         """The dew-point temperature at P: flash_pvf at beta 1."""
         return self.flash_pvf(P, 1.0, z)
 
+    def transport(self, T, P, z=None, *, phase="liquid"):
+        """A phase's viscosity (Pa·s), thermal conductivity (W/(m·K)) and
+        surface tension (N/m) at many points: a Transport of arrays, each
+        value with its own status (M5b).
+
+        T (K), P (Pa) and z broadcast as for props. phase is "liquid" or
+        "vapor" (or a Phase): the phase at that label's volume root, the
+        smallest volume for a liquid, the largest for a vapour, taken by
+        the liquid's methods or the gas's. A cubic fluid's are its compounds'
+        correlations by mixing rules, IAPWS-95 water's IAPWS's.
+        """
+        from .points import transport
+        return transport(self, T, P, z, phase)
+
     def psat(self, T, compound=None):
         """Vapour pressures (Pa) at temperatures T (K): a Saturation, with each
         compound's along a last axis, or one compound's (an index, name or

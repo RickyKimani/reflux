@@ -183,6 +183,29 @@ pub fn (db Database) iapws95(name string) !Setup {
 	}
 }
 
+// if97 builds water's fluid by IAPWS-IF97 as a phase model (M5b's D12,
+// D14), from the one compound named, which must be water: water's
+// If97Phases with region 2's ideal gas, and water's record's ΔH°f and S°
+// for reflux's reference. It has no kᵢⱼ and no α.
+pub fn (db Database) if97(name string) !Setup {
+	r := db.find(name)!
+	if r.ids.cas != water_cas {
+		return error("IF97 is water's alone, not ${r.name} (${r.ids.cas})")
+	}
+	ig := r.ideal_gas()!
+	return Setup{
+		equation: 'IF97'
+		fluid:    water.if97_fluid(ig.dhf, ig.s0)!
+		records:  [r]
+		kij:      KijMatrix{
+			bank: 'none: IF97 is for water alone'
+			cas:  [r.ids.cas]
+			k:    [0.0]
+		}
+		alphas:   ['none: IF97 has no α']
+	}
+}
+
 // equation_name is an equation's name as a flowsheet file writes it.
 pub fn equation_name(kind thermo.CubicKind) string {
 	return match kind {

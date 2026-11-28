@@ -98,13 +98,14 @@ fn test_a_chain_of_every_reactor() {
 	assert sol.streams['product'].flows[0] > sol.streams['s4'].flows[0]
 }
 
-// The report: format 2, the PFR's profile from its inlet to its outlet,
-// its points' keys docs/report-format.md's, and every other unit's null.
+// The report: format 2's profile (the report is format 5 since M5b), the
+// PFR's from its inlet to its outlet, its points' keys
+// docs/report-format.md's, and every other unit's null.
 fn test_the_profile_in_the_report() {
 	l := load(chain + reactions())!
 	sol := l.solve()!
 	j := json2.decode[json2.Any](json2.encode(l.report(sol)))!.as_map()
-	assert j['format']!.int() == 4
+	assert j['format']!.int() == 5
 	units := j['units']!.as_array()
 	for u in units {
 		m := u.as_map()

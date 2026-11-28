@@ -29,6 +29,32 @@ pub interface PhaseModel {
 	phase_residual(st State) PhaseResidual
 }
 
+// Saturates is a pure model with a saturation line of its own (M5b's D13):
+// IF97's region 4, whose Pˢᵃᵗ(T) and Tˢᵃᵗ(P) are each other's inverses, and
+// on which the model's two phases' Gibbs energies differ by its own
+// inconsistency, not by nothing. The flash's paths for one compound take
+// the line from it instead of solving ln φᴸ = ln φⱽ, and check it by its own
+// identity and the model's bound on that gap. A cubic hasn't it, nor has
+// IAPWS-95, whose phases meet where their Gibbs energies do.
+pub interface Saturates {
+	// saturation_p is the line's P at T, or why there's none.
+	saturation_p(t f64) !f64
+	// saturation_t is the line's T at P, or why there's none.
+	saturation_t(p f64) !f64
+	// saturated is the liquid and the vapour at (T, P) on the line.
+	saturated(t f64, p f64, n []f64) ![]State
+	// saturation_gap is how far apart the two phases' ln φ may be on it.
+	saturation_gap() f64
+}
+
+// NoState is a phase model that knows where it has no state at all, outside
+// its formulation's range (IF97's, M5b's D12), so that a flash's search can
+// step back into it (M5a's at_or_closer), as a Model says so through
+// Branches.
+pub interface NoState {
+	no_state(t f64, p f64) bool
+}
+
 // Scoped is a phase model that can keep what depends on T alone between
 // calls, in a workspace for one thread: the γ–φ fluid's Pˢᵃᵗ, Vᴸ and its
 // activity model's parameters (M6's D4). A model holds nothing about a

@@ -228,38 +228,54 @@ fn bracket_down(f numeric.FallibleFunction, x0 f64, dx f64, what string, back St
 }
 
 // StepBack is what at_or_closer needs to know whether a search's step has
-// left a model's range: the model and the feed, and whether the search's
-// variable is T (ln_t: its logarithm). Its zero value never steps back.
+// left a model's range: the equation of state, or else the phase model,
+// the feed and the search's P, and whether its variable is T (ln_t: its
+// logarithm). Its zero value never steps back.
 struct StepBack {
 	m    ?thermo.Model
+	pm   ?thermo.PhaseModel
 	z    []f64
+	p    f64
 	ln_t bool
 }
 
 // outside says whether the model has no state at the T a search's x is:
-// only a model with thermo.Branches can say so (no_state).
+// an equation of state with thermo.Branches can say so (no_state), and a
+// phase model with none behind it that is thermo.NoState (IF97's, M5b's
+// D12).
 fn (s StepBack) outside(x f64) bool {
-	m := s.m or { return false }
-	if m is thermo.Branches {
-		t := if s.ln_t { math.exp(x) } else { x }
-		return m.branches(t, s.z).no_state
+	if m := s.m {
+		if m is thermo.Branches {
+			t := if s.ln_t { math.exp(x) } else { x }
+			return m.branches(t, s.z).no_state
+		}
+		return false
+	}
+	if pm := s.pm {
+		if pm is thermo.NoState {
+			t := if s.ln_t { math.exp(x) } else { x }
+			return pm.no_state(t, s.p)
+		}
 	}
 	return false
 }
 
-// step_back is a fluid's StepBack: its equation of state's, if its phases
-// have one behind them (thermo.Fluid.helmholtz; M6's γ–φ liquid has none,
-// and so no Branches), and the zero value's otherwise.
-fn step_back(fl thermo.Fluid, z []f64, ln_t bool) StepBack {
+// step_back is a fluid's StepBack at P: its equation of state's, if its
+// phases have one behind them (thermo.Fluid.helmholtz), and its phase
+// model's otherwise (M6's γ–φ liquid, which never steps back, and IF97's).
+fn step_back(fl thermo.Fluid, z []f64, ln_t bool, p f64) StepBack {
 	m := fl.helmholtz() or {
 		return StepBack{
+			pm:   fl.model
 			z:    z
+			p:    p
 			ln_t: ln_t
 		}
 	}
 	return StepBack{
 		m:    m
 		z:    z
+		p:    p
 		ln_t: ln_t
 	}
 }
@@ -545,7 +561,7 @@ fn (e EnergyFlash) solve() !FlashResult {
 	} else {
 		t0 = 300.0
 	}
-	lo, hi, bsteps := bracket_down(neg, math.log(t0), math.log(1.5), e.what(), step_back(e.fl, e.tvs.z, true))!
+	lo, hi, bsteps := bracket_down(neg, math.log(t0), math.log(1.5), e.what(), step_back(e.fl, e.tvs.z, true, 0.0))!
 	steps += bsteps
 	coarse := numeric.brent(f, lo, hi, xtol: 1e-3, max_iter: e.tvs.params.max_steps)!
 	steps += coarse.evaluations

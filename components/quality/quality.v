@@ -266,7 +266,8 @@ pub fn generate() !string {
 	pr := components.load_kij(db.vendor, .pr)!
 	srk := components.load_kij(db.vendor, .srk)!
 	mc := components.load_mathias_copeman_pr(db.vendor)!
-	return render(s, imp, cool, [pr, srk], mc, db) + activity_lines(db)!.join('\n') + '\n'
+	return render(s, imp, cool, [pr, srk], mc, db) + activity_lines(db)!.join('\n') + '\n' +
+		transport_lines(db)!.join('\n')
 }
 
 // Number formatting that comes out the same whichever C compiler built

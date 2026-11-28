@@ -5,6 +5,7 @@ import kinetics
 import math
 import numeric
 import thermo
+import transport
 
 // PressureDrop is how a PFR's pressure falls along it.
 pub enum PressureDrop {
@@ -181,7 +182,7 @@ mut:
 	y1     []f64
 	// What Wilke's rule needs at the T last asked, kept until T moves
 	// (M8's D11).
-	wilke WilkeAt
+	wilke transport.WilkeAt
 }
 
 // tp is T and P at V and the state.
@@ -204,7 +205,7 @@ fn (mut o PfrOde) ergun(t f64, p f64, flows []f64) !f64 {
 	// Wilke's rule mixes what depends on T alone, each compound's viscosity
 	// and each pair's factors: an isothermal reactor's are computed once
 	// (M8's D11). Any other viscosity is asked whole.
-	mu := if visc is Wilke {
+	mu := if visc is transport.Wilke {
 		visc.at(t, mut o.wilke)!
 		visc.mixed(o.wilke, o.src.y)
 	} else {
@@ -370,7 +371,7 @@ fn (r Pfr) integrate(fl thermo.Fluid, inlets []flowsheet.Stream, h0 f64) !flowsh
 		y1:     []f64{len: m}
 	}
 	if visc := r.viscosity {
-		if visc is Wilke {
+		if visc is transport.Wilke {
 			o.wilke = visc.room()
 		}
 	}

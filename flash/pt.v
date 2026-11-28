@@ -19,6 +19,7 @@ pub enum Path {
 	single_phase // the feed was stable
 	substitution // successive substitution converged
 	newton       // Newton on the Gibbs energy finished the split
+	own_line     // a pure model's own saturation line (thermo.Saturates, M5b's D13)
 }
 
 // FlashResult is a converged flash (D7).

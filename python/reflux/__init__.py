@@ -19,11 +19,11 @@ from ._native import (ABI_VERSION, BadArgument, BadHandle, DataError, NotFound, 
 from .database import Database, data_root
 from .fluid import Fluid
 from .points import (FlashResult, Phase, PhaseView, Properties, Saturation, Stability,
-                     Status)
+                     Status, Transport)
 
 __all__ = ["ABI_VERSION", "BadArgument", "BadHandle", "DataError", "Database", "FlashResult",
            "Fluid", "NotFound", "Phase", "PhaseView", "Properties", "RefluxError", "Saturation",
-           "Stability", "Status", "abi_version", "collect", "data_root", "version"]
+           "Stability", "Status", "Transport", "abi_version", "collect", "data_root", "version"]
 
 
 def abi_version():

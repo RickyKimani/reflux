@@ -1,10 +1,11 @@
 # The flowsheet file format
 
-A flowsheet is a [TOML](https://toml.io) file, format 1, 2, 3 or 4: format 2
-(M9) adds reactions and reactors, format 3 (M8) adds specs, studies,
-optimisations and fits, and format 4 (M6) adds γ–φ fluids, whose liquid is
-an activity model, and the decanter, and (M5a) water by IAPWS-95. A file of
-reactions alone may be format
+A flowsheet is a [TOML](https://toml.io) file, format 1, 2, 3, 4 or 5:
+format 2 (M9) adds reactions and reactors, format 3 (M8) adds specs,
+studies, optimisations and fits, format 4 (M6) adds γ–φ fluids, whose liquid
+is an activity model, and the decanter, and (M5a) water by IAPWS-95, and
+format 5 (M5b) adds water by IF97 and `[transport]`, a liquid pair's
+viscosity parameter. A file of reactions alone may be format
 2 or 3. Each reads every earlier format's sections as that format does.
 [testdata/flowsheets/reference.toml](../testdata/flowsheets/reference.toml) is
 a complete example:
@@ -82,8 +83,9 @@ prefixes, and how a compound unit is written.
 ## `format`
 
 Required: 1, 2 for a file with reactions or reactors, 3 for a file with
-specs, or 4 for a file with an activity model or a decanter. A later format
-will come with a way to migrate.
+specs, 4 for a file with an activity model, a decanter or IAPWS-95, or 5
+for a file with IF97 or `[transport]`. A later format will come with a way
+to migrate.
 
 ## `[components]`
 
@@ -115,6 +117,14 @@ the rest; `reflux water` gives its states on IAPWS's
 ([design.md](design.md#reflux-water)).
 [testdata/flowsheets/rankine.toml](../testdata/flowsheets/rankine.toml) is a
 Rankine cycle on it.
+
+Or in format 5 water alone by IAPWS-IF97 (M5b's D15), `equation = "IF97"`,
+refused as IAPWS-95 is: IF97's regions and region 4's saturation line behind
+the flash, its range 273.15 K to 1073.15 K up to 100 MPa and to 2273.15 K up
+to 50 MPa, its H and S IF97's plus reflux's reference
+([design.md](design.md#if97-as-a-phase-model)). TV and UV flashes refuse
+it. [testdata/flowsheets/rankine_if97.toml](../testdata/flowsheets/rankine_if97.toml)
+is the same Rankine cycle on it.
 
 Or in format 4 a γ–φ fluid (M6's D12), whose liquid's fugacity is
 xᵢγᵢPᵢˢᵃᵗφᵢˢᵃᵗ times the Poynting correction, and whose vapour is the ideal
@@ -160,6 +170,28 @@ Wilson's Λ_ab. UNIFAC takes none, its parameters being its groups'. A bank's
 pair is written in the same language in the report: NRTL's methanol–water
 is `tau_ab = "792.8020 K / (1.98721*T)"` for water with methanol, A₁₂ in
 cal/mol over DECHEMA's R, which the bank was fitted with.
+
+## `[transport]`
+
+Optional, in format 5 (M5b's D15): what a phase's transport in the report
+takes beyond the compounds' correlations ([report-format.md](report-format.md),
+`model.transport`). Nothing in a solve uses it.
+
+```toml
+[[transport.pairs]]
+a = "water"
+b = "ethylene glycol"
+G = "2.1 - 300 K / T"
+```
+
+| Key | |
+|---|---|
+| `pairs` | `[[transport.pairs]]`: a liquid pair's Grunberg–Nissan G, ln μ = Σxᵢ ln μᵢ + ½ΣΣxᵢxⱼGᵢⱼ ([design.md](design.md#transport-of-mixtures)). Every pair not listed has G = 0, the logarithmic rule, which leaves an aqueous mixture's viscosity 40% to 70% low ([m5b-plan.md](m5b-plan.md), D6). |
+
+Each `[[transport.pairs]]` has `a` and `b`, two of the components, and `G`,
+an expression in T that comes out a pure number, in the language of
+`[[model.pairs]]`. A pair is listed once, either way round. Water by
+IAPWS-95 or IF97 takes IAPWS's own transport, with no pairs.
 
 ## `[solver]`
 
@@ -619,8 +651,8 @@ constraint at once.
 A fit finds a file's constants that best match measured data, with each
 constant's standard error and 95% interval (M8's D14, D15). It's in a
 format-3 file with the reactions whose constants it fits, the `[model]`
-whose kᵢⱼ it fits, or both, or in format 4 with the activity model whose
-pairs it fits (M6's D16); a flowsheet file's fits read too.
+whose kᵢⱼ it fits, or both, or in format 4 or 5 with the activity model
+whose pairs it fits (M6's D16); a flowsheet file's fits read too.
 `reflux fit file.toml [NAME]` runs it ([report-format.md](report-format.md)).
 
 ```toml

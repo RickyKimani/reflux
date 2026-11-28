@@ -13,7 +13,9 @@
 // flashes against DWSIM and thermo (criterion 12), which
 // tools/gen_m6_bench.py writes, and testdata/m5_bench.json, M5a's water
 // against DWSIM, CoolProp and the iapws package (criterion 10), which
-// tools/gen_m5_bench.py writes:
+// tools/gen_m5_bench.py writes, and testdata/m5b_bench.json, M5b's
+// transport against DWSIM and thermo and IF97 behind the flash (criterion
+// 10), which tools/gen_m5b_bench.py writes:
 //
 //     v run tools/benchmarks.vsh          # write the report
 //     v -prod -cc gcc run tools/benchmarks.vsh --time
@@ -32,9 +34,10 @@ rf := benchmarks.load_reactor()!
 mf := benchmarks.load_m8()!
 gf := benchmarks.load_m6()!
 wf := benchmarks.load_m5()!
+tf := benchmarks.load_m5b()!
 write_file(benchmarks.report_path, benchmarks.report(fx) + benchmarks.flowsheet_section(ff) +
 	benchmarks.reactor_section(rf) + benchmarks.m8_section(mf) + benchmarks.m6_section(gf) +
-	benchmarks.m5_section(wf) + benchmarks.python_section(pf))!
+	benchmarks.m5_section(wf) + benchmarks.m5b_section(tf) + benchmarks.python_section(pf))!
 println('wrote ${benchmarks.report_path}')
 if '--time' in arguments() {
 	$if !prod {

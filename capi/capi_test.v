@@ -78,6 +78,7 @@ fn test_the_header_and_the_code_agree() {
 		'OUTSIDE_ENVELOPE': point_outside_envelope
 		'SUPERCRITICAL':    point_supercritical
 		'NOT_FINITE':       point_not_finite
+		'NO_VALUE':         point_no_value
 	} {
 		want['REFLUX_POINT_' + name] = code
 	}
@@ -102,6 +103,10 @@ fn test_the_header_and_the_code_agree() {
 		want['REFLUX_PHASE_' + name.to_upper()] = k
 	}
 	want['REFLUX_PHASE_VALUES'] = n_phase
+	for k, name in transport_names {
+		want['REFLUX_TRANSPORT_' + name.to_upper()] = k
+	}
+	want['REFLUX_TRANSPORT_VALUES'] = n_transport
 	assert defines() == want
 	assert reflux_abi_version() == abi_version
 	// Every @[export] in this module is declared, and every declaration

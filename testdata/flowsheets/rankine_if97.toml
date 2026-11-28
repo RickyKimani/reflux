@@ -1,0 +1,44 @@
+# M5b's Rankine cycle (criterion 8): M5a's (rankine.toml), with water by
+# IF97 through the same pump, boiler, turbine and condenser. It's open: the
+# feed is the condenser's outlet, a liquid 0.8 K below its boiling point at
+# 10 kPa, and the condenser brings the turbine's wet exhaust back to that
+# state.
+format = 5
+
+[components]
+names = ["water"]
+
+[model]
+equation = "IF97"
+
+[feed.condensate]
+T = "318.15 K"
+P = "10 kPa"
+flow = "50 mol/s"
+mole_fractions = { water = 1 }
+
+[unit.pump]
+type = "pump"
+in = "condensate"
+out = "feedwater"
+outlet_P = "8 MPa"
+efficiency = 0.75
+
+[unit.boiler]
+type = "heater"
+in = "feedwater"
+out = "steam"
+outlet_T = "773.15 K"
+
+[unit.turbine]
+type = "expander"
+in = "steam"
+out = "exhaust"
+outlet_P = "10 kPa"
+efficiency = 0.85
+
+[unit.condenser]
+type = "heater"
+in = "exhaust"
+out = "return"
+outlet_T = "318.15 K"

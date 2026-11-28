@@ -2,8 +2,9 @@
 // unnoticed. Each file in testdata/flowsheets/golden/ is the report that
 // tools/golden.vsh wrote for one, and solving it again gives the same, to 1e-9
 // of each value's scale: T and P of themselves, a flow of the feed, H of RT and
-// S of R, a duty of F·RT, and the same passes. They're regenerated only on
-// purpose, with the change explained.
+// S of R, a duty of F·RT, and the same passes; and each phase's transport
+// (format 5) to 1e-9 of itself, or none, with the same notes. They're
+// regenerated only on purpose, with the change explained.
 import flowsheet { Report, Stream }
 import json2
 import math
@@ -18,7 +19,7 @@ fn close(got f64, want f64, scale f64, at string) {
 
 fn test_every_golden_flowsheet_solves_to_its_results() {
 	files := os.ls(golden_dir)!.filter(it.ends_with('.json'))
-	assert files.len == 7, '${files}'
+	assert files.len == 8, '${files}'
 	for f in files {
 		want := json2.decode[Report](os.read_file(os.join_path(golden_dir, f))!)!
 		assert want.file == 'testdata/flowsheets/${f.all_before('.json')}.toml'
@@ -39,6 +40,14 @@ fn same(got Report, want Report, at string) {
 	assert got.streams.map(it.name) == want.streams.map(it.name), at
 	for k, w in want.streams {
 		assert got.streams[k].phases.map(it.phase) == w.phases.map(it.phase), '${at} ${w.name}'
+		for j, wp in w.phases {
+			gp := got.streams[k].phases[j]
+			where := '${at} ${w.name} ${wp.phase}'
+			same_value(gp.viscosity, wp.viscosity, '${where} viscosity')
+			same_value(gp.thermal_conductivity, wp.thermal_conductivity, '${where} conductivity')
+			same_value(gp.surface_tension, wp.surface_tension, '${where} surface tension')
+			assert gp.transport_notes == wp.transport_notes, '${where}: ${gp.transport_notes}'
+		}
 	}
 	assert got.units.map(it.name) == want.units.map(it.name), at
 	mut feed := 0.0
@@ -84,6 +93,19 @@ fn same(got Report, want Report, at string) {
 		assert g.units == w.units && g.tears == w.tears && g.cycles == w.cycles, at
 		// The same passes, none more.
 		assert g.residuals.len == w.residuals.len, '${at}: ${g.residuals.len} passes, not ${w.residuals.len}'
+	}
+}
+
+// same_value holds a transport value to 1e-9 of itself, or both none.
+fn same_value(got ?f64, want ?f64, at string) {
+	if w := want {
+		g := got or {
+			assert false, '${at}: none, not ${w}'
+			return
+		}
+		close(g, w, w, at)
+	} else {
+		assert got == none, '${at}: ${got}, not none'
 	}
 }
 

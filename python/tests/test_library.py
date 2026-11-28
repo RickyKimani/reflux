@@ -71,6 +71,9 @@ def test_the_codes_are_the_headers():
     for k, name in enumerate(_native.PHASE_VALUES):
         want[f"PHASE_{name.upper()}"] = k
     want["PHASE_VALUES"] = len(_native.PHASE_VALUES)
+    for k, name in enumerate(_native.TRANSPORT_VALUES):
+        want[f"TRANSPORT_{name.upper()}"] = k
+    want["TRANSPORT_VALUES"] = len(_native.TRANSPORT_VALUES)
     assert header_defines() == want
 
 

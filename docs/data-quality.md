@@ -1032,3 +1032,97 @@ Each difference, and what settles it:
 - UNIFAC-Dortmund, 27 ACNO2 with 3 ACH: [1866.23, -9.2814, 0.008299]; thermo [36.45, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
 - UNIFAC-Dortmund, 27 ACNO2 with 4 ACCH2: [1931.39, -5.1507, 4.5164e-07]; thermo [1567.0, -2.678, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
 - UNIFAC-Dortmund, 29 CH3SH with 3 ACH: [-2.1662, 0.1196, 0.0]; thermo [-41.77, 0.0, 0.0]: DDBST's published page prints ChemSep's values; thermo's copy is the one that differs.
+
+## Transport (M5b)
+
+Each compound's correlations as transport takes them (M5b's D3): one
+with an impossible range, a form reflux can't evaluate or a unit it
+can't convert is none, as are a saturated liquid's quantities at or
+above Tc and any value that isn't positive, which the correlations'
+table above lists where the sweep finds one.
+
+| Quantity | In the files | Usable |
+|---|---|---|
+| `liquid_viscosity` | 638 | 622 |
+| `vapor_viscosity` | 606 | 606 |
+| `liquid_thermal_conductivity` | 599 | 599 |
+| `vapor_thermal_conductivity` | 598 | 598 |
+| `surface_tension` | 637 | 637 |
+| `liquid_density` | 626 | 626 |
+| `vapor_pressure` | 620 | 641 |
+| all six but the vapour pressure | 594 | 588 |
+
+A vapour pressure falls back to the Antoine record, as everywhere.
+
+### No dipole moment (49)
+
+Lucas's polar term needs it, so a gas holding one of these has no
+viscosity (M5b's D5): reflux doesn't take a missing dipole moment as 0.
+
+| CAS | Compound | Problem |
+|---|---|---|
+| 100-18-5 | P-diisopropylbenzene | no dipole moment |
+| 110-12-3 | 5-Methyl-2-hexanone | no dipole moment |
+| 110-97-4 | Diisopropanolamine | no dipole moment |
+| 112-63-0 | Methyl linoleate | no dipole moment |
+| 124-25-4 | Tetradecanal | no dipole moment |
+| 13509-27-8 | Methyl Phenyl Carbonate | no dipole moment |
+| 140-31-8 | N-aminoethyl piperazine | no dipole moment |
+| 14371-10-9 | T-Cinnamaldehyde | no dipole moment |
+| 1454-84-8 | 1-Nonadecanol | no dipole moment |
+| 1758-88-9 | 2-Ethyl-p-xylene | no dipole moment |
+| 18094-01-4 | 2-Methyl-1-tridecene | no dipole moment |
+| 18516-37-5 | 2-Methyl-1-undecene | no dipole moment |
+| 2615-15-8 | HexaEthylene Glycol | no dipole moment |
+| 2870-04-4 | 2-Ethyl-m-xylene | no dipole moment |
+| 29833-69-0 | 2-Methyl-1-pentadecene | no dipole moment |
+| 301-00-8 | Methyl linolenate | no dipole moment |
+| 3071-32-7 | Ethylbenzene hydroperoxide | no dipole moment |
+| 4028-66-4 | 2,4,6-Trimethylanisole | no dipole moment |
+| 42764-74-9 | 2-Methyl-1-heptadecene | no dipole moment |
+| 4780-79-4 | 1-Naphthalenemethanol | no dipole moment |
+| 4792-15-8 | PentaEthylene Glycol | no dipole moment |
+| 496-16-2 | 2,3-Dihydrobenzofuran | no dipole moment |
+| 514-10-3 | Abietic acid | no dipole moment |
+| 52254-50-9 | 2-Methyl-1-nonadecene | no dipole moment |
+| 527-53-7 | 1,2,3,5-Tetramethylbenzene | no dipole moment |
+| 537-40-6 | Trilinolein | no dipole moment |
+| 53716-82-8 | Cyrene | no dipole moment |
+| 538-23-8 | Tricaprylin | no dipole moment |
+| 538-24-9 | Trilaurin | no dipole moment |
+| 542-52-9 | DiButyl Carbonate | no dipole moment |
+| 555-44-2 | Tripalmitin | no dipole moment |
+| 555-45-3 | Trimyristin | no dipole moment |
+| 621-71-6 | Tricaprin | no dipole moment |
+| 623-53-0 | Methyl Ethyl Carbonate | no dipole moment |
+| 625-25-2 | 2-Methyl-2-Heptanol | no dipole moment |
+| 629-80-1 | Hexadecanal | no dipole moment |
+| 638-66-4 | Octadecanal | no dipole moment |
+| 6863-58-7 | Di-sec-butyl ether | no dipole moment |
+| 74388-92-4 | HexaPropylene Glycol | no dipole moment |
+| 754-12-1 | 2,3,3,3-TetrafluoroPropene | no dipole moment |
+| 76589-16-7 | 2-Methoxy-2-Methyl-Heptane | no dipole moment |
+| 80-05-7 | Bisphenol a | no dipole moment |
+| 80-43-3 | Dicumyl peroxide | no dipole moment |
+| 8004-13-5 | Dowtherm A | no dipole moment |
+| 874-41-9 | 4-Ethyl-m-xylene | no dipole moment |
+| 90-00-6 | O-ethylphenol | no dipole moment |
+| 934-80-5 | 4-Ethyl-o-xylene | no dipole moment |
+| 98-49-7 | P-diisopropylbenzene hydroperoxide | no dipole moment |
+| 99-94-5 | P-toluic acid | no dipole moment |
+
+### No critical volume or Zc (0)
+
+Lucas's mixture rules and Stiel and Thodos' pseudo-critical constants
+need both (D5).
+
+None.
+
+### No Pure (1)
+
+Without Tc, Pc, ω or M a compound has no transport, as no equation of
+state can use it.
+
+| CAS | Compound | Problem |
+|---|---|---|
+| 3967-55-3 | 1,2-Dichloroethylene Carbonate | 1,2-Dichloroethylene Carbonate (3967-55-3) has no Tc, Pc, ω, so no equation of state can use it |

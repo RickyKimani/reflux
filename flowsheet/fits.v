@@ -88,7 +88,7 @@ pub:
 }
 
 // The sections a fits file may have that its reader leaves to others.
-const fit_others = ['feed', 'unit', 'solver', 'estimate', 'spec', 'study', 'optimize']
+const fit_others = ['feed', 'unit', 'solver', 'estimate', 'spec', 'study', 'optimize', 'transport']
 
 // load_fits reads a file's fits. See load_fits_text.
 pub fn load_fits(path string, params LoadParams) !FitFile {
@@ -117,8 +117,9 @@ pub fn load_fits_text(text string, params LoadParams) !FitFile {
 		text:  text
 	}
 	given := top.integer('format')!
-	if given != 3 && given != 4 {
-		return top.fail('format', 'fits need format 3, or 4 for an activity model, not ${given}', [])
+	if given !in [i64(3), 4, 5] {
+		return top.fail('format', 'fits need format 3, or 4 or 5 for an activity model, not ${given}',
+			[])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!

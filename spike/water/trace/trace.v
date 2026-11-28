@@ -183,5 +183,57 @@ fn main() {
 			}
 		}
 	}
+	// IAPWS-95 water (added in M5b's bundle B, which must keep its answers'
+	// bits too): every flash kind over a grid from the triple point to
+	// 1500 K, and inside the dome.
+	ws := db.iapws95('water') or { panic(err) }
+	wf := ws.fluid
+	weos := wf.helmholtz() or { panic(err) }
+	for t in [280.0, 373.15, 450.0, 600.0, 640.0, 647.0, 700.0, 1000.0, 1500.0] {
+		for p in [1e3, 1e5, 1e6, 1e7, 2.2e7, 5e7] {
+			tag := 'water ${t} ${p}'
+			r := flash.pt(wf.model, t, p, [1.0]) or {
+				o.fail('${tag} pt', err)
+				continue
+			}
+			o.result('${tag} pt', r, wf)
+			pr := wf.props(r.phases[0].state)
+			if a := flash.ph(wf, p, pr.h, [1.0]) {
+				o.result('${tag} ph', a, wf)
+			} else {
+				o.fail('${tag} ph', err)
+			}
+			if a := flash.ps(wf, p, pr.s, [1.0]) {
+				o.result('${tag} ps', a, wf)
+			} else {
+				o.fail('${tag} ps', err)
+			}
+			v := r.phases[0].state.v
+			if a := flash.tv(weos, t, v, [1.0]) {
+				o.result('${tag} tv', a, wf)
+			} else {
+				o.fail('${tag} tv', err)
+			}
+			if a := flash.uv(wf, pr.u, v, [1.0]) {
+				o.result('${tag} uv', a, wf)
+			} else {
+				o.fail('${tag} uv', err)
+			}
+		}
+	}
+	for t in [300.0, 373.15, 500.0, 620.0, 646.0] {
+		for beta in [0.0, 0.5, 1.0] {
+			if a := flash.tvf(wf.model, t, beta, [1.0]) {
+				o.result('water tvf ${t} ${beta}', a, wf)
+				if c := flash.pvf(wf.model, a.p, beta, [1.0]) {
+					o.result('water pvf ${a.p} ${beta}', c, wf)
+				} else {
+					o.fail('water pvf ${a.p} ${beta}', err)
+				}
+			} else {
+				o.fail('water tvf ${t} ${beta}', err)
+			}
+		}
+	}
 	println(o.lines.join('\n'))
 }

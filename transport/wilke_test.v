@@ -1,8 +1,7 @@
-// The gas viscosity (M9 step 9, D10 as amended in step 0): each compound's
-// from its component file, mixed by Wilke's rule, against chemicals'
+// The gas viscosity at low pressure (M9 step 9, D10 as amended in step 0,
+// moved to transport by M5b's D2): each compound's from its component
+// file, mixed by Wilke's rule, against chemicals'
 // (testdata/m9_viscosity.json).
-module reactors
-
 import components
 import json2
 import math
@@ -32,9 +31,9 @@ fn test_against_chemicals() {
 	mut worst := 0.0
 	for c in f.cases {
 		records := c.cas.map(db.find(it) or { panic(err) })
-		w := new_wilke(records)!
+		w := components.wilke(records)!
 		for i, want in c.pure {
-			got := w.pure[i].at(c.t).value
+			got := w.pure[i].at(c.t)
 			worst = math.max(worst, math.abs(got / want - 1))
 			assert math.abs(got / want - 1) <= 1e-13, '${c.name}, compound ${i}: ${got} vs ${want}'
 		}
@@ -47,8 +46,8 @@ fn test_against_chemicals() {
 
 fn test_refused() {
 	db := components.load_default()!
-	w := new_wilke([db.find('methane')!, db.find('hydrogen')!])!
-	mut small := new_wilke([db.find('methane')!])!.room()
+	w := components.wilke([db.find('methane')!, db.find('hydrogen')!])!
+	mut small := components.wilke([db.find('methane')!])!.room()
 	if _ := w.at(500, mut small) {
 		assert false, 'room for one viscosity of two'
 	} else {
@@ -74,7 +73,7 @@ fn test_kept_and_mixed_is_the_whole() {
 	mut mixtures := 0
 	for c in f.cases {
 		records := c.cas.map(db.find(it) or { panic(err) })
-		w := new_wilke(records)!
+		w := components.wilke(records)!
 		n := c.y.len
 		mut k := w.room()
 		assert !k.kept

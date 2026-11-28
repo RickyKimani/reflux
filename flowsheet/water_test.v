@@ -1,7 +1,9 @@
 // Water by IAPWS-95 in a file (M5a step 7): `equation = "IAPWS-95"` in a
 // format 4 [model], its refusals at their lines, and the Rankine cycle of
 // criterion 8 against its hand calculation (testdata/m5_rankine.json, from
-// the iapws package's states by tools/gen_m5_rankine.py).
+// the iapws package's states by tools/gen_m5_rankine.py). And by IF97 (M5b
+// step 7): format 5's `equation = "IF97"`, its refusals, and the same cycle
+// against IF97's own functions and DWSIM's Steam Tables package.
 import components
 import flowsheet { FlowsheetError, Loaded }
 import math
@@ -150,6 +152,143 @@ fn test_iapws95_in_a_file_is_refused_at_its_line() {
 		'')
 	refused(with('names = ["water"]', 'names = ["watr"]').replace('water = 1', 'watr = 1'),
 		names, 'components.names', 'no compound watr', 'Water (7732-18-5)')
+}
+
+fn rankine_if97_text() string {
+	return os.read_file(os.join_path(@VMODROOT, 'testdata', 'flowsheets', 'rankine_if97.toml')) or {
+		panic(err)
+	}
+}
+
+// IF97's cycle by hand, per kg on IAPWS's reference: each unit's power, J/kg
+// as the cycle has it (the turbine's and pump's work, the boiler's heat and
+// the condenser's rejected heat, all positive), the feedwater's T and the
+// exhaust's T and x, each IF97 state from water.if97's own functions
+// through M4's unit models: the pump's v₁ΔP/η, the turbine's η times its
+// isentropic drop.
+struct If97Cycle {
+	power     map[string]f64
+	feedwater f64
+	exhaust_t f64
+	exhaust_x f64
+}
+
+fn if97_by_hand() !If97Cycle {
+	s1 := if97.state_pt(1e4, 318.15)!
+	w := s1.v * (8e6 - 1e4) / 0.75
+	s3 := if97.state_pt(8e6, 773.15)!
+	s4s := if97.state_ps(1e4, s3.s)!
+	h4 := s3.h - 0.85 * (s3.h - s4s.h)
+	e := if97.state_ph(1e4, h4)!
+	return If97Cycle{
+		power:     {
+			'pump':      w
+			'boiler':    s3.h - s1.h - w
+			'turbine':   s3.h - h4
+			'condenser': h4 - s1.h
+		}
+		feedwater: if97.state_ph(8e6, s1.h + w)!.t
+		exhaust_t: e.t
+		exhaust_x: e.x
+	}
+}
+
+// M5b's criterion 8: the Rankine cycle with water by IF97 (format 5's
+// `equation = "IF97"`) solves, every balance closed, and is IF97's cycle
+// by hand to the flashes' tolerance; and DWSIM 9's cycle on its Steam
+// Tables package (testdata/m5_dwsim.json) by state.
+//
+// Measured against the hand calculation: the turbine's work, the exhaust's
+// T and x and the return's H exact; the pump's work 4.9e-7 J/kg high
+// (4.6e-11 of it) and the boiler's heat as much low, since the pump's
+// outlet is a PH flash met to 3.3e-12·RT, whose H the stream carries; the
+// condenser 9.3e-10 J/kg; the feedwater's T 1.2e-10 K. The bounds are
+// M5a's on the IAPWS-95 cycle, the flashes' tolerance (1e-10·RT, 3.6e-8
+// kJ/kg at 773 K).
+//
+// Against DWSIM, by state, M5a's bounds on its Steam Tables package against
+// the hand calculation hold, and each difference is that one's (its pump
+// outlet's flash 3.0e-7 K low, its exhaust's x 3.5e-11 high, its
+// condenser's outlet 1.9e-5 K high), since reflux is the hand calculation's
+// to 5e-13 of each power.
+fn test_the_if97_rankine_cycle_against_its_hand_calculation_and_dwsim() {
+	l := load(rankine_if97_text())!
+	sol := l.solve()!
+	want := if97_by_hand()!
+	flow := 50.0 * 0.018015268 // kg/s, at IAPWS's molar mass, which IF97's phases take
+	mut got := map[string]f64{}
+	for unit in ['pump', 'boiler', 'turbine', 'condenser'] {
+		got[unit] = math.abs(power(sol, unit)) / flow // J/kg
+		assert math.abs(got[unit] - want.power[unit]) <= 1e-4, '${unit}: ${got[unit]} J/kg against ${want.power[unit]}'
+	}
+	feedwater := sol.streams['feedwater'] or { panic('no feedwater') }
+	exhaust := sol.streams['exhaust'] or { panic('no exhaust') }
+	assert math.abs(feedwater.t - want.feedwater) <= 1e-8, 'feedwater: ${feedwater.t} K'
+	assert math.abs(exhaust.t - want.exhaust_t) <= 1e-9, 'exhaust: ${exhaust.t} K'
+	assert math.abs(exhaust.beta - want.exhaust_x) <= 2e-11, 'exhaust: x ${exhaust.beta}'
+	ret := sol.streams['return'] or { panic('no return') }
+	feed := sol.streams['condensate'] or { panic('no condensate') }
+	assert math.abs(ret.h - feed.h) <= 1e-9 * math.abs(feed.h), 'return: ${ret.h} J/mol against ${feed.h}'
+	rep := l.report(sol)
+	m := rep.model or { panic('no model') }
+	assert m.equation == 'IF97' && m.pairs.len == 0
+	tm := m.transport or { panic('no transport') }
+	assert tm.methods.map(it.method).all(it.contains('IAPWS')), '${tm.methods}'
+	assert tm.pairs.len == 0
+
+	// DWSIM's Steam Tables cycle, by state: kJ/kg by unit, then K, K, x, K.
+	text := os.read_file(os.join_path(@VMODROOT, 'testdata', 'm5_dwsim.json'))!
+	rk := object(object((json2.decode[json2.Any](text)!).as_map(), 'steam_tables'), 'rankine')
+	units := object(rk, 'units')
+	streams := object(rk, 'streams')
+	mf := number(object(streams, 'condensate'), 'mass_flow')
+	bounds := [1e-10, 5e-6, 1e-6, 1e-6, 2e-6, 1e-10, 1e-9, 1e-4]
+	for k, unit in ['pump', 'boiler', 'turbine', 'condenser'] {
+		d := number(units, unit) / mf // DeltaQ, kW, per kg/s
+		// The pump's bound is below reflux's own rounding against the hand
+		// calculation (4.9e-10 kJ/kg), so it's held with that added.
+		extra := if unit in ['pump', 'boiler'] { 5e-10 } else { 0.0 }
+		assert math.abs(d - got[unit] * 1e-3) <= bounds[k] + extra, 'DWSIM ${unit}: ${d} kJ/kg against ${got[unit] * 1e-3}'
+	}
+	fw, ex := object(streams, 'feedwater'), object(streams, 'exhaust')
+	back := object(streams, 'return')
+	assert math.abs(number(fw, 'T') - feedwater.t) <= bounds[4], 'DWSIM feedwater: ${number(fw, 'T')} K'
+	assert math.abs(number(ex, 'T') - exhaust.t) <= bounds[5], 'DWSIM exhaust: ${number(ex, 'T')} K'
+	assert math.abs(number(ex, 'beta') - exhaust.beta) <= bounds[6], 'DWSIM exhaust: x ${number(ex, 'beta')}'
+	assert math.abs(number(back, 'T') - ret.t) <= bounds[7], 'DWSIM return: ${number(back, 'T')} K'
+}
+
+// What IF97 can't be is refused at its line, as IAPWS-95's is: a file before
+// format 5, a cubic's keys, another compound or a mixture, a misspelling.
+fn test_if97_in_a_file_is_refused_at_its_line() {
+	text := rankine_if97_text()
+	at := fn [text] (s string) int {
+		return text.all_before(s).count('\n') + 1
+	}
+	swap := fn [text] (a string, b string) string {
+		assert text.count(a) == 1, a
+		return text.replace(a, b)
+	}
+	model := at('equation =')
+	names := at('names =')
+	refused(swap('format = 5', 'format = 4'), model, 'model.equation', 'IF97 needs format 5 (M5b), and this file is format 4',
+		'')
+	refused(swap('equation = "IF97"', 'equation = "IF97"\nalpha = "Twu"'), model + 1, 'model.alpha',
+		"alpha is a cubic's, and IF97 has none", '')
+	refused(swap('equation = "IF97"', 'equation = "IF97"\nkij = false'), model + 1, 'model.kij',
+		"kij is a cubic's, and IF97 has none", '')
+	refused(swap('equation = "IF97"', 'equation = "IF-97"'), model, 'model.equation', 'no equation IF-97',
+		'IF97')
+	refused(swap('names = ["water"]', 'names = ["methanol"]').replace('water = 1', 'methanol = 1'),
+		names, 'components.names', "IF97 is water's alone", '')
+	refused(swap('names = ["water"]', 'names = ["water", "methanol"]').replace('water = 1',
+		'water = 0.5, methanol = 0.5'), names, 'components.names', "IF97 is water's alone", '')
+	refused(swap('names = ["water"]', 'names = ["watr"]').replace('water = 1', 'watr = 1'),
+		names, 'components.names', 'no compound watr', 'Water (7732-18-5)')
+	// Water alone has no pair for [transport].
+	paired := text + '\n[[transport.pairs]]\na = "water"\nb = "water"\nG = "1"\n'
+	refused(paired, paired.all_before('b = "water"').count('\n') + 1, 'transport.pairs[0].b',
+		'a pair is of two components, and this one is water twice', '')
 }
 
 // DWSIM 9's same cycle (testdata/m5_dwsim.json, tools/gen_m5_dwsim.py), by

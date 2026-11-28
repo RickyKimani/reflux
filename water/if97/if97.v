@@ -40,6 +40,7 @@ pub:
 	cv     f64 // J/(kg·K)
 	w      f64 // m/s
 	drhodp f64 // (∂ρ/∂p)_T, kg/(m³·Pa): R15-11's industrial λ needs it
+	dvdt   f64 // (∂v/∂T)_p, m³/(kg·K): a phase's, for M5b's phase model
 	x      f64 = math.nan()
 }
 

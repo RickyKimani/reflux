@@ -501,6 +501,15 @@ rec := db.find('watr') or {
   or name the fields, as `unit` in [quantity/quantity.v](../quantity/quantity.v)
   does.
 
+- **Nor a smart-cast value straight into an interface variable.** With
+  `mut m := s.model` of an interface type and `base` smart-cast to `Mix`
+  by `if base is Mix`, `m = Mix{...base, pairs: p}` compiled and gave
+  `m` a `Mix` whose `pures` had 3,163,839,489 elements. The same literal
+  into a local first, `y := Mix{...base, pairs: p}`, then `m = y`, was
+  right, and so was naming the fields (probed in V 0.5.2). M5b's file
+  reader met it adding a file's pairs to a mixture's transport
+  ([flowsheet/file.v](../flowsheet/file.v)), and names the fields.
+
 - **Wrapping** (Go's `fmt.Errorf("…: %w", err)`):
   `f() or { return error('loading ${path}: ${err}') }`. See `number` in
   [demo.v](../demo.v). V doesn't keep an error chain the way `%w` does.
@@ -1129,6 +1138,12 @@ out of anything run often (§10). A loop is what
 [components/published_test.v](../components/published_test.v) uses, as Go
 would.
 
+Nor is there a `zip`: `for a, b in xs.zip(ys)` is "unknown function:
+xs.zip" (a probe, M5b), and inside a loop of more the compiler's later
+messages are about the loop's body, not the call. Index one array by the
+other's index, `for i, key in keys { got := gots[i] … }`, as
+[transport/gas_test.v](../transport/gas_test.v) does.
+
 **Gotcha:** the string format spec has no `>`. `'${s:>8}'` prints `s` without
 padding. Right-align is `'${s:8}'` and left-align is `'${s:-8}'`.
 
@@ -1600,6 +1615,18 @@ deprecated, which `-W` makes an error, and so is `json2.raw_decode(text)`:
 write `json2.decode[json2.Any](text)` ([water/if97/iapws_test.v](../water/if97/iapws_test.v)). [flowsheet/report_test.v](../flowsheet/report_test.v)
 checks the report that way, so that a key on the wrong field can't hide
 behind the struct that wrote it and read it back.
+
+**json2 knows a type by its short name, not its module.** Go's
+encoding/json works on the value's own type, wherever it was declared.
+V 0.5.2's json2 doesn't tell two types of one name in different modules
+apart: once module `transport` declared a struct `Method`, decoding a
+flowsheet report, whose `solver.method` is `flowsheet`'s enum `Method`,
+failed with "Expected object, but got string" at that key, though the
+report holds no `transport.Method` at all. A probe of two modules, `main`'s
+enum `Method` in the struct decoded and `other`'s struct `Method` only
+imported and used elsewhere, failed the same way; encoding was right. So
+a type that json2 decodes needs a name no other module in the program
+uses: reflux's is `transport.MethodUsed`.
 
 **Indexing a map of `json2.Any` needs `or {}` or `!`.** Go's `m["b"]` is the
 zero value for a missing key; V's is too for a map of plain values, but a

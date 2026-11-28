@@ -1,7 +1,7 @@
 # The report format
 
 `reflux solve plant.toml --json results.json` writes a flowsheet's results as
-JSON, and `--csv streams.csv` its streams as CSV. This is format 4 of the
+JSON, and `--csv streams.csv` its streams as CSV. This is format 5 of the
 JSON, and of the CSV, which is format 1's. It changes only with a new
 `format` number, so that what reads a report can rely on it. Format 2 (M9)
 adds a reactor's profile to its unit, a unit's warnings, an element balance
@@ -9,6 +9,9 @@ where something reacts, and the failure `"reaction_failed"`. Format 3 (M8)
 adds the file's specs, each block's specs and their residuals, and the
 failure `"spec_not_met"`. Format 4 (M6) adds `model`, how the fluid was
 built, and a phase `"liquid2"`, so that a stream may have three phases.
+Format 5 (M5b) adds each phase's viscosity, thermal conductivity and
+surface tension, with why any is missing, and `model.transport`, how they
+were had.
 
 - **Every number is SI:** K, Pa, mol/s, kg/s, m³/s, J/mol, J/(mol·K), m³/mol
   and W.
@@ -37,7 +40,7 @@ table = pd.read_csv("streams.csv", index_col="stream")
 
 | Key | |
 |---|---|
-| `format` | 4. |
+| `format` | 5. |
 | `reflux` | The version of reflux that wrote it. |
 | `file` | The flowsheet file, as the command line named it. |
 | `status` | `"solved"` or `"failed"`. |
@@ -76,6 +79,7 @@ fluid, with each pair's parameters and where they came from.
 | `pairs` | Each pair of components the model has parameters for, in the file's order: an equation of state's kᵢⱼ, every pair; a binary activity model's, every pair of solvents. UNIFAC has none, its parameters being its groups'. |
 | `notes` | Where other values came from: an α not the equation's own, a vapour pressure from its Antoine record, a gas's Henry's constant from IAPWS. |
 | `warnings` | What the answers should be read with: a pair with no parameters, made ideal by `missing = "ideal"`. `reflux solve` prints them. |
+| `transport` | How each phase's transport is had (format 5, M5b's D16). |
 
 ### `model.pairs[]`
 
@@ -85,6 +89,27 @@ fluid, with each pair's parameters and where they came from.
 | `b` | The second. |
 | `parameters` | Each as `{ name, text }`: `kij`, a number; `tau_ab`, `tau_ba` and NRTL's `alpha`, or Wilson's `lambda_ab` and `lambda_ba`, each an expression in T as the file would write it. A bank's is in its own form: NRTL's `"792.8020 K / (1.98721*T)"` is A₁₂ in cal/mol over DECHEMA's R. |
 | `source` | Where they came from: a bank's line and its comment, such as `"nrtl.ipd line 180: Methanol/Water p61 1/1a"`, the DECHEMA volume and page; `"the file"`; `"none listed: 0"` for a kᵢⱼ; or `"none listed: an ideal pair"`, `"none listed: no residual interaction"` for UNIQUAC. |
+
+### `model.transport`
+
+How each phase's viscosity, thermal conductivity and surface tension are
+had: from each compound's correlations by mixing rules, or for water by
+IAPWS-95 or IF97, IAPWS's own ([design.md](design.md), "Transport of
+mixtures"). Nothing in a solve uses them: they're worked out for the report,
+after it.
+
+| Key | |
+|---|---|
+| `methods` | How each property is had, for which phases. |
+| `pairs` | Each pair of components' Grunberg–Nissan G, which a liquid's viscosity takes, in the file's order, as `model.pairs[]` with one parameter, `G`, an expression in T as the file wrote it, or `"0"`. Its `source` is `"the file"` (`[[transport.pairs]]`, file format 5), or `"none listed: 0"`. Empty for one compound and for water's own. |
+
+### `model.transport.methods[]`
+
+| Key | |
+|---|---|
+| `property` | `"viscosity"`, `"thermal_conductivity"` or `"surface_tension"`. |
+| `phase` | `"vapour"`, `"liquid"` (which is `"liquid2"`'s too) or `"any"`. |
+| `method` | The method, in words, with its source: `"Wilke's rule on each compound's vapour viscosity, times Lucas's (1980) high-pressure factor …"`. |
 
 ### `streams[]`
 
@@ -122,6 +147,18 @@ composition it was given. So it has fractions and a phase though its flows are
 | `H` | J/mol of the phase. |
 | `S` | J/(mol·K). |
 | `V` | m³/mol. |
+| `viscosity` | Pa·s, or `null` (format 5). |
+| `thermal_conductivity` | W/(m·K), or `null`. |
+| `surface_tension` | N/m, a liquid's; `null` for a vapour. |
+| `transport_notes` | Why each `null` but a vapour's surface tension, each reason once with the properties it's for, such as `"no viscosity, thermal conductivity or surface tension: Methane, above its Tc, is 0.287043 of the liquid's moles, more than 0.1 (D9)"`; then the compounds a liquid's rules left out, and the values taken beyond their correlations' fitted ranges. Numbers in a note are to 6 significant figures. |
+
+Each value is at the stream's T and P and the phase's composition and
+volume: a mixture's by the rules in `model.transport`, which take a phase
+whose every compound is above its Tc as a gas whatever its label, and leave
+a compound above its Tc out of a liquid when such compounds are at most 10%
+of its moles (D9 in [m5b-plan.md](m5b-plan.md)), the rest renormalised; a
+liquid with more has none. A stream as a whole has none: its phases' μ and
+λ don't mix into one that means anything.
 
 ### `units[]`
 

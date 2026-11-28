@@ -20,7 +20,12 @@ Status: **approved** on 2026-11-27, as drafted, every decision as written
 kept, Python's `reflux_transport`), on branch
 `claude/dazzling-lehmann-3ad069` from `main` at v0.6.0 (`a1d1b91`). Step 0
 is done ([spike/transport](../spike/transport)): its findings are in "What
-the research found" and shape D4 to D10, D13 and D19.
+the research found" and shape D4 to D10, D13 and D19; the plan and the
+spikes are committed at `5c49cfd`. Bundle A, steps 1 to 4, is done, no
+decision amended. Bundle B, steps 5 and 6, is done, and amends D14 and
+criterion 7, approved on 2026-11-28. Bundle C, steps 7 and 8, and bundle
+D, steps 9 to 13, are done, no decision amended: M5b is finished, its exit
+review at the end. None but the plan is committed yet.
 
 ## Goal
 
@@ -49,8 +54,9 @@ the research found" and shape D4 to D10, D13 and D19.
 - **The component files** carry ChemSep's correlations for each compound's
   liquid and vapour viscosity, liquid and vapour thermal conductivity,
   surface tension and liquid density (`components/record.v`), evaluated by
-  `tdep`. Of the 642 compounds, 594 have all six; 637 a liquid viscosity
-  reflux can evaluate (one is equation 118, which `tdep` hasn't), 606 a
+  `tdep`. Of the 642 compounds, 594 have all six in their files, 588
+  usable (step 1); 638 have a liquid viscosity, 622 usable (15 have
+  impossible ranges and one is equation 118, which `tdep` hasn't), 606 a
   vapour viscosity, 599 and 598 the two conductivities, 637 a surface
   tension and 626 a liquid density. The forms: liquid viscosity mostly
   DIPPR 101 (588) and 115 (45); vapour viscosity and conductivity 102 (590,
@@ -304,6 +310,17 @@ All checked by tests in CI, as before.
      refuse IF97 with why;
    - every cubic and IAPWS-95 answer keeps its bits (a trace, as M5a's
      step 2's).
+
+   **Amended in step 6,** approved on 2026-11-28: where IF97's regions meet within
+   R7-97's Table 43's inconsistency, one h (or s) is had at two T, each an
+   IF97 state with the value asked: on B13 (623.15 K above 16.53 MPa) up to
+   2.1 mK apart, and at 1073.15 K between regions 2 and 5 up to 58.7 mK
+   (Table 43 allows their h 0.2 kJ/kg apart). There a PH or PS flash's
+   answer is held to the value asked and to within 0.1 K of IF97's own
+   backward function's (Table 43's 0.2 kJ/kg over steam's cp), the states
+   it happens at counted (10 of 296), since from a state on the boundary
+   IF97's own functions take either side by rounding. Everywhere else
+   within the flash's tolerance, 3e-11·T, as M5a held IAPWS-95's.
 8. **IF97 in a flowsheet.** A file with `equation = "IF97"` (D15) and
    M5a's Rankine cycle solves, every balance closed, and joins the golden
    flowsheets. It matches IF97's states through the same unit models
@@ -339,7 +356,7 @@ All checked by tests in CI, as before.
 | D11 | When transport is computed | For the report, after the solve, and by a unit that asks for it itself. No solve computes it, so no flash, unit or golden number moves.<br><br>**The PFR keeps M9's viscosity,** Wilke's at low pressure, so its answers keep their bits; on the reforming gas Lucas's factor is 1.0015. The alternative, D5's gas viscosity in Ergun's drop, moves the reactor goldens slightly. | Transport changes no balance, so it costs a solve nothing. The PFR's choice is the owner's: its gas is dilute, and its goldens hold M9's comparisons with DWSIM. |
 | D12 | IF97 as a phase model | `water.if97_phases()`, a `thermo.PhaseModel` for water:<br>- **`.stable`** is the state R7-97's region map gives at (T, P), region 4 deciding liquid or vapour below the critical point, never the lower Gibbs energy, which disagrees within millikelvins of the line;<br>- **`.liquid` and `.vapour`** are the other side's equation where the flash's pure paths ask for it, region 1 or 2 across the line, region 3 by its side of ρc (as M5a's D7 split), refused where the equation has no state;<br>- **its range** is IF97's, 273.15 K to 1073.15 K to 100 MPa and to 2273.15 K to 50 MPa, refused outside with the range, and its `no_state` at the T limits lets the flash's searches step back (M5a's `at_or_closer`);<br>- **ln φ and the residual properties** are against IF97's own ideal gas (D14), each derivative in closed form from the region's equation;<br>- **labels:** region 1 liquid, regions 2 and 5 vapour, region 3 by ρc.<br><br>The TV and UV flashes refuse it, saying why: regions 1, 2 and 5 are Gibbs energies in (T, P), with no F(T, V). | M6's seam is a phase at (T, P, n), which is what IF97 gives in every region. Region 4 is IF97's saturation; a flowsheet on IF97 should give its steam tables' states. |
 | D13 | IF97's saturation in the flash | An optional interface in `thermo`, which a pure model implements if it has a saturation line of its own: Pˢᵃᵗ(T), Tˢᵃᵗ(P) and its two phases there. The flash's paths for one compound (the vapour-fraction flashes, and PH and PS through them) take T or P from it instead of solving ln φᴸ = ln φⱽ, and check the line by its own identity, Pˢᵃᵗ(Tˢᵃᵗ(P)) = P to rounding, and its phases' Gibbs gap against Table 44's bound. Only IF97 implements it; a cubic's and IAPWS-95's paths are unchanged, which a trace shows, as M5a's step 2 showed D7. | Step 0: fugacity equality on IF97's two equations is up to 3.5 mK from region 4's line and moves the saturated liquid's h by 36 J/kg, beyond what "IF97" can mean. An optional interface, as M5a's `Branches` and M8's `Warm` are, leaves `PhaseModel` and every other model's path as they are. |
-| D14 | IF97's ideal part and reference | IF97's region-2 ideal-gas part γ° (nine powers of τ = 540/T) as the fluid's ideal gas: a new `CpForm` variant, a sum of powers of 1/T with closed-form integrals, with IF97's R carried as M5a's D4 carried IAPWS-95's. The residual of every region, region 5's included, is against that ideal gas, so a stream's h and s are IF97's plus M5a's D6 constants exactly. Region 5's own γ° differs from region 2's, so its ln φ isn't 0 at zero pressure; only water's own phases compare it. | A stream's H and S must be IF97's own, to its tables' digits, and on reflux's reference like every fluid's (M5a's D6). IAPWS-95's ideal part under IF97's residual would mix two formulations. |
+| D14 | IF97's ideal part and reference | IF97's region-2 ideal-gas part γ° (nine powers of τ = 540/T) as the fluid's ideal gas: a new `CpForm` variant, a sum of powers of 1/T with closed-form integrals, with IF97's R carried as M5a's D4 carried IAPWS-95's. The residual of every region, region 5's included, is against that ideal gas, so a stream's h and s are IF97's plus M5a's D6 constants exactly. Region 5's own γ° differs from region 2's, so its ln φ isn't 0 at zero pressure; only water's own phases compare it.<br><br>**Amended in step 5,** approved on 2026-11-28: no new variant. γ°'s Cp per mole, −R₉₇Σnᵢ°Jᵢ°(Jᵢ° − 1)(540/T)^Jᵢ°, is a sum of powers of T, 5 to 1, −2 and −3, which `thermo.Polynomial` already is, with its closed-form integrals; `water.ideal_cp_if97` builds it. | A stream's H and S must be IF97's own, to its tables' digits, and on reflux's reference like every fluid's (M5a's D6). IAPWS-95's ideal part under IF97's residual would mix two formulations. |
 | D15 | The file | **Format 5:**<br>- `[model] equation = "IF97"`, water alone by any of its names or CAS, its refusals as IAPWS-95's (M5a's D12);<br>- `[[transport.pairs]]`, `{ a, b, G }`, G an expression in T with units (dimensionless), each pair's Grunberg–Nissan Gᵢⱼ (D6), its source in the report as "the file".<br><br>Formats 1 to 4 read as before. With neither key a file needs no new format: M5a's D12 argued that an equation an older version refuses by name changes no file's meaning, so IF97 alone could stay format 4, if the owner prefers. | The CHANGELOG's rule: a change to the file is a new format. A pair's parameter is an equation, so it's an expression (A9), as M6's pairs are. |
 | D16 | Reports | **Report format 5:** each phase gains `viscosity` (Pa·s), `thermal_conductivity` (W/(m·K)) and `surface_tension` (N/m, a liquid's; null for a vapour), each a number or null, and `transport_notes`: why each null, the compounds D9 left out, the values taken beyond their correlations' ranges. `model.transport` names each method and each liquid pair's G with its source. The CSV and the printed table are unchanged: they hold a stream's own values, and a phase's are in the JSON. The water report is unchanged. Every golden report is written again, transport added, no other number moved. | The report says what was used and what wasn't there, as it says which kᵢⱼ were. μ and λ of a two-phase stream as a whole mean nothing, so none is given, unlike DWSIM's "mixture" conductivity. |
 | D17 | Python and the C API | `reflux_transport(fluid, label, n, T, P, x, …)`: a phase's μ, λ and σ at many points, each with its status (`REFLUX_POINT_*`) and the first failure's reason, the phase's volume from the fluid's model at its label's root; the package's `Fluid.transport(T, P, x, phase)`. A new function, so the ABI version is unchanged. IF97 isn't in the C API (M5a's D16). | A Python user sizing a heat exchanger wants μ and λ beside the flash M10a gave. One vectorised function on the existing fluids, with the same rules as every call. |
@@ -408,7 +425,7 @@ bundle, the touched tests and their dependents, and the planted mistakes.
   questions were the methods' and DWSIM's, and `thermo`, `chemicals` and
   the `iapws` package had them to hand.
 
-### 1. Each compound's values, and `transport`
+### 1. Each compound's values, and `transport` — done
 - D2, D3: the module; `transport.Pure`, a compound's correlations and
   constants; `components.Database.transport(names)`; the Tc rule and the
   notes.
@@ -418,7 +435,47 @@ bundle, the touched tests and their dependents, and the planted mistakes.
 - data-quality.md's transport coverage, and each correlation that fails
   D3's checks over its range.
 
-### 2. Gases
+**What was built** ([design.md](design.md), "Transport of mixtures"):
+[transport/pure.v](../transport/pure.v), `Quantity` (the seven
+correlations transport reads), `Correlated` (a correlation in SI,
+components' own arithmetic, so a value is the same number either way),
+`Pure` (constants in SI, NaN where the file has none, the dipole moment
+in debye, Lucas's Q for He, H₂ and D₂) and `Pure.value`, a value or why
+there's none: no correlation, a saturated liquid's quantity at or above
+Tc, a value that isn't a positive finite number; outside the fitted range
+the correlation's extrapolation, marked. [components/transport.v](../components/transport.v)
+builds them (`Record.transport_pure`, `mixture`, `Database.transport`).
+data-quality.md gains "Transport (M5b)" ([components/quality/transport.v](../components/quality/transport.v)):
+each quantity in the files and usable, the 49 compounds with no dipole
+moment, and the one with no Pure.
+
+**Tests** ([transport/pure_test.v](../transport/pure_test.v)):
+- **Criterion 1:** each of the 11,058 points, every transport correlation
+  of every compound at its range's ends and middle (a saturated liquid's
+  to 0.99·Tc), is `chemicals`' within 1e-15 of the size of its terms,
+  which the fixture gives where rounding is relative to more than the
+  value: a polynomial's terms, equation 16's A beside its exponential, an
+  exponential form's exponent (DIPPR 101's reach 500 for a liquid's
+  viscosity: p-cresol's at 563.72 K is 1.1e-13 of itself from `chemicals`').
+  Measured: 2.8e-16 of the terms; 25 points, where `chemicals` finds no
+  positive value, refused.
+- **D3's refusals,** each with its reason: water's five saturated
+  quantities at Tc (its density correlation runs past it); a surface
+  tension that goes negative below Tc (water's, 1 K below; P-diisopropyl-
+  benzene's); squalane's liquid viscosity, equation 118; a vapour's
+  quantity past Tc, marked outside its range at 2000 K.
+- **The coverage,** numbers that change only with the data: 641 compounds
+  make a Pure; usable, 622 liquid viscosities, 606 vapour viscosities, 599
+  and 598 conductivities, 637 surface tensions, 626 liquid densities, 641
+  vapour pressures (Antoine where it must); 588 with all six.
+
+**Found:** the plan's count of liquid viscosities reflux can evaluate was
+637, those present less one; 15 have impossible ranges
+(data/components/CHANGES.md) and one is equation 118, so 622, and 588
+compounds have all six usable of the 594 with all six in their files
+("What the research found" corrected; no decision moved).
+
+### 2. Gases — done
 - D4, D5: Wilke's rule moved from `reactors` (the PFR's tests and the
   reactor goldens hold its bits); Mason–Saxena on the same `WilkeAt`;
   Lucas's factor against its zero-pressure value, with its mixture rules
@@ -428,21 +485,158 @@ bundle, the touched tests and their dependents, and the planted mistakes.
   Mason–Saxena), each at seeded states, and each source's worked example
   (criteria 2 and 3); continuity at zero pressure, and each refusal.
 
-### 3. Liquids
+**What was built:** [transport/wilke.v](../transport/wilke.v), M9's
+`Wilke` and `WilkeAt` with their arithmetic (`new_wilke` from correlations
+and molar masses; `components.wilke` from records, with M9's messages), and
+`Wilke.conductivity`, Mason and Saxena's on the same factors;
+[transport/gas.v](../transport/gas.v), `lucas_factor` (Fp°, Fq°, A, both
+branches of Z₂, Y against its zero-pressure value, Fp and Fq rearranged to
+be 1 to the bit at Y = 1), `lucas_dilute` (Lucas's own η°, for the test of
+Fp° and Fq°), `yorizane` and `stiel_thodos`. `reactors` keeps its
+`Viscosity` interface; its PFR asks `transport.Wilke`, and its maker
+`components.wilke` (D11: Ergun's drop stays at low pressure).
+
+**Tests** ([transport/gas_test.v](../transport/gas_test.v),
+[transport/wilke_test.v](../transport/wilke_test.v), moved from
+`reactors/viscosity_test.v`):
+- **Criterion 2:** Mason–Saxena against mpmath at 50 digits on
+  `chemicals`' pure values, 29 gases and states from pure ammonia to the
+  reforming gas, within 1e-14 (2.2e-16); one compound alone its own λ to
+  the bit. Wilke's M9 test, unchanged: 2.2e-16 of `chemicals`, kept and
+  mixed the same bits.
+- **Criterion 3:** Lucas's factor against mpmath's transcription, 29 states
+  on both branches, polar (water, methanol, ammonia) and quantum (hydrogen,
+  with carbon dioxide on A's side), within 1e-13 (4.4e-16), and exactly 1
+  at zero pressure at every one; Lucas's η° against `chemicals`'
+  `Lucas_gas`, which holds Fp° and Fq°, eight compounds on each branch of
+  Fp° and each side of Tr = 12 for Fq°, within 1e-14 (4.4e-16); Yorizane's
+  constants against mpmath and Stiel and Thodos' residual against
+  `chemicals` at Peng–Robinson's volumes, within 1e-14 (1.3e-15), 0 at
+  zero density.
+- **The refusals,** each with why: below Tr = 1 above Pcm; Tr past 40, Pr
+  past 100; a missing dipole moment; Zc of 0.292 or more for a polar
+  compound; ρr past 2.8.
+- **Not yet:** each source's worked example. They're in Poling et al.,
+  which this session doesn't have; criterion 3 waits for the owner's copy
+  to type them from.
+
+**Found:**
+- **The reforming gas's 0.05 of CO₂ is exactly on Lucas's A bound**
+  (0.05 < y_H): the generator's mpmath compared the double 0.05 with the
+  decimal 0.05 and took it in, moving the factor by 3e-4. Bounds are
+  compared as doubles, as reflux does, now in the generator too.
+- **Cantera has 0.6990 where polykin and reflux have 6.990** in Lucas's Z₂
+  below Tr = 1 (polykin after Reid, Prausnitz and Poling, 4th ed.): for the
+  owner's Poling to settle. The data sets of step 0 are above Tr = 1, so
+  they don't.
+- **49 compounds have no dipole moment,** some polar (glycols, a ketone,
+  alcohols): Lucas's Fp° can't be had, and D3 rules out taking it as 0, so
+  a gas holding one has no viscosity, saying why.
+
+### 3. Liquids — done
 - D6, D7, D8, D9: the logarithmic rule with Gᵢⱼ, Lucas's liquid factor,
   Li with Missenard, Winterfeld–Scriven–Davis, and the dissolved-gas rule.
 - Against `chemicals` (`Lucas`, `DIPPR9I`, `Missenard`,
   `Winterfeld_Scriven_Davis`) and mpmath (Gᵢⱼ), at seeded states; each
   factor 1 at Pˢᵃᵗ; each pure composition its correlation's value.
 
-### 4. A phase's transport, and water's
+**What was built:** [transport/liquid.v](../transport/liquid.v),
+`lucas_liquid` (ΔPr below 0 as 0), `missenard` (bilinear on his table,
+held at its edges, as `chemicals`' spline of degree 1), `grunberg_nissan`
+(Gᵢⱼ from a `Parameter`, a pair's expression in T in format 5, or a
+`Constant`), `li` and `winterfeld`.
+
+**Tests** ([transport/liquid_test.v](../transport/liquid_test.v)): Lucas's
+factor against `chemicals`' on the same vapour pressure, nine compounds and
+states, the same bits, 1 at and below Pˢᵃᵗ; Missenard's against
+`chemicals`' at 72 (Tr, Pr) inside the table, on its lines and beyond each
+edge, the same bits, 1 at zero pressure; Li's, Winterfeld–Scriven–Davis'
+and Grunberg–Nissan's against `chemicals` and mpmath on given numbers with
+and without Gᵢⱼ, within 1e-14 (5.6e-16).
+
+### 4. A phase's transport, and water's — done
 - D9, D10, D11: a phase's transport by its label, or the gas methods for a
   supercritical phase; values or reasons; the notes; water's model in
   `water` over M5a's functions; `components` building each fluid kind's.
 - Criterion 4's seeded phases: M3's sweep, M6's γ–φ and three-phase
   states, water's grid. Criterion 6's half: the PFR's bits.
 
-### 5. IF97 as a phase model
+**What was built:** [transport/phase.v](../transport/phase.v), `Result` (a
+value, or none and why), `PhaseTransport`, the `Model` interface, `Pair`
+and `Mixture.phase`: the gas's methods for a vapour or a phase of
+compounds all above their Tc, the liquid's otherwise, a compound above
+its Tc left out and noted unless they're more than `dissolved_limit` (10%)
+of the liquid, one compound alone its own value times its factors, the
+notes without repeats; [water/phase_transport.v](../water/phase_transport.v),
+`water.Transport95`; `components.Setup.transport()`, water's own for
+IAPWS-95, the compounds' for any other. IF97's water has its transport
+model with its phase model, in bundle B.
+
+**Tests** ([transport/phase_test.v](../transport/phase_test.v)):
+- **Whole phases** against the generator's own putting together of the
+  pieces, nine of them, liquids at 1 atm and 100 bar, water with 1%
+  hydrogen, natural gas at 100 bar, the reforming gas, methanol–water's
+  vapour, carbon dioxide labelled liquid above its Tc: within 1e-13
+  (1.4e-14).
+- **D9:** the hydrogen left out and noted, water's own values to the bit;
+  methanol and water with 1% hydrogen as methanol and water at 0.3 and 0.7,
+  within 1e-14 (added for a planted mistake, below); 20% hydrogen, none,
+  saying why; carbon dioxide above its Tc the same labelled liquid or
+  vapour; a gas at 1e-300 Pa Wilke's own value, to the bit.
+- **Reasons and notes:** squalane's viscosity, P-diisopropylbenzene's
+  missing dipole moment, benzene's liquid below its ranges noted, wrong
+  compositions and states.
+- **Water (D10):** IAPWS-95 water's phases from flashes at five states,
+  M5a's μ, λ and σ to the bit, σ none for a gas, none past R12-08's range;
+  `Setup.transport()` water's model for IAPWS-95, a `Mixture` for PR.
+- **Criterion 4:** seeded PT flashes of four PR mixtures (a natural gas,
+  benzene–toluene, the methanol plant's gas, n-hexane–water), NRTL's
+  water–1-butanol with its two liquids, and IAPWS-95 water: 272 phases,
+  271 viscosities, 272 conductivities and 126 surface tensions, every
+  other with its reason, numbers that can't fall. The missing viscosity is
+  the methanol plant's dense vapour just above its pseudo-critical
+  pressure below its pseudo-critical temperature, where Lucas's form
+  doesn't hold; the missing surface tensions, liquids with carbon dioxide
+  between 302.6 K and its Tc of 304.2 K, where its correlation is
+  negative, and water labelled liquid above its Tc.
+- **Criterion 6's half:** the reactors' tests and goldens pass unchanged
+  with Wilke moved.
+
+**Found:** carbon dioxide's surface-tension correlation goes negative at
+302.6 K, 1.6 K below its Tc, so a liquid holding any CO₂ has no surface
+tension there (D3).
+
+**Planted mistakes** (bundle A): 41, in a scratch copy, one at a time,
+each against the transport tests (and the data-quality report's), restored
+and compared with `cmp`: 38 caught; one caught after a test was added for
+it, and two explained.
+- **Caught:** the Tc rule's inequality, a liquid's surface tension let past
+  Tc, a negative value let through, every value marked in range, the SI
+  scale dropped; Mason–Saxena as a mole mean and with Φ unsquared; Fp°'s
+  0.075, 30.55 and Zc bound, Fq°'s sign and M in kg/mol, A's ratio at 99,
+  the published Y below Tr = 1 (the normalisation undone), Cantera's 0.6990,
+  Fq's 0.07, the exponent 1.3088; Yorizane's Tc by an arithmetic mean and
+  Zc's 0.8; Stiel and Thodos' first break at 0.6 and their range to 3.8;
+  Lucas's liquid factor with |ΔPr|, Missenard unclamped below his table
+  and with Pr^0.75; Grunberg–Nissan without its ½, Li's and Winterfeld's
+  means arithmetic; the dissolved limit at 0.3, a supercritical liquid on
+  the liquid's methods, Lucas's factor and Stiel and Thodos' residual left
+  out of a gas, one compound through the mixing rule, Missenard left out,
+  every compound kept in a liquid; the dipole moment in C·m, hydrogen's Q
+  0.67; water's surface tension given its vapour, its density as 1/V.
+- **Caught after a test:** what's kept of a liquid not renormalised: every
+  case with a compound left out kept one, whose value doesn't depend on
+  its fraction. The methanol–water test above catches it.
+- **Explained:** `components.wilke`'s molar-mass check removed (M9's; no
+  compound reaches it with a molar mass that isn't positive); the report's
+  "all six" counting the vapour pressure (every compound with the other
+  six has one usable, Antoine where it must, so the count doesn't move).
+
+**The bundle's full tcc check** passed: `v fmt -verify`, `v vet`, 142 test
+files, then the build and its smoke runs. The fixture regenerates byte for
+byte.
+
+### 5. IF97 as a phase model — done, with D14 amended
 - D12, D14: `water.if97_phases()`, the region map, the metastable sides,
   ln φ and the residual properties against region 2's γ°, the new
   `CpForm`, labels.
@@ -450,7 +644,38 @@ bundle, the touched tests and their dependents, and the planted mistakes.
   M1's identities on it (ln φ's T- and P-derivatives against H and V,
   Gibbs–Helmholtz); h and s on reflux's reference by D6's constants.
 
-### 6. IF97 through the flash
+**What was built** ([design.md](design.md), "IF97 as a phase model"):
+[water/if97_phases.v](../water/if97_phases.v), `If97Phases` (the five
+PhaseModel methods; `state_at`, a phase's IF97 state from its T, P and
+density; `ideal_cp_if97`; `if97_fluid`), `TransportIf97` (D10's industrial
+forms); in [water/if97](../water/if97), `phases.v` (`liquid_pt`,
+`vapour_pt`, `saturated_at`, `region2_ideal`, γ°'s coefficients) and a
+`dvdt` on every state, (∂v/∂T)_p from each region's own derivatives;
+`components.Database.if97`, and `Setup.transport()`'s IF97 case.
+
+**Tests** ([water/if97_flash_test.v](../water/if97_flash_test.v)):
+- **The phases are IF97's states:** at 148 (T, P) over every region, both
+  sides of B23 and the saturation line, the critical region and the
+  edges, v the bit (M·v), h and s one pair of constants from IF97's times M
+  within 2e-8 J/mol and 2e-11 J/(mol·K) (1.2e-10 and 2.6e-13 measured, the
+  ideal gas's polynomial integrated from 298.15 K against IF97's own γ°),
+  cp, cv and w within 1e-12 (7.5e-14), each label the region's.
+- **M1's identities:** ln φ's T- and P-derivatives against central
+  differences of ln φ, within 1e-6 of the derivative plus the differences'
+  rounding (at most 0.21 of that bound), each difference kept in its
+  region, none in the critical region.
+- **The volume's derivatives:** (∂V/∂T)_P from each region's `dvdt` and
+  (∂P/∂V)_T against central differences of the phase's volume, within 1e-6
+  plus the differences' rounding (at most 0.42 of that bound); Z is PV/nRT
+  with reflux's R.
+- **IF97 water's transport:** μ and λ the industrial forms' to the bit, σ
+  for a liquid; `Setup.transport()` gives it for `Database.if97`, which
+  refuses any compound but water.
+
+**Found:** D14's new `CpForm` isn't needed: `thermo.Polynomial` already
+takes negative powers (D14 amended, approved on 2026-11-28).
+
+### 6. IF97 through the flash — done, with criterion 7 amended
 - D13: the interface, the pure paths taking a model's own line; TV and UV
   refusing IF97.
 - Criterion 7: every flash on IF97 water over a sweep of its range, each
@@ -458,40 +683,431 @@ bundle, the touched tests and their dependents, and the planted mistakes.
   4 exactly, iterations recorded; the trace for every cubic and IAPWS-95
   answer.
 
-### 7. The file, the reports and the Rankine cycle
+**What was built:** `thermo.Saturates` (a pure model's own saturation
+line) and `thermo.NoState` (where a phase model has no state), both
+optional, in [thermo/phases.v](../thermo/phases.v);
+[flash/vf.v](../flash/vf.v)'s `own_line`, which the pure vapour-fraction
+flashes, and PH and PS through them, take for a `Saturates` model, the
+line checked one way by the other to 1e-12 and its phases' ln φ against
+the model's bound, and `Path.own_line`; [flash/tv.v](../flash/tv.v)'s
+`StepBack`, which now asks a phase model with no equation of state behind
+it whether it has a state (`NoState`). The TV and UV flashes refuse IF97
+through `Fluid.helmholtz()`'s `NoHelmholtzError`, as they refuse γ–φ.
+
+**Tests** ([water/if97_flash_test.v](../water/if97_flash_test.v)):
+- **Region 4:** `tvf` at eleven T from 273.16 K to 647 K and β 0, 0.5 and
+  1 gives psat97(T) to the bit, `pvf` back tsat97(P) to the bit and T
+  within 1e-12; each phase IF97's saturated state; the two phases' ln φ
+  within 5.4e-5 of each other, inside the 5e-4 bound; at and above Tc no
+  line, saying why.
+- **Every flash against the steam tables** over the 148 states: a PT flash
+  the region map's state, v to the bit; PH and PS back within 3e-11·T of
+  IF97's own `state_ph` and `state_ps` (1.9e-8 K at worst, the flash's
+  energy balance at 1e-10·RT in a gas); 10 on region boundaries across
+  them, within 0.1 K (58.7 mK at worst; criterion 7 as amended); inside
+  the dome at five pressures and three qualities, region 4's T to the bit
+  and IF97's quality within 1e-10.
+- **The range:** each state outside refused with IF97's range, `no_state`
+  true there; a PH search from Tsat at 1 bar to steam at 2200 K steps past
+  2273.15 K and back; TV refused, saying why.
+- **`own_line`'s guards,** on a copy of IF97 with its Tˢᵃᵗ moved by 1e-9
+  of itself, and one with a gap bound of 1e-6: each refused, saying why.
+- **The iterations:** the PH and PS flashes over the sweep take 2,118, a
+  number that can't grow.
+- **Nothing else moves:** M5a's trace, now with IAPWS-95 water's every
+  flash kind over a grid from the triple point to 1500 K and in the dome,
+  86,408 lines of every cubic and IAPWS-95 answer's bits (3,000 of the
+  sweep's mixtures, 160 pure compounds, water), gcc `-prod`, the same bytes
+  before and after bundle B; `flash`, `water`, `thermo`, `transport` and
+  `components`' fluid tests, 46 files, pass.
+
+**Found** (each fixed, with a test in IF97's own,
+[water/if97/functions_test.v](../water/if97/functions_test.v)):
+- **IF97's `finish_t` could fail at a root within h's rounding:** at
+  25 MPa, 1.3e-9 J/kg below h(273.16 K), region 1's h has about 6e-9 J/kg
+  of rounding, Newton jittered across a bracket closed to rounding, and
+  halving it never settled ("T not found"). A step out of a closed bracket
+  now returns the state it's at; converged answers, which never bisect at
+  the end, keep their bits.
+- **IF97's `state_ph` and `state_ps` above 50 MPa** sent a value within
+  the edge's rounding above region 2's top at 1073.15 K to region 5's
+  search, which has no state above 50 MPa: 1072.9 K at 100 MPa. It's region
+  2's now.
+- **A flash at the edge of IF97's range** failed where Brent's tolerance
+  step probed 4.8e-7 K past an answer at 1073.15 K and 100 MPa; within
+  1e-9 of T past an edge a phase is the edge's own equation's.
+- **Where IF97's regions meet,** one h has two temperatures (criterion 7
+  as amended).
+- The step's plan named the `iapws` package too; `water.if97`'s functions
+  are held to it already (M5a's criterion 5), so the flash is held to them.
+
+**Planted mistakes** (bundle B): 31, in a scratch copy, one at a time,
+against the IF97 tests (and the transport phase test for `components`),
+restored and compared with `cmp`: all caught, two only after a test was
+added, and one planted again after its first form didn't compile.
+- **Caught:** ln φ's (R − R₉₇) term's sign; the ideal Cp's exponents; the
+  liquid root given the vapour's; regions 1 and 2 by ρ inverted; region
+  3's vapour side above B23 dropped; ∂ln φ/∂T's sign and ∂ln φ/∂P's RT/P;
+  the label's ρc inverted; Cvʳ without R; Sʳ without its R term; (∂P/∂V)_T
+  missing a v; the line allowed at Tc; the gap bound at 1e-5; `no_state`'s
+  top at twice 2273.15 K (planted again: `false && … || …` doesn't compile
+  under `-W`); the edge's hair at 0; IF97's transport with R12-08's full
+  viscosity; region 2 for the liquid side, region 3's liquid side for the
+  vapour's; region 2's ideal part at τ off by 1e-4; the closed bracket's
+  return and the region-5 guard taken out (IF97's regression tests); each
+  region's `dvdt` wrong; the saturated phases swapped; `own_line` not
+  taken; the step back for a phase model taken out; `Database.if97` for
+  any compound; IF97's transport given IAPWS-95's.
+- **Caught after a test:** Z with IF97's R (Z is now held to PV/nRT);
+  `own_line`'s inverse check loosened to 1e-2, which IF97 never trips (the
+  skewed copy, above).
+
+**The bundle's full tcc check** passed: `v fmt -verify`, `v vet`, 143 test
+files, then the build and its smoke runs.
+
+### 7. The file, the reports and the Rankine cycle — done
 - D15, D16: format 5, `equation = "IF97"` and `[[transport.pairs]]`, each
   refusal at its line; report format 5; every golden report written again
   (transport added, nothing else moved); `rankine_if97.toml` and its golden
   (criterion 8), against IF97's states through M4's unit models.
 
-### 8. Python
+**What was built:**
+- **File format 5** ([flowsheet/file.v](../flowsheet/file.v)): `equation =
+  "IF97"` by `read_water`, which now reads IAPWS-95 too (each with the
+  format and milestone it needs, its note, its refusals as M5a's);
+  `[[transport.pairs]]`, `{ a, b, G }`, G an expression in T parsed as
+  M6's pairs (`activity.plain`, dimensionless), evaluated by `PairG`, each
+  pair listed once either way round. `load` builds the fluid's transport
+  model beside it (`Setup.transport()`, or `components.mixture` for a γ–φ
+  fluid), adds the file's pairs, and keeps it in `Loaded.transport`, an
+  Option, so a `Loaded` made by hand reports none. A fits file reads
+  format 5 and leaves `[transport]` to the flowsheet; `Loaded.write` keeps
+  it.
+- **Report format 5** ([flowsheet/report.v](../flowsheet/report.v)): each
+  phase's `viscosity`, `thermal_conductivity` and `surface_tension`, a
+  number or null, and `transport_notes`; `model.transport`, each method
+  (`transport.Model.methods()`, new, each model's own words) and every
+  pair's G with its source, "the file" or "none listed: 0". The CSV and
+  the printed table are unchanged.
+- **In `transport`:** `MethodUsed` and `methods()` on each model;
+  `PhaseTransport.reasons`, each reason once with the properties it's for,
+  which the report and the C API share; `shown`, a number in a message to
+  6 significant figures by `math.round` on an exact power of ten, so that
+  notes read the same from tcc's build and gcc's (and read as numbers);
+  a mixing rule's value that isn't positive and finite is none (a G of
+  4000 overflowed Grunberg and Nissan's exp to +∞, reported as a value).
+  Water's range messages round their T and ρ the same way.
+- [testdata/flowsheets/rankine_if97.toml](../testdata/flowsheets/rankine_if97.toml),
+  M5a's cycle on IF97, and its golden report; `tools/golden.vsh` writes
+  eight. The changed and new golden reports go in 0.7.0's CHANGELOG entry,
+  by name, at the release (step 12), still carrying 0.6.0 until then.
+- Docs: [report-format.md](report-format.md) (format 5, `model.transport`,
+  each phase's three values), [flowsheet-format.md](flowsheet-format.md)
+  (format 5, IF97, `[transport]`).
+
+**Tests:**
+- **Criterion 8** ([flowsheet/water_test.v](../flowsheet/water_test.v)):
+  the IF97 cycle against IF97's own functions through the same unit
+  models: the turbine's work, the exhaust's T and x and the return's H
+  exact; the pump's work 4.9e-7 J/kg high (4.6e-11 of it) and the boiler's
+  heat as much low, the pump outlet's PH flash met to 3.3e-12·RT; the
+  condenser 9.3e-10 J/kg; the feedwater's T 1.2e-10 K; M5a's bounds. And
+  DWSIM's Steam Tables cycle by state within M5a's bounds on it against
+  the hand calculation, each difference that one's. Every refusal of IF97
+  at its line.
+- **Criterion 6:** the nine golden reports written again, and the IF97
+  cycle's new tenth; with `model.transport` and each phase's four new keys
+  taken out, each of the nine is its format-4 report value for value
+  (compared in Python, all nine "same").
+  The golden test now holds each phase's three values to 1e-9 of
+  themselves, or none, and its notes as written.
+- **Criterion 4** ([flowsheet/transport_test.v](../flowsheet/transport_test.v)):
+  every phase of `every_unit`, `decanter`, `rankine` and `rankine_if97`
+  reports its model's bits (the cubic and γ–φ fluids' by
+  `components.mixture` built again, IAPWS-95's by M5a's functions at the
+  phase's ρ, IF97's by its industrial forms), and each none but a vapour's
+  surface tension has a reason. The reference flowsheet's liquids hold 13%
+  to 29% methane, above its Tc, so they report none, saying so (D9).
+- **Pairs:** a file's G is the liquid's Grunberg–Nissan G, each viscosity
+  the model's with that pair bit for bit, ln μ moved by x₁x₂G(T) within
+  1e-14, λ and σ unmoved; the report lists it with "the file", and without
+  it "none listed: 0"; a G with no value at a stream's T, or one that
+  overflows, leaves that viscosity none with why; every refusal of
+  `[transport]` at its line; written back, the same report.
+- `transport.shown` on ten numbers; the file, report, fits and main tests
+  updated for format 5.
+
+**Found:**
+- **json2 knows a type by its short name** (V 0.5.2): once `transport` had
+  a struct `Method`, decoding a report failed at `solver.method`, the
+  flowsheet's enum `Method`, though no report holds the other. Renamed
+  `MethodUsed`; [v-for-go.md](v-for-go.md) has the probe.
+- **Spreading a smart-cast interface value straight into an interface
+  variable** (`m = Mix{...base, pairs: p}`) gave a `Mix` with 3.2e9 pures;
+  into a local first it's right. The reader names the fields
+  ([v-for-go.md](v-for-go.md)).
+- An empty array's key, `kij_overrides = []`, is placed at its table's
+  first line, not its own: Section places a key by its value, and an empty
+  array has no position in V's TOML tree.
+- `reactors/viscosity.v`'s line in the README still described M9's Wilke
+  rule, which bundle A moved: corrected.
+
+### 8. Python — done
 - D17: `reflux_transport`, the package's `Fluid.transport`, the reference
   program's points for the bit-for-bit tests (criterion 11).
 
-### 9. Measured mixtures
+**What was built:** `reflux_transport` in [capi/reflux.h](../capi/reflux.h)
+and [capi/transport.v](../capi/transport.v): a fluid, a label
+(`REFLUX_LIQUID` or `REFLUX_VAPOR`) and n points of (T, P, z), the phase at
+the label's volume root, its three values out by property
+(`REFLUX_TRANSPORT_*`), each with its own status: `REFLUX_POINT_NO_VALUE`
+(9, new) where a property has none, a vapour's surface tension always;
+err the first point's reasons. A new function and a new status: the ABI
+version stays 1. The package's `Fluid.transport(T, P, z, phase=)` and
+`Transport` ([python/reflux/points.py](../python/reflux/points.py)), its
+status with a last axis of properties; `Status.NO_VALUE`;
+[docs/python.md](python.md)'s section, run by its test.
+
+**Tests:**
+- **Criterion 11:** [tools/capi_reference.v](../tools/capi_reference.v)
+  writes 200 transport points (five fluids, both labels, two compositions
+  at nine states, one beyond every method's range and one with no volume
+  root), and `test_reference.py` holds every value, status and reason bit
+  for bit through the library. Values, NO_VALUE and NO_VOLUME_ROOT all
+  occur.
+- [capi/transport_test.v](../capi/transport_test.v): each value the V
+  API's, the two roots at 300 K and 1 bar each its label's, IAPWS-95
+  water M5a's functions, a bad point and a D9 liquid with their statuses
+  and reasons, the call's own refusals; the fuzz test calls
+  `reflux_transport` with the rest; the header test knows its codes.
+- [python/tests/test_transport.py](../python/tests/test_transport.py):
+  broadcasting, a vapour's surface tension, reasons, the phase argument,
+  IAPWS-95 water. `tools/python.vsh test`: 94 passed.
+
+**Planted mistakes** (bundle C): 39, in a scratch copy, one at a time,
+against the flowsheet's transport, water, golden and report tests, the C
+API's transport test and transport's own, restored and compared: 38
+caught, one after a test was added, one explained.
+- **Caught:** format 5 not read; `[transport]` allowed in format 4; a pair
+  of one compound, and one listed twice reversed, let through; the file's
+  pairs dropped, or kept off the model; G at T + 1; a pair on the wrong
+  compound; "none listed: 0" and a pair's text changed; IF97 in format 4,
+  and IAPWS-95 refused in its own; IF97's fluid by IAPWS-95; a γ–φ fluid's
+  transport on its compounds reversed; a pair's or `[transport]`'s unknown
+  key let through; every phase given the liquid's methods; μ given λ, σ
+  given μ; a none reported as a number; the notes dropped; report format
+  4; a vapour's surface tension given as a reason; reasons not merged, and
+  merged with "and"; an infinite value kept; a method's phase; `shown` at
+  7 figures, and by floor; a water method's words; the C API's vapour
+  label at the liquid root, every status OK, its reasons dropped, its
+  vapour label the liquid's; fits refusing format 5 and `[transport]`;
+  the writer dropping `[transport]`.
+- **Caught after a test:** the phase's molar volume not divided by the
+  moles: the C API test's vapour points all had amounts summing to 1, and
+  a liquid's methods don't use V. It now has 3 mol of the vapour, and of
+  IAPWS-95 water, against 1 mol's.
+- **Explained:** the C API handing the model unnormalised amounts:
+  `transport.Mixture.phase` renormalises its composition itself, and
+  water's models take only its length, so no bit moves.
+
+**The bundle's full tcc check** ran 145 test files: 144 passed, and
+`reactors/flowsheet_test.v`, which still held the report at format 4,
+passed alone once it held 5; `v fmt -verify`, `v vet`, the build and the
+smoke runs then passed by hand.
+
+### 9. Measured mixtures — done
 - Criterion 5: `tools/gen_m5b_published.py`, `testdata/m5b_published.json`,
   step 0's sets and any more the archive or papers' tables give (as M6's
   criterion 8 was amended), especially nonaqueous liquids; each method's
   deviations and its alternatives', numbers that can't grow.
 
-### 10. DWSIM references
+**What was built:** [tools/gen_m5b_published.py](../tools/gen_m5b_published.py)
+and [testdata/m5b_published.json](../testdata/m5b_published.json): 27 sets
+from the ThermoML archive, 1,662 points as printed with their expanded
+uncertainties, step 0's sets with their pure compounds' sets where they
+test a pressure factor, and from a new search of 26 nonaqueous pairs the
+two liquids the archive has with compounds reflux knows, ethanol +
+heptane to 100 MPa (Zéberg-Mikkelsen et al., 2006) and 1-butanol +
+2-methylheptane (Torín-Ollarves et al., 2012). For each set, the
+alternatives' deviations by `chemicals` and `thermo` on the files' pure
+values. [transport/published_test.v](../transport/published_test.v)
+works out M5b's own on reflux's Peng–Robinson at each phase's label's
+root, records each set's average and largest deviation and its points
+with no value (89 numbers that can't grow), and prints each alternative's
+beside them; and holds ChemSep's water against M5a's IAPWS functions.
+
+**What the data say** (average absolute deviation, largest in brackets):
+
+| Set | M5b | The best alternative, and DWSIM's |
+|---|---|---|
+| gas μ, H₂ + CO₂, 300 kPa | 2.5% (6.7%) | Wilke alone the same; DWSIM's 14.4% |
+| gas μ, CO₂ + CH₄, to 32 MPa | 6.3% (21%), 7 dense points none | DWSIM's 6.1% (22%); LBC 6.4% |
+| gas μ, CH₄ + C₃H₈, to 31 MPa | 2.8% (7.1%) | LBC 12.1%; DWSIM's 12.6% |
+| gas μ, CH₄ + C₄H₁₀, to 30 MPa | 2.3% (7.8%) | Wilke + JST 7.8%; DWSIM's 8.2% |
+| gas λ, CO₂, to 15 MPa | 3.3% (23%) | Lindsay–Bromley + Stiel–Thodos the same; DWSIM's 19.9% |
+| gas λ, CH₄ + CO₂, to 12 MPa | 1.6% (5.1%) | Lindsay–Bromley + Stiel–Thodos 1.6%; DWSIM's 5.2% |
+| liquid μ, heptane + octane, to 10 MPa | 5.9% (11%) | by mass 5.9%; DWSIM's 6.0% |
+| liquid μ, heptane + octane, to 513 K | 4.7% (7.2%) | by mass 5.2%; DWSIM's 5.3% |
+| liquid μ, ethanol, 20–100 MPa | 15.6% (25%) | without a pressure factor 29% |
+| liquid μ, ethanol + heptane, 1 atm | 14.6% (26%) | by mass 3.8%; DWSIM's 21.6% |
+| liquid μ, ethanol + heptane, to 100 MPa | 10.3% (25%) | DWSIM's 25.1% |
+| liquid μ, 1-butanol + 2-methylheptane | 19.3% (44%) | by mass 7.4%; DWSIM's 45.7% |
+| liquid μ, methanol + water | 40.7% (61%) | DWSIM's 39.5% |
+| liquid μ, diethylene glycol + water | 45.8% (74%) | by mass 5.3%; DWSIM's 8.9% |
+| liquid μ, diethylethanolamine + water | 71.8% (91%) | by mass 61.9% |
+| liquid λ, 2-butoxyethanol + water, to 150 MPa | 3.8% (8.2%) | Filippov + Missenard 2.8%; DWSIM's 7.4% |
+| σ, CH₄ + C₂H₆ | 12.1% (66%), 28 none | DWSIM's 14.0%, 47 none |
+| σ, N₂ + O₂ | 7.3% (43%), 12 none | DWSIM's 11.7% (62%), 16 none |
+| σ, diethylethanolamine + water | 32% (68%) | DWSIM's 59% |
+
+- **The gases and dense gases** are as step 0 found, and as D4 and D5
+  chose: Lucas's factor two to five times better than the alternatives on
+  the hydrocarbons, Stiel–Thodos taking the conductivities from 7.5% and
+  20% to 1.6% and 3.3%.
+- **The liquids' viscosity:** the logarithmic rule by mole fractions with
+  no G (D6's default) is beaten on four sets at 1 atm by the same rule by
+  mass fractions, which needs no pair parameter: by 10 to 40 points on
+  ethanol + heptane, 1-butanol + 2-methylheptane, diethylene glycol + water
+  and diethylethanolamine + water; it's 2.6 points worse on methanol +
+  water. D6 is the published rule and
+  the owner's approved choice, a file's G fixing any one pair; the mass
+  basis is for the owner to weigh (below, "For the owner"). Lucas's
+  compressed-liquid factor halves ethanol's error at 20 to 100 MPa.
+- **ChemSep's water against IAPWS's:** the liquid's viscosity within 2.1%
+  to 550 K (5.8% to 630 K), its conductivity 2.0%, its surface tension
+  0.65% to 550 K (6.9% at 630 K); the vapour's at 1 kPa within 1.8% and
+  1.4%, as step 0 found.
+
+**Found:** the archive's name search matches loosely (2-methylheptane for
+iso-octane, JP-10, a tricyclodecane), and four aqueous sets in step 0's
+cache have compounds reflux's data lacks (AMP, 3-dimethylamino-1-propanol,
+two glycol ethers), so they're left out; the N₂ + CH₄ surface-tension set
+gives no composition.
+
+### 10. DWSIM references — done
 - D19: `tools/gen_m5b_dwsim.py`, `testdata/m5b_dwsim.json`: its PR and NRTL
   packages by state, each number reproduced from its formulas, every
   difference from reflux's explained; the IF97 Rankine cycle against its
   Steam Tables package's.
 
-### 11. Speed
+**What was built:** [tools/gen_m5b_dwsim.py](../tools/gen_m5b_dwsim.py)
+and [testdata/m5b_dwsim.json](../testdata/m5b_dwsim.json): DWSIM 9.0.5's
+PR and NRTL packages at ten states (step 0's eight, and methane in hexane
+both ways round), each phase's μ, λ and σ as it reports them, each
+compound's values by DWSIM and by reflux's component files, and each
+number worked out again by DWSIM's formulas on both; its two water
+packages at five states. [transport/dwsim_test.v](../transport/dwsim_test.v)
+holds it. The IF97 Rankine cycle against its Steam Tables package's is
+step 7's ([flowsheet/water_test.v](../flowsheet/water_test.v)).
+
+**What it shows:**
+- **Every number DWSIM reports is its formulas'** to 4.7e-16, on its own
+  compound values, and its formulas on the component files' values are its
+  numbers to 3e-6: its ChemSep correlations are the files'. So the data
+  explain none of the differences from reflux's.
+- **So every difference is the methods'** (recorded, 35 numbers): a
+  liquid's viscosity −0.03% to −12% (the logarithmic rule against the
+  mole-fraction mean; −12% on 1-butanol's liquid), its conductivity +0.2%
+  at 1 atm and +2.6% at 100 bar (Li on the liquids' volumes and
+  Missenard's factor, against Li on critical volumes); a gas's viscosity
+  −2.7% to −3.0% at 1 atm (Jossi–Stiel–Thodos adds 3% to 5% at zero
+  density), +23% on the reforming gas (the mole-fraction mean is that much
+  below Wilke's in hydrogen-rich gas, as M9 found) and −2.8% at 100 bar
+  (Lucas against JST); a gas's conductivity −15% on the reforming gas
+  (Mason–Saxena against the mole mean) and +32% at 100 bar (Stiel and
+  Thodos' residual, which DWSIM hasn't); the surface tension −23% to −38%
+  for water's mixtures (Winterfeld, Scriven and Davis against the mole
+  mean).
+- **A compound above its Tc:** DWSIM keeps it in a liquid's viscosity, its
+  liquid correlation extrapolated, with its Henry's constant (methane's in
+  water, 4.1e9 Pa, whatever the solvent) for Psat in Lucas's factor; reflux
+  leaves it out (D9), +5.0% here. DWSIM drops it from the surface tension
+  term by term, each later term divided by one less the moles dropped so
+  far, so the answer depends on the compounds' order: methane listed first
+  gives hexane's own σ, hexane first 95% of it (reflux's is hexane's
+  either way).
+- **A second liquid** gets the first's μ and λ (water–1-butanol: its
+  aqueous liquid reported with the organic's λ, 0.21 W/(m·K), where reflux
+  gives 0.59).
+- **Its water:** the Steam Tables package's (IAPS 1985) within 0.31% and
+  2.1% of IAPWS's here. Its CoolProp package's are not ChemSep's, as step 0
+  read the source (those are 0.7% to 20% off them), but CoolProp's: the
+  vapour's viscosity R12-08 at the state to 1.3e-11, the liquid's
+  conductivity at 300 K R15-11 at the saturated liquid to 1e-13, its
+  viscosity near the saturated liquid's times a pressure factor (1e-5 at
+  300 K, 1.6% at 500 K and 10 MPa, not explained); within 2.7% of IAPWS
+  at the state in all. The research section's line on it is corrected
+  here.
+
+**Found:** the two order-dependent and Henry's-constant behaviours above,
+the CoolProp package's water, and a second liquid's transport, for the
+reports to DWSIM. DWSIM's three-phase split moves in its last digits from
+run to run (M6 found it), so the water–1-butanol case doesn't reproduce
+byte for byte; every other number does.
+
+### 11. Speed — done
 - D20: `tools/bench_m5b.v`, `tools/gen_m5b_bench.py`, `testdata/m5b_bench.json`,
   `benchmarks/m5b.v`, `docs/benchmarks.md`.
 
-### 12. Release
+**What was built:** [tools/bench_m5b.v](../tools/bench_m5b.v) (reflux,
+gcc `-prod`, run before the others and after),
+[tools/gen_m5b_bench.py](../tools/gen_m5b_bench.py) (DWSIM's PR
+package's own transport functions on a stream it calculated, thermo's
+mixture properties at their defaults, DWSIM's Steam Tables flashes),
+[testdata/m5b_bench.json](../testdata/m5b_bench.json),
+[benchmarks/m5b.v](../benchmarks/m5b.v) and its section of
+[docs/benchmarks.md](benchmarks.md), held by
+[benchmarks/m5b_test.v](../benchmarks/m5b_test.v).
+
+**Measured** (median per call):
+
+| | reflux | thermo | DWSIM |
+|---|---|---|---|
+| benzene–toluene's liquid, μ, λ and σ | 4.2 µs | 45 µs | 94 µs |
+| the reforming gas at 30 bar, μ and λ | 8.7 µs | 154 µs | 29 µs |
+| methane–propane at 100 bar, μ and λ | 2.8 µs | 59 µs | 38 µs |
+
+reflux is 3.4 to 22 times faster than DWSIM's own functions at every case
+(criterion 10), though its take a phase's whole transport in one call and
+DWSIM's each property alone, through pythonnet. Water at M5a's three
+states: IF97 behind the flash 1.3 µs a PT flash and 26 µs a PH flash,
+eight and seven times faster than IAPWS-95's (10 µs, 172 µs), IF97's own
+functions 0.5 µs and 3.8 µs, and DWSIM's Steam Tables package 268 µs and
+1.9 ms. A report with each phase's transport: the reference flowsheet's
+21 phases add 123 µs to its 142 (5.8 µs a phase, most of it the phases'
+`transport.Pure` values evaluated again), the IF97 Rankine cycle's 6 add
+16 µs; a solve costs nothing more (D11).
+
+### 12. Release — done
 - The CHANGELOG entry (report format 5, file format 5, the golden reports
   by name), the versions and the release gate (D21).
 
-### 13. Docs and exit review
+**What was done:** v.mod and the Python package at 0.7.0; 0.7.0's
+CHANGELOG entry, undated until the tag on `main` after the merge, naming
+the nine golden reports written again and the new `rankine_if97.json`;
+all ten written again for the version, which alone moved (each compared
+with the one before). `tools/release.vsh` refuses for the tree, the
+branch and the date alone. The golden reports' names are seen by the gate
+once they're committed.
+
+### 13. Docs and exit review — done
 - README, roadmap, design notes (every formula the code uses), the file and
   report formats, data-quality.md, testdata/README.md, the V notes, and a
   criterion-by-criterion review.
+
+**What was done:** the README (M5a and M5b in its status, M5b's list, the
+IF97 Rankine command, the layout), the roadmap (M5b done, C6 and C7),
+design.md (transport in a flowsheet and from C, written with step 7),
+testdata/README.md's rows for every new fixture, and the exit review
+below; the file and report formats, data-quality.md and the V notes were
+written with their steps.
+
+**Planted mistakes** (bundle D): 10, in a scratch copy, against the
+measured mixtures', DWSIM's and the benchmark's tests: all caught (the
+exit review has them). Step 10's differences were held two-sided first.
+
+**The bundle's full tcc check** passed: `v fmt -verify`, `v vet`, 148 test
+files, then the build and its smoke runs.
 
 ## Risks
 
@@ -527,3 +1143,112 @@ bundle, the touched tests and their dependents, and the planted mistakes.
   mixture model (GERG-2008, later).
 - **IF97 from Python** (M5a's D16), and `reflux water`'s other pairs (M5a's
   carried forward).
+
+## Exit review
+
+Each criterion against what was built and measured, with the steps that
+hold it. Steps 0 to 13 are done; criterion 7 and D14 were amended in
+bundle B, approved on 2026-11-28; no other decision moved.
+
+1. **Each compound's values are its correlations': met** (step 1). Every
+   transport correlation of every compound, 11,058 points, within 1e-15 of
+   its terms' size of `chemicals`' (2.8e-16 measured), each refusal with its
+   reason; data-quality.md's "Transport (M5b)" has the coverage (588
+   compounds with all six usable) and the 49 with no dipole moment.
+2. **The mixing rules are right: met** (steps 2 and 3). Mason–Saxena
+   within 2.2e-16 of mpmath, Li's, Winterfeld–Scriven–Davis' and
+   Grunberg–Nissan's within 5.6e-16 of `chemicals` and mpmath; one
+   compound alone its own value to the bit; Wilke's M9's bits, the PFR's
+   and the reactor goldens' with it.
+3. **The pressure corrections are right: met but for the worked
+   examples** (steps 2 and 3). Lucas's gas factor within 4.4e-16 of
+   mpmath and exactly 1 at zero pressure at every state; Stiel and Thodos'
+   residual within 1.3e-15 of `chemicals`, 0 at zero density; Lucas's
+   liquid factor and Missenard's `chemicals`' bits, 1 at Pˢᵃᵗ and at zero
+   pressure. Each source's worked example waits for the owner's Poling et
+   al. (5th ed.), which this work didn't have; with it the owner settles
+   Lucas's Z₂ coefficient below Tr = 1 (6.990 here and in polykin, 0.6990
+   in Cantera), which no data set of step 9 reaches.
+4. **Every phase has its transport, or why not: met** (steps 4, 6 and 7).
+   272 seeded phases of M3's sweep, M6's γ–φ and three-phase states and
+   water's grid, each a value or a reason (271, 272 and 126 values of μ, λ
+   and σ); every golden phase its model's bits (cubic and γ–φ by the
+   compounds, IAPWS-95 by M5a's functions, IF97 by their industrial
+   forms), each none but a vapour's σ with its reason.
+5. **Measured mixtures are recorded: met** (step 9). 27 sets, 1,662
+   points; each set's average and largest deviation and its points with no
+   value recorded (89 numbers that can't grow), each alternative's beside
+   them; two new nonaqueous liquids, the only ones the archive has with
+   compounds reflux knows; ChemSep's water against IAPWS's.
+6. **Nothing moves: met** (steps 2, 6, 7 and 12). M5a's trace of every
+   cubic and IAPWS-95 flash answer, 86,408 lines, the same bytes before and
+   after bundle B; the nine golden reports, with transport taken out,
+   their format-4 selves value for value, and then only the version moved;
+   the PFR's bits.
+7. **IF97 behind the flash: met, as amended** (step 6). A PT flash the
+   region map's state; PH and PS within 3e-11·T of IF97's own but on
+   region boundaries (10 of 296, within 0.1 K, as amended); region 4 to the
+   bit, its phases' gap within Table 44's; the range and TV and UV refused
+   with why; the trace unchanged.
+8. **IF97 in a flowsheet: met** (step 7). `rankine_if97.toml` solves,
+   every balance closed, a golden flowsheet; within 4.9e-7 J/kg of IF97's
+   functions through the same unit models, and DWSIM's Steam Tables cycle
+   by state within M5a's bounds on it, each difference that one's.
+9. **Against DWSIM 9: met** (step 10). Every number of its PR and NRTL
+   packages at ten states its own formulas' to 4.7e-16, its data the
+   files', so every difference from reflux's is the methods', each
+   recorded signed (35). Its water recorded: the Steam Tables package's
+   IAPS 1985 within 0.31% and 2.1% of IAPWS's; its CoolProp package's
+   CoolProp's, explained but for its liquid's viscosity at 500 K and
+   10 MPa (1.6% from the rule that holds at 300 K).
+10. **Speed: met** (step 11). A phase's transport 3.4 to 22 times faster
+    than DWSIM's own functions, 11 to 21 times thermo's; IF97 behind the
+    flash, eight and seven times faster than IAPWS-95's, beside IF97's
+    functions and DWSIM's Steam Tables (268 µs and 1.9 ms).
+11. **Python: met** (step 8). `reflux_transport`, 200 points of five fluids
+    bit for bit through the library, values, statuses and reasons;
+    `tools/python.vsh test` passed.
+12. **CI and the docs: the docs met; CI and the release wait for the
+    push, the merge and the tag.** README, roadmap, design notes, the file
+    and report formats, data-quality.md, testdata/README.md, the V notes,
+    benchmarks.md and 0.7.0's entry are written; the release gate refuses
+    for the tree, the branch and the date alone.
+
+**Planted mistakes:** bundle A 41 (38 caught, 1 after a test was added, 2
+explained), B 31 (all caught, 2 after a test was added), C 39 (38 caught,
+1 after a test was added, 1 explained), D 10 (all caught: Lucas's gas
+factor, Stiel and Thodos' residual, Lucas's liquid factor and Missenard's
+each taken out; the logarithmic rule and Winterfeld–Scriven–Davis' each
+skewed; D9's threshold at 30%; Mason–Saxena made the mole-fraction mean;
+the benchmark section's faster run and its per-phase cost). The
+Mason–Saxena one is caught only because step 10's differences were first
+held two-sided, to 0.1% of themselves: a one-sided bound is blind to a
+change toward DWSIM's own method.
+
+**For the owner:**
+- **Criterion 3's worked examples, and Lucas's Z₂ coefficient,** from the
+  owner's Poling.
+- **A liquid's viscosity by mass fractions** beats D6's logarithmic rule
+  by mole fractions on four of step 9's sets at 1 atm with no pair
+  parameter (by 10 to 40 points on alcohol + alkane, glycol + water and
+  amine + water), and is 2.6 points worse on methanol + water. D6 is the published rule and the approved
+  one, a file's G fixing any one pair; whether the default should be by
+  mass is the owner's to weigh.
+- **D9's threshold** (10%) left 28 of 70 CH₄ + C₂H₆ surface tensions
+  without a value, where methane passed its Tc; the threshold is the
+  owner's.
+
+**Carried forward:**
+- The reports to DWSIM: a liquid's surface tension order-dependent with a
+  compound above its Tc; such a compound's viscosity taken with its
+  Henry's constant in water whatever the solvent; a second liquid given
+  the first's viscosity and conductivity; its CoolProp package's water
+  viscosity at 500 K and 10 MPa; and step 0's mole-mean and
+  Jossi–Stiel–Thodos findings.
+- A report's transport evaluates each compound's correlations again for
+  every phase (5.8 µs a phase on the reference flowsheet): a cache by T,
+  if a large flowsheet's report needs it.
+- IF97 from Python and `reflux water`'s other pairs (M5a's), diffusivity,
+  fitting Gᵢⱼ to viscosity data, and the rest of "Not in M5b".
+- The release: CI on the push, the PR into `main` when the owner asks,
+  then 0.7.0's date and its tag.
