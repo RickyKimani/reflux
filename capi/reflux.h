@@ -63,6 +63,7 @@
 #define REFLUX_POINT_OUTSIDE_ENVELOPE 6 /* no such point on the phase envelope */
 #define REFLUX_POINT_SUPERCRITICAL 7    /* at or above Tc: no vapour pressure */
 #define REFLUX_POINT_NOT_FINITE 8       /* an answer that isn't finite: beyond the model */
+#define REFLUX_POINT_NO_VALUE 9         /* reflux_transport: a property with no value at a phase */
 
 /* A phase's label, by its phase identification parameter. */
 #define REFLUX_NO_PHASE (-1)
@@ -259,5 +260,36 @@ int32_t reflux_stability(int64_t fluid, int64_t n, double *t, int64_t t_len, dou
 int32_t reflux_flash(int64_t fluid, int32_t spec, int64_t n, double *a, int64_t a_len, double *b,
                      int64_t b_len, double *z, int64_t z_rows, double *out, double *phase,
                      double *x, int32_t *n_phases, int32_t *status, char *err, int32_t err_len);
+
+/* ---- Transport (M5b) ---- */
+
+/* reflux_transport's values per point, out[k * n + i], each with its own
+   status, status[k * n + i]. */
+#define REFLUX_TRANSPORT_VISCOSITY 0       /* Pa s */
+#define REFLUX_TRANSPORT_CONDUCTIVITY 1    /* thermal conductivity, W/(m K) */
+#define REFLUX_TRANSPORT_SURFACE_TENSION 2 /* N/m, a liquid's */
+#define REFLUX_TRANSPORT_VALUES 3          /* how many there are */
+
+/* reflux_transport evaluates one phase's viscosity, thermal conductivity and
+   surface tension at n points (T in K, P in Pa, and the mole amounts z, nc
+   per point, normalised by their sum). The phase is label's, REFLUX_LIQUID
+   or REFLUX_VAPOR, at its volume root: the smallest volume for a liquid,
+   the largest for a vapour. It writes the REFLUX_TRANSPORT_VALUES values to
+   out and each value's status to status (REFLUX_TRANSPORT_VALUES * n each).
+   - A cubic fluid's are its compounds' correlations by mixing rules, each
+     pair's Grunberg-Nissan G 0 (docs/design.md, "Transport of mixtures");
+     IAPWS-95 water's are IAPWS's (R12-08, R15-11 and R1-76).
+   - A point with no phase there (a bad input, no volume root) has every
+     status that failure's, and NaN.
+   - A property with no value has REFLUX_POINT_NO_VALUE and NaN: a compound
+     without its correlation, a method beyond its range, a liquid whose
+     compounds above their Tc are more than 10% of it. A vapour's surface
+     tension always has.
+   - err gets the first point's reasons, each once with the properties it's
+     for, among points lacking a value but a vapour's surface tension.
+   A new function: the ABI version is unchanged. */
+int32_t reflux_transport(int64_t fluid, int32_t label, int64_t n, double *t, int64_t t_len,
+                         double *p, int64_t p_len, double *z, int64_t z_rows, double *out,
+                         int32_t *status, char *err, int32_t err_len);
 
 #endif

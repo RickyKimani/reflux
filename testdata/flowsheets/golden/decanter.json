@@ -1,6 +1,6 @@
 {
-  "format": 4,
-  "reflux": "0.6.0",
+  "format": 5,
+  "reflux": "0.7.0",
   "file": "testdata/flowsheets/decanter.toml",
   "status": "solved",
   "error": null,
@@ -87,7 +87,71 @@
       }
     ],
     "notes": [],
-    "warnings": []
+    "warnings": [],
+    "transport": {
+      "methods": [
+        {
+          "property": "viscosity",
+          "phase": "vapour",
+          "method": "Wilke's rule on each compound's vapour viscosity, times Lucas's (1980) high-pressure factor taken against its value at zero pressure; also a phase whose every compound is above its Tc"
+        },
+        {
+          "property": "thermal_conductivity",
+          "phase": "vapour",
+          "method": "Wassiljewa's form with Mason and Saxena's Aᵢⱼ on each compound's vapour conductivity, plus Stiel and Thodos' (1964) residual on Yorizane's pseudo-critical constants; also a phase whose every compound is above its Tc"
+        },
+        {
+          "property": "viscosity",
+          "phase": "liquid",
+          "method": "Grunberg and Nissan's rule, with each pair's G, on each compound's liquid viscosity times Lucas's (1981) compressed-liquid factor; a compound above its Tc left out, up to 0.1 of the liquid's moles"
+        },
+        {
+          "property": "thermal_conductivity",
+          "phase": "liquid",
+          "method": "Li's rule on each compound's liquid conductivity times Missenard's (1970) compressed-liquid factor, its volume by its liquid density; a compound above its Tc left out, up to 0.1 of the liquid's moles"
+        },
+        {
+          "property": "surface_tension",
+          "phase": "liquid",
+          "method": "Winterfeld, Scriven and Davis's rule on each compound's surface tension, its volume by its liquid density; a compound above its Tc left out, up to 0.1 of the liquid's moles"
+        }
+      ],
+      "pairs": [
+        {
+          "a": "water",
+          "b": "1-butanol",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "water",
+          "b": "methanol",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "1-butanol",
+          "b": "methanol",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        }
+      ]
+    }
   },
   "streams": [
     {
@@ -134,7 +198,11 @@
           ],
           "H": -296136.25653550756,
           "S": 127.67334618059915,
-          "V": 0.00004361406294171074
+          "V": 0.00004361406294171074,
+          "viscosity": 0.0011673094794354458,
+          "thermal_conductivity": 0.22100545433496735,
+          "surface_tension": 0.03373877533349865,
+          "transport_notes": []
         },
         {
           "phase": "liquid2",
@@ -146,7 +214,11 @@
           ],
           "H": -284586.2829510147,
           "S": 74.84566697896281,
-          "V": 0.00001955805590957099
+          "V": 0.00001955805590957099,
+          "viscosity": 0.0008563897111586309,
+          "thermal_conductivity": 0.540263962963588,
+          "surface_tension": 0.06487070040868614,
+          "transport_notes": []
         }
       ]
     },
@@ -194,7 +266,11 @@
           ],
           "H": -240633.2881679126,
           "S": 245.46744015753916,
-          "V": 0.029885292726685515
+          "V": 0.029885292726685515,
+          "viscosity": 0.000011103682352734608,
+          "thermal_conductivity": 0.02302451192603512,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -206,7 +282,11 @@
           ],
           "H": -290521.6581676453,
           "S": 153.06990402900527,
-          "V": 0.0000479433574760175
+          "V": 0.0000479433574760175,
+          "viscosity": 0.000397516416646224,
+          "thermal_conductivity": 0.2052857110190336,
+          "surface_tension": 0.02646408275742156,
+          "transport_notes": []
         },
         {
           "phase": "liquid2",
@@ -218,7 +298,11 @@
           ],
           "H": -280568.4106137942,
           "S": 91.43917693908031,
-          "V": 0.000021242681143973186
+          "V": 0.000021242681143973186,
+          "viscosity": 0.0003106797403027989,
+          "thermal_conductivity": 0.5463342746382815,
+          "surface_tension": 0.05209596724572855,
+          "transport_notes": []
         }
       ]
     },
@@ -266,7 +350,11 @@
           ],
           "H": -240633.2881679126,
           "S": 245.46744015753916,
-          "V": 0.029885292726685515
+          "V": 0.029885292726685515,
+          "viscosity": 0.000011103682352734608,
+          "thermal_conductivity": 0.02302451192603512,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -278,7 +366,11 @@
           ],
           "H": -290521.6581676453,
           "S": 153.06990402900527,
-          "V": 0.0000479433574760175
+          "V": 0.0000479433574760175,
+          "viscosity": 0.000397516416646224,
+          "thermal_conductivity": 0.2052857110190336,
+          "surface_tension": 0.02646408275742156,
+          "transport_notes": []
         },
         {
           "phase": "liquid2",
@@ -290,7 +382,11 @@
           ],
           "H": -280568.4106137942,
           "S": 91.43917693908031,
-          "V": 0.000021242681143973186
+          "V": 0.000021242681143973186,
+          "viscosity": 0.0003106797403027989,
+          "thermal_conductivity": 0.5463342746382815,
+          "surface_tension": 0.05209596724572855,
+          "transport_notes": []
         }
       ]
     },
@@ -338,7 +434,11 @@
           ],
           "H": -240633.2881679126,
           "S": 245.46744015753916,
-          "V": 0.029885292726685515
+          "V": 0.029885292726685515,
+          "viscosity": 0.000011103682352734608,
+          "thermal_conductivity": 0.02302451192603512,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -350,7 +450,11 @@
           ],
           "H": -290521.6581676453,
           "S": 153.06990402900527,
-          "V": 0.0000479433574760175
+          "V": 0.0000479433574760175,
+          "viscosity": 0.000397516416646224,
+          "thermal_conductivity": 0.2052857110190336,
+          "surface_tension": 0.02646408275742156,
+          "transport_notes": []
         },
         {
           "phase": "liquid2",
@@ -362,7 +466,11 @@
           ],
           "H": -280568.4106137942,
           "S": 91.43917693908031,
-          "V": 0.000021242681143973186
+          "V": 0.000021242681143973186,
+          "viscosity": 0.0003106797403027989,
+          "thermal_conductivity": 0.5463342746382815,
+          "surface_tension": 0.05209596724572855,
+          "transport_notes": []
         }
       ]
     },
@@ -410,7 +518,11 @@
           ],
           "H": -240633.2881679126,
           "S": 245.46744015753916,
-          "V": 0.029885292726685515
+          "V": 0.029885292726685515,
+          "viscosity": 0.000011103682352734608,
+          "thermal_conductivity": 0.02302451192603512,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -422,7 +534,11 @@
           ],
           "H": -290521.6581676453,
           "S": 153.06990402900527,
-          "V": 0.0000479433574760175
+          "V": 0.0000479433574760175,
+          "viscosity": 0.000397516416646224,
+          "thermal_conductivity": 0.2052857110190336,
+          "surface_tension": 0.02646408275742156,
+          "transport_notes": []
         },
         {
           "phase": "liquid2",
@@ -434,7 +550,11 @@
           ],
           "H": -280568.4106137942,
           "S": 91.43917693908031,
-          "V": 0.000021242681143973186
+          "V": 0.000021242681143973186,
+          "viscosity": 0.0003106797403027989,
+          "thermal_conductivity": 0.5463342746382815,
+          "surface_tension": 0.05209596724572855,
+          "transport_notes": []
         }
       ]
     }

@@ -17,6 +17,10 @@ v run . solve testdata/flowsheets/rankine.toml   # a Rankine cycle on IAPWS-95 w
 ```
 
 ```bash
+v run . solve testdata/flowsheets/rankine_if97.toml --json out.json   # the same on IF97, each phase's viscosity, conductivity and σ in the report
+```
+
+```bash
 v run . water T=450degC P=40bar   # a steam table: water's properties at a state, by IAPWS-95 (or --if97)
 ```
 
@@ -213,6 +217,24 @@ water/              water and steam (M5a)
                     between it and reflux's (D6)
   transport.v       water's viscosity (R12-08), thermal conductivity (R15-11)
                     and surface tension (R1-76), and their industrial forms
+  phase_transport.v a stream of IAPWS-95 water's transport, as a
+                    transport.Model (M5b's D10)
+  if97_phases.v     IF97 as a thermo.PhaseModel (M5b's D12–D14): the region
+                    map, each side across the line, residuals against region
+                    2's ideal gas, region 4 as its own saturation line, and
+                    IF97 water's transport
+transport/          a phase's viscosity, thermal conductivity and surface
+                    tension (M5b): each compound's correlations by mixing
+                    rules, with pressure corrections
+  pure.v            each compound's values, or why it has none (D3)
+  wilke.v           a gas at low pressure: Wilke's rule (M9's, moved) and
+                    Mason and Saxena's conductivity on its factors (D4)
+  gas.v             a gas at pressure: Lucas's factor, Yorizane's
+                    pseudo-critical rules, Stiel and Thodos' residual (D5)
+  liquid.v          a liquid: Grunberg–Nissan, Li, Winterfeld–Scriven–Davis,
+                    Lucas's and Missenard's compressed-liquid factors (D6–D8)
+  phase.v           a phase's transport by its label, dissolved gases and
+                    supercritical phases (D9), the Model interface
                     on IF97
   if97/             IAPWS-IF97 with its region-3 supplements, per kg (water.if97)
     basic.v         the basic equations of regions 1, 2 (and the metastable
@@ -224,6 +246,9 @@ water/              water and steam (M5a)
     region3_v.v     SR5-05's v(p, T) in region 3's 26 subregions
     functions.v     the steam-table functions from (p, T), (p, h), (p, s), (T, x)
                     and (p, x), each finished on its basic equation
+    phases.v        each side's equation across the saturation line, the
+                    saturated phases, region 2's ideal gas: what the phase
+                    model asks (M5b's D12)
     coefficients.v, coefficients_sr3.v, coefficients_sr5.v
                     the releases' tables, by tools/extract_if97.py
 flash/
@@ -311,8 +336,8 @@ reactors/           the reactors (M9): flowsheet units with makers for the file
                     where Newton from the inlet fails
   pfr.v             the PFR and packed bed: isothermal, adiabatic or with a
                     duty, Ergun's drop, its profile
-  viscosity.v       the gas viscosity Ergun needs: Wilke's rule, with what
-                    depends on T alone kept until T moves
+  viscosity.v       the gas viscosity Ergun takes, as an interface: Wilke's
+                    rule, from transport (M5b)
   makers.v          the reactors' tables in a flowsheet file (format 2)
 flowsheet/
   stream.v          material streams, each with the flash that gave its state
@@ -349,7 +374,7 @@ flowsheet/
                     to kinetics (format 2)
   write.v           a file back, in a fixed order
   report.v          a solve's report, or its failure's, as JSON and CSV
-                    (docs/report-format.md)
+                    (docs/report-format.md), each phase's transport (M5b)
   table.v           the stream table and the trace, for reading
   error.v           FlowsheetError: every failure, typed, never a panic
 study/              studies (M8): one or two inputs over their values, in
@@ -390,6 +415,8 @@ capi/               the C API (M10a): reflux.h, and the functions it declares,
                     at once, each with its status
   flash.v           stability, and the flashes in one layout: each phase in
                     the place of its label
+  transport.v       a phase's viscosity, conductivity and surface tension,
+                    many points at once, each value with its status (M5b)
   gc_threads.h      registering a thread the collector doesn't know
 python/             the Python package over the C API (M10a): reflux/
                     (Database, Fluid, and points.py's results on NumPy arrays,
@@ -476,6 +503,10 @@ spike/water/        IAPWS-95 under thermo's volume solvers and Psat, its
                     critical point, and DWSIM 9's water packages (M5a step 0);
                     trace/, every cubic answer's bits, before and after D7
                     (M5a step 2)
+spike/transport/    DWSIM 9's transport of mixtures from its own code, what
+                    ThermoML holds, the candidate methods against it,
+                    ChemSep's water against IAPWS's, and IF97's two
+                    equations on region 4's line (M5b step 0)
 .v-version          the V commit CI builds
 ```
 
@@ -487,12 +518,14 @@ at the edges, i.e. input files and printed output.
 **M0 (foundations), M1 (thermo core), M2 (component data), M3 (flash), M4
 (the first flowsheet), M10a (thermo and the flash from Python), M9
 (equations, kinetics and reactors), M8 (specifications, studies,
-optimisation and fitting) and M6 (activity models and liquid–liquid
-equilibrium) are done.** The exit reviews are at the ends of
+optimisation and fitting), M6 (activity models and liquid–liquid
+equilibrium), M5a (water and steam) and M5b (transport of mixtures, and
+IF97 behind the flash) are done.** The exit reviews are at the ends of
 [docs/m1-plan.md](docs/m1-plan.md), [docs/m2-plan.md](docs/m2-plan.md),
 [docs/m3-plan.md](docs/m3-plan.md), [docs/m4-plan.md](docs/m4-plan.md),
 [docs/m10a-plan.md](docs/m10a-plan.md), [docs/m9-plan.md](docs/m9-plan.md),
-[docs/m8-plan.md](docs/m8-plan.md) and [docs/m6-plan.md](docs/m6-plan.md).
+[docs/m8-plan.md](docs/m8-plan.md), [docs/m6-plan.md](docs/m6-plan.md),
+[docs/m5-plan.md](docs/m5-plan.md) and [docs/m5b-plan.md](docs/m5b-plan.md).
 What exists now:
 
 - [x] Model contract built on the residual Helmholtz energy F(T, V, n), with
@@ -716,8 +749,33 @@ And from M6, activity models and liquid–liquid equilibrium:
 - [x] A fifth release, v0.5.0, to be tagged on `main` after M6's merge
       ([CHANGELOG.md](CHANGELOG.md)).
 
-By the roadmap, next is M10b, flowsheets from Python, or M5 and M7: steam
-and columns.
+And from M5b, transport of mixtures and IF97 behind the flash:
+
+- [x] Every phase's viscosity and thermal conductivity, and a liquid's
+      surface tension, in the report (format 5), each from ChemSep's
+      correlations by mixing rules with pressure corrections for dense
+      gases and compressed liquids, or none with why: a value is always a
+      correlation's, never an estimate standing in for one.
+- [x] Methods chosen against 27 measured data sets from NIST's ThermoML
+      archive, each method's deviations recorded with its alternatives':
+      Lucas's dense-gas viscosity 2% to 6% on hydrocarbon gases to 32 MPa,
+      where DWSIM's is 6% to 13%.
+- [x] A liquid pair's Grunberg–Nissan G in the flowsheet file (format 5),
+      as an expression in T, for the aqueous liquids no ideal rule fits.
+- [x] Water's own transport (IAPWS's) for a stream of IAPWS-95 or IF97
+      water.
+- [x] IAPWS-IF97 behind every flash but TV and UV, region 4 its own
+      saturation, in a flowsheet file and its Rankine cycle, a golden
+      flowsheet within 4.9e-7 J/kg of IF97's own functions.
+- [x] A phase's transport from C and Python, bit for bit the V API's.
+- [x] DWSIM 9's transport reproduced from its own formulas state by state,
+      every difference put down to its methods.
+- [x] A phase's transport in 3 to 9 µs, 3 to 22 times DWSIM's own functions
+      ([docs/benchmarks.md](docs/benchmarks.md)).
+- [x] A seventh release, v0.7.0, to be tagged on `main` after M5b's merge
+      ([CHANGELOG.md](CHANGELOG.md)).
+
+By the roadmap, next is M7, columns, or M10b, flowsheets from Python.
 
 ## Roadmap
 
@@ -728,9 +786,10 @@ how they get replaced, and CAPE-OPEN / FMI interop. The critical path:
 **M0** foundations ✓ → **M1** thermo core ✓ → **M2** component data
 (ChemSep) ✓ → **M3** flash ✓ → **M4** first flowsheet, compared with DWSIM 9
 ✓ → **M10a** thermo and flash from Python ✓. **M9** equations, kinetics and
-reactors ✓, **M8** specifications, studies and optimisation ✓ and **M6**
-activity models and liquid–liquid equilibrium ✓ build on M4. Next, **M10b**
-makes the flowsheets callable from Python.
+reactors ✓, **M8** specifications, studies and optimisation ✓, **M6**
+activity models and liquid–liquid equilibrium ✓, **M5a** water and steam ✓
+and **M5b** transport of mixtures ✓ build on M4. Next, **M7** columns, and
+**M10b** makes the flowsheets callable from Python.
 
 ## Development
 

@@ -209,6 +209,64 @@ feed, negative where the feed is unstable, and `w` that trial's composition:
 where the feed is unstable, the phase that would appear. If every trial came
 back to the feed, as at 150 bar here, `tm` is 0 and `w` the feed.
 
+## Transport
+
+`transport` gives a phase's viscosity (Pa·s), thermal conductivity
+(W/(m·K)) and surface tension (N/m) at (T, P, z), the phase at the volume
+root of `phase`: `"liquid"` (the default, the smallest volume) or `"vapor"`
+(the largest). A cubic fluid's come from its compounds' correlations by
+mixing rules, each pair's Grunberg–Nissan G 0
+([design.md](design.md#transport-of-mixtures)); IAPWS-95 water's are IAPWS's
+own. Nothing else uses them: they're for sizing what the flashes give.
+
+```python
+liquid = db.fluid("PR", ["n-butane", "n-pentane"])
+tr = liquid.transport([280.0, 300.0, 320.0], 5e5, [0.4, 0.6])
+print((tr.viscosity * 1e6).round(2), "µPa·s")
+print(tr.thermal_conductivity.round(5), "W/(m·K)")
+print((tr.surface_tension * 1e3).round(3), "mN/m")
+```
+
+```text
+[225.9  187.17 155.94] µPa·s
+[0.11781 0.10965 0.10202] W/(m·K)
+[16.241 14.001 11.815] mN/m
+```
+
+Each value has its own status, along a last axis in the order of
+`Transport.PROPERTIES`: `NO_VALUE` where that property has none, as a
+vapour's surface tension never does.
+
+```python
+gas = fluid.transport(400.0, [1e5, 50e5], [0.5, 0.5], phase="vapor")
+print((gas.viscosity * 1e6).round(3), gas.thermal_conductivity.round(5))
+print(gas.status)
+```
+
+```text
+[11.484 13.614] [0.03541 0.04032]
+[[0 0 9]
+ [0 0 9]]
+```
+
+A liquid whose compounds above their Tc are more than a tenth of it has no
+value, and `reason(index)` says so; less, and they're left out of its mixing
+rules:
+
+```python
+cold = fluid.transport([250.0], 20e5, [0.3, 0.7])
+print(cold.status)
+print(cold.reason(0))
+```
+
+```text
+[[9 9 9]]
+no viscosity, thermal conductivity or surface tension: Methane, above its Tc, is 0.3 of the liquid's moles, more than 0.1 (D9)
+```
+
+A value is given beyond its correlation's fitted range, as every property
+is; a flowsheet's report notes where, and this doesn't.
+
 ## The other flashes
 
 | Method | Given | It finds |
@@ -266,6 +324,7 @@ one of `reflux.Status`:
 | `OUTSIDE_ENVELOPE` (6) | there's no such point on the phase envelope |
 | `SUPERCRITICAL` (7) | at or above Tc, where there's no vapour pressure |
 | `NOT_FINITE` (8) | an answer that isn't finite: beyond the model |
+| `NO_VALUE` (9) | `transport`: one property with no value at a phase that has others, or a vapour's surface tension |
 
 `reason(index)` gives a point's reason in words, by running that point again
 alone:

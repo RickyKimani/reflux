@@ -655,6 +655,72 @@ within 0.0069% and Ts within 0.0006% of Eqs. (30) and (31), and on region 3
 ps within 0.0026%. The steam-table functions don't hide these: each answer
 is its region's equation's.
 
+**Two edges, found by M5b's flashes and fixed:** a backward answer whose
+root lies within h's own rounding of the last Newton step (region 1's h
+has about 6e-9 J/kg of it at 273 K and 25 MPa) took a step out of a
+bracket closed to rounding, and halving a closed bracket never settled;
+such a step now returns the state it's at. And above 50 MPa a value
+within the edge's rounding above region 2's top at 1073.15 K, which
+`by_p` lets in, went to region 5's search, which has no state there; it's
+region 2's now.
+
+### IF97 as a phase model
+
+`water.If97Phases` ([water/if97_phases.v](../water/if97_phases.v), M5b's
+D12 to D14) is IF97 as a `thermo.PhaseModel`, so that the flash, and a
+flowsheet (`Database.if97`), give the steam tables' states.
+
+- **A phase at (T, P):** `.stable` is the region map's state (`state_pt`),
+  region 4 deciding liquid or vapour below the critical point, never the
+  lower Gibbs energy, which disagrees within millikelvins of the line.
+  `.liquid` and `.vapour` are each side's equation across the line, as far
+  as it has a state (`liquid_pt`, `vapour_pt`): region 1 or region 3's
+  liquid side; region 2, or region 3's vapour side above B23. Above Tc, the
+  one state. Within 1e-9 of T past an edge of IF97's range, the edge's own
+  equation: a search's last probe can step that far past an answer on the
+  edge (Brent's, 4.8e-7 K past 1073.15 K at 100 MPa).
+- **Its ideal gas** is region 2's ideal-gas part, γ° = ln π + Σ nᵢ°τ^Jᵢ°,
+  τ = 540/T, whose Cp per mole, −R₉₇τ²γ°_ττ (R₉₇ = 461.526 J/(kg·K) times
+  IAPWS's M), is a `thermo.Polynomial` in T with powers 5 to 1, −2 and −3
+  (`ideal_cp_if97`). Every region's residual is against it, per mole of M:
+
+      Hʳ = M(h − h°₂),  Sʳ = M(s − s°₂) + (R − R₉₇)ln(P/P°),  Cpʳ = M(cp − cp°₂),
+      Cvʳ = M(cv − cp°₂) + R,  ln φ = Gʳ/RT,  Gʳ = Hʳ − TSʳ,
+
+  so that a stream's H and S are IF97's times M plus one pair of constants
+  everywhere, and ln φ's P-derivative is (V − RT/P)/RT with reflux's R, as
+  M5a's D4 carried IAPWS-95's. ∂ln φ/∂T = −Hʳ/RT²; n·∂ln φ/∂n = 0.
+  (∂V/∂T)_P comes from each region's own derivatives, which IF97's states
+  now carry (`dvdt`): (R/p*)(γ_π − τγ_πτ) in region 1,
+  (R/p)(1 + πγʳ_π − τπγʳ_πτ) in regions 2 and 5, and
+  (δφ_δ − δτφ_δτ)/(ρT(2δφ_δ + δ²φ_δδ)) in region 3.
+- **A phase's region**, for its derivatives, its residuals and its label,
+  is had again from its T, P and density (`state_at`): below Tc by ρ
+  against ρc, region 3 at its ρ and the rest at (P, T); above Tc by the
+  region map. The label is region 1's liquid, regions 2 and 5's vapour,
+  region 3's by ρc.
+- **Its saturation line** is region 4's, through `thermo.Saturates` (D13):
+  the flash's paths for one compound take T or P from Pˢᵃᵗ(T) or Tˢᵃᵗ(P),
+  check one by the other to 1e-12, and take the two phases there
+  (`saturated_at`); their ln φ, IF97's inconsistency apart (5.4e-5 at
+  most), must be within the Prague value for the saturation pressure's
+  consistency, 0.05% (`saturation_gap`, 5e-4). The result's path is
+  `own_line`. At and above the critical point there's no line.
+- **Its range:** outside 273.15 K to 1073.15 K to 100 MPa and to 2273.15 K
+  to 50 MPa it has no state, and says so through `thermo.NoState`, so that
+  a PH or PS search's step past it halves back (`at_or_closer`, which now
+  asks a phase model with no equation of state behind it). The TV and UV
+  flashes refuse it: it has no F(T, V).
+- **Where its regions meet,** within Table 43's inconsistency, one h (or s)
+  can be had at two temperatures: on B13 (623.15 K above 16.53 MPa) up to
+  2.1 mK apart, and at 1073.15 K between regions 2 and 5 up to 58.7 mK. A
+  PH or PS flash there gives an IF97 state with the value asked, which
+  needn't be the one IF97's own backward functions choose.
+
+**IF97 water's transport** (D10, `water.TransportIf97`): R12-08's and
+R15-11's industrial forms on the phase's IF97 state, and R1-76's σ for a
+liquid.
+
 ## Water's transport
 
 [water/transport.v](../water/transport.v) (M5a's step 6, D11) holds IAPWS's
@@ -721,6 +787,168 @@ only the dilute gas, the viscosity's to 2500 K and the conductivity's to
 about 1500 K; a gas is read as dilute to ρ = 0.01ρc, where μ̄₁ and λ̄₁ are
 within about 1% of 1. Anything else is a `TransportError` saying why.
 Neither function knows the melting curve, which `reflux water` checks.
+
+**A stream of IAPWS-95 water** (M5b's D10, [water/phase_transport.v](../water/phase_transport.v)):
+`water.Transport95` is a `transport.Model` giving each phase R12-08's μ
+and R15-11's λ at its T and density, M/V, and R1-76's σ for a liquid,
+these functions' own numbers, to the bit; a gas has no surface tension.
+
+## Transport of mixtures
+
+The [transport](../transport) module (M5b, [m5b-plan.md](m5b-plan.md)) gives
+a phase its viscosity, thermal conductivity and, for a liquid, its surface
+tension, from each compound's ChemSep correlations by mixing rules, with
+pressure corrections. Every method was chosen by measuring the candidates
+against measured mixtures from NIST's ThermoML archive (the plan's step 0).
+`components` builds its compounds from the component files
+(`Record.transport_pure`, `Database.transport`, `Setup.transport`), as it
+builds activity's models.
+
+**Each compound's values** (D3, [transport/pure.v](../transport/pure.v)):
+its liquid's and vapour's viscosity and conductivity, its surface tension,
+its liquid density and its vapour pressure, each its correlation in SI by
+`tdep` (scale × Y(T), components' own arithmetic), or none with the file's
+lack: no correlation, an impossible range, a form `tdep` can't evaluate.
+Outside a correlation's fitted range the value is its extrapolation (M2's
+D7), noted in the phase's notes. A saturated liquid's quantity (the
+liquid's three, the density, the vapour pressure) is none at or above the
+compound's Tc, and any value that isn't a positive finite number is none:
+190 of ChemSep's surface tensions go negative by Tc, water's 1 K below
+it. No estimate stands in for a correlation. Constants a method needs and
+the file lacks are NaN, and the method says so: 49 compounds have no
+dipole moment, for Lucas's polar term (data-quality.md).
+
+**A gas at low pressure** (D4, [transport/wilke.v](../transport/wilke.v)):
+Wilke's rule, M9's, moved here with its arithmetic (and its kept factors,
+`WilkeAt`; see "The reactors"), and the conductivity by Wassiljewa's form
+with Mason and Saxena's Aᵢⱼ at ε = 1,
+
+    λ = Σᵢ yᵢλᵢ / Σⱼ yⱼAᵢⱼ,   Aᵢⱼ = Φᵢⱼ = [1 + (μᵢ/μⱼ)^½(Mⱼ/Mᵢ)^¼]² / [8(1 + Mᵢ/Mⱼ)]^½,
+
+Wilke's Φᵢⱼ of the viscosities, so one `WilkeAt` serves both.
+
+**A gas at pressure** (D5, [transport/gas.v](../transport/gas.v)), as
+Poling, Prausnitz and O'Connell give the methods (5th ed., §9-4, §9-6,
+§10-5, §10-7). The viscosity is the low-pressure value times Lucas's
+factor Y·Fp·Fq, with Lucas's mixture rules over the phase's compounds:
+
+    Tcm = Σyᵢ Tcᵢ,  Pcm = R·Tcm·ΣyᵢZcᵢ/ΣyᵢVcᵢ,  Tr = T/Tcm,  Pr = P/Pcm,
+    Fp°m = Σyᵢ Fp°ᵢ,  Fq°m = A·Σyᵢ Fq°ᵢ,
+
+each compound's at its own Tr = T/Tcᵢ: Fp° = 1 for μr = 52.46μ²Pc/Tc² below
+0.022 (μ in debye, Pc in bar), 1 + 30.55(0.292 − Zc)^1.72 below 0.075, and
+1 + 30.55(0.292 − Zc)^1.72·|0.96 + 0.1(Tr − 0.7)| beyond (refused for
+Zc ≥ 0.292); Fq° = 1.22Q^0.15{1 + 0.00385[(Tr − 12)²]^(1/M) sign(Tr − 12)}
+for He, H₂ and D₂ (Q = 1.38, 0.76, 0.52; M in g/mol), 1 otherwise. A =
+1 − 0.01(M_H/M_L)^0.87 where the heaviest compound present is more than
+nine times the lightest and 0.05 < y_H < 0.7 (compared as doubles: the
+reforming gas's 0.05 of CO₂ is on the bound, and out), else 1. Then, with
+Z₁ = [0.807Tr^0.618 − 0.357e^(−0.449Tr) + 0.340e^(−4.058Tr) + 0.018]Fp°Fq°,
+
+- above Tr = 1 (to Tr 40 and Pr 100):
+
+      Z₂ = Z₁[1 + a·Pr^1.3088 / (b·Pr^f + (1 + c·Pr^d)⁻¹)],  Y = Z₂/Z₁,
+      a = (1.245e-3/Tr)·exp(5.1726·Tr^−0.3286),  b = a(1.6553·Tr − 1.2723),
+      c = (0.4489/Tr)·exp(3.0578·Tr^−37.7332),  d = (1.7368/Tr)·exp(2.2310·Tr^−7.6351),
+      f = 0.9425·exp(−0.1853·Tr^0.4489);
+
+- at or below Tr = 1, for a vapour below its saturation pressure (refused
+  at Pr ≥ 1):
+
+      Z₂ = 0.600 + 0.760·Pr^α + (6.990·Pr^β − 0.6)(1 − Tr),
+      α = 3.262 + 14.98·Pr^5.508,  β = 1.390 + 5.746·Pr,  Y = Z₂(P)/Z₂(0).
+
+Lucas's Y is Z₂/Z₁ on both branches, but below Tr = 1 his Z₂ tends to
+0.6·Tr at zero pressure, not Z₁, so the published factor isn't 1 there
+(0.972 for methanol–water's vapour at 350 K and 1 atm): D5 takes Y against
+its own value at zero pressure, which is Lucas's own above Tr = 1. polykin
+(after Reid, Prausnitz and Poling, 4th ed.) has 6.990 in Z₂ below Tr = 1;
+Cantera has 0.6990. Then
+
+    Fp = 1 + (Fp° − 1)(Y⁻³ − 1)/Fp°,  Fq = 1 + (Fq° − 1)(Y⁻¹ − 0.007(ln Y)⁴ − 1)/Fq°,
+
+Lucas's [1 + (Fp° − 1)Y⁻³]/Fp° and [1 + (Fq° − 1)(Y⁻¹ − 0.007(ln Y)⁴)]/Fq°
+rearranged so that at Y = 1 each is 1 to the bit, and the factor exactly 1
+at zero pressure. The conductivity is the low-pressure value plus Stiel and
+Thodos' residual at the phase's molar volume V, ρr = Vcm/V, on Yorizane's
+pseudo-critical constants:
+
+    Vcᵢⱼ = (Vcᵢ^⅓ + Vcⱼ^⅓)³/8,  Vcm = ΣΣyᵢyⱼVcᵢⱼ,  Tcm = ΣΣyᵢyⱼVcᵢⱼ(TcᵢTcⱼ)^½/Vcm,
+    Zcm = 0.291 − 0.08Σyᵢωᵢ,  Pcm = Zcm·R·Tcm/Vcm,  Mm = ΣyᵢMᵢ,
+    (λ − λ°)ΓZcm⁵ = 1.22e-2(e^(0.535ρr) − 1)   (ρr < 0.5)
+                  = 1.14e-2(e^(0.67ρr) − 1.069) (ρr < 2)
+                  = 2.60e-3(e^(1.155ρr) + 2.016) (ρr ≤ 2.8; beyond, refused),
+    Γ = 210(Tcm·Mm³/Pcm⁴)^⅙   (M in g/mol, Pc in bar),
+
+0 at zero density.
+
+**A liquid** (D6 to D8, [transport/liquid.v](../transport/liquid.v)):
+
+    ln μ = Σᵢ xᵢ ln μᵢ + ½ΣᵢΣⱼ xᵢxⱼGᵢⱼ        (Grunberg–Nissan; Gᵢⱼ = 0 unless given)
+    λ = ΣᵢΣⱼ φᵢφⱼ·2/(1/λᵢ + 1/λⱼ),  φᵢ = xᵢVᵢ/ΣxⱼVⱼ   (Li, DIPPR 9I)
+    σ = ΣᵢΣⱼ xᵢxⱼ(σᵢσⱼ)^½VᵢVⱼ/(ΣₖxₖVₖ)²             (Winterfeld, Scriven and Davis)
+
+each Vᵢ the compound's liquid-density correlation's, each μᵢ times Lucas's
+compressed-liquid factor and each λᵢ times Missenard's. Lucas's, as
+`chemicals` has it, with Tr = min(T/Tc, 1) and ΔPr = (P − Pˢᵃᵗ)/Pc by the
+compound's own vapour pressure, 0 below it (DWSIM takes |ΔPr|):
+
+    μ/μˢᵃᵗ = [1 + D(ΔPr/2.118)^A] / (1 + Cω·ΔPr),
+    A = 0.9991 − 4.674e-4/(1.0523·Tr^−0.03877 − 1.0513),
+    D = 0.3257/(1.0039 − Tr^2.573)^0.2906 − 0.2086,
+    C = −0.07921 + 2.1616Tr − 13.404Tr² + 44.1706Tr³ − 84.8291Tr⁴
+        + 96.1209Tr⁵ − 59.8127Tr⁶ + 15.6719Tr⁷.
+
+Missenard's is λ/λ° = 1 + Q·Pr^0.7, Pr = P/Pc, Q bilinear in Tr and Pr on
+his table (Tr 0.5, 0.6, 0.7, 0.8 by Pr 1, 5, 10, 50, 100, 200; Q from 0.012
+to 0.038) and held at its edges beyond it, as `chemicals`' spline of degree
+1 is: 1 at zero pressure.
+
+**A phase** (D9, [transport/phase.v](../transport/phase.v)): `Mixture.phase`
+takes a phase's label, T, P, composition and molar volume, as a flash gave
+it, and gives each value or why it has none (`Result`), with notes. A
+vapour takes the gas's methods; so does a phase whose every compound is
+above its Tc, whatever its label, the dense-gas methods being for
+supercritical fluids too. A liquid or liquid2 takes the liquid's, a
+compound above its Tc left out, the rest renormalised and the moles left
+out noted, unless they're more than 10% of the liquid (`dissolved_limit`),
+which then has none. One compound alone is its own value times its
+factors, with no mixing rule's rounding. A gas has no surface tension. A
+value that a mixing rule's arithmetic makes other than positive and finite
+(a pair's G large enough to overflow exp) is none, saying so. Numbers in a
+reason or note are to 6 significant figures (`transport.shown`, by
+`math.round` on an exact power of ten), so that a report's notes read the
+same from tcc's build as from gcc's.
+
+**In a flowsheet** (D11, D15, D16, [flowsheet/file.v](../flowsheet/file.v),
+[flowsheet/report.v](../flowsheet/report.v)): `load` builds the fluid's
+transport model beside the fluid, `Setup.transport()` for an equation of
+state or water, `components.mixture` for a γ–φ fluid, and adds format 5's
+`[[transport.pairs]]`, each G an expression in T parsed as M6's pairs are
+(`activity.plain`, dimensionless), refused at its line. Nothing in a solve
+asks it: the report does, after the solve, at each phase's T, P,
+composition and molar volume, so no other number moves. Report format 5
+gives each phase its three values or null, and its notes: each reason once
+with the properties it's for (`PhaseTransport.reasons`), then the
+compounds a liquid left out and the values beyond their fitted ranges; and
+`model.transport`, each method (`Model.methods()`) and every pair's G, the
+file's or "none listed: 0".
+
+**From C and Python** (D17, [capi/transport.v](../capi/transport.v)):
+`reflux_transport` takes a fluid, a label and many (T, P, z), solves the
+label's volume root (the smallest for a liquid, the largest for a vapour),
+and gives each value with a status of its own, `REFLUX_POINT_NO_VALUE`
+where it has none; err holds the first point's reasons. A cubic fluid's
+pairs are all G = 0. `Fluid.transport` is the package's.
+
+**What the tests show** ([transport](../transport)'s tests, against
+`testdata/m5b_transport.json` from `tools/gen_m5b_transport.py`): each of
+the 11,058 points of every transport correlation is `chemicals`' within
+2.8e-16 of its terms' size; Mason–Saxena mpmath's within 2.2e-16 and
+Lucas's factor within 4.4e-16, Lucas's own η° (its Fp° and Fq°) `chemicals`'
+within 4.4e-16, Stiel and Thodos' residual within 1.3e-15; Lucas's liquid
+factor and Missenard's the same bits as `chemicals`'; whole phases within
+1.4e-14 of the pieces put together; Wilke's M9 bits.
 
 ## `reflux water`
 
@@ -2280,8 +2508,10 @@ integrated T must agree with its T to 100·rtol of T (plus 1e-9 of it), or
 the energy equation and the fluid disagree and the PFR fails. The profile
 is the inlet and every accepted step.
 
-**The gas viscosity** ([reactors/viscosity.v](../reactors/viscosity.v)),
-for Ergun (D10, as amended in step 0): each component's from its file's
+**The gas viscosity** ([transport/wilke.v](../transport/wilke.v), moved
+from `reactors` by M5b's D2, built by `components.wilke`), for Ergun (D10,
+as amended in step 0), which keeps it at low pressure (M5b's D11): each
+component's from its file's
 vapour-viscosity correlation (ChemSep's equation 102) at T, mixed by
 Wilke's rule,
 

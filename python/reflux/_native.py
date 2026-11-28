@@ -39,6 +39,11 @@ FLASHES = {"pt": 0, "ph": 1, "ps": 2, "tv": 3, "uv": 4, "tvf": 5, "pvf": 6}
 FLASH_VALUES = ("beta", "t", "p", "h", "s", "v")
 PHASE_VALUES = ("fraction", "v", "h", "s")
 
+# reflux_transport's labels, and its values in the order it writes them
+# (REFLUX_TRANSPORT_VISCOSITY...), by reflux.h's names.
+LABELS = {"liquid": 0, "vapor": 1}
+TRANSPORT_VALUES = ("viscosity", "conductivity", "surface_tension")
+
 _i32, _i64, _f64 = ctypes.c_int32, ctypes.c_int64, ctypes.c_double
 _doubles = ctypes.POINTER(_f64)
 _ints = ctypes.POINTER(_i32)
@@ -67,6 +72,8 @@ FUNCTIONS = {
                                 _doubles, _doubles, _ints, *_err]),
     "reflux_flash": (_i32, [_i64, _i32, _i64, _doubles, _i64, _doubles, _i64, _doubles, _i64,
                             _doubles, _doubles, _doubles, _ints, _ints, *_err]),
+    "reflux_transport": (_i32, [_i64, _i32, _i64, _doubles, _i64, _doubles, _i64, _doubles, _i64,
+                                _doubles, _ints, *_err]),
 }
 
 # Room for a reason. A longer one is cut at a character boundary.

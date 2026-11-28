@@ -37,6 +37,86 @@ From 0.2.0 on:
    the entry, and the full check passes. Then it prints the tag command.
 3. Tag on `main`, and push the tag.
 
+## [0.7.0]
+
+Transport of mixtures, and IF97 behind the flash: the roadmap's M5b. Every
+phase of every stream now reports its viscosity and thermal conductivity,
+and a liquid its surface tension, from each compound's ChemSep correlations
+by mixing rules, with pressure corrections for dense gases and compressed
+liquids, or why it has none; water by IAPWS-IF97 goes through every flash
+but TV and UV, in a flowsheet file and its Rankine cycle; and a phase's
+transport comes from C and Python. The methods were chosen against measured
+mixtures from NIST's ThermoML archive, whose 27 sets are recorded with each
+alternative's deviations beside reflux's; DWSIM 9's transport is
+reproduced from its own formulas state by state, every difference put down
+to its methods. Like 0.6.0, it's a source release
+(`v -prod -cc gcc -o reflux .`).
+
+### Added
+
+- **Transport of mixtures** (`transport`): a gas's viscosity by Wilke's rule
+  times Lucas's (1980) high-pressure factor, taken against its value at
+  zero pressure; its conductivity by Mason and Saxena's rule plus Stiel and
+  Thodos' dense-gas residual; a liquid's viscosity by Grunberg and Nissan's
+  rule with each pair's G (0 unless a file gives it) and Lucas's (1981)
+  compressed-liquid factor; its conductivity by Li's rule with Missenard's
+  factor; its surface tension by Winterfeld, Scriven and Davis. A compound
+  above its Tc is left out of a liquid up to 10% of its moles, and a phase
+  whose every compound is above its Tc takes the gas's methods. A value is
+  a correlation's, never an estimate in place of a missing one.
+- **Water's own transport** in a stream of water by IAPWS-95 (R12-08,
+  R15-11, R1-76) or IF97 (their industrial forms).
+- **Report format 5:** each phase's `viscosity`, `thermal_conductivity` and
+  `surface_tension`, a number or null, and `transport_notes` (why each null,
+  the compounds a liquid left out, the values beyond their correlations'
+  fitted ranges); `model.transport`, each method and every pair's G with
+  its source. The CSV and the printed table are unchanged.
+- **IF97 behind the flash** (`water.If97Phases`): IF97's region map as a
+  phase model, its saturation region 4's own (through the new optional
+  `thermo.Saturates`, which the flash's paths for one compound take), its
+  range IF97's (`thermo.NoState`), its H and S IF97's on reflux's reference.
+- **File format 5:** `[model] equation = "IF97"` (water alone), and
+  `[[transport.pairs]]`, a liquid pair's Grunberg–Nissan G as an expression
+  in T. Formats 1 to 4 read as before.
+- **A golden flowsheet,** `rankine_if97.json`: M5a's Rankine cycle on IF97
+  (`testdata/flowsheets/rankine_if97.toml`), within 4.9e-7 J/kg of IF97's
+  own functions worked through the same unit models, and DWSIM 9's Steam
+  Tables cycle by state.
+- **`reflux_transport`** in the C API and **`Fluid.transport`** in Python: a
+  phase's three values at many points, each with a status of its own
+  (`REFLUX_POINT_NO_VALUE`, new); bit for bit the V API's. The ABI version
+  stays 1.
+- **Speed** (docs/benchmarks.md): a phase's transport in 2.8 to 8.7 µs with
+  gcc `-prod`, 3.4 to 22 times DWSIM 9's own functions and 11 to 21 times
+  thermo's from Python; an IF97 PT flash in 1.3 µs and a PH flash in 26 µs,
+  eight and seven times faster than IAPWS-95's.
+
+### Changed
+
+- **The golden flowsheets' reports** were written again, all nine
+  (`reference.json`, `every_unit.json`, `no_recycle.json`,
+  `interlocking.json`, `saturated_loop.json`, `decanter.json`,
+  `rankine.json`, and `reactors/reformer.json` and
+  `reactors/methanol.json`), in report format 5 and for this version. With
+  each phase's transport and `model.transport` taken out, each is its
+  format-4 report value for value: no other number moved.
+- **Wilke's rule moved** from `reactors` to `transport` (`transport.Wilke`,
+  `transport.WilkeAt`; `components.wilke` builds it); the PFR's every
+  answer keeps its bits.
+- **A fits file reads format 5,** leaving `[transport]` to the flowsheet.
+- **Water's transport range messages** give T and ρ to 6 significant
+  figures, as transport's notes do, so that a report's notes read the same
+  from every compiler.
+
+### Fixed
+
+- **IF97's backward functions** (`water.if97`, 0.6.0's): a T within
+  rounding of a closed bracket's root no longer halves the bracket without
+  end ("T not found", met at 25 MPa just below 273.16 K's h), and a value
+  within rounding above region 2's top at 1073.15 K and above 50 MPa is
+  region 2's, not region 5's search, which has no state there (it gave
+  1072.9 K at 100 MPa).
+
 ## [0.6.0] — 2026-11-27
 
 Water and steam: the roadmap's M5a. reflux now has water by IAPWS-95, the

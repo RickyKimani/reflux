@@ -180,7 +180,7 @@ fn test_the_json_reads_back_as_the_report() {
 
 fn test_the_json_is_laid_out_a_value_to_a_line() {
 	_, _, r := solved(cases['reference'].text)!
-	assert r.json().starts_with('{\n  "format": 4,\n  "reflux": "')
+	assert r.json().starts_with('{\n  "format": 5,\n  "reflux": "')
 	assert r.json().contains('\n      "molar_flows": [\n        70,\n        10,\n')
 	assert r.json().ends_with('\n}\n')
 }
@@ -190,7 +190,7 @@ fn test_the_json_is_the_solution() {
 		types := sheet.types
 		l, sol, r := solved(sheet.text)!
 		j := parse(r.json())
-		assert j['format']!.int() == 4 && j['status']!.str() == 'solved'
+		assert j['format']!.int() == 5 && j['status']!.str() == 'solved'
 		assert j['reflux']!.str() == flowsheet.version()
 		assert j['error']! is json2.Null
 		// The components, from the database itself.
@@ -532,6 +532,12 @@ fn test_the_json_is_as_documented() {
 	model := j['model']!.as_map()
 	assert model.keys() == doc['model']
 	assert list(model['pairs']!)[0].keys() == doc['model.pairs[]']
+	// How each phase's transport is had (format 5): the pairs' G as
+	// model.pairs[] are.
+	moved := model['transport']!.as_map()
+	assert moved.keys() == doc['model.transport']
+	assert list(moved['methods']!)[0].keys() == doc['model.transport.methods[]']
+	assert list(moved['pairs']!)[0].keys() == doc['model.pairs[]']
 	// A spec's report, from a file with one (format 3).
 	text := read_flowsheet('reference.toml').replace('format = 1', 'format = 3') +
 		'
@@ -552,8 +558,9 @@ until = "gas.F = 60 mol/s"
 		// A profile's keys are checked with a reactor's report, in
 		// reactors/flowsheet_test.v.
 		assert all == ['', 'balance', 'blocks[]', 'components[]', 'error', 'model', 'model.pairs[]',
-			'solver', 'specs[]', 'streams[]', 'streams[].phases[]', 'units[]', 'units[].balance',
-			'units[].energy[]', 'units[].profile[]', 'worst_unit']
+			'model.transport', 'model.transport.methods[]', 'solver', 'specs[]', 'streams[]',
+			'streams[].phases[]', 'units[]', 'units[].balance', 'units[].energy[]', 'units[].profile[]',
+			'worst_unit']
 		return
 	}
 	assert false, 'format 2 loaded'

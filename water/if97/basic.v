@@ -69,6 +69,8 @@ pub fn region1(p f64, t f64) State {
 		w:      math.sqrt(rt * g.gp * g.gp / (d * d / (tau * tau * g.gtt) - g.gpp))
 		// v = (RT/p*)γ_π, so (∂v/∂p)_T = (RT/p*²)γ_ππ
 		drhodp: -rt * g.gpp / (16.53e6 * 16.53e6 * (pi * g.gp * rt / p) * (pi * g.gp * rt / p))
+		// and (∂v/∂T)_p = (R/p*)(γ_π − τγ_πτ)
+		dvdt:   r / 16.53e6 * d
 	}
 }
 
@@ -144,6 +146,8 @@ fn gas(region int, p f64, t f64, pi f64, tau f64, o Ideal, g Gibbs) State {
 			a * a / (tau * tau * gtt)))
 		// γ_ππ = −1/π² + γʳ_ππ, and (∂v/∂p)_T = (RT/p*²)γ_ππ
 		drhodp: -rt * (g.gpp - 1.0 / (pi * pi)) / (ps * ps * v * v)
+		// v = (RT/p)(1 + πγʳ_π), so (∂v/∂T)_p = (R/p)(1 + πγʳ_π − τπγʳ_πτ)
+		dvdt:   r / p * a
 	}
 }
 
@@ -222,5 +226,7 @@ pub fn region3(rho f64, t f64) State {
 		cv:     -r * tau * tau * f.ftt
 		w:      math.sqrt(rt * (b - a * a / (tau * tau * f.ftt)))
 		drhodp: 1.0 / (rt * b) // (∂p/∂ρ)_T = RT(2δφ_δ + δ²φ_δδ)
+		// (∂v/∂T)_p = (∂p/∂T)_ρ/(ρ²(∂p/∂ρ)_T), (∂p/∂T)_ρ = ρR(δφ_δ − δτφ_δτ)
+		dvdt:   a / (rho * t * b)
 	}
 }

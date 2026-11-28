@@ -1,6 +1,7 @@
 module water
 
 import math
+import transport
 import water.if97
 
 // Water's transport properties (M5a's D11): the viscosity by IAPWS R12-08,
@@ -98,12 +99,12 @@ const dilute_rho = 0.01 * rho_star
 fn check_range(t f64, rho f64, t_dilute f64, what string) ! {
 	if !(rho >= 0.0) || !(t >= transport_t_min) {
 		return TransportError{
-			what: 'IAPWS gives ${what} from 250 K, not ${t} K and ${rho} kg/m³'
+			what: 'IAPWS gives ${what} from 250 K, not ${transport.shown(t)} K and ${transport.shown(rho)} kg/m³'
 		}
 	}
 	if t > transport_t_dense && !(t <= t_dilute && rho <= dilute_rho) {
 		return TransportError{
-			what: 'IAPWS gives ${what} above 1273.15 K only for a dilute gas (to ${dilute_rho} kg/m³) up to ${t_dilute} K, not ${t} K and ${rho} kg/m³'
+			what: 'IAPWS gives ${what} above 1273.15 K only for a dilute gas (to ${dilute_rho} kg/m³) up to ${t_dilute} K, not ${transport.shown(t)} K and ${transport.shown(rho)} kg/m³'
 		}
 	}
 }
@@ -345,7 +346,7 @@ pub fn conductivity_industrial(st if97.State) !Conductivity {
 pub fn surface_tension(t f64) !f64 {
 	if !(t >= 248.15 && t <= critical_t) {
 		return TransportError{
-			what: 'IAPWS gives the surface tension from 248.15 K to ${critical_t} K, not ${t} K'
+			what: 'IAPWS gives the surface tension from 248.15 K to ${critical_t} K, not ${transport.shown(t)} K'
 		}
 	}
 	tau := 1.0 - t / critical_t

@@ -104,6 +104,24 @@ def test_stability_is_the_v_apis(ref, db):
                 assert same([r.tm[i]], [p["tm"]]) and same(r.w[i], p["w"])
 
 
+def test_transport_is_the_v_apis(ref, db):
+    # M5b's criterion 11: every value, its status, and each point's reasons.
+    checked = 0
+    for c in ref["fluids"]:
+        with fluid_of(db, c) as f:
+            for label in ("liquid", "vapor"):
+                pts = [p for p in c["transport"] if p["label"] == label]
+                r = f.transport(values([p["t"] for p in pts]), values([p["p"] for p in pts]),
+                                np.array([values(p["z"]) for p in pts]), phase=label)
+                for i, p in enumerate(pts):
+                    at = f"{c['names']} {label} point {i}"
+                    assert r.status[i].tolist() == p["status"], at
+                    assert same([getattr(r, n)[i] for n in r.PROPERTIES], p["values"]), at
+                    assert r.reason(i) == p["reason"], at
+                    checked += 1
+    assert checked == len(ref["fluids"]) * 2 * 20
+
+
 def test_every_flash_is_the_v_apis(ref, db):
     seen = {}
     for c in ref["fluids"]:

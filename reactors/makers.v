@@ -1,5 +1,6 @@
 module reactors
 
+import components
 import flowsheet
 import kinetics
 import quantity
@@ -254,7 +255,7 @@ fn make_pfr(mut s flowsheet.Section) !flowsheet.Unit {
 					[])
 			}
 			mode = .ergun
-			visc = new_wilke(s.context.records) or { return s.fail('pressure_drop', err.msg(), []) }
+			visc = components.wilke(s.context.records) or { return s.fail('pressure_drop', err.msg(), []) }
 		} else {
 			mode = .given
 			given = s.quantity('pressure_drop', .pressure_difference)!

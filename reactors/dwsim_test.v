@@ -14,6 +14,7 @@ import kinetics
 import math
 import os
 import thermo
+import transport
 
 const db = components.load_default() or { panic(err) }
 
@@ -474,7 +475,7 @@ fn test_the_owners_pfr_against_dwsim() {
 		return (inlet.flows[ch4] - flows[ch4]) / inlet.flows[ch4]
 	}
 	visc := new_dwsim_viscosity(fl, records)!
-	wilke := new_wilke(records)!
+	wilke := components.wilke(records)!
 	for ergun in [false, true] {
 		r := new_pfr('pfr',
 			k:         k
@@ -583,7 +584,7 @@ fn test_the_owners_pfr_against_dwsim() {
 // Whole is Wilke's viscosity asked whole at every state, as the PFR asked
 // for it before it kept each compound's (M8's D11).
 struct Whole {
-	w Wilke
+	w transport.Wilke
 }
 
 fn (x Whole) viscosity(t f64, p f64, y []f64) !f64 {

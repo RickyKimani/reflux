@@ -452,6 +452,10 @@ fn (q PureSat) eval(x []f64, mut f []f64, mut jac []f64) ! {
 }
 
 fn (s Saturation) pure() !FlashResult {
+	m := s.m
+	if m is thermo.Saturates {
+		return s.own_line(m)
+	}
 	i := s.present[0]
 	comps := s.m.components()
 	c := comps[i]
@@ -502,6 +506,48 @@ fn (s Saturation) pure() !FlashResult {
 		path:       .newton
 		iterations: sol.iterations
 		stability:  stab
+	}
+}
+
+// own_line is a pure model's own saturation line (M5b's D13): T or P from
+// its Pˢᵃᵗ(T) or Tˢᵃᵗ(P), checked by the other, which is its inverse, to
+// 1e-12; its liquid and vapour there, their ln φ within the model's own
+// bound of each other (IF97's Prague value), the vapour the less dense.
+fn (s Saturation) own_line(m thermo.Saturates) !FlashResult {
+	i := s.present[0]
+	mut t, mut p := 0.0, 0.0
+	if s.given == .t {
+		t = s.value
+		p = m.saturation_p(t) or { return fail(.bad_input, '${s.what()}: ${err.msg()}') }
+		back := m.saturation_t(p) or { return fail(.bad_input, '${s.what()}: ${err.msg()}') }
+		if !(math.abs(back - t) <= 1e-12 * t) {
+			return fail(.no_convergence, "${s.what()}: the model's saturation line gives back ${back} K at its own ${p} Pa")
+		}
+	} else {
+		p = s.value
+		t = m.saturation_t(p) or { return fail(.bad_input, '${s.what()}: ${err.msg()}') }
+		back := m.saturation_p(t) or { return fail(.bad_input, '${s.what()}: ${err.msg()}') }
+		if !(math.abs(back - p) <= 1e-12 * p) {
+			return fail(.no_convergence, "${s.what()}: the model's saturation line gives back ${back} Pa at its own ${t} K")
+		}
+	}
+	phases := m.saturated(t, p, s.z) or { return fail(.no_volume_root, '${s.what()}: ${err.msg()}') }
+	liq, vap := phases[0], phases[1]
+	gap := math.abs(liq.ln_phi[i] - vap.ln_phi[i])
+	if !(gap <= m.saturation_gap()) {
+		return fail(.no_convergence, "${s.what()}: on the model's own saturation line its phases' ln φ are ${gap} apart, beyond its ${m.saturation_gap()}")
+	}
+	if !(mass_density(s.m, vap) < mass_density(s.m, liq)) {
+		return fail(.phases_swapped, '${s.what()}: at ${t} K and ${p} Pa the vapour is the denser')
+	}
+	return FlashResult{
+		t:         t
+		p:         p
+		z:         s.z
+		beta:      s.beta
+		phases:    [Phase{.vapor, vap, s.beta}, Phase{.liquid, liq, 1.0 - s.beta}]
+		path:      .own_line
+		stability: stability(s.m, t, p, s.z)!
 	}
 }
 

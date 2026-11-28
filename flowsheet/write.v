@@ -9,7 +9,7 @@ import toml.ast
 pub fn (l Loaded) write() string {
 	mut b := strings.new_builder(1024)
 	b.write_string('format = ${value_text(l.root['format'] or { ast.Null{} })}\n')
-	for name in ['components', 'model', 'solver'] {
+	for name in ['components', 'model', 'transport', 'solver'] {
 		if v := l.root[name] {
 			write_table(mut b, name, v as map[string]ast.Value)
 		}

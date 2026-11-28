@@ -1,6 +1,6 @@
 {
-  "format": 4,
-  "reflux": "0.6.0",
+  "format": 5,
+  "reflux": "0.7.0",
   "file": "testdata/flowsheets/no_recycle.toml",
   "status": "solved",
   "error": null,
@@ -101,7 +101,104 @@
       }
     ],
     "notes": [],
-    "warnings": []
+    "warnings": [],
+    "transport": {
+      "methods": [
+        {
+          "property": "viscosity",
+          "phase": "vapour",
+          "method": "Wilke's rule on each compound's vapour viscosity, times Lucas's (1980) high-pressure factor taken against its value at zero pressure; also a phase whose every compound is above its Tc"
+        },
+        {
+          "property": "thermal_conductivity",
+          "phase": "vapour",
+          "method": "Wassiljewa's form with Mason and Saxena's Aᵢⱼ on each compound's vapour conductivity, plus Stiel and Thodos' (1964) residual on Yorizane's pseudo-critical constants; also a phase whose every compound is above its Tc"
+        },
+        {
+          "property": "viscosity",
+          "phase": "liquid",
+          "method": "Grunberg and Nissan's rule, with each pair's G, on each compound's liquid viscosity times Lucas's (1981) compressed-liquid factor; a compound above its Tc left out, up to 0.1 of the liquid's moles"
+        },
+        {
+          "property": "thermal_conductivity",
+          "phase": "liquid",
+          "method": "Li's rule on each compound's liquid conductivity times Missenard's (1970) compressed-liquid factor, its volume by its liquid density; a compound above its Tc left out, up to 0.1 of the liquid's moles"
+        },
+        {
+          "property": "surface_tension",
+          "phase": "liquid",
+          "method": "Winterfeld, Scriven and Davis's rule on each compound's surface tension, its volume by its liquid density; a compound above its Tc left out, up to 0.1 of the liquid's moles"
+        }
+      ],
+      "pairs": [
+        {
+          "a": "methane",
+          "b": "ethane",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "methane",
+          "b": "propane",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "methane",
+          "b": "n-butane",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "ethane",
+          "b": "propane",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "ethane",
+          "b": "n-butane",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        },
+        {
+          "a": "propane",
+          "b": "n-butane",
+          "parameters": [
+            {
+              "name": "G",
+              "text": "0"
+            }
+          ],
+          "source": "none listed: 0"
+        }
+      ]
+    }
   },
   "streams": [
     {
@@ -153,7 +250,11 @@
           ],
           "H": -86506.3075529186,
           "S": 188.73898150692068,
-          "V": 0.0003278715094528419
+          "V": 0.0003278715094528419,
+          "viscosity": 0.000013006267673587587,
+          "thermal_conductivity": 0.036285957115507216,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -166,7 +267,13 @@
           ],
           "H": -112870.36684374243,
           "S": 208.4567883232612,
-          "V": 0.00010595401254536208
+          "V": 0.00010595401254536208,
+          "viscosity": null,
+          "thermal_conductivity": null,
+          "surface_tension": null,
+          "transport_notes": [
+            "no viscosity, thermal conductivity or surface tension: Methane, Ethane, above their Tc, are 0.382138 of the liquid's moles, more than 0.1 (D9)"
+          ]
         }
       ]
     },
@@ -219,7 +326,11 @@
           ],
           "H": -85757.15888038198,
           "S": 196.02880588568192,
-          "V": 0.0010769407470133693
+          "V": 0.0010769407470133693,
+          "viscosity": 0.000010146755896246176,
+          "thermal_conductivity": 0.02748770885005233,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -232,7 +343,13 @@
           ],
           "H": -130026.0449185707,
           "S": 213.00701645999007,
-          "V": 0.00009823356530848032
+          "V": 0.00009823356530848032,
+          "viscosity": 0.0001321240548391667,
+          "thermal_conductivity": 0.10360147230264527,
+          "surface_tension": 0.00962591053969789,
+          "transport_notes": [
+            "Methane, above its Tc, left out: 0.0784239 of the liquid's moles (D9)"
+          ]
         }
       ]
     },
@@ -285,7 +402,11 @@
           ],
           "H": -80788.7802582912,
           "S": 170.07485525760774,
-          "V": 0.0009247386731602326
+          "V": 0.0009247386731602326,
+          "viscosity": 0.000009466671551148231,
+          "thermal_conductivity": 0.026129730836262,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -298,7 +419,13 @@
           ],
           "H": -123787.34675661215,
           "S": 184.23443287145125,
-          "V": 0.00008235794325382117
+          "V": 0.00008235794325382117,
+          "viscosity": null,
+          "thermal_conductivity": null,
+          "surface_tension": null,
+          "transport_notes": [
+            "no viscosity, thermal conductivity or surface tension: Methane, above its Tc, is 0.136082 of the liquid's moles, more than 0.1 (D9)"
+          ]
         }
       ]
     },
@@ -351,7 +478,11 @@
           ],
           "H": -80558.21029577125,
           "S": 168.38682137405652,
-          "V": 0.0009116014662864821
+          "V": 0.0009116014662864821,
+          "viscosity": 0.000009399858794169517,
+          "thermal_conductivity": 0.02600429893943591,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -364,7 +495,13 @@
           ],
           "H": -123264.40800555554,
           "S": 182.0329795873329,
-          "V": 0.00008122961742268739
+          "V": 0.00008122961742268739,
+          "viscosity": null,
+          "thermal_conductivity": null,
+          "surface_tension": null,
+          "transport_notes": [
+            "no viscosity, thermal conductivity or surface tension: Methane, above its Tc, is 0.14292 of the liquid's moles, more than 0.1 (D9)"
+          ]
         }
       ]
     },
@@ -417,7 +554,11 @@
           ],
           "H": -80558.21029577125,
           "S": 168.38682137405652,
-          "V": 0.0009116014662864821
+          "V": 0.0009116014662864821,
+          "viscosity": 0.000009399858794169517,
+          "thermal_conductivity": 0.02600429893943591,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -430,7 +571,13 @@
           ],
           "H": -123264.40800555554,
           "S": 182.0329795873329,
-          "V": 0.00008122961742268739
+          "V": 0.00008122961742268739,
+          "viscosity": null,
+          "thermal_conductivity": null,
+          "surface_tension": null,
+          "transport_notes": [
+            "no viscosity, thermal conductivity or surface tension: Methane, above its Tc, is 0.14292 of the liquid's moles, more than 0.1 (D9)"
+          ]
         }
       ]
     },
@@ -483,7 +630,11 @@
           ],
           "H": -78809.72091128217,
           "S": 169.69034707635242,
-          "V": 0.0005527198263233893
+          "V": 0.0005527198263233893,
+          "viscosity": 0.000011562868614665157,
+          "thermal_conductivity": 0.034445215391998706,
+          "surface_tension": null,
+          "transport_notes": []
         }
       ]
     },
@@ -536,7 +687,11 @@
           ],
           "H": -78809.72091128219,
           "S": 169.69034707635242,
-          "V": 0.0005527198263233892
+          "V": 0.0005527198263233892,
+          "viscosity": 0.000011562868614665157,
+          "thermal_conductivity": 0.0344452153919987,
+          "surface_tension": null,
+          "transport_notes": []
         }
       ]
     },
@@ -589,7 +744,11 @@
           ],
           "H": -78809.72091128219,
           "S": 169.69034707635242,
-          "V": 0.0005527198263233892
+          "V": 0.0005527198263233892,
+          "viscosity": 0.000011562868614665157,
+          "thermal_conductivity": 0.0344452153919987,
+          "surface_tension": null,
+          "transport_notes": []
         }
       ]
     },
@@ -642,7 +801,11 @@
           ],
           "H": -87657.32128144748,
           "S": 203.7973938434224,
-          "V": 0.001041574990532644
+          "V": 0.001041574990532644,
+          "viscosity": 0.000009964923830573892,
+          "thermal_conductivity": 0.025840518796264332,
+          "surface_tension": null,
+          "transport_notes": []
         },
         {
           "phase": "liquid",
@@ -655,7 +818,13 @@
           ],
           "H": -123947.80335126829,
           "S": 206.99545422501052,
-          "V": 0.00009580865208653187
+          "V": 0.00009580865208653187,
+          "viscosity": 0.00011103886099560419,
+          "thermal_conductivity": 0.09930945229769272,
+          "surface_tension": 0.007868655341969268,
+          "transport_notes": [
+            "Methane, above its Tc, left out: 0.0626529 of the liquid's moles (D9)"
+          ]
         }
       ]
     }

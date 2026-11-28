@@ -41,7 +41,7 @@ fn file_refused(text string, line int, says string) {
 fn test_the_file_refused() {
 	text := base_text()
 	at := 37 // parameters' line
-	file_refused(text.replace('format = 3', 'format = 2'), 8, 'fits need format 3, or 4 for an activity model, not 2')
+	file_refused(text.replace('format = 3', 'format = 2'), 8, 'fits need format 3, or 4 or 5 for an activity model, not 2')
 	file_refused(text.replace('parameters = ["k1.A", "k1.Ea", "K_E.A", "K_E.dH", "K_H", "k2.A", "k2.Ea"]',
 		'parameters = []'), 35, 'a fit varies at least one parameter')
 	file_refused(text.replace('"k2.Ea"]', '"k9.Ea"]'), at, 'no constant k9: the reactions have K_E, K_H, k1, k2')

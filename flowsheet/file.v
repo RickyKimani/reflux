@@ -10,12 +10,14 @@ import quantity
 import thermo
 import toml
 import toml.ast
+import transport
 
 // The formats this reflux reads (D9): 1, M4's; 2, which adds M9's
-// reactions and reactors (D11); 3, which adds M8's specs (D16); and 4, which
-// adds M6's γ–φ fluids and the decanter (D12). A later one comes with a
+// reactions and reactors (D11); 3, which adds M8's specs (D16); 4, which
+// adds M6's γ–φ fluids and the decanter (D12); and 5, which adds M5b's IF97
+// and liquid pairs' Grunberg–Nissan G (D15). A later one comes with a
 // migration.
-const file_formats = [1, 2, 3, 4]
+const file_formats = [1, 2, 3, 4, 5]
 
 // How deep arrays and inline tables may nest. No flowsheet goes past 2, and
 // V's parser recurses, so it's what stops a file overflowing the stack.
@@ -72,6 +74,10 @@ pub:
 	studies   []StudyPlan // the file's [study.NAME], for the study module (D16)
 	// The file's [optimize.NAME], for the study module (D13).
 	optimizations []OptimizePlan
+	// What gives each phase in the report its transport (M5b's D16): the
+	// fluid's compounds' correlations with the file's pairs, or water's own.
+	// A Loaded made by hand may have none, and its phases then have none.
+	transport ?transport.Model
 }
 
 // load reads a flowsheet file. See load_text.
@@ -102,7 +108,7 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 	}
 	given := top.integer('format')!
 	if given !in file_formats.map(i64(it)) {
-		return top.fail('format', 'this reflux reads format 1, 2, 3 or 4, not ${given}', [])
+		return top.fail('format', 'this reflux reads format 1, 2, 3, 4 or 5, not ${given}', [])
 	}
 	mut names := top.child('components')!
 	component_names := names.strings('names')!
@@ -121,6 +127,30 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 	mut model := top.child('model')!
 	modelled := read_model(mut model, db, component_names, names.line('names'), int(given))!
 	fl := modelled.fluid
+	mut transported := modelled.transport
+	mut given_pairs := []GivenPair{}
+	if top.has('transport') {
+		if given < 5 {
+			return top.fail('transport', 'transport needs format 5 (M5b), and this file is format ${given}',
+				[])
+		}
+		mut ts := top.child('transport')!
+		given_pairs = read_transport(mut ts, component_names)!
+		if given_pairs.len > 0 {
+			if modelled.transport is transport.Mixture {
+				// Named, not spread: `...` on a smart-cast interface copies nothing
+				// (docs/v-for-go.md).
+				base := modelled.transport as transport.Mixture
+				transported = transport.Mixture{
+					pures: base.pures
+					pairs: given_pairs.map(it.pair)
+				}
+			} else {
+				return ts.fail('pairs', "${modelled.report.equation} has water's own transport, with no pairs",
+					[])
+			}
+		}
+	}
 
 	// The file's components as reactions know them, for a reactor's maker,
 	// and in format 2 its reactions.
@@ -187,7 +217,11 @@ pub fn load_text(text string, params LoadParams) !Loaded {
 	members, keys := member_names(component_names, species)
 	mut loaded := Loaded{
 		fluid:     fl
-		model:     modelled.report
+		model:     ModelReport{
+			...modelled.report
+			transport: transport_report(transported, component_names, given_pairs)
+		}
+		transport: transported
 		sheet:     sheet
 		params:    solve_params
 		root:      root
@@ -379,11 +413,13 @@ fn database(params LoadParams, data []string) !components.Database {
 }
 
 // Modelled is a file's fluid and how it was built: its report (M6's D13),
-// and a γ–φ fluid's setup, whose pairs a fit may vary (D16).
+// a γ–φ fluid's setup, whose pairs a fit may vary (D16), and its transport,
+// without the file's pairs (M5b's D16).
 struct Modelled {
 	fluid     thermo.Fluid
 	report    ModelReport
 	gamma_phi ?components.GammaPhiSetup
+	transport transport.Model
 }
 
 // The equations of state a file names.
@@ -424,12 +460,12 @@ fn read_model(mut s Section, db components.Database, names []string, names_line 
 		}
 	}
 	equation := s.text('equation')!
-	if equation == 'IAPWS-95' {
-		return read_iapws95(mut s, db, names, names_line, format)
+	if equation in waters {
+		return read_water(mut s, db, names, names_line, format, equation)
 	}
 	kind := equations[equation] or {
 		mut known := equations.keys()
-		known << 'IAPWS-95'
+		known << waters.keys()
 		return s.fail('equation', 'no equation ${equation}', quantity.closest(equation, known))
 	}
 	mut opts := components.FluidOptions{
@@ -470,40 +506,159 @@ fn read_model(mut s Section, db components.Database, names []string, names_line 
 		return s.fail('equation', err.msg(), [])
 	}
 	return Modelled{
-		fluid:  setup.fluid
-		report: cubic_report(equation, setup, names)
+		fluid:     setup.fluid
+		report:    cubic_report(equation, setup, names)
+		transport: setup.transport() or { return s.fail('equation', err.msg(), []) }
 	}
 }
 
-// read_iapws95 builds water's fluid by IAPWS-95 (M5a's D12): format 4's,
+// Water's own formulations, the file's format each needs, and the
+// milestone that brought it: IAPWS-95 (M5a's D12) and IF97 (M5b's D15).
+struct Water {
+	format    int
+	milestone string
+	note      string
+}
+
+const waters = {
+	'IAPWS-95': Water{4, 'M5a', "IAPWS R6-95(2018), with its own gas constant; H and S on reflux's reference"}
+	'IF97':     Water{5, 'M5b', "IAPWS R7-97(2012) with SR3-03 and SR5-05, with its own gas constant; H and S on reflux's reference"}
+}
+
+// read_water builds water's fluid by one of its own formulations (waters):
 // for water alone, with none of a cubic's keys.
-fn read_iapws95(mut s Section, db components.Database, names []string, names_line int, format int) !Modelled {
-	if format < 4 {
-		return s.fail('equation', 'IAPWS-95 needs format 4 (M5a), and this file is format ${format}',
+fn read_water(mut s Section, db components.Database, names []string, names_line int, format int, equation string) !Modelled {
+	w := waters[equation] or { return s.fail('equation', 'no equation ${equation}', []) }
+	if format < w.format {
+		return s.fail('equation', '${equation} needs format ${w.format} (${w.milestone}), and this file is format ${format}',
 			[])
 	}
 	for key in ['alpha', 'kij', 'kij_overrides'] {
 		if s.has(key) {
-			return s.fail(key, "${key} is a cubic's, and IAPWS-95 has none", [])
+			return s.fail(key, "${key} is a cubic's, and ${equation} has none", [])
 		}
 	}
 	s.finish()!
 	if names.len != 1 {
-		return file_error(names_line, 'components.names', "IAPWS-95 is water's alone; water with other compounds needs a mixture model, which reflux doesn't have yet",
+		return file_error(names_line, 'components.names', "${equation} is water's alone; water with other compounds needs a mixture model, which reflux doesn't have yet",
 			[])
 	}
-	setup := db.iapws95(names[0]) or {
+	setup := water_setup(db, equation, names[0]) or {
 		if err is components.LookupError {
 			return file_error(names_line, 'components.names', 'no compound ${err.query}', err.suggestions)
 		}
 		return file_error(names_line, 'components.names', err.msg(), [])
 	}
 	return Modelled{
-		fluid:  setup.fluid
-		report: ModelReport{
-			equation: 'IAPWS-95'
-			notes:    ["IAPWS R6-95(2018), with its own gas constant; H and S on reflux's reference"]
+		fluid:     setup.fluid
+		report:    ModelReport{
+			equation: equation
+			notes:    [w.note]
 		}
+		transport: setup.transport() or { return s.fail('equation', err.msg(), []) }
+	}
+}
+
+// water_setup is water's fluid by IF97 or IAPWS-95.
+fn water_setup(db components.Database, equation string, name string) !components.Setup {
+	return if equation == 'IF97' { db.if97(name)! } else { db.iapws95(name)! }
+}
+
+// GivenPair is a liquid pair's Grunberg–Nissan G as the file gives it
+// (M5b's D15): for the transport, and its names and text for the report.
+struct GivenPair {
+	a    string
+	b    string
+	text string
+	pair transport.Pair
+}
+
+// PairG is a pair's G as an expression in T, dimensionless.
+struct PairG {
+	p activity.Param
+}
+
+fn (g PairG) value(t f64) !f64 {
+	return g.p.e.value(&g.p.defs, [t], []string{})
+}
+
+// read_transport reads format 5's [transport] (D15): pairs, each liquid
+// pair's Grunberg–Nissan G as an expression in T.
+fn read_transport(mut s Section, names []string) ![]GivenPair {
+	mut out := []GivenPair{}
+	if s.has('pairs') {
+		for mut t in s.tables('pairs')! {
+			a := t.text('a')!
+			b := t.text('b')!
+			for k, name in [a, b] {
+				if name !in names {
+					return t.fail(['a', 'b'][k], '${name} is not one of the components',
+						quantity.closest(name, names))
+				}
+			}
+			if a == b {
+				return t.fail('b', 'a pair is of two components, and this one is ${a} twice', [])
+			}
+			for o in out {
+				if (o.a == a && o.b == b) || (o.a == b && o.b == a) {
+					return t.fail('b', '${a} and ${b} are a pair already', [])
+				}
+			}
+			text := t.text('G')!
+			g := activity.plain(text, 'G') or { return t.fail('G', err.msg(), []) }
+			t.finish()!
+			out << GivenPair{
+				a:    a
+				b:    b
+				text: text
+				pair: transport.Pair{
+					i:      names.index(a)
+					j:      names.index(b)
+					g:      PairG{g}
+					source: 'the file'
+				}
+			}
+		}
+	}
+	s.finish()!
+	return out
+}
+
+// transport_report says how the phases' transport is had (D16): each
+// method, and every liquid pair's G with its source, the file's or "none
+// listed: 0", for a mixture of more than one compound.
+fn transport_report(m transport.Model, names []string, given []GivenPair) TransportReport {
+	mut pairs := []PairReport{}
+	if m is transport.Mixture {
+		for i in 0 .. names.len {
+			for j in i + 1 .. names.len {
+				mut pair := PairReport{
+					a:          names[i]
+					b:          names[j]
+					parameters: [ParameterReport{'G', '0'}]
+					source:     'none listed: 0'
+				}
+				for g in given {
+					if (g.pair.i == i && g.pair.j == j) || (g.pair.i == j && g.pair.j == i) {
+						pair = PairReport{
+							a:          g.a
+							b:          g.b
+							parameters: [ParameterReport{'G', g.text}]
+							source:     g.pair.source
+						}
+					}
+				}
+				pairs << pair
+			}
+		}
+	}
+	return TransportReport{
+		methods: m.methods().map(MethodReport{
+			property: it.property
+			phase:    it.phase
+			method:   it.method
+		})
+		pairs:   pairs
 	}
 }
 
@@ -666,6 +821,7 @@ fn read_gamma_phi(mut s Section, db components.Database, names []string, names_l
 		fluid:     setup.fluid
 		report:    gamma_phi_report(liquid_name, vapour_name, poynting, setup, names, keys)
 		gamma_phi: setup
+		transport: components.mixture(setup.records) or { return s.fail('liquid', err.msg(), []) }
 	}
 }
 

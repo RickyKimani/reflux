@@ -11,7 +11,7 @@ import numpy as np
 from . import _native
 
 __all__ = ["FlashResult", "Phase", "PhaseView", "Properties", "Saturation", "Stability",
-           "Status"]
+           "Status", "Transport"]
 
 
 class Status(enum.IntEnum):
@@ -27,6 +27,7 @@ class Status(enum.IntEnum):
     OUTSIDE_ENVELOPE = 6  # no such point on the phase envelope
     SUPERCRITICAL = 7  # at or above Tc: no vapour pressure
     NOT_FINITE = 8  # an answer that isn't finite: beyond the model
+    NO_VALUE = 9  # Fluid.transport: a property with no value at a phase that has others
 
 
 class Phase(enum.IntEnum):
@@ -348,3 +349,58 @@ def flash(fluid, spec, a, b, z):
                doubles(x), ints(n_phases), ints(status))
     return FlashResult(fluid, spec, shape, ((aa, a_len), (bb, b_len), (zz, z_rows)), out, phase, x,
                        n_phases, status, why)
+
+
+class Transport:
+    """A phase's transport at many points, each an array of the points'
+    shape, in SI (M5b): viscosity (Pa·s), thermal_conductivity (W/(m·K)) and
+    surface_tension (N/m, a liquid's), by the fluid's compounds' correlations
+    and mixing rules, or IAPWS's own for IAPWS-95 water.
+
+    status has one more axis, the property's in that order, each a Status:
+    NO_VALUE where that property has none and NaN for its value (a vapour's
+    surface tension always), and every property the point's own failure
+    where there's no phase there. ok is its mask. reason(index) says why a
+    point lacks any value but a vapour's surface tension.
+    """
+
+    PROPERTIES = ("viscosity", "thermal_conductivity", "surface_tension")
+
+    def __init__(self, fluid, phase, shape, inputs, out, status, why):
+        self._fluid, self._phase, self._inputs, self._why = fluid, phase, inputs, why
+        for k, name in enumerate(self.PROPERTIES):
+            setattr(self, name, out[k].reshape(shape))
+        self.status = np.moveaxis(status, 0, -1).reshape(shape + (len(self.PROPERTIES),))
+
+    @property
+    def ok(self):
+        """Where there's a value, by point and property."""
+        return self.status == Status.OK
+
+    def reason(self, index):
+        """Why the point at index lacks any value, or "" if it lacks none but
+        a vapour's surface tension: the library's reasons for that point
+        alone, each once with the properties it's for (D17)."""
+        i = flat_index(index, self.status.shape[:-1])
+        (t, t_len), (p, p_len), (z, z_rows) = self._inputs
+        return transport(self._fluid, t[i if t_len > 1 else 0], p[i if p_len > 1 else 0],
+                         z[i if z_rows > 1 else 0], self._phase)._why
+
+    def __repr__(self):
+        return (f"Transport({self.status.shape[:-1]}, {self._phase}, "
+                f"{int(self.ok.all(axis=-1).sum())} of {self.status[..., 0].size} with every value)")
+
+
+def transport(fluid, T, P, z, phase):
+    """Fluid.transport's work: broadcast, call, shape."""
+    if isinstance(phase, Phase):
+        phase = {Phase.LIQUID: "liquid", Phase.VAPOR: "vapor"}.get(phase, phase)
+    if phase not in _native.LABELS:
+        raise ValueError(f"no phase {phase!r}: {', '.join(map(repr, _native.LABELS))}")
+    shape, n, (t, t_len), (p, p_len), (zz, z_rows) = broadcast(fluid, T, P, z)
+    k = len(_native.TRANSPORT_VALUES)
+    out = np.empty((k, n))
+    status = np.empty((k, n), dtype=np.int32)
+    why = call(_native.lib.reflux_transport, fluid.handle, _native.LABELS[phase], n, doubles(t),
+               t_len, doubles(p), p_len, doubles(zz), z_rows, doubles(out), ints(status))
+    return Transport(fluid, phase, shape, ((t, t_len), (p, p_len), (zz, z_rows)), out, status, why)

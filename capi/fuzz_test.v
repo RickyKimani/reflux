@@ -21,7 +21,7 @@ fn c_string(buf []u8) string {
 const call_codes = [ok, bad_argument, bad_handle, not_found, data_error, too_small]
 const point_statuses = [point_ok, point_bad_input, point_no_convergence, point_no_volume_root,
 	point_more_phases, point_phases_swapped, point_outside_envelope, point_supercritical,
-	point_not_finite]
+	point_not_finite, point_no_value]
 
 // pick is one of xs, chosen by the seeded generator.
 fn pick[T](xs []T) T {
@@ -219,6 +219,46 @@ fn fuzz_props(p Pool) []i32 {
 		}
 	}
 	return got
+}
+
+// fuzz_transport calls reflux_transport (M5b's D17), whose every value has
+// its own status: a value is finite and above zero, a point without one NaN,
+// and a point's three statuses all BAD_INPUT exactly where its rules break.
+fn fuzz_transport(p Pool) []i32 {
+	fl, nc := p.handle()
+	n := pick([0, 1, 2, 5, -1])
+	nn := if n < 0 { 0 } else { n }
+	tl, pl, zr := count(nn), count(nn), count(nn)
+	t := inputs(if tl > 0 { tl } else { 1 }, true)
+	pp := inputs(if pl > 0 { pl } else { 1 }, true)
+	z := feed(nc * (if zr > 0 { zr } else { 1 }))
+	mut out := []f64{len: n_transport * nn}
+	mut status := []i32{len: n_transport * nn}
+	mut buf := []u8{len: 256}
+	label := i32(rand.intn(4) or { 0 }) - 1
+	code := reflux_transport(fl, label, n, unsafe { &f64(t.data) }, tl, unsafe { &f64(pp.data) },
+		pl, unsafe { &f64(z.data) }, zr, unsafe { &f64(out.data) }, unsafe { &i32(status.data) },
+		&char(buf.data), 256)
+	check_code(code, 'transport')
+	if code != ok {
+		return []i32{}
+	}
+	for i in 0 .. nn {
+		ok_in := sane(t[if tl == 1 { 0 } else { i }], pp[if pl == 1 { 0 } else { i }],
+			row_of(z, zr, nc, i))
+		for k in 0 .. n_transport {
+			st := status[k * nn + i]
+			x := out[k * nn + i]
+			assert st in point_statuses, 'transport: status ${st}'
+			if st == point_ok {
+				assert math.is_finite(x) && x > 0.0, 'transport: ${x}, a value'
+			} else {
+				assert math.is_nan(x), 'transport: ${x}, status ${st}'
+			}
+			assert (st == point_bad_input) == !ok_in, 'transport: status ${st} for ${t} ${pp} ${z}'
+		}
+	}
+	return status
 }
 
 fn fuzz_psat(p Pool) []i32 {
@@ -437,7 +477,7 @@ fn test_every_function_keeps_its_contract_whatever_its_arguments() {
 	// gets past the checks into the flashes.
 	mut seen := map[string]int{}
 	for _ in 0 .. n {
-		match rand.intn(9) or { 0 } {
+		match rand.intn(10) or { 0 } {
 			0, 1 {
 				for st in fuzz_props(p) {
 					seen['props ${st}']++
@@ -465,6 +505,12 @@ fn test_every_function_keeps_its_contract_whatever_its_arguments() {
 			6 {
 				fuzz_fluid_new(p)
 				calls['fluid_new']++
+			}
+			8 {
+				for st in fuzz_transport(p) {
+					seen['transport ${st}']++
+				}
+				calls['transport']++
 			}
 			7 {
 				fuzz_text_out(p)

@@ -230,6 +230,25 @@ IAPWS-95 solves and matches DWSIM 9.
 
 **Exit:** the transport properties pass reference checks.
 
+**M5b is done,** on its branch `claude/dazzling-lehmann-3ad069`, for the
+release 0.7.0 once it merges (its D21). Its plan, with its decisions and
+the criterion-by-criterion exit review, is in [m5b-plan.md](m5b-plan.md).
+Each method was chosen by measurement against mixtures from NIST's
+ThermoML archive (27 sets, each method's deviations recorded with its
+alternatives'): Wilke and Mason–Saxena for a gas, Lucas's factor and
+Stiel–Thodos' residual at pressure, Grunberg–Nissan's rule with Lucas's
+factor, Li's with Missenard's, and Winterfeld–Scriven–Davis' for a liquid.
+A stream of IAPWS-95 or IF97 water reports IAPWS's own transport, and IF97
+goes behind the flash with region 4 as its saturation, through an optional
+interface. Criterion 7 and D14 are amended, approved on 2026-11-28: one h
+has two T where IF97's regions meet, and IF97's ideal gas is a
+polynomial, no new Cp form. It found DWSIM 9's transport order-dependent
+in a liquid's surface tension, a supercritical compound's viscosity taken
+with its Henry's constant in water, and a second liquid given the first's
+viscosity and conductivity.
+Its exit criteria are checked against `chemicals`, `thermo`, mpmath, the
+archive's data and DWSIM 9 by state, every difference explained.
+
 ### M6 — Activity models and liquid–liquid equilibrium
 **Done.** The detailed plan, with its decisions and the criterion-by-criterion
 exit review, is in [m6-plan.md](m6-plan.md), and its step 0's spike of
@@ -537,11 +556,13 @@ golden flowsheet; a dynamic flash drum step test matches a reference.
 - C5 Activity models: Wilson, NRTL, UNIQUAC, UNIFAC; γ–φ. **M6** (done,
   with Henry's law and UNIFAC's LLE table)
 - C6 Reference equations: IAPWS-95 as a `Model` and IAPWS-IF97 natively
-  **M5a**, IF97 behind the flash **M5b**; GERG-2008 through CoolProp first,
-  natively later.
+  **M5a** (done), IF97 behind the flash **M5b** (done); GERG-2008 through
+  CoolProp first, natively later.
 - C7 Transport: viscosity, thermal conductivity, diffusivity, surface tension.
-  Water's by IAPWS **M5a**, mixtures' **M5b**, except a gas's viscosity at low
-  pressure, which Ergun's pressure drop needs: **M9** (done)
+  Water's by IAPWS **M5a** (done), mixtures' **M5b** (done), a gas's
+  viscosity at low pressure, which Ergun's pressure drop needs, **M9**
+  (done). Diffusivity waits for a rate-based column or a mass-transfer unit
+  (M5b's D1).
 - C8 Electrolytes (eNRTL, e-CPA). **after M12**
 - C9 Property packages: phase models + transport + data, chosen per
   flowsheet. This is what CAPE-OPEN exposes. **M4** for the phase model and

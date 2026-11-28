@@ -21,6 +21,7 @@ import numeric
 import os
 import strings
 import thermo
+import transport
 
 // A fluid of the reference set, as the Python side builds it again.
 struct FluidCase {
@@ -83,6 +84,7 @@ const supercritical = 7
 const not_finite = 8
 const no_volume_root = 3
 const no_convergence = 2
+const no_value = 9
 
 fn status_of(e IError) int {
 	if e is flash.FlashError {
@@ -203,6 +205,33 @@ fn stability_point(m thermo.PhaseModel, t f64, p f64, z []f64) string {
 	tm, w := if best < 0 { 0.0, z.map(it / total) } else { st.trials[best].tm, st.trials[best].w }
 	stable := if st.stable { 1 } else { 0 }
 	return '{"t": ${bits(t)}, "p": ${bits(p)}, "z": ${bits_list(z)}, "status": ${ok}, "stable": ${stable}, "tm": ${bits(tm)}, "w": ${bits_list(w)}}'
+}
+
+// transport_point is one point of reflux_transport (M5b's D17): the phase at
+// its label's volume root, the setup's transport model there, each value
+// with its status, and the point's reasons, but a vapour's surface
+// tension's.
+fn transport_point(f thermo.Fluid, tm transport.Model, label thermo.PhaseLabel, t f64, p f64, z []f64) string {
+	mut values := nans(3)
+	mut statuses := [no_value, no_value, no_value]
+	mut reason := ''
+	root := if label == .vapor { thermo.Root.vapor } else { thermo.Root.liquid }
+	if st := f.model.phase(t, p, z, root) {
+		n := numeric.sum(z)
+		tr := tm.phase(label, t, p, z.map(it / n), st.v / n)
+		for k, r in [tr.viscosity, tr.conductivity, tr.surface_tension] {
+			if r.ok() {
+				values[k] = r.value
+				statuses[k] = ok
+			}
+		}
+		reason = tr.reasons(label).join('; ')
+	} else {
+		statuses = [no_volume_root, no_volume_root, no_volume_root]
+		reason = err.msg()
+	}
+	name := if label == .vapor { 'vapor' } else { 'liquid' }
+	return '{"label": "${name}", "t": ${bits(t)}, "p": ${bits(p)}, "z": ${bits_list(z)}, "status": ${statuses}, "values": ${bits_list(values)}, "reason": ${quote(reason)}}'
 }
 
 // FlashPoint is one point of reflux_flash, and with an answer the PT values
@@ -343,6 +372,20 @@ fn fluid_json(db components.Database, fc FluidCase) !string {
 		}
 	}
 	flashes << flash_point('pt', f, 300.0, 1e-300, z).json
+	tm := s.transport()!
+	mut moved := []string{}
+	for label in [thermo.PhaseLabel.liquid, .vapor] {
+		for zz in feeds(nc) {
+			for t in ts {
+				for p in ps {
+					moved << transport_point(f, tm, label, t, p, zz)
+				}
+			}
+		}
+		// Beyond every method's range, and no volume root.
+		moved << transport_point(f, tm, label, 1e10, 1e5, feeds(nc)[0])
+		moved << transport_point(f, tm, label, 300.0, 1e-300, feeds(nc)[0])
+	}
 	mut fields := []string{}
 	fields << '"equation": ${quote(fc.equation)}'
 	fields << '"names": [${fc.names.map(quote(it)).join(', ')}]'
@@ -355,6 +398,7 @@ fn fluid_json(db components.Database, fc FluidCase) !string {
 	fields << '"psat": [\n    ${psat.join(',\n    ')}]'
 	fields << '"stability": [\n    ${stab.join(',\n    ')}]'
 	fields << '"flash": [\n    ${flashes.join(',\n    ')}]'
+	fields << '"transport": [\n    ${moved.join(',\n    ')}]'
 	return '{\n  ${fields.join(',\n  ')}\n}'
 }
 

@@ -5,14 +5,16 @@ import flash
 import json2
 import numeric
 import thermo
+import transport
 import v.vmod
 
 // The report's own format (D11), which docs/report-format.md describes. What
 // reads a report can rely on it: it changes only with a new number. Format 2
 // (M9) adds a reactor's profile to its unit, and a unit's warnings; format 3
 // (M8) adds the specs, and each block's; format 4 (M6) adds the model, and a
-// phase may be liquid2.
-pub const report_format = 4
+// phase may be liquid2; format 5 (M5b) adds each phase's transport, and how
+// it was had.
+pub const report_format = 5
 
 // Report is a solve's results, or its failure: what the command line writes as
 // JSON and CSV, and prints as a stream table. Every number is SI, and every
@@ -66,6 +68,26 @@ pub:
 	pairs    []PairReport
 	notes    []string // where a value was taken from, beyond the pairs
 	warnings []string // what the answers should be read with: a pair given none
+	// How each phase's transport is had (format 5, M5b's D16).
+	transport ?TransportReport @[json_null]
+}
+
+// TransportReport is how a fluid's phases have their transport (format 5):
+// each property's method, and each liquid pair's Grunberg–Nissan G with its
+// source, the file's or "none listed: 0".
+pub struct TransportReport {
+pub:
+	methods []MethodReport
+	pairs   []PairReport
+}
+
+// MethodReport is how one property is had, for the phases it names:
+// 'vapour', 'liquid' (liquid2 too) or 'any'.
+pub struct MethodReport {
+pub:
+	property string
+	phase    string
+	method   string
 }
 
 // PairReport is one pair's parameters, a before b, and where they came from:
@@ -116,15 +138,23 @@ pub:
 	phases         []PhaseReport // the less dense first
 }
 
-// PhaseReport is one of a stream's phases, per mole of the phase.
+// PhaseReport is one of a stream's phases, per mole of the phase, and its
+// transport (format 5, M5b's D16): each a number, or null with why in
+// transport_notes.
 pub struct PhaseReport {
 pub:
-	phase          string // 'vapour', 'liquid' or 'liquid2', as the flash labels it (M6's D9)
-	fraction       f64    // of the stream's moles
-	mole_fractions []f64
-	h              f64 @[json: 'H'] // J/mol
-	s              f64 @[json: 'S'] // J/(mol·K)
-	v              f64 @[json: 'V'] // m³/mol
+	phase                string // 'vapour', 'liquid' or 'liquid2', as the flash labels it (M6's D9)
+	fraction             f64    // of the stream's moles
+	mole_fractions       []f64
+	h                    f64  @[json: 'H'] // J/mol
+	s                    f64  @[json: 'S'] // J/(mol·K)
+	v                    f64  @[json: 'V'] // m³/mol
+	viscosity            ?f64 @[json_null] // Pa·s
+	thermal_conductivity ?f64 @[json_null] // W/(m·K)
+	surface_tension      ?f64 @[json_null] // N/m, a liquid's; null for a vapour
+	// Why each null but a vapour's surface tension, the compounds a liquid's
+	// rules left out, and the values taken beyond their correlations' ranges.
+	transport_notes []string
 }
 
 pub struct UnitReport {
@@ -201,8 +231,8 @@ pub fn (l Loaded) report(sol Solution) Report {
 	from, to := l.sheet.ends()
 	mut streams := []StreamReport{}
 	for name in l.sheet.stream_order() {
-		streams << stream_report(l.fluid, name, sol.streams[name], end(from, name), end(to,
-			name))
+		streams << stream_report(l.fluid, l.transport, name, sol.streams[name], end(from,
+			name), end(to, name))
 	}
 	mut units := []UnitReport{}
 	for i, p in l.sheet.units {
@@ -349,7 +379,7 @@ fn end(units map[string]string, stream string) ?string {
 	return units[stream] or { return none }
 }
 
-fn stream_report(fl thermo.Fluid, name string, st Stream, from ?string, to ?string) StreamReport {
+fn stream_report(fl thermo.Fluid, tm ?transport.Model, name string, st Stream, from ?string, to ?string) StreamReport {
 	comps := fl.model.components()
 	z := st.result.z
 	mut mass := []f64{len: comps.len}
@@ -379,21 +409,49 @@ fn stream_report(fl thermo.Fluid, name string, st Stream, from ?string, to ?stri
 		mass_flows:      mass
 		mole_fractions:  z.clone()
 		mass_fractions:  w
-		phases:          st.result.phases.map(phase_report(fl, it))
+		phases:          st.result.phases.map(phase_report(fl, tm, st, it))
 	}
 }
 
-// phase_report is a phase, whose state is one mole of it, as of_flash has it.
-fn phase_report(fl thermo.Fluid, ph flash.Phase) PhaseReport {
+// phase_report is a phase, whose state is one mole of it, as of_flash has
+// it, with its transport at the stream's T and P (D11: after the solve, so
+// nothing else moves).
+fn phase_report(fl thermo.Fluid, tm ?transport.Model, st Stream, ph flash.Phase) PhaseReport {
 	pr := fl.props(ph.state)
-	return PhaseReport{
-		phase:          ph.label.name()
-		fraction:       ph.fraction
-		mole_fractions: ph.state.n.clone()
-		h:              pr.h
-		s:              pr.s
-		v:              ph.state.v
+	m := tm or {
+		return PhaseReport{
+			phase:           ph.label.name()
+			fraction:        ph.fraction
+			mole_fractions:  ph.state.n.clone()
+			h:               pr.h
+			s:               pr.s
+			v:               ph.state.v
+			transport_notes: ['no transport model']
+		}
 	}
+	tr := m.phase(ph.label, st.t, st.p, ph.state.n, ph.state.v)
+	mut notes := tr.reasons(ph.label)
+	notes << tr.notes
+	return PhaseReport{
+		phase:                ph.label.name()
+		fraction:             ph.fraction
+		mole_fractions:       ph.state.n.clone()
+		h:                    pr.h
+		s:                    pr.s
+		v:                    ph.state.v
+		viscosity:            reported(tr.viscosity)
+		thermal_conductivity: reported(tr.conductivity)
+		surface_tension:      reported(tr.surface_tension)
+		transport_notes:      notes
+	}
+}
+
+// reported is a transport value as the report gives it: its number, or none.
+fn reported(r transport.Result) ?f64 {
+	if r.ok() {
+		return r.value
+	}
+	return none
 }
 
 // block_reports is the plan's blocks, each with the history of its tears and

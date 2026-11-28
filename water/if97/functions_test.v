@@ -226,3 +226,31 @@ fn test_the_gap_at_1073_k() {
 	}
 	assert n == 4
 }
+
+// A backward answer whose root is within h's rounding of the last step
+// still has its T (M5b bundle B): at 25 MPa, 1.3e-9 J/kg below h(273.16 K),
+// region 1's h has about 6e-9 J/kg of rounding, Newton jittered across its
+// closed bracket, and halving it never settled ("T not found").
+fn test_a_root_within_rounding_settles() {
+	p := 25e6
+	h := 25004.730825223185
+	st := state_ph(p, h)!
+	assert math.abs(st.t - 273.16) <= 1e-12, '${st.t}'
+	assert math.abs(st.h - h) <= 1e-8
+}
+
+// Above 50 MPa a value within the edge's rounding above region 2's top at
+// 1073.15 K is region 2's there (M5b bundle B): it went to region 5's
+// search, which has no state above 50 MPa, and came back at 1072.9 K.
+fn test_no_region_5_above_50_mpa() {
+	p := 100e6
+	top := region2(p, t5)
+	for g in [top.h, top.h + 2e-7] { // by_p's edge for h: 1e-12·R·T, 4.9e-7 J/kg
+		st := state_ph(p, g)!
+		assert st.region == 2 && math.abs(st.t - t5) <= 1e-9, '${st.region} ${st.t}'
+	}
+	for g in [top.s, top.s + 2e-10] { // for s: 1e-12·R, 4.6e-10 J/(kg·K)
+		st := state_ps(p, g)!
+		assert st.region == 2 && math.abs(st.t - t5) <= 1e-9, '${st.region} ${st.t}'
+	}
+}
