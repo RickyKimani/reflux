@@ -14,10 +14,13 @@ jobs:
   check:
     name: ${{ matrix.os }} / ${{ matrix.cc }}
     runs-on: ${{ matrix.os }}
-    # A job takes 4 to 9 minutes. A race can hang a test rather than fail it
-    # (the registry without its lock did, in M10a step 1), and GitHub's own
+    # A job takes 13 to 29 minutes (PR #12): Windows' gcc the longest, 25 of
+    # them its check, compiling 149 test files, then 3 the Python tests. At 30
+    # minutes it was cancelled once, so the limit is 60, for every job, as
+    # each milestone adds test files. A race can hang a test rather than fail
+    # it (the registry without its lock did, in M10a step 1), and GitHub's own
     # limit is six hours.
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
